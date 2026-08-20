@@ -285,7 +285,11 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
   const sync = useCallback(() => {
     const el = ref.current;
     const pinned = el && getComputedStyle(el).position === 'sticky';
-    const h = pinned ? Math.round(el.getBoundingClientRect().height) : 0;
+    // **Rounded down, never to nearest** — see `usePublishedHeight`, which is
+    // the same measurement and the same reason: this number is the `top` the
+    // date bar below is held at, so it has to be *at most* this bar's own
+    // height or the two are a hairline apart with the page running through it.
+    const h = pinned ? Math.floor(el.getBoundingClientRect().height) : 0;
     if (h === height.current) return;
     height.current = h;
     document.documentElement.style.setProperty('--chrome-h', `${h}px`);
@@ -337,7 +341,25 @@ export function usePublishedHeight(
 ) {
   const sync = useCallback(() => {
     const el = enabled ? ref.current : null;
-    const h = el ? Math.round(el.getBoundingClientRect().height) : 0;
+    // **`floor`, not `round`, and that is a bug fix rather than a preference.**
+    //
+    // This number is the `top` a sticky box below is held at, measured from the
+    // same scrollport edge the bar's own top is — so the seam between them is
+    // `published − actual`, and it is a **gap** whenever that is positive. A bar
+    // measuring 54.6px publishes 55 under `round`, and the table's header row
+    // then sits 0.4px below the bar's bottom edge with the rows visibly running
+    // through the strip. Floored it can only ever be negative: the two overlap
+    // by a sub-pixel, which paints as nothing.
+    //
+    // Driven rather than reasoned, and the first attempt had it the wrong way
+    // round: with the bar forced to 55.391px, `ceil` published **56** and the
+    // seam measured **+0.609px**, `floor` publishes **55** and it measures
+    // **−0.391**. 54 is an integer at every width this was measured at, which
+    // is why the seam is flush here and not on the reporter's screen — the
+    // bar's face is a control height plus a line of text in a font this app
+    // does not choose, which is exactly the case the measure-don't-declare rule
+    // exists for, and the rounding is the other half of it.
+    const h = el ? Math.floor(el.getBoundingClientRect().height) : 0;
     document.documentElement.style.setProperty(prop, `${h}px`);
   }, [ref, prop, enabled]);
   useLayoutEffect(() => {
@@ -394,7 +416,11 @@ export function useOverlayChromeOffset<T extends HTMLElement>(
   const sync = useCallback(() => {
     const el = ref.current;
     const pinned = el && getComputedStyle(el).position === 'sticky';
-    const h = pinned ? Math.round(el.getBoundingClientRect().height) : 0;
+    // Down, for the reason the other two do it — this band is what the
+    // matchup's own date bar sticks below, and a published height *over* the
+    // real one is a hairline between them with the page running through it.
+    // See `usePublishedHeight`.
+    const h = pinned ? Math.floor(el.getBoundingClientRect().height) : 0;
     if (h === height.current) return;
     height.current = h;
     host.current?.style.setProperty('--details-chrome-h', `${h}px`);

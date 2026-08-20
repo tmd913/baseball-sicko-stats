@@ -106,8 +106,11 @@ sits on the chrome's own hairline rather than 14px above it.
 
 **Everything that is not a page is in `.view-tools`, a band in the page.** The
 roster's four readings and the stream's order, the League view's three tabs and
-the Rankings span and lens, and the research board's whole control set portalled
-in — all the things that used to share the tab row. It keeps that row's rule
+the Rankings span and lens, the research board's whole control set portalled in
+— and **a matchup team page's four readings**, which is the same row folded onto
+rather than a second one that resembles it (see **Client — a league matchup**,
+*The reading run is the app's own row*). All the things that used to share the
+tab row. It keeps that row's rule
 exactly (`flex: none` on every group, so the row breaks between two rather than
 inside one) and the `container-type: inline-size` the feed-order toggle's two
 thresholds are measured against came with it: `.view-tools` is a block-level box
@@ -149,8 +152,29 @@ this file's measured heights and the plainest, `--chrome-h` needing to read
 an overlay rather than the root. It is **0 on the way out as well as in**: the
 property is what a table's header row sticks below, and a stale height there is
 a 54px band of nothing above the first column heading on every view with no bar.
-Only the app's own bar publishes it (`measure` on `DateBar`) — a team page's and
-the expanded box's are neither of them the one a page's header row is under.
+It is published by the app's own bar and by a matchup team page's (`measure` on
+`DateBar`), which are never both on screen; the expanded box's bar is above its
+pane rather than in it and publishes nothing.
+
+**All three of them round *down*, and that is a bug rather than a preference.**
+A reader reported "a small gap between the date picker and table headers, which
+you can see content scrolling through", and the seam measured **flush at 320,
+390, 640, 1200 and 1920 and at device pixel ratios 1 and 2** — because 54 is an
+integer at every one of those. The bar's face is a control height plus a line of
+text in **a font this app does not choose**, which is exactly the case the
+measure-don't-declare rule exists for, and the rounding is the other half of it:
+the seam is `published − actual`, so it is a **gap** whenever the published
+number is the larger. `Math.round` gives one on any bar whose height lands above
+`.5`.
+
+**Driven, and the first attempt had it the wrong way round** — the instinct is
+that a sticky box must clear the one above it, which argues for rounding *up*,
+and up is the direction that opens the gap. With the bar forced to 55.391px:
+`ceil` publishes **56** and the seam measures **+0.609px**; `floor` publishes
+**55** and it measures **−0.391**, a sub-pixel overlap, which paints as nothing.
+The same test on the Feed's chrome→bar seam with the tab strip forced to
+104.391px: **−0.391** floored. `--scroll-offset` reads `--chrome-h` too and does
+not care which way a fraction goes.
 
 **The exception is the Roster's table reading, and it is not an exception to the
 ladder but to where the ladder is drawn.** That view is a viewport-tall flex
@@ -198,10 +222,13 @@ Schedule, Projected), with the bar's lead reading `Today` / `Today` /
 and does not publish). The feed-order toggle still loses its word at a container
 of 335 — 276 at a 320 window, 346 at 390 — which is the threshold measured on
 the old tab row, unmoved. **Page-body overflow is 0** at 320, 390, 640, 1200 and
-1920 on every view. Bundle: JS **598.51 → 602.53 KB** (178.32 → 179.11 gzipped)
-and CSS **159.28 → 161.29** (28.58 → 28.93) — 4.0KB and 2.0KB raw, 0.8 and 0.35
+1920 on every view. Bundle: JS **598.51 → 602.30 KB** (178.32 → 179.14 gzipped)
+and CSS **159.28 → 160.47** (28.58 → 28.78) — 3.8KB and 1.2KB raw, 0.8 and 0.2
 over the wire, for a fourth view, a fourth reading, a tab strip, a band, a
-measured height and the how-to page's rewritten chapter.
+measured height and the how-to page's rewritten chapter. The CSS figure is net
+of what the matchup page gave back: folding its reading run onto `.view-tools`
+retired `.mup-tools`, `.mup-tool-icons`, `.mup-dates`, two ghost rules and two
+container queries.
 
 The Roster and Feed pills only render once something is on the roster (`showRosterViews`); **Research needs no roster and is always there** — with nothing rostered the bar is that lone pill, which is the one tab a new user can actually use.
 

@@ -1494,6 +1494,119 @@ reaches 0 (measured: band x 6, w 1188 against a pane at x 0, w 1200). It reads
 `--table-bleed`'s own rule stated a third time. Re-measured: band **x 0, w
 1200**, pane **x 0, w 1200**, page-body overflow **0**.
 
+**Which gutters, though, is the question that was got wrong first, and it cut
+the page off at both edges.** The tab was shipped with the gutters on
+`.app.matchup-mode` and none on `.mup-view.mup-page` — which reads as
+equivalent, the page being the app's content box either way, and is not. **This
+box is the scroll container** (`.mup-view` scrolls itself), a scroll container's
+origin is its own **padding edge**, and every wide table inside bleeds back out
+with `margin-inline: calc(-1 * var(--table-bleed))`. With the padding one box
+out, that negative margin puts 22px of the table to the *left of scroll offset
+zero*, where it is clipped and unreachable — a headshot column gone on the left
+and a stat column on the right, reported as exactly that.
+
+The overlay never had it because its two numbers are the same by construction:
+`padding: 0 16px` and `--table-bleed: 16px`. So the tab takes that arrangement
+with the app's number — **`.app.matchup-mode` gives up its side padding
+entirely** (and the app chrome gives up the negative margins that were bleeding
+through it) and `.mup-view.mup-page` carries `padding-inline: var(--app-gutter)`
+against a bleed of the same. Measured after: `.mup-view` **0 → 1200** at a 1200
+window, the pane **0 → 1200**, the first body cell at **x 0** and the last
+header cell ending at **1201**, `scrollWidth` 1200 against a `clientWidth` of
+1200 — nothing outside the scrollport at either edge, and page-body overflow
+**0**.
+
+### The reading run is the app's own row, and it is in the page
+
+**Three changes that are one change: `Feed` is a toggle, the run is
+`.view-tools`, and it is not pinned.**
+
+**`Roster | Feed` was a segmented pair and is a `Feed` toggle**, which is the
+app's own settlement one page along applied here, where there are four readings
+rather than three. A segmented switch says *pick one of these*; what these are
+is **departures from the plain table**, one at a time, with the table itself
+being none of them lit — `Feed`, `Schedule`, `Projected`, `Summary`, in the
+app's own order, with the stream's direction after them on the reading that has
+one. `FeedToggle`, `ScheduleToggle` and `ProjectedToggle` are literally the
+components the Roster page draws (`FeedToggle` was extracted from `App.tsx` into
+`FeedFilters.tsx` for it), so the two surfaces cannot come to differ. Pressing
+`Schedule` or `Projected` from the stream or from `Summary` returns to the table
+they are a reading *of*, which is the same one-deep rule the Roster page keeps.
+
+**The row is `.view-tools`, folded rather than resembled**, so it takes the
+app's spacing, the app's 640px squaring rule and the container query the order
+toggle's word threshold is measured against. `.mup-tools`' `--card-column` cap
+went with it: the table under this row is the width of the page, and so is the
+app's own bar over the app's own table — a control narrower than the thing it
+describes was the last place the two surfaces parted. `.mup-dates` went the same
+way and the bar is bare.
+
+**And it is in the page, under a band that is now the week, the manager and the
+strip.** That reverses what this file used to say — *which manager and which
+reading of him are one statement, and half of it scrolling away under the other
+half is the fault `.app-chrome` answers by pinning the pair* — on the same
+argument the app settled with: **which page you are on** is what must not leave
+the screen, **which reading** is set on arrival. Measured at 1200, the pinned
+band goes **144 → 96px**.
+
+**What that retires is worth naming, because it was most of the reasoning in
+this row.** `.mup-tool-icons`, the `.mup-tool-modes` / `.mup-tool-order` ghosts
+with their `visibility: hidden` pairs and their `order: 1`, and a container
+query of this row's own — every one of them existed to keep a **pinned** band
+from changing height under the finger that pressed a reading. In the page there
+is nothing pinned to move. The fault they were written for is still worth
+remembering in one line: two branches each reserved the box the *other* reading
+vacated, neither could see the other's arithmetic, and composed they made the
+band jump **48px** on a press of `Feed` at six widths — a reserved box is a
+subtraction of two measured widths, and a subtraction cannot stay right in a
+file two people are editing.
+
+### The ladder, and where the bar sticks on each reading
+
+```
+.mup-chrome    week · manager · strip   pinned
+.view-tools    which reading            scrolls away
+.date-bar      which days               pinned, under the band
+  thead                                 pinned, under the bar
+```
+
+which is `.app-chrome` / `.view-tools` / `.date-bar` / `thead` one page along,
+the same four boxes in the same order.
+
+**Where the bar is drawn depends on which box scrolls**, and that is the same
+split the app makes. On the **feed** reading `.mup-view` is the scroller, so the
+bar is an ordinary child of it, sticky at `top: var(--details-chrome-h)` — the
+band's *measured* height, which `useOverlayChromeOffset` already writes onto
+this element and every `scroll-margin-top` in here already reads. On the
+**roster** and **summary** readings this box is a fixed-height column whose
+table owns the scroll, so both rows go **inside the pane** (`LeagueTeam`'s
+`chrome` → `SummaryTable`'s `paneChrome`), where the bar and the header row
+stick against the same scrollport. The band goes `static` there, which is the
+scrollport-holds-a-sticky-box-against-its-padding trap both `.app.summary-mode`
+and this file already record, and its bottom margin goes with it so the pane
+meets it.
+
+**`chrome` is drawn in every branch of `LeagueTeam`, the empty and failed ones
+included** — the dates are what a reader empties this page with, and its own
+empty state says *the date control above is what changes them*, which must not
+be a sentence about a control that is not there.
+
+**Measured at 1200×800 on the live league, and at 390.** The band is **96px**
+(static on the two table readings, sticky on the feed); on the roster reading
+the pane starts at 198 with the tools row at **199** and the bar at **255**,
+both sticky, and the header row at **309** — `top: 54px`, the bar's own measured
+height. On the feed reading the tools row is at 214 in the page and the bar
+pinned at **264**, which is the band's bottom. Driven through all five presses —
+`Feed`, `Schedule`, `Summary`, `Projected`, `Projected` again — **exactly one
+toggle is lit at every step and exactly one date bar is on screen**, with the
+bar's lead reading `Today` / `Today` / `Schedule · Week 19` / `Matchup to date`
+/ `Projected` / `Today`, and page-body overflow **0** throughout. At 390 the run
+is four squares, the band 96, and the overlay path is untouched: the sides strip
+and the comparison card open as before, with `Back`, the pinned body and the
+inert chrome.
+
+
+
 **A bye is found here like any other**, ESPN publishing one as a matchup with no
 away side, and the page draws its own bye head — so the tab's empty state is for
 a period this manager has no row in at all, not for a bye. Driven on the live

@@ -329,6 +329,69 @@ export function FeedFilterPills({
  * where `--control-h` is what the row is made of. A prop with no caller is a
  * prop nobody misses.
  */
+/** The Feed reading's mark: a day as a run of entries down a rail, which is
+ *  what the stream is — deliberately not a clock or a list icon, the other two
+ *  candidates, since what distinguishes this reading from the table beside it
+ *  is that it is one thing after another rather than one row per player. */
+function FeedGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="19"
+      height="19"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+      style={{ flex: 'none' }}
+    >
+      <path d="M4 6h3M4 12h3M4 18h3" />
+      <path d="M11 6h9M11 12h9M11 18h6" />
+    </svg>
+  );
+}
+
+/**
+ * **The stream, as a reading of a roster rather than a page beside it.**
+ *
+ * It is drawn in two places and it is **one component rendered twice** — the
+ * rule `ScheduleToggle`, `DateBar` and `PlayerIdentity` already set: the app's
+ * own Roster page draws it in `.view-tools` beside `Schedule` and `Projected`,
+ * and a matchup's team page draws it in `.mup-tools` beside those two and
+ * `Summary`. Both are the same question about the same rows — *what would you
+ * like this set of players over these days to look like* — and a control that
+ * looked slightly different on the two would be one feature wearing two shapes.
+ *
+ * Folded onto `.research-toggle`'s selector lists like its neighbours, so it
+ * takes `.on` and never `.active`, and loses its word for a 36px square under
+ * 640 with the rest of the run.
+ */
+export function FeedToggle({
+  on,
+  onToggle,
+  title,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  /** What the press does, in the vocabulary of the page it is on — the app's
+   *  own roster and somebody else's team say it differently. */
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`feed-toggle${on ? ' on' : ''}`}
+      aria-pressed={on}
+      onClick={onToggle}
+      title={title}
+    >
+      <FeedGlyph />
+      <span className="feed-toggle-label">Feed</span>
+    </button>
+  );
+}
+
 export function FeedOrderToggle({
   oldestFirst,
   onToggle,

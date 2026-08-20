@@ -107,9 +107,22 @@ the chrome's 41. Measured, the pinned band is **102px at 1200, 100 at 390 and
 
 **There are two measured heights now rather than one**, which is the cost and it
 is one `ResizeObserver`: `--date-bar-h`, published by
-`hooks.ts::usePublishedHeight` from the app's own bar (`measure` on `DateBar`,
-passed by nobody else — a team page's bar and the expanded box's are neither of
-them the one a page's header row is under). `--scroll-offset` is
+`hooks.ts::usePublishedHeight` from the app's own bar and from a matchup team
+page's (`measure` on `DateBar`, and the two are never both on screen — the
+expanded box's bar is above its pane rather than in it, so it publishes
+nothing).
+
+**It rounds *down*, and the direction is the whole of a reported bug.** The seam
+between the bar and whatever sticks under it is `published − actual`, so it is a
+**gap** whenever the published number is the larger — and `Math.round` produces
+one on any bar whose height lands above `.5`. The bar is 54px at every width
+this was measured at, which is why the seam was flush here and not on the
+screen it was reported from: the face is a control height plus a line of text in
+a font this app does not choose. Driven with the bar forced to 55.391px, `ceil`
+publishes **56** and the seam measures **+0.609px** where `floor` publishes
+**55** and it measures **−0.391** — a sub-pixel overlap, which paints as
+nothing. `--chrome-h` and `--details-chrome-h` take the same rounding for the
+same reason, this bar being what sticks under both of them. `--scroll-offset` is
 `--chrome-h + --date-bar-h + 12px`, or a clip scrolling itself into view on the
 Feed lands behind 54px of dates. The property goes to **0 on the way out as well
 as in**, since a table's header row sticks below it and a stale height is a band
@@ -128,6 +141,12 @@ Measured at 1200×900 with the pane scrolled 600 down and 400 across: the bar
 holds at **y 102** (the pane's top) and the header row at **156**, both at
 **x 0**, with the tools row gone to −498. See **Client — the Roster view**,
 *The tools row and the dates are inside the pane*.
+
+**A matchup team page takes the identical arrangement**, which is the point of
+having one component: the bar is a child of `.mup-view` and sticky under that
+page's band on its feed reading, and inside `.summary-scroll` on its two table
+readings. See **Client — a league matchup**, *The ladder, and where the bar
+sticks on each reading*.
 
 **One thing the move needed and nothing else did.** The bar carries
 `flex: 1 1 100%` — "its own line", written for the wrapping rows it used to sit

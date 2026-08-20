@@ -15,7 +15,7 @@ import { InfoKey } from './InfoKey';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
 import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
-import { FeedOrderToggle } from './FeedFilters';
+import { FeedOrderToggle, FeedToggle } from './FeedFilters';
 import type { FeedLens } from './FeedFilters';
 import { ProjectedToggle } from './Projection';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
@@ -1044,7 +1044,7 @@ export default function LeagueMatchupView({
    * it — see `.mup-nav-row`, which does that with a grid rather than by
    * centering the pair (which would sit the tabs 19px left of center).
    */
-  const head = (extra: ReactNode, key?: ReactNode, tools?: ReactNode) => (
+  const head = (extra: ReactNode, key?: ReactNode) => (
     <div className="mup-chrome" ref={chromeRef}>
       <div className="mup-bar">
         {/* The way back, and the only one this page needs: it was opened from a
@@ -1079,15 +1079,17 @@ export default function LeagueMatchupView({
       ) : (
         extra
       )}
-      {/* **And a team page's own controls travel with the strip**, for the
-          reason the strip is here at all: which manager, which reading of him,
-          which kind and which players are one statement — *what is on screen* —
-          and half of it scrolling away under the other half is the fault
-          `.details-chrome` and `.app-chrome` each answer by pinning the pair.
-          They were an inch of page a reader partway down a feed had to go back
-          up for; the band holds them now, and the days stay on the page (see
-          `.mup-dates`, which is the one control that did not come). */}
-      {tools}
+      {/* **The team page's own reading controls used to end this band and are
+          in the page now**, which reverses what the paragraph here used to say
+          — *which manager and which reading of him are one statement, and half
+          of it scrolling away under the other half is the fault `.app-chrome`
+          answers by pinning the pair*. The app settled it the other way one page
+          along and this follows it: **which page you are on** is what must not
+          leave the screen, and **which reading** is set on arrival. The band is
+          the week, the manager and the strip; the readings and the days are
+          below it, the first scrolling away and the second pinned under it.
+          That takes the pinned band from 144px to 96 at 1200 and buys the rows
+          the difference. */}
     </div>
   );
 
@@ -1548,6 +1550,12 @@ export default function LeagueMatchupView({
   const mupNext = mupStepTo(1);
   const dateBar = (
     <DateBar
+      /* **This page's bar publishes `--date-bar-h` too**, which is what the
+         team table's header row sticks below — the same arrangement the app's
+         own Roster page has. Only one of the two is ever on screen: App draws
+         no bar on the League or Matchup views, and this page is only ever
+         opened over the League view or as the Matchup tab. */
+      measure
       reading={mupBarReading}
       start={mupBarSpan.start}
       end={mupBarSpan.end}
@@ -1601,202 +1609,141 @@ export default function LeagueMatchupView({
   );
 
   const tools = (
-    <div className="mup-tools">
-      {/* **Three readings, and `Summary` is the middle one.**
-
-          It is the app's Roster table over the matchup's own days — the span the
-          category card two presses away is summed over — and it is a *reading*
-          rather than a preset because it is not the reader's to move: the days
-          are the period's, clamped to today, and an arrow that stepped off them
-          would leave a page still calling itself a summary of this week. So the
-          bar below draws them as text (see `dateBar`, `fixed`).
-
-          **It replaces the pill that used to lead this page's preset row.**
-          `Matchup` was the first of six there and the reason a reader was on
-          this page at all; the preset row has gone from every bar in the app
-          (the face opens a calendar now), and this is where that one pill's job
-          went — promoted from *a range you can pick* to *a reading you can be
-          in*, which is what it always was in practice.
-
-          **The word is `Summary`, and it is the second thing on this page to
-          wear it** — the strip above has a `Summary` tab, which is the
-          comparison page rather than a reading of a team. They are one press
-          apart and both are `.view-switch` pills. The two are told apart by the
-          strip being *whose* page and this being *what about him*, and by their
-          titles saying so in as many words; the alternative was a second word
-          for one idea, which is worse — a manager reading his own week wants
-          the summary of it, and calling it anything else on a team page would
-          be this app inventing a synonym to protect a layout. */}
-      <div className="view-switch mup-reading" role="tablist" aria-label="Reading">
-        {(['roster', 'feed'] as const).map((r) => (
-          <button
-            key={r}
-            type="button"
-            role="tab"
-            aria-selected={reading === r}
-            className={`view-tab${reading === r ? ' active' : ''}`}
-            title={
-              r === 'roster'
-                ? `${sidePossessive} table over the days you pick`
-                : `${sidePossessive} plays, in order`
-            }
-            onClick={() => setReading(r)}
-          >
-            {r === 'roster' ? 'Roster' : 'Feed'}
-          </button>
-        ))}
-      </div>
-      {/* **The icon buttons travel as one group**, which is `.view-bar-tabs`'
-          own rule one page down: a group breaks to the next line whole rather
-          than one member of it going alone. Measured at 390, the four groups
-          came to 382 against the 358 this box has, so the row wraps — and left
-          loose it wrapped the *date* button by itself, a lone 36px square under
-          two full-width switches with its range bubble hanging over nothing.
-          That square has since left the row entirely for the bar below (see
-          `dateBar`), which is the same fault answered a second time and for
-          good; the grouping stays, because Schedule and Projected come and go
-          with the reading and would otherwise break apart. */}
-      <div className="mup-tool-icons">
-        {/* **The two toggles the feed has no use for are drawn either way, and
-            hidden on that reading rather than removed.** They are the roster
-            table's alone — the Schedule view swaps its stat columns for a column
-            per day, and there is nothing in a stream of things that have already
-            happened for a fixture list or a projection to replace — so on the
-            Feed reading the run is the order toggle by itself.
-
-            Taking them out takes 80px out of a row that **wraps on a phone**,
-            which is 40px of *pinned* band appearing and disappearing under the
-            finger of the reader who pressed `Feed`: the rule this app applies
-            everywhere is to reserve the worst case and let the box be still.
-            Reserved with a real pair under `visibility: hidden` — `.details-sub`
-            and the movement chart's callouts do the same — so what is held open
-            is exactly what these two buttons measure in whatever font the
-            platform hands us, and not a height this file guesses at. Hidden
-            that way they are out of the tab order and out of the accessibility
-            tree, which is what `.mv-callouts-ghost` relies on too.
-
-            And it is held open at the **end** of the run rather than in place,
-            which is what makes it free at a width where nothing wraps: trailing
-            blank in the last group of a left-aligned row is invisible, where in
-            place it left the feed's lone clipboard 90px adrift of its own line.
-            That is `order` on the ghost, so the DOM keeps the roster row's own
-            order — see `.mup-tool-modes`. */}
-        <span
-          /* **Every reading lays out the same three toggles**, and the ghost
-             hides the ones that do not apply to it: the modes off the roster
-             reading, the order toggle off the Feed reading. So the run is the
-             union at every width and the band cannot move under the finger
-             that pressed a reading pill.
-
-             **It reserved the *difference* before, and that was right when the
-             union was four toggles.** `Schedule` `Projected` `Starters` and the
-             order control came to 452px, which does not fit the 800px card
-             column, so carrying the union wrapped the row on *all three*
-             readings at every desktop width — 210px of pinned band instead of
-             162, bought from every reader to close three seams. `Starters` has
-             since been removed from the app, and the union is 359.2px, which
-             fits: measured at 1400, the run is 359.2 on all three readings and
-             the band is 36 on all three.
-
-             The difference rule did not survive that arithmetic changing. It
-             was written against a roster reading that reserved *nothing*, and
-             the same merge that removed `Starters` made the roster reading
-             reserve the order toggle — so the roster run held 118.6px open
-             while the feed run held 113.5 where it needed 224.6, and the band
-             jumped **48px** crossing to `Feed` at 780, 700, 400, 390, 375 and
-             320. Neither branch could see it; both were measured before the
-             other landed.
-
-             Measured after, across the three readings at fifteen widths:
-             **36 / 36 / 36** at 1400, 1000, 900 and 800; **84** on all three at
-             780, 700, 660, 641, 500, 430 and 360; **132** on all three at 400,
-             390, 375 and 320. Equal at every width, and equal by construction
-             rather than by a number — which is what the difference rule, being
-             a subtraction of two measured widths, could never be.
-
-             The cost is a wrapped line on the Feed reading between 660 and 780
-             that it did not pay before. That is the line the other two readings
-             were already paying at those widths, and it does not move. */
-          className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}`}
-          aria-hidden={reading === 'roster' ? undefined : true}
-        >
-          <ScheduleToggle
-            on={scheduleSpan !== null}
-            loading={scheduleLoading}
-            onToggle={() =>
-              setScheduleSpan((s) => {
-                if (s !== null) return null;
-                // **The projected lens goes off with it**, which is the same
-                // exclusivity `toggleTeamProjected` states from the other side.
-                // Left on, its button would sit lit over a table it was not
-                // reading. The range it moved the reader to stays, the days
-                // ahead being exactly what a schedule is for.
-                setTeamProjected(false);
-                return defaultScheduleSpan(matchupWindow);
-              })
-            }
-          />
-          {/* **The projected reading, after the Schedule view** — the roster
-              row's own order, where these two are the third of *which page,
-              which kind, which reading of it, which players, which days*: the
-              stats behind you, the fixtures ahead, and what the fixtures are
-              worth. */}
-          <ProjectedToggle
-            on={teamProjected}
-            loading={teamProjLoading}
-            onToggle={toggleTeamProjected}
-            title={
-              teamProjected
-                ? 'Back to what has actually happened'
-                : `Add what ${sideName} should get from these players over the days still to be played — and open on the days there are games in`
-            }
-          />
-        </span>
-        {/* **Which way the feed's clock runs**, on the feed reading alone —
-            there being no order to a table. It is beside the other two "which
-            reading of it" controls for that reason, and it is *here* rather
-            than in the pill row inside the page for the Feed view's own
-            reason: the pills answer the question the page was opened with and
-            are worked on arrival, where an order is wanted by a reader already
-            well down a stream, and this run is the part of the page that does
-            not scroll away from them. See `FeedOrderToggle`.
-
-            **It is reserved on the roster reading, the mirror of the span
-            above it.** The rule this row keeps is that the band measures the
-            same on both readings, and the reservation used to run one way only
-            — the modes ghosted on the Feed reading, this button simply absent
-            on the other — on the reasoning that the roster reading was the
-            wider of the two and so had nothing to reserve against. It was, by
-            one 36px square, while it carried a third toggle; with that toggle
-            gone the roster reading is the *narrower* of the two, and at 320 the
-            band went **84 → 132** crossing to Feed, which is the same 48px of
-            pinned chrome moving under the same finger. So both runs are ghosted
-            now and the argument is symmetric: each reading holds the other's
-            slot open, and the row wraps identically whichever is on. */}
-        {/* **Outside both ghosts, because it applies in every reading.** It is
-            the way into the matchup's own days and the way back out, so it is
-            drawn and pressable on `roster`, on `summary` and on `feed` alike —
-            there is no reading it does not answer, and so nothing to reserve
-            for it and nothing for it to reserve against. It sits after the
-            modes and before the order toggle, which keeps the run in the
-            question order the roster row uses: which page, which kind, which
-            reading of it, over which days. */}
-        <SummaryToggle
-          on={reading === 'summary'}
-          onToggle={() => setReading((r) => (r === 'summary' ? 'roster' : 'summary'))}
-          title={
-            reading === 'summary'
-              ? 'Back to the days you pick'
-              : `${sidePossessive} table over this matchup so far — every day of it up to today, which is the span the category card is summed over`
+    /**
+     * **The four readings of a team page, as one run of toggles.**
+     *
+     * It was a `Roster | Feed` segmented pair and then three separate icon
+     * buttons, and the pair is gone: the app's own Roster page settled this one
+     * page along, where `Feed` became a toggle beside `Schedule` and
+     * `Projected` rather than a tab beside `Roster`. The argument is the same
+     * here and stronger, this page having a fourth. A segmented switch says
+     * *pick one of these*; what these actually are is **departures from the
+     * plain table**, one at a time, with the table itself being none of them
+     * lit — which is what a run of toggles says and what the strip above
+     * already says about *whose* page it is.
+     *
+     * The order is the app's: the stream, the fixtures ahead, what they are
+     * worth, and then the matchup's own span. `FeedToggle` and `ScheduleToggle`
+     * and `ProjectedToggle` are literally the components the Roster page draws,
+     * so the two surfaces cannot come to differ.
+     *
+     * **And the ghosts are gone with the pinning.** Half the reasoning that
+     * used to live here was about reserving the box a control vacated —
+     * `.mup-tool-modes`, `.mup-tool-order`, `visibility: hidden` pairs, `order:
+     * 1` to keep the blank trailing — and every word of it was in service of
+     * one rule: *this row is pinned, so it must not change height under the
+     * finger that pressed a reading*. The row is in the page now (see where it
+     * is rendered), so a control that comes and goes moves page content by its
+     * own height and nothing that is pinned at all. Four of the five are drawn
+     * on every reading in any case; only the order toggle comes and goes, and
+     * it is last in the run.
+     */
+    /* **`.view-tools`, which is the app's own row and not a copy of it.** The
+       class is the fold: the Roster page's reading run and this one are the
+       same set of controls answering the same question, so they share a
+       selector rather than two rules that agree today — which also hands this
+       row the container query the order toggle's word threshold is measured
+       against, and the 640px rule that squares the run on a phone. What was
+       here before (`.mup-tools`, `.mup-tool-icons`, the two ghosts and a
+       container query of its own) was all in service of a card-column cap and
+       a pinned band, and both are gone. */
+    <div className="view-tools">
+      <FeedToggle
+        on={reading === 'feed'}
+        onToggle={() => {
+          if (reading === 'feed') {
+            setReading('roster');
+            return;
           }
-        />
-        <span
-          className={`mup-tool-order${reading === 'feed' ? '' : ' mup-tool-ghost'}`}
-          aria-hidden={reading === 'feed' ? undefined : true}
-        >
-          <FeedOrderToggle oldestFirst={feedOldest} onToggle={() => setFeedOldest((v) => !v)} />
-        </span>
-      </div>
+          // The two column modes go off with it, the same exclusivity they
+          // already state about each other: a stream has no stat columns for a
+          // fixture list to replace or a projection to fill.
+          setScheduleSpan(null);
+          setTeamProjected(false);
+          setReading('feed');
+        }}
+        title={
+          reading === 'feed'
+            ? `Back to ${sidePossessive} table`
+            : `${sidePossessive} plays, in the order they came`
+        }
+      />
+      <ScheduleToggle
+        on={scheduleSpan !== null}
+        loading={scheduleLoading}
+        onToggle={() => {
+          // Back to the table this is a reading *of*, which is what makes the
+          // run one deep: pressed from the stream or from `Summary` it would
+          // otherwise light over columns nobody is looking at.
+          setReading('roster');
+          setScheduleSpan((s) => {
+            if (s !== null) return null;
+            // **The projected lens goes off with it**, which is the same
+            // exclusivity `toggleTeamProjected` states from the other side.
+            // The range it moved the reader to stays, the days ahead being
+            // exactly what a schedule is for.
+            setTeamProjected(false);
+            return defaultScheduleSpan(matchupWindow);
+          });
+        }}
+      />
+      {/* **The projected reading, after the Schedule view** — the roster row's
+          own order, where these two are the third of *which page, which kind,
+          which reading of it, which players, which days*: the stats behind you,
+          the fixtures ahead, and what the fixtures are worth. */}
+      <ProjectedToggle
+        on={teamProjected}
+        loading={teamProjLoading}
+        onToggle={() => {
+          setReading('roster');
+          toggleTeamProjected();
+        }}
+        title={
+          teamProjected
+            ? 'Back to what has actually happened'
+            : `Add what ${sideName} should get from these players over the days still to be played — and open on the days there are games in`
+        }
+      />
+      {/* **`Summary` is the fourth reading and the one that is not the reader's
+          days.** It is the app's Roster table over the matchup's own span — the
+          days the category card two presses away is summed over — so the bar
+          below draws them as text rather than as something to step (see
+          `dateBar`, `fixed`).
+
+          **It is the second thing on this page to wear the word**, the strip
+          above having a `Summary` tab, which is the comparison page rather than
+          a reading of a team. They are one press apart and are told apart by
+          the strip being *whose* page and this being *what about him*, and by
+          their titles saying so in as many words; the alternative was a second
+          word for one idea, which is worse — a manager reading his own week
+          wants the summary of it. */}
+      <SummaryToggle
+        on={reading === 'summary'}
+        onToggle={() =>
+          setReading((r) => {
+            if (r === 'summary') return 'roster';
+            // Same clearing the other three do: `Summary` is a span of its own
+            // and the table it draws is the plain one.
+            setScheduleSpan(null);
+            setTeamProjected(false);
+            return 'summary';
+          })
+        }
+        title={
+          reading === 'summary'
+            ? 'Back to the days you pick'
+            : `${sidePossessive} table over this matchup so far — every day of it up to today, which is the span the category card is summed over`
+        }
+      />
+      {/* **Which way the stream's clock runs**, on the feed reading alone —
+          there being no order to a table. It is in this run rather than in the
+          pill row inside the page for the Feed view's own reason: the pills
+          answer the question the page was opened with and are worked on
+          arrival, where an order is wanted by a reader already well down a
+          stream. See `FeedOrderToggle`. */}
+      {reading === 'feed' && (
+        <FeedOrderToggle oldestFirst={feedOldest} onToggle={() => setFeedOldest((v) => !v)} />
+      )}
     </div>
   );
 
@@ -1805,7 +1752,22 @@ export default function LeagueMatchupView({
      calendar square that used to end the icon run and the span strip that used
      to be a group of its own are both in it, and it is the one control of this
      page's that stayed on the page when the rest went into the head. */
-  const dates = <div className="mup-dates">{dateBar}</div>;
+  /* The bar itself, bare — it was wrapped in a `.mup-dates` box that capped it
+     at the card column and centered it. The table under it is the width of the
+     page, and so is the app's own bar over the app's own table; a control
+     narrower than the thing it describes was the one place these two surfaces
+     still parted. */
+  const dates = dateBar;
+
+  /** The two rows under the band — which reading, then which days — as one
+   *  node, because they travel together into whichever box the reading gives
+   *  them. See `LeagueTeam`'s `chrome`. */
+  const teamChrome = (
+    <>
+      {tools}
+      {dates}
+    </>
+  );
 
   return (
     <DialogLayerContext.Provider value={MATCHUP_LAYER}>
@@ -1831,11 +1793,10 @@ export default function LeagueMatchupView({
           sideTeamId !== null && reading !== 'feed' ? ' roster-mode' : ''
         }`}
       >
-        {head(nav, barsKey, sideTeamId !== null ? tools : null)}
+        {head(nav, barsKey)}
 
         {sideTeamId !== null ? (
           <>
-            {dates}
             <LeagueTeam
               /* Keyed on the team alone: the span, the kind and the reading are
                  the chrome's and must not remount the page — only crossing to
@@ -1872,6 +1833,16 @@ export default function LeagueMatchupView({
                   : null
               }
               onOpenDetails={onOpenDetails}
+              /* **The reading run and the dates, handed to the page they are
+                 about** — see `chrome` there. On the roster reading they go
+                 inside the table's own scroller, which is the app's own
+                 arrangement and for the app's own reason: that reading is a
+                 fixed-height column in which only the pane scrolls, and a
+                 sticky box sticks to the box that scrolls, so a date bar left
+                 above the pane is pinned to a column that never moves while
+                 the table's header row is pinned to the pane. Two boxes stuck
+                 to two different edges, drawn as one band. */
+              chrome={teamChrome}
             />
           </>
         ) : !away ? (

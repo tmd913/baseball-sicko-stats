@@ -91,6 +91,7 @@ import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
   FeedOrderToggle,
+  FeedToggle,
   playFilterParam,
   toPlayFilter,
   type FeedLens,
@@ -148,29 +149,6 @@ type View = 'summary' | 'feed' | 'research' | 'matchup' | 'league';
  *  has a date range of its own. */
 function isRosterView(v: View): boolean {
   return v === 'summary' || v === 'feed';
-}
-
-/** The Feed reading's mark: a day as a run of entries down a rail, which is
- *  what the stream is — deliberately not a clock or a list icon, the other two
- *  candidates, since what distinguishes this reading from the table beside it
- *  is that it is one thing after another rather than one row per player. */
-function FeedGlyph() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="19"
-      height="19"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-      style={{ flex: 'none' }}
-    >
-      <path d="M4 6h3M4 12h3M4 18h3" />
-      <path d="M11 6h9M11 12h9M11 18h6" />
-    </svg>
-  );
 }
 
 /** The four tabs, and which `view` values each of them owns. The Roster tab
@@ -4676,15 +4654,9 @@ export default function App() {
    */
   const feedToggle =
     isRosterView(view) && showRosterViews ? (
-      <button
-        type="button"
-        /* Folded onto `.research-toggle`'s selector lists rather than styled
-           anew, so the four readings of this page are one object by
-           construction. A plain switch with no panel, so it takes `.on` and
-           never `.active`. */
-        className={`feed-toggle${view === 'feed' ? ' on' : ''}`}
-        aria-pressed={view === 'feed'}
-        onClick={() => {
+      <FeedToggle
+        on={view === 'feed'}
+        onToggle={() => {
           if (view === 'feed') {
             setView('summary');
             return;
@@ -4698,10 +4670,7 @@ export default function App() {
             ? 'Back to the stat table'
             : 'Read these days as they happened — every plate appearance and outing in the order it came'
         }
-      >
-        <FeedGlyph />
-        <span className="feed-toggle-label">Feed</span>
-      </button>
+      />
     ) : null;
 
   const scheduleControl = (
