@@ -6325,6 +6325,37 @@ button.start-line:focus-visible {
 .date-bar-panel > .schedule-span-select {
   align-self: center;
 }
+/* **And on the Feed, the press opens a calendar over the page instead.** The
+   anchor is the *bar* rather than a wrapper round the face, and that is exactly
+   what the three-column grid above buys: the middle column is centered on the
+   bar's own center line at every width and whatever the label says, so a
+   popover centered on the bar is centered on the face by construction — no
+   extra box, and nothing to keep in step with the face's `justify-self`.
+   Measured at 1400 / 390 / 320 the bar's center and the face's center are the
+   same number (700 / 195 / 160).
+
+   Only the anchoring and the cap are declared here; `.drp-popover` is folded
+   onto in the JSX so this is the app's one calendar surface — the same 260px
+   panel, border, radius and lift the Roster's picker opens, rather than a
+   second one that agrees with it today. */
+.date-bar-anchored {
+  position: relative;
+}
+.date-bar-pop {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  /* The measured cap, for the reason `--popover-max-h` exists at all: the bar
+     is pinned chrome and the calendar is 300px of grid, so a short window — a
+     phone held sideways above all — has less room below the bar than the
+     calendar wants. `usePopoverFit` publishes it; `none` is the fallback for
+     the frame before it has, not a second opinion. */
+  max-height: var(--popover-max-h, none);
+  overflow-y: auto;
+  /* The axis it genuinely scrolls, and only where it scrolls: a flick that runs
+     out of calendar must not carry the page under it. */
+  overscroll-behavior-y: none;
+}
 /* Edit carries its label, so it overrides the square the shared list gives it —
    everything else in that rule (the panel fill, the border, the hover, the
    accent when active) is what it is there for. It renders in one place now, as
@@ -7214,6 +7245,28 @@ button.start-line:focus-visible {
    line up with. */
 .summary-legend {
   justify-content: center;
+}
+/* **The key rides inside the scrolling pane**, which is what stopped it being a
+   strip held against the bottom of the window — see `SummaryTable.tsx`, where
+   the move is argued. Two declarations are what it costs:
+
+   `position: sticky; left: 0` keeps it under the reader's eye across the
+   *horizontal* axis, which is the one thing being inside a two-axis scroller
+   would otherwise take away: a wide table scrolled out to `K` would have left
+   the key behind at the far left of a 1952px content box. It is the same
+   pinning the headshot column already takes, on the same axis and for the same
+   reason, and it is deliberately not the vertical one — a key you scroll to is
+   the whole point of moving it.
+
+   `width` is left to the block itself, i.e. the scroller's own client width, so
+   the four items center in the *viewport* rather than on the table's
+   `max-content`. Measured on a phone before that was settled: as a child of
+   `.summary-tables` at 390 the key was laid out in a 714px box and its items
+   sat from x≈190 to x≈524, half of them off the right of a screen nobody had
+   scrolled yet. */
+.summary-scroll > .summary-legend {
+  position: sticky;
+  left: 0;
 }
 .summary-legend-item,
 .roll-legend-item,
@@ -9851,8 +9904,35 @@ button.start-line:focus-visible {
    1200, a 246px card in a 774px body, its `1fr` bar track collapsed to nothing
    and every fill 0px wide. The same sentence `.details-chrome` records for the
    head and tabs it took out of a flex row. The 680px cap and the auto margins
-   still do their work above that width. */
-.upcoming-detail .pct-card {
+   still do their work above that width.
+
+   **And `.start-detail` is on the rule, because the trap was sprung a second
+   time by the wrapper being folded on without it.** The player page's Schedule
+   tab opens this same card from an upcoming row, in the same `.play-detail-box`
+   at the same width — the two wrappers already share the flex column above —
+   but that fold left this line behind, so from that caller the card shrank to
+   its own content all over again: measured at 1400, **246px in a 774px body,
+   the rail track 0px and all eight fills rendered at 0.00px**; at 390 and at
+   320 the card was 185px and the track 0 again. (The fills are *drawn* in both
+   cases — eight `.spl-fill` nodes with their inline `calc(frac × (50% −
+   inset))` — and 50% of a 0px track is 0px, which is why the card reads as a
+   list of figures with no bars rather than as a card with something missing.
+   The player it happens to be opened on decides how obvious it is: a thin-split
+   card carries the amber note, whose own max-content is 623.75px, so the
+   shrink-to-fit lands near the 680 cap and the bars come back by accident.
+   Aaron Judge's card looks right; Shohei Ohtani's is the 246.)
+
+   **The three fixes that are not this one were measured too**, on the same card
+   at 1400: `align-self: stretch` on the card and `align-items: stretch` on the
+   wrapper both leave it at 246 — an auto cross-axis margin doesn't lose to
+   either, it makes the item ignore alignment and center at its hypothetical
+   size, which is the whole of the trap. A `min-width` on `.spl-track` does put
+   ink back (200px track, eight fills painted) and is the wrong shape of answer:
+   it is a declared number where the right one is *the width the box has to
+   give*, and it still left a 446px card floating in a 774px body. `width: 100%`
+   is the only one that reads the container, and it is the line already here. */
+.upcoming-detail .pct-card,
+.start-detail .pct-card {
   width: 100%;
 }
 /* "Load more" under the Recent section — the stream shows a page at a time, so
@@ -11960,22 +12040,38 @@ button.start-line:focus-visible {
   white-space: nowrap;
   line-height: 1.1;
 }
-/* The three weights are **the `GS` count's own** (`.sched-gs` below), which is
-   the point of taking them rather than inventing a fourth mark: nothing → solid
-   → dashed, so a reader who has learned the ladder on the count reads it here.
-   Nothing is added where his club has named him — an announcement is the fact
-   this grid is otherwise short of, and a fact needs no caveat — an underline
-   says the slot is our reading of *him*, and a dashed one that it is his club's
-   rotation standing in. The sentence is on the cell's own title.
+/* The three weights: nothing where his club has named him — an announcement is
+   the fact this grid is otherwise short of, and a fact needs no caveat —
+   **italic** where the slot is our reading of *him*, and italic under a dashed
+   line where it is his club's rotation standing in. The sentence is on the
+   cell's own title.
 
-   **`text-decoration` rather than a `border-bottom`, and that is a height
+   **Italic rather than the solid underline this carried, and it is the same
+   word doing the work as on the `SP` legend beside it.** Both marks say *nobody
+   has announced this start*, so both say it the same way, and the reader learns
+   one thing rather than two: a slanted name and a slanted `SP` are the same
+   caveat about the same game. The underline it replaces had the additional
+   problem of being the *measured* half of this app's own solid-against-broken
+   ladder spent on the half that is ours — a solid line under a projection is
+   exactly the clothing that rule reserves for a fact.
+
+   **The dashed line stays on the third tier, and only there.** With the solid
+   one gone it is no longer "unannounced" but "his club's rotation, not his
+   own" — the `--faint` dashes are what this app has meant by *estimated* since
+   the percentile card's first dotted bar, and italic alone cannot say which of
+   two unannounced tiers a name is in. Dropping it too was the tidier option and
+   was rejected on that: a 10px caption has room for one more signal and this is
+   the one that costs no height.
+
+   **A painted decoration rather than a `border-bottom`, and that is a height
    decision rather than a stylistic one.** A border is part of the box, so it
-   would have to be reserved `transparent` on the announced tier or a cell would
-   change height as clubs name their probables through the week — and reserved,
-   it costs every one of these lines a pixel on a grid that is 14 columns wide
-   and stacks two of them on a doubleheader. An underline is painted rather than
-   laid out: it costs nothing, on any tier, and the three cannot differ in
-   height by construction.
+   would have to be reserved `transparent` on the two tiers without one or a
+   cell would change height as clubs name their probables through the week — and
+   reserved, it costs every one of these lines a pixel on a grid that is 14
+   columns wide and stacks two of them on a doubleheader. Italic and an
+   underline are both painted rather than laid out: measured, all three tiers
+   render at **11px** either side of this change in the grid, and at **16px**
+   either side of it on the player page's Schedule tab.
 
    **Two surfaces wear these now**, and the second takes them rather than
    restating them: the player page's Schedule tab draws the opposing starter on
@@ -11984,68 +12080,153 @@ button.start-line:focus-visible {
    rotation standing in. Only the two *modifiers* travel; `.sched-vs` itself
    stays with the grid, being the 10px caption that cell's width argues for. */
 .sched-vs-projected {
-  text-decoration: underline solid color-mix(in srgb, var(--muted) 55%, transparent);
-  text-underline-offset: 2px;
+  font-style: italic;
 }
 .sched-vs-estimated {
+  font-style: italic;
   text-decoration: underline dashed color-mix(in srgb, var(--faint) 85%, transparent);
   text-underline-offset: 2px;
 }
-/* He is starting this game. A chip rather than a color on the opponent, because
-   the opponent's color is already spoken for by the game's own state above and a
-   starter can be announced for a game that is live.
+/* He is starting this game — **the opponent inside a box, with `SP` breaking the
+   bottom stroke**, which is a fieldset legend and is the shape the fact wants.
+   The mark is about a *day*, so the border goes round the day; the pill this
+   replaced sat under the opponent as a third thing in the cell and left the
+   reader to pair them.
 
-   **Three weights, because the chip now says three things** — his club has named
+   **It is not a color on the opponent**, for the reason the pill was not: the
+   opponent's color is already spoken for by the game's own state above it —
+   live, final, postponed — and a starter can be announced for a game that is
+   live.
+
+   **Three weights, because the mark says three things** — his club has named
    him, his own rotation slot puts him there, or his club's rotation does (see
    `startTierOn`, and `server/src/rotations.ts` where each is measured). A grid
-   cell has room for two characters and not for a word, so the *weight* carries
-   how sure it is and the chip's own title carries the sentence.
+   cell has room for two characters and not for a word, so the *stroke* carries
+   how sure it is and the legend's own title carries the sentence.
 
-   The ladder is the app's own and is read from the outside in: **filled** is a
-   fact, **outlined** is our measurement of him, **dashed** is a measurement of
-   his club standing in for one of him. That is exactly the progression the
-   percentile card's solid-against-dotted bar already draws and the Splits card's
-   solid-against-hatched fill, so a reader who has learned it anywhere in this app
-   reads it here. Ink stays at full strength on all three: the *number* is not
-   less legible for being less certain, and dimming it would have the reader
-   squinting at the thing they most need to check. */
-.sched-sp {
-  margin-top: 1px;
+   The ladder is the app's own: **accent and solid** is a fact, **muted and
+   solid** is our measurement of him, **dashed** is a measurement of his club
+   standing in for one of him — the progression the percentile card's
+   solid-against-dotted bar draws and the Splits card's solid-against-hatched
+   fill. **And the legend goes italic on the two nobody has announced**, which is
+   the same word `.sched-vs` above now uses for the same fact about the other
+   club's man.
+
+   **The fill the announced pill carried is gone and is not coming back.** A
+   14% accent ground inside a stroke that now encloses `vs PIT` tints the
+   opponent rather than the mark, which is the one thing a border round a cell's
+   own text must not do: it reads as a box that has grown, or worse as a
+   selection — and this table already spends a ground on the zebra stripe and
+   four live-role tints. What the fill said, the accent hue says.
+
+   **The box is the containing block and the reason the row does not grow.**
+   `.sched-sp` is taken out of flow, so the legend costs the cell nothing but the
+   5px the box reserves below itself for the half of it that hangs under the
+   stroke; the pill it replaces was a laid-out third line of 12.8px plus a
+   pixel of margin. Measured on the live roster and the SP board at 1400 / 390 /
+   320: **a start day's row goes 64.19 → 58**, back to the figure the other three
+   wide tables keep, and a start day with no opposing starter named stays at 58.
+   Every start row on both tables is 58 after — 4 of 7 on the roster and 29 of 32
+   on the board were 64.19 before. The cell's own content comes to **32.39px**
+   against the **33px** a 58px row leaves between its 12px paddings and its
+   1px rule — 16.39 of box, 5 of reserved overhang, 11 of caption — and 21.39
+   where no opposing starter is named.
+
+   **The negative right margin is what keeps the column lined up.** A day cell is
+   right-aligned so the abbreviations share one edge down the column (see
+   `.sched-cell`), and 4px of padding plus a 1px stroke would push a start day's
+   `vs PIT` 5px in from every other day's. Pulled back by exactly that, the
+   *text* holds the edge and the stroke overhangs into the cell's own padding.
+   **5px is the number because it is the floor of both gutters**: the summary
+   table's is `clamp(5px, 1.9vw, 28px)` and the board's `clamp(5px, 1.6vw,
+   13px)`, so the stroke can touch a column boundary and can never cross one.
+   Measured at 1400 / 390 / 320 on both tables, a start day's opponent and a
+   plain day's in the same column agree to **0.00px** over 79 pairings on the
+   roster and 1198 on the board; the tightest the stroke ever comes to its own
+   `<td>`'s edge is **0.11px** (the board at 320) and **1.08px** (the roster at
+   320); and page overflow stays **0** at all six. */
+.sched-opp-box {
+  position: relative;
+  /* **`flex` rather than the block a flex item is otherwise blockified into**,
+     and it buys 1.2px of the cell's height budget. A block draws a *strut* off
+     its own inherited font — the td's 13px against the opponent's 12 — so the
+     box came out 17.59px tall round a 14.39px line, which put the cell 0.59px
+     over its budget and the row at 58.59. A flex container has no strut: the box
+     is its content, measured **16.39**, and it cannot drift if the opponent's
+     own size ever changes. */
+  display: flex;
   padding: 0 4px;
-  border-radius: 999px;
+  margin-right: -5px;
+  /* The legend hangs half its 9px line under the stroke; this is the room it
+     hangs into, so the caption below is never crossed by it. */
+  margin-bottom: 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+.sched-opp-box-announced {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Our own measurement of his slot: the accent goes, so the box reads as a quiet
+   stroke against the announced one's. `--muted` rather than the accent, which is
+   this view's color for a fact. */
+.sched-opp-box-projected {
+  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+/* His club's rotation, not his own record — the stroke goes **dashed**, which is
+   what this app has meant by "estimated" since the percentile card's first
+   dotted bar. */
+.sched-opp-box-estimated {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--faint) 85%, transparent);
+}
+/* The legend. `bottom: -0.5px` with a half-height translate puts its own center
+   on the *center* of the 1px stroke rather than on the padding box's edge — the
+   half-pixel is the stroke's own half, and without it the word rides a half
+   pixel high and the line reappears under it.
+
+   **Its ground is `var(--cell-bg)` and that is the whole of how the stroke
+   breaks.** The token is the rule this stylesheet already states for the summary
+   table: a cell's ground is *named* rather than assigned, because two things
+   need the same color and must not be able to disagree — here the cell behind
+   the box and the patch of it painted over the stroke. Assigning `--bg` would
+   put a page-colored notch in every even row's zebra stripe and in all four
+   live-role tints; reading the token, the patch is whatever that row resolved.
+   Checked on both tables at all three widths: every legend's computed
+   `background-color` is byte-identical to its own `<td>`'s — two values in play,
+   `rgb(32,33,34)` on the page and `rgb(18,19,20)` on the stripe — and the
+   legend's center sits **0.00px** off the stroke's.
+
+   **The ink stays `--muted` on the two quiet tiers, and that is measured rather
+   than a preference.** A third step down to `--faint` is the obvious way to draw
+   the third tier and it puts a 9px bold label at **3.18:1 on the zebra stripe**
+   in Midnight (3.72 on the page) — under what a label a reader has to *read*
+   owes them, where the percentile card's own `--faint` badge is a quiet
+   secondary number beside a value. `--muted` measures 6.08:1 on that stripe and
+   7.11 on the page, and 5.88/6.94 in Lavender (where `--faint` is 3.35/3.95). So
+   the ladder is carried by the two structural properties — hue, then stroke
+   style — and the text of all three stays legible in both. */
+.sched-sp {
+  position: absolute;
+  left: 50%;
+  bottom: -0.5px;
+  transform: translate(-50%, 50%);
+  padding: 0 3px;
+  background: var(--cell-bg);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.04em;
+  /* Declared, so the legend's height is the 9px this box reserves half of
+     rather than whatever `normal` resolves to in a font this app does not
+     choose. */
+  line-height: 1;
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
-/* Our own measurement of his slot: the fill goes, so the chip reads as an
-   outline against the announced one's solid ground. `--muted` rather than the
-   accent, which is this view's color for a fact. */
-.sched-sp-projected {
-  color: var(--muted);
-  background: none;
-  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-}
-/* His club's rotation, not his own record — the border goes **dashed**, which is
-   what this app has meant by "estimated" since the percentile card's first dotted
-   bar.
-
-   **The ink stays `--muted`, and that is measured rather than a preference.** A
-   third step down to `--faint` is the obvious way to draw the third tier and it
-   puts a 9px bold label at **3.18:1 on the zebra stripe** in Midnight (3.72 on
-   the page) — under what a chip a reader has to *read* owes them, where the
-   percentile card's own `--faint` badge is a quiet secondary number beside a
-   value. `--muted` measures 6.08:1 on that stripe and 7.11 on the page, and
-   5.88/6.94 in Lavender (where `--faint` is 3.35/3.95). So the ladder is carried
-   by the two structural properties — fill, then border style — and the text of
-   all three stays legible in both. */
+/* Nobody has announced this one. The italic is the caveat, and it is the same
+   one `.sched-vs-projected` above carries about the other club's man. */
+.sched-sp-projected,
 .sched-sp-estimated {
   color: var(--muted);
-  background: none;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--faint) 85%, transparent);
+  font-style: italic;
 }
 
 /* The `GS` count takes the same three weights, so the column and the cells it
@@ -12180,23 +12361,114 @@ button.start-line:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.lg-period-label {
-  display: inline-flex;
+/* **The week, folded onto the app's own date face.** `.lg-period-label` was
+   this: `Week 19` at 15px bold over the days at 12px muted — the qualifier
+   large and the days small, which is the *reverse* of the way the date bar four
+   lines above states the same kind of fact. Two faces for one object, so there
+   is one now: `.date-face` outright, in the JSX rather than restyled here, and
+   the three rules it replaced (`.lg-period-label`, `.lg-period-n`,
+   `.lg-period-dates`) are gone with it.
+
+   All this declares is what a *press* needs and `.date-face` cannot know: an
+   anchor for the list, and a width. The date bar's face is centered in a grid
+   column that is already the middle of a full-width bar, so it may be
+   `max-content` with a floor; here it sits between two arrows in a shrink-to-fit
+   inline row, where a percentage floor resolves against an indefinite width and
+   a `max-content` box shrugs to the width of `Aug 10 – Aug 19`. The pair below
+   is the same intent stated in the terms this row is in — measured, it holds the
+   face at 172px at 1400 and 320 alike, against the 108 the old label reserved,
+   so the week and the dates sit on one line at every width. */
+/* **Static, so the list hangs off the head row rather than off this group** —
+   `.lg-proj-key`'s measured trick, one edge over. The group sits behind the ‹
+   arrow, so its own left edge is 62px in at 320; a 260px panel from there runs
+   62 → 322 against a 320 window, which was measured at **2px of page-body
+   overflow** before this. Against `.lg-head`, which is the content width at
+   every size, `left: 0` is the app's own left gutter and the panel is on screen
+   at 320 (22 → 282) as at 1400. */
+.lg-period-face {
+  position: static;
+}
+.lg-period-face .date-face {
+  min-width: 172px;
+  width: auto;
+}
+/* The league's own weeks, as a list. Folded onto nothing — no popover in this
+   app is a list of rows of its own — so it states the surface once: the panel
+   fill, the border, the radius and the lift `.drp-popover` states, and a cap
+   that is measured rather than declared because the list is as long as the
+   season (19 rows on the live league, 21 at the end of one).
+
+   `left: 0` against the **head row**, not against the face — see the note on
+   `.lg-period-face`. Measured, the panel runs 340 → 600 at 1400 and 22 → 282 at
+   320, with 0 page-body overflow at both. */
+.lg-week-pop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  display: flex;
   flex-direction: column;
-  line-height: 1.25;
-  padding: 0 6px;
-  min-width: 108px;
+  gap: 2px;
+  /* The two gutters, so the panel is the width of the content column at 320
+     and its own 260 above that. */
+  width: min(260px, calc(100vw - 44px));
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  max-height: var(--popover-max-h, none);
+  overflow-y: auto;
+  /* The axis it genuinely scrolls, and only that one: a flick that runs out of
+     weeks must not carry the board under it. */
+  overscroll-behavior-y: none;
 }
-.lg-period-n {
-  font-size: 15px;
+/* One week. The same two lines the face prints, in the same order and the same
+   two sizes — a list whose rows read differently from the control that opened
+   them is a list you have to translate. */
+.lg-week {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Scoped: these are full-width rows in a scrolling list, which is exactly the
+   shape the app scopes hover on — a touch device has no pointer to move away,
+   so the tint sticks to the last row a finger crossed on its way down. */
+@media (hover: hover) {
+  .lg-week:hover {
+    background: var(--bg-2);
+    border-color: var(--border);
+  }
+}
+.lg-week:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The week the board is on. It sits after the hover rule, the two being equal
+   specificity — the trap this file records five times over. */
+.lg-week.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.lg-week-n {
+  font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
-/* The dates are not decoration: a **live** period's totals cover the days
-   played so far, so the span and the Live tag beside it have to be read
-   together or the numbers claim a whole week they haven't had. */
-.lg-period-dates {
+.lg-week-dates {
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
 }
 /* A label rather than a control, so it takes the app's round pill — the shape
    this app reserves for a thing you read. */
@@ -14568,32 +14840,59 @@ span.mup-move-name:hover {
    start at one x — the same arithmetic the summary table's fantasy slot chip
    makes for its own column. It held the *word* (`Claimed`, the widest the
    vocabulary holds) in 58px; `+` and `−` say the same direction in 14, and the
-   44px that buys is what lets the row stay one line down to 416 instead of
+   44px that buys is what lets the row stay one line down to 417 instead of
    giving the ownership block its own line from 640 (see the phone rule below).
-   The word is not lost — it is the slot's `title` and its `.sr-only` text. */
+   The word is not lost — it is the slot's `title` and its `.sr-only` text.
+
+   **The slot is a filled disc**, which is how the rest of this app draws a
+   mark that is a *state* rather than a run of text — `.lineup-spot`, the pip on
+   a headshot, is the same object one size up: a state color as the ground and
+   `--on-accent` as the ink. Round rather than `--radius-ctl`, because this is
+   read and never pressed. Not folded onto `.lineup-spot`'s selector list: that
+   rule carries a `1.5px solid var(--panel)` ring it needs to sit on a
+   photograph and a `font-weight: 700` this glyph does not want, so the two
+   would be one selector and two overrides — the fold rule's own test for two
+   things that merely resemble each other.
+
+   **20px, and the 6px it costs the row is measured**: the disc clears the 15px
+   glyph by 2.5px on every side, and the single-line row still carries this
+   league's widest name unellipsized down to 417 — so the phone rule below moved
+   411 → 416 with it. 18px left the glyph 1.5px a side and read as a ring drawn
+   round it rather than a ground under it. */
 .lg-tx-move {
-  min-width: 14px;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
   flex: none;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
+  color: var(--on-accent);
 }
 /* Color is spent on **what the pickup cost**, which is the distinction the word
    was carrying (`Claimed` rather than `Added`) and the one a reader of a feed
    acts on: `--hit` for a man taken off the pool for nothing, `--hr` for one
-   that cost a bid and a place in the waiver order. Neither is on every row —
-   between them they mark about half of one — and the third tone is no color at
-   all: a drop and either side of a trade are not pickups off the pool, and the
-   header's two team names and the row's `to <Team>` already say which. */
+   that cost a bid and a place in the waiver order, and `--muted` for the two
+   moves that are not a pickup off the pool at all — a drop, and either side of
+   a trade, which the header's two team names and the row's `to <Team>` already
+   say. It is the ground now rather than the glyph; the ink is `--on-accent` on
+   all three. Read off the rendered page in all six themes — sampled pixels, so
+   the two light palettes' card gradients are in the numbers — the glyph clears
+   its disc by **6.94–11.22:1** and the disc clears the row's own ground by
+   **5.48–9.93:1**, against the 4.5 a 15px glyph owes and the 3 a graphical
+   object does. */
 .lg-tx-move-free {
-  color: var(--hit);
+  background: var(--hit);
 }
 .lg-tx-move-waiver {
-  color: var(--hr);
+  background: var(--hr);
 }
 .lg-tx-move-plain {
-  color: var(--muted);
+  background: var(--muted);
 }
 .lg-tx-name {
   background: none;
@@ -14651,10 +14950,15 @@ span.mup-move-name:hover {
    and 2 of 42 go at 408. So the wrap begins at 411 and every width above it
    keeps the figure on the line above its deltas beside a full-width name.
 
+   **It is 416 now, because the mark took its disc.** Same 42 rows, same league:
+   0 of 42 ellipsized down to **417** and 2 at 416, which is the 14 → 20px slot
+   read straight back off the page. The rule is the number, so the number moved
+   with the slot rather than the slot being sized to keep the number.
+
    This is the one place the row wraps, and it does not undo the rule above it:
    what must not wrap is the *identity block*, which still ellipsizes, so a
    nine-player trade is nine rows of two lines rather than nine paragraphs. */
-@media (max-width: 411px) {
+@media (max-width: 416px) {
   .lg-tx-player {
     flex-wrap: wrap;
     row-gap: 2px;

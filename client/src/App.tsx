@@ -60,7 +60,7 @@ import type { ResearchInclude, ResearchPos, ResearchUi } from './components/Rese
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
-import { DateBar, DateRow, stepRange, stepTitle } from './components/DateControls';
+import { DateBar, DateCalendar, DateRow, stepRange, stepTitle } from './components/DateControls';
 import type { DateBarReading, DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
 import {
@@ -2833,6 +2833,10 @@ export default function App() {
   // below 640px they collapse behind the calendar icon and open as their own
   // full-width line. Transient like the other two.
   const [dateOpen, setDateOpen] = useState(false);
+  /* Stable, because the Feed's bar hands it to `useDismissable`, whose effect
+     is keyed on the callback: an inline lambda would tear the window listeners
+     down and put them back on every render of the app. */
+  const closeDates = useCallback(() => setDateOpen(false), []);
   // "Search for a player" from the empty state has two things it could mean,
   // depending on which of the two the breakpoint is showing: put the cursor in
   // the header's field, or open the bar the icon opens. `offsetParent` is null
@@ -4842,6 +4846,7 @@ export default function App() {
         setSearchOpen(false);
         setDateOpen((v) => !v);
       }}
+      onClose={closeDates}
       onPrev={prevStep.run}
       onNext={nextStep.run}
       /* A disabled arrow keeps a title, rather than going silent: the reason it
@@ -4865,6 +4870,31 @@ export default function App() {
           />
         ) : null
       }
+      /* **On the Feed the face opens the calendar and nothing else.** The
+         presets were what it opened, and on a stream they are the wrong six
+         words: the Roster is a table read for what a line *comes to* over a
+         named span, where the Feed is a record of what happened, scrolled back
+         through — and going to it is going to a *day*. `DateControls.tsx`
+         carries the geometry (a popover rather than 300px of pinned chrome);
+         `client-dates.md` carries the decision to drop the presets and what is
+         still reachable without them.
+
+         Schedule and Projected are Summary's alone, so there is no reading in
+         which the Feed's bar wants a panel — one test, not two. */
+      popover={
+        view === 'feed' ? (
+          <DateCalendar
+            start={start}
+            end={end}
+            max={maxDate}
+            onChange={(s, e) => {
+              setRange({ start: s, end: e, preset: null });
+              setDateOpen(false);
+            }}
+          />
+        ) : null
+      }
+      popoverLabel="Pick a range on the calendar"
     >
       <DateRow
         /* The five plus the fantasy week where there is a league to name one.

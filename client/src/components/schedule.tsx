@@ -744,7 +744,9 @@ export const TIER_TITLE: Record<StartTier, string> = {
   estimated: "estimated to start — his club's rotation, his own record being too thin to read one off",
 };
 
-/** `SP` / `SP` outlined / `SP` dashed — the chip, and the class that grades it. */
+/** `SP`, the legend that breaks the bottom stroke of the box drawn around the
+ *  opponent — upright where his club has named him, italic where nobody has.
+ *  The class grades it; `.sched-opp-box` is the box it is the legend of. */
 export function StartChip({ tier, cadence }: { tier: StartTier; cadence?: number | null }) {
   const turn =
     tier === 'announced' || cadence == null
@@ -773,22 +775,26 @@ export function StartChip({ tier, cadence }: { tier: StartTier; cadence?: number
  * games are still to come. An off day is a faint dash — quiet on purpose, so a
  * row's games are what the eye lands on when it scans across.
  *
- * **A starting pitcher's own game carries an `SP` chip, in one of three
- * weights** — filled where his club has named him, outlined where his own
- * rotation slot puts him there, dashed where his club's rotation does. That is
- * the app's own ladder for how sure a number is (the percentile card's dotted
- * bubble, the Splits card's hatched fill), applied to a grid cell where a word
- * would not fit; the sentence is on the chip's own title.
+ * **A starting pitcher's own game is the opponent inside a box, with `SP`
+ * breaking the bottom stroke** — a fieldset legend, which is what the mark is:
+ * the day is what carries the fact, so the border goes round the day rather
+ * than a pill going under it. Three weights, and the ladder is the app's own —
+ * a **solid accent** stroke where his club has named him, a **solid muted** one
+ * where his own rotation slot puts him there, a **dashed** one where his club's
+ * rotation does (the percentile card's dotted bubble, the Splits card's hatched
+ * fill). **The legend goes italic on the two nobody has announced**, so the
+ * word itself carries the caveat; the sentence is on its own title.
  *
  * **And every cell names the man the other club is throwing** — `RHP
  * Alcantara`, hand and surname, which is the vocabulary the summary table's
  * opponent cell and the feed's Upcoming bar already write a starter in and the
  * one fact a manager decides a hitter's week on. It takes the same three
  * weights as the count column beside it (`.sched-gs`): nothing added where his
- * club has named him, an underline where it is our own reading of his slot, a
- * dashed one where it is his club's. Where the answer is not one man — see
- * `buildStarters`, which enumerates the four ways — the line is simply absent,
- * because a dash in this grid already means *no game*.
+ * club has named him, **italic** where it is our own reading of his slot, and
+ * italic under a dashed line where it is his club's rotation standing in. Where
+ * the answer is not one man — see `buildStarters`, which enumerates the four
+ * ways — the line is simply absent, because a dash in this grid already means
+ * *no game*.
  */
 export function ScheduleCell({
   index,
@@ -833,9 +839,20 @@ export function ScheduleCell({
             className={`sched-cell sched-${g.state}${tier ? ` sched-start sched-start-${tier}` : ''}`}
             title={title}
           >
-            <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+            {/* The box is drawn **only on a start day**, and the opponent is
+                the same `<span>` either way — the box is what a legend needs a
+                containing block for, and a cell with no start has nothing to
+                legend. Its border is laid out rather than painted, so it is
+                added where it is spoken for rather than reserved everywhere. */}
+            {tier ? (
+              <span className={`sched-opp-box sched-opp-box-${tier}`}>
+                <span className="sched-opp">{opp}</span>
+                <StartChip tier={tier} cadence={rotation?.cadence ?? null} />
+              </span>
+            ) : (
+              <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+            )}
             {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
-            {tier && <StartChip tier={tier} cadence={rotation?.cadence ?? null} />}
           </span>
         );
       })}

@@ -1,5 +1,7 @@
+import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import { addDays, wideRange } from '../lib';
+import { useDismissable, usePopoverFit } from '../hooks';
 import { DateRangePicker } from './DateRangePicker';
 
 /**
@@ -70,6 +72,11 @@ import { DateRangePicker } from './DateRangePicker';
  * open, and what a step does to it — because that is the only half the two
  * genuinely answer differently.
  */
+
+/** Re-exported so a caller that draws the bar draws the calendar from the same
+ *  import — the two are one control on the Feed, and a second import site is
+ *  how a surface comes to hold a calendar the bar knows nothing about. */
+export { DateCalendar } from './DateRangePicker';
 
 /** One named span the presets row offers. */
 export interface DatePreset {
@@ -212,11 +219,14 @@ export function DateBar({
   end,
   open,
   onToggle,
+  onClose,
   onPrev,
   onNext,
   prevTitle,
   nextTitle,
   spanControl,
+  popover,
+  popoverLabel,
   children,
 }: {
   reading: DateBarReading;
@@ -224,6 +234,9 @@ export function DateBar({
   end: string;
   open: boolean;
   onToggle: () => void;
+  /** Only wanted alongside `popover` — a popover dismisses on an outside press
+   *  and on Escape, and neither of those is a toggle. */
+  onClose?: () => void;
   /** Null disables the arrow — there is nowhere to step in that direction. */
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
@@ -242,6 +255,35 @@ export function DateBar({
    * press that promised one.
    */
   spanControl?: ReactNode;
+  /**
+   * **What the press opens instead of the disclosure, where the disclosure is
+   * the wrong shape for it** — a panel floating over the page rather than one
+   * pushing the page down, hung under the middle of the bar.
+   *
+   * It exists for the Feed, whose face opens the calendar straight away, and
+   * the reason is a number: the presets panel is 50px and a month grid is 300,
+   * so drawn in the flow it would be 300px of pinned chrome on a view whose
+   * whole content is a scrolling stream. `--chrome-h` is measured off that box,
+   * so the page below would move down by the height of a calendar every time
+   * one was opened. Over the page it costs the chrome nothing.
+   *
+   * **It dismisses like every other popover in this app** — `useDismissable`,
+   * so an outside press closes it and is spent on the closing, and Escape goes
+   * through `answersEscape` and undoes exactly this one thing. The box the
+   * press is tested against is the **whole bar**, not the popover: the face is
+   * the opener and its own `onClick` already toggles, so a face inside the test
+   * is one press doing one thing rather than a dismissal and a re-open racing
+   * each other. The arrows are inside it for the same reason — they and the
+   * calendar are one control over one range, and a step with the calendar open
+   * moves the grid rather than closing it.
+   *
+   * **Null falls back to the disclosure**, which is what every caller that has
+   * not asked for this gets.
+   */
+  popover?: ReactNode;
+  /** What the popover calls itself, to a screen reader and in the face's own
+   *  tooltip — `Pick a range on the calendar`. Ignored without `popover`. */
+  popoverLabel?: string;
   /** The disclosure everywhere else: the presets and the picker. Rendered only
    *  while `open`, which is what lets `.date-control` be a plain flex row again
    *  rather than a `display: none` undone by a class on somebody else's
@@ -249,8 +291,22 @@ export function DateBar({
   children: ReactNode;
 }) {
   const { lead, range } = dateBarFace(reading, start, end);
+  const asPopover = popover != null;
+  const barRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  /* The hooks run unconditionally and are handed `false` where the bar is a
+     disclosure — a disclosure in the pinned chrome has no outside to press
+     past and no height to cap, and a conditional hook is not a thing React
+     allows in any case. */
+  useDismissable(asPopover && open, barRef, onClose ?? (() => {}));
+  usePopoverFit(asPopover && open, popRef);
   return (
-    <div className={`date-bar${open ? ' open' : ''}`} role="group" aria-label="Dates">
+    <div
+      className={`date-bar${open ? ' open' : ''}${asPopover ? ' date-bar-anchored' : ''}`}
+      role="group"
+      aria-label="Dates"
+      ref={barRef}
+    >
       <div className="date-bar-row">
         <button
           type="button"
@@ -267,14 +323,23 @@ export function DateBar({
           className={`date-face${open ? ' active' : ''}`}
           onClick={onToggle}
           aria-expanded={open}
-          /* The tooltip names what is actually behind the press, which the
-             Schedule reading changes: a preset list is not what opens there. */
+          aria-haspopup={asPopover ? 'dialog' : undefined}
+          /* The tooltip names what is actually behind the press, and two things
+             change it: the Schedule reading, where a preset list is not what
+             opens, and a caller that has handed over a popover in place of the
+             disclosure — on the Feed the press is a calendar and saying
+             `Presets and a range picker` would name one control this bar does
+             not have and one it opens at a remove. */
           title={
             open
-              ? 'Close the date controls'
-              : reading.kind === 'schedule' && spanControl
-                ? 'How far ahead'
-                : 'Presets and a range picker'
+              ? asPopover
+                ? 'Close the calendar'
+                : 'Close the date controls'
+              : asPopover
+                ? popoverLabel ?? 'Pick a range'
+                : reading.kind === 'schedule' && spanControl
+                  ? 'How far ahead'
+                  : 'Presets and a range picker'
           }
         >
           <span className="date-face-lead">{lead}</span>
@@ -291,11 +356,21 @@ export function DateBar({
           <Chevron back={false} />
         </button>
       </div>
-      {open && (
-        <div className="date-bar-panel">
-          {reading.kind === 'schedule' && spanControl ? spanControl : children}
-        </div>
-      )}
+      {open &&
+        (asPopover ? (
+          <div
+            className="drp-popover date-bar-pop"
+            role="dialog"
+            aria-label={popoverLabel ?? 'Dates'}
+            ref={popRef}
+          >
+            {popover}
+          </div>
+        ) : (
+          <div className="date-bar-panel">
+            {reading.kind === 'schedule' && spanControl ? spanControl : children}
+          </div>
+        ))}
     </div>
   );
 }

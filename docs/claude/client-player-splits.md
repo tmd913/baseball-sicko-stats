@@ -608,3 +608,86 @@ compare against.`
 101.82 KB of CSS** (17.80 → 18.12 gzipped) — 2.8KB and 1.8KB raw, 1.1KB and
 0.3KB over the wire, for a component that replaced a card and a stylesheet block
 that is mostly the paragraphs above restated where the rules are.
+
+### The card has three callers, and the third one got no bars
+
+**The Splits tab is not the only place this card is drawn.** The feed's Upcoming
+row opens it in a dialog with one half marked, and — since the player page grew
+a **Schedule** tab — an upcoming game row on that tab opens exactly the same
+thing, from `PlayerSchedule.tsx`, in the same `Modal` under the same
+`.play-detail-box`. That third caller shipped with **no bars at all**.
+
+**Both halves of the complaint were one fault, and it is the one this stylesheet
+already documents.** `.pct-card` centers itself with `margin: 0 auto`, which is
+right in the block flow of the Splits tab; inside the dialog's flex column that
+auto cross-axis margin **suppresses the item's stretch**, so the card shrink-to-
+fits. `.upcoming-detail .pct-card { width: 100% }` was written for exactly this
+when the feed's Upcoming row went from an accordion to a popup. The player
+page's wrapper, `.start-detail`, was folded onto `.upcoming-detail` for the flex
+column above it and **not onto this line**, so the fault was reintroduced one
+caller along.
+
+**What that costs, measured on Ohtani's Aug 20 row (178 PA vs LHP, 357 vs RHP,
+so no amber note):**
+
+| | dialog | card | rail track | fills painted | row |
+| --- | --- | --- | --- | --- | --- |
+| 1400 before | 800 | **246** | **0** | **0 / 8** | 34 |
+| 1400 after | 800 | 680 | 434 | 8 / 8 | 34 |
+| 390 before | 358 | **185** | **0** | **0 / 8** | 34 |
+| 390 after | 358 | 328 | 143 | 8 / 8 | 34 |
+| 320 before | 288 | **185** | **0** | **0 / 8** | 34 |
+| 320 after | 288 | 258 | 73 | 8 / 8 | 34 |
+
+The **dialog's own width never moved** — `min(--card-column, 100%)` on
+`.play-detail-box`, 800 / 358 / 288 before and after, and the page overflows by
+0 at every width in both states. What read as a narrow popup was a 246px card
+adrift in a 774px body. And 246 is not a new number: it is the same 246 the
+feed's own fix recorded, arrived at the same way.
+
+**The fills were rendered, not missing** — eight `.spl-fill` nodes on every row
+of the broken card, each carrying its inline `calc(frac × (50% −
+var(--spl-inset)))`. The `1fr` rail track has no intrinsic content, so it
+contributes nothing to the table's max-content and collapses to 0 in a shrink-to-
+fit card; 50% of 0 is 0. That is worth knowing because it is the reason the bug
+survived: the card looks *complete*, a tidy column of figures with empty rails,
+rather than like something that failed.
+
+**Which player it opens on decides whether you see it at all.** The amber
+thin-sample note is a paragraph inside `.pct-card`, and its own max-content is
+**623.75px** — wider than the table's 200 — so on a thin-split card the shrink-
+to-fit lands at 669.75, a hair under the 680 cap, and the bars come back by
+accident. Aaron Judge's card (76 PA vs LHP) looked right at 1400; Ohtani's was
+the 246. A layout bug you can only reproduce on half your roster is a layout bug
+that gets reported as "sometimes".
+
+**Three other fixes were tried on the live card at 1400 and all three lose.**
+`align-self: stretch` on the card: **246, track 0, 0 / 8** — unchanged. The same
+declared as `align-items: stretch` on the wrapper: **246, track 0, 0 / 8** —
+also unchanged, and both for the reason the trap is a trap. An auto margin in
+the cross axis does not *lose* to alignment, it makes the item **ignore
+alignment entirely** and center at its hypothetical size, so neither
+declaration is even in the argument. A `min-width` on `.spl-track` does put ink
+back — **446px card, 200px track, 8 / 8 painted** — and is the wrong shape of
+answer twice over: it is a declared constant where the right number is *the
+width the box has to give*, which is this repo's standing rule, and it still
+leaves the card floating 328px short of its body. `width: 100%` reads the
+container, and it is the line that was already there. So the fix is one selector
+folded onto an existing rule rather than a rule of its own — two wrappers that
+are the same object, which is the other standing rule.
+
+**The hatch survives**, which is the thing a width fix could quietly break: an
+estimate never wears a measurement's clothes. Judge at 1400 / 390 / 320 after
+the fix draws **8 hatched fills of 8** on cards of 680 / 328 / 258, and Ohtani
+draws **0 hatched of 8** on the same three widths. Solid still means measured.
+
+**The feed caller is byte-identical before and after**, which is what a folded
+selector should be: the same Upcoming dialog at 1400 / 390 / 320 measured 800 /
+358 / 288 wide, cards 680 / 328 / 258, tracks 434 / 143 / 73, 8 / 8 painted, row
+34px, overflow 0 — every figure the same on both runs. The two callers now agree
+at every width, which they always claimed to.
+
+**Bundle: CSS 158,320 → 158,344 raw (28,282 → 28,286 gzipped), JS 600,229 raw
+and 176,931 gzipped, unchanged.** 24 bytes of stylesheet, 4 over the wire, for a
+selector; the rest of the diff is the comment above the rule saying why it has
+two.

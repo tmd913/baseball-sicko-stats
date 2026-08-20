@@ -1411,11 +1411,15 @@ function PitcherTable({
  * beside `--live-purple` in `styles.css`, where the hue and the measured gaps
  * between all four grounds are set out.
  *
- * What the gate was really protecting is real and is kept: the row costs the
- * pane its height, this view being a fixed-height column where every pixel
- * under the table is a row of players off the bottom of it. That is a fixed
- * ~36px now rather than a row that comes and goes, which is the cheaper thing
- * to lay out and by far the easier thing to read.
+ * What the gate was really protecting is real: the row cost the pane its
+ * height, this view being a fixed-height column where every pixel under the
+ * table is a row of players off the bottom of it. That was a fixed ~36px rather
+ * than a row that came and went — and it is **nothing** now, the key having
+ * moved inside the pane, under the last row, where it scrolls instead of
+ * standing on the window's bottom edge. Measured: pane 694 → 731 at 1400 and
+ * 650 → 687 at 390, which is the legend's own 37px given back. See where it is
+ * rendered for the two decisions that took (whose width it centers in, and why
+ * it is sticky on the horizontal axis alone).
  *
  * The labels are `liveRoleLabel`'s, the same strings the live tag on a feed row
  * and a player card carry, and the swatches read the same `--role-*` tokens the
@@ -1552,10 +1556,29 @@ export function SummaryTable({
             />
           )}
         </div>
+        {/* The key to the row tints — always, and the whole vocabulary, however
+            quiet the day is. See `RoleLegend`.
+
+            **Inside the pane, under the last row**, which is where it stopped
+            being a strip of chrome held against the bottom of the window. This
+            view is a viewport-tall flex column where only the table scrolls, so
+            a legend *outside* the pane is pinned by construction: it sat on the
+            window's own bottom edge at every scroll position and cost the rows
+            37px of a screen that has nothing else to give. A key is a thing you
+            go and look at, not a thing that follows you — so it scrolls with
+            the rows it explains, and reaching the last one is what brings it
+            into view.
+
+            A sibling of `.summary-tables` rather than a child of it: that
+            column is `width: max-content`, so a key inside it is centered on
+            the *table's* width and on a phone lands half off the right of a
+            screen the reader has not scrolled yet. Out here it takes the
+            scroller's own width and centers in the viewport at every width —
+            and takes `position: sticky; left: 0` so a reader scrolled out to
+            the K column still has it, which is the horizontal half of the
+            pinning this table already does for the headshot column. */}
+        <RoleLegend />
       </div>
-      {/* The key to the row tints — always, and the whole vocabulary, however
-          quiet the day is. See `RoleLegend`. */}
-      <RoleLegend />
     </div>
   );
 }

@@ -87,6 +87,36 @@ At **390** the same three read 50 / 50 / 96 → 50, the phone `<select>` standin
 
 **Where it is drawn.** On the Roster and the Feed, once there is something to read — the same guard the calendar carried, the dates qualifying exactly those two views and nothing on the research board. In the expanded full-page table, which keeps it for the reason it keeps the kind tabs: a table of dates with nothing on screen saying which days is the state that mode must never be in. And on a matchup's team pages, below their tools row. It goes with the rest of the chrome on the **edit screen** by being **named in `.app.edit-mode`'s list** rather than by being inside `.view-bar` — it used to inherit that for free and is a sibling of that row now; verified, `display: none` under that class where it is `block` without it.
 
+#### On the Feed the face opens the calendar, and the presets are not behind it
+
+**The press opened six preset pills and a field that opened a calendar; on the Feed it opens the calendar.** The bar is drawn on two views and they ask different questions of it — the paragraph below (*The Roster and the Feed keep their own range*) is that argument for the *range*, and this is the same argument one step further on, about the *control*. The Roster is a table read for what a line comes to over a named span, which is what `Last 7 days` is a word for; the Feed is a record of what happened, scrolled back through, and going to it is going to a **day**. Reaching that day was three presses — the face, the `Aug 19, 2026` field, then the day — of which the middle one existed only to get past a row of controls the reader was not there for.
+
+**It is a popover over the page, not a panel in the flow, and that is a number rather than a taste.** The presets panel is 50px; the calendar is 318. The bar lives inside `.app-chrome`, which is pinned and whose height is *measured* into `--chrome-h`, so a calendar drawn in the flow is a calendar added to the pinned chrome. Driven on the Feed with the calendar open, the same grid drawn in the bar's flow against drawn over the page:
+
+| | chrome, over the page | chrome, in the flow | window |
+| --- | --- | --- | --- |
+| 1400 × 900 | **169** | 501 | 900 |
+| 390 × 844 | **213** | 545 | 844 |
+| 320 × 844 | **309** | 641 | 844 |
+
+At 390 that is 65% of the window given over to chrome, with the first feed item pushed to y=633 — a control that answers *which day* by hiding the day. Over the page the chrome does not move at all, at any of the three widths, and page-body overflow is **0** in every state measured.
+
+**The anchor is the bar, not a wrapper round the face**, which is what the three-column grid already buys: the middle column is centered on the bar's own center line whatever the label says, so a popover centered on the bar is centered on the face by construction. Measured, the bar's center and the face's center are the same number at all three widths — **700 / 195 / 160** — and the popover is 260 wide at each, running 570 → 830 at 1400, 65 → 325 at 390 and 30 → 290 at 320. `.drp-popover` is folded onto in the JSX rather than restyled, so the Feed's calendar and the Roster's are one surface; what `.date-bar-pop` declares is the anchoring and a `--popover-max-h` cap, the latter for the reason that token exists — measured at 712 / 612 / 516 at the three widths, none of which the 318px grid reaches, but a phone held sideways would.
+
+**The presets do not stay, and that is the decision rather than an omission.** Three things were weighed:
+
+- **The arrows already carry the two that matter.** `stepRange` lands back on a preset's *label* wherever the days it reaches are exactly that preset's days, so `Today` → ‹ → `Yesterday` → › → `Today` round-trips through the rule rather than through a frozen range, with the URL going `?preset=Today` → `?preset=Yesterday` → `?preset=Today`. Those are the two a stream reader wants; the other four are spans, and the four *are* reachable — two presses on the calendar draw any of them.
+- **Keeping them above the calendar would have made "opens the calendar" false where it matters.** Stacked, the panel is the pills plus the grid, and on a phone the pills are a `<select>` — so the control the press was for starts 50px lower on a surface that already has the least room. At 320 the popover's foot is at 634 against an 844 window; 50px of presets above it puts it past the fold.
+- **A preset names a span and a feed is not read in spans.** `Last 15 days` on a stream is a scroll, not a reading, which is the same fact that made `Schedule` and `Projected` the Roster's alone.
+
+The pills, the phone `<select>` and the field-behind-a-calendar are all untouched on the Roster, where the case for them is the case that was always made: measured after this change, its panel is **50px** and its bar 54 → 104 exactly as before, six pills, one field, and one press of Escape closing the calendar and leaving the panel standing.
+
+**Dismissal is the app's, not a second mechanism.** `useDismissable` on the bar, so an outside press closes the popover and is **spent on the closing** — driven at 1400 with the calendar open on the Feed, a press on the `Roster` tab behind it dismissed the popover and left the view on the Feed (`?view=feed` unchanged), and a second press then crossed. Escape goes through `answersEscape` and undoes exactly one thing: driven on a matchup's team page in its feed reading, one press closed the calendar with the matchup page still open (`?mup=109&mt=6` intact) and a second closed the page. **The box the press is tested against is the whole bar**, deliberately: the face is the opener and its own `onClick` already toggles, so a face outside the test is a dismissal and a re-open racing each other on one press — and the arrows are inside it because they and the calendar are one control over one range, so a step with the calendar open moves the grid (`DateCalendar` re-centers on `end`) instead of closing it.
+
+**A matchup's team pages take it from the same component**, in the `feed` reading, and there the case is stronger rather than weaker: that page's preset row leads with a `Matchup` pill of its own, and the whole page *is* one matchup period, so it is the one preset a reader of that feed has least reason to press. Driven at 390 on `?view=league&mup=109&mt=6`: the Roster reading opens six pills and a field in a 50px panel (bar 103), and the Feed reading opens a 260 × 318 calendar with the bar still at 53.
+
+**`DateRangePicker` split in two for it.** `DateCalendar` is the month head, the grid and the foot — no field, no open state — and `DateRangePicker` is that calendar behind the field the Roster's panel wants. The two surfaces share the grid rather than being two grids that agree today about how a range is picked. The effect that used to re-center the grid and drop a half-made selection on every open is gone with the split: the calendar is mounted only while it is shown, so a fresh mount does both in its own initializers, and the remaining effect watches `end` — which is what makes an arrow pressed with the calendar open move the grid to the month the reader has just been moved to.
+
 #### What this replaced (kept for the history)
 
 The two paragraphs below are the button's own argument, left as written. The

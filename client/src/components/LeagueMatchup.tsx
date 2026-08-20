@@ -12,7 +12,7 @@ import { LoadingLine } from './Loading';
 import { api } from '../api';
 import { BackButton } from './BackButton';
 import { InfoKey } from './InfoKey';
-import { DateBar, DateRow, stepRange, stepTitle } from './DateControls';
+import { DateBar, DateCalendar, DateRow, stepRange, stepTitle } from './DateControls';
 import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import { FeedOrderToggle } from './FeedFilters';
@@ -546,6 +546,9 @@ export default function LeagueMatchupView({
    */
   const [feedOldest, setFeedOldest] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  /* Stable for `useDismissable`'s sake — see the same note on the app's own
+     copy, whose effect is keyed on the callback it is handed. */
+  const closeDates = useCallback(() => setDateOpen(false), []);
   const [scheduleSpan, setScheduleSpan] = useState<ScheduleSpan | null>(null);
   /**
    * **The projected reading of a team page** — the app's own Roster-view lens,
@@ -1410,6 +1413,7 @@ export default function LeagueMatchupView({
       end={mupBarSpan.end}
       open={dateOpen}
       onToggle={() => setDateOpen((v) => !v)}
+      onClose={closeDates}
       onPrev={mupPrev.run}
       onNext={mupNext.run}
       prevTitle={mupPrev.title}
@@ -1427,6 +1431,26 @@ export default function LeagueMatchupView({
           />
         ) : null
       }
+      /* And the same rule the app's Feed is on, from the same component: in the
+         feed reading the face opens the calendar rather than a preset row. This
+         page's preset row leads with a `Matchup` pill of its own, which makes
+         the case *stronger* here rather than weaker — the whole page is already
+         one matchup period, so the pill that names it is the one preset a
+         reader of this feed has least reason to press. */
+      popover={
+        reading === 'feed' ? (
+          <DateCalendar
+            start={span.start}
+            end={span.end}
+            max={maxDate}
+            onChange={(s, e) => {
+              setSpan({ start: s, end: e, preset: null });
+              setDateOpen(false);
+            }}
+          />
+        ) : null
+      }
+      popoverLabel="Pick a range on the calendar"
     >
       <DateRow
         presets={spanPresets}

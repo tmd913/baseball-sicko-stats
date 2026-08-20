@@ -52,6 +52,14 @@ So the page-level wait takes **`margin-top: 54px`** and both views land on it id
 
 **Only the summary view.** `.app.research-mode` shares the flex-column rule and is deliberately left out of this one: what its chrome's bottom margin holds off is the **count line**, which is a caption rather than a bordered pane and would read as part of the bar if the two touched, and the board's error banner and empty states are children of that same column. The games view and the feed are lists of cards and keep the full 80px, which is what stops the last card sitting on the edge of the window. Checked after the change: research is still 14px of chrome margin over its count line and 14px of `.app` padding under its pane, games still 80px under its last card.
 
+**The legend is inside the pane now, and the phrase above — *the room at the bottom of this view* — is what was wrong with it.** *(Superseded in that one respect; everything below about what the key says, why it is always drawn and why each swatch is the row's own ground stands unchanged.)* This view is a viewport-tall flex column in which only the table scrolls, so a legend that is a *sibling* of the pane is pinned by construction: it sat on the window's own bottom edge at every scroll position, on every roster, on a page whose whole design is that the rows get the screen. Measured on the live roster at 900px tall: the key held **37px** off the bottom of the pane at 1400, 390 and 320 alike, and gave it back the moment it moved — pane **694 → 731 at 1400** and **650 → 687 at 390**, which is the legend's own box to the pixel.
+
+A key is a thing you go and look at, not a thing that follows you. So it is the last child of `.summary-scroll`, under the last row, and reaching the foot of the table is what brings it into view: measured, it lays out at y **1080** in a 900px window and reads at **862** once the pane is scrolled to its end.
+
+**Two things had to be decided rather than assumed, and both were measured wrong first.** A child of `.summary-tables` looks like the right home — that column is `width: max-content`, so the key would travel with the table — but the column is *wider than the screen on a phone*, and centering four items in it put them at x≈190–524 in a 390px viewport, half of them off the right of a screen nobody had scrolled. As a child of the scroller it takes the client width instead and centers in the viewport: items at **36–354 at 390** and **1–319 at 320**. And being inside a two-axis scroller would otherwise cost it the horizontal axis — a table scrolled out to `K` would leave the key behind at the far left of a 1952px content box — so it takes **`position: sticky; left: 0`**, which is the same pinning the headshot column already has, on the same axis, and deliberately not on the vertical one. Measured at full right scroll: legend left **0** at 1400 and 390, **−0.1** at 320.
+
+The full-page box takes the change with it, the legend being a child of the same pane there: measured expanded at 1400×900, pane **774px** with the key at **852** once scrolled to the foot, and page-body overflow **0** at every width.
+
 **A legend for the row tints sits under the table, always, and it is also the room at the bottom of this view.** Nothing on this page had ever named the colors it paints rows in — a reader arriving at a table with three shades in it had to work out from the pips and the rings what each one meant, or ask — so the four live roles get a key: `At bat`, `On deck`, `On base`, `On mound`, each a swatch and a word, on both tabs and on every day of the season.
 
 **How that squares with the passage above, which took this column's vertical margins away.** What went then was a **pair of empty 14s** and the argument was precisely that they were "a strip of background showing through where a reader expects rows". Neither rule comes back and neither needs to. The room this row occupies is taken off the pane by the flex column, so the table still runs from the bar to whatever is under it — and what is under it is *content* rather than background, which is the one condition the old argument turned on. The old reasoning holds exactly as written; it never claimed the strip could not be used, only that it must not be empty, and 37px of key is not empty on any day.
@@ -471,7 +479,7 @@ It is the app's own swap rather than a new one — the date presets, the researc
 
 **So the turns are projected, and the projection is measured rather than guessed** — which is the other half of what changed, and the half that makes the reversal honest. `server/src/rotations.ts` reads each club's own schedule for who started which of its games (MLB keeps `probablePitcher` on a game already played — **1,866 of 1,868 finals carry both sides**), takes the median gap between a pitcher's consecutive starts *in club games*, and steps that forward over the games still to come. Blinded against real announcements, a pitcher's own cadence lands his next start **41 of 51 exact and 51 of 51 within a day**; where his own record is too thin, his club's pooled rotation stands in and lands **9 of 9**. The feed's Upcoming rule is untouched and still right *there*, for a reason this view does not share: that section is a list of games a player is *in*, where a wrong entry is a game he is not playing, and this is a grid of a club's fixtures where the mark qualifies a day that is on screen either way.
 
-**Three tiers, and the reader is told which.** A cell's chip and the `GS` count both carry the weight, and the ladder is the app's own — **filled** where his club has named him, **outlined** where his own rotation slot puts him there, **dashed** where his club's rotation does. That is the progression the percentile card's solid-against-dotted bar already draws and the Splits card's solid-against-hatched fill, applied to a grid cell where a word will not fit; each chip's `title` carries the sentence, and the cadence with it (`a turn every 5 club games`). See **Client — the player page**, *Projected Starts*, where the same three tiers are drawn as words because a row there has the width for them.
+**Three tiers, and the reader is told which.** A cell's chip and the `GS` count both carry the weight, and the ladder is the app's own — **filled** where his club has named him, **outlined** where his own rotation slot puts him there, **dashed** where his club's rotation does. That is the progression the percentile card's solid-against-dotted bar already draws and the Splits card's solid-against-hatched fill, applied to a grid cell where a word will not fit; each chip's `title` carries the sentence, and the cadence with it (`a turn every 5 club games`). See **Client — the player page**, *Projected Starts*, where the same three tiers are drawn as words because a row there has the width for them. (**The cell's own chip is a border round the opponent now**, with `SP` breaking its bottom stroke, and the fill is gone with it — see *The `SP` mark is a border round the day* below. The `GS` count still wears the ladder exactly as this paragraph describes.)
 
 **The `GS` count takes the *weakest* tier among the turns it counts**, so a `2` built on one announcement and one guess is drawn as a guess and its title says so (`2 turns in the next 7 days — 1 announced · 1 projected from his own pace`). Drawing it as a fact would be the one thing this column must not do — and it is the ordinary shape rather than a corner, an announced Monday and a projected Saturday being exactly what a two-start week looks like three days out.
 
@@ -593,6 +601,117 @@ by construction.
 records: a third step down to `--faint` puts a label a reader has to *read* at
 3.18:1 on Midnight's zebra stripe, where `--muted` measures 6.08. The ladder is
 carried by the structure and every tier stays legible.
+
+#### And the tier is italic now, not an underline
+
+**The passage above is left as it stands because its height argument is still
+the one in force** — what changed is *which* painted mark carries the tier, not
+that it is painted. The solid underline on `projected` is gone and the two
+unannounced tiers are **italic**: `LHP Rogers` for a slot we read off his own
+cadence, and italic under the same `--faint` dashed line for one read off his
+club's rotation. `announced` is still upright and undecorated.
+
+**One word, said the same way in both places.** The `SP` mark on the row's own
+pitcher goes italic on exactly the same two tiers (see the section below), so a
+slanted name and a slanted `SP` are the same caveat about the same game and a
+reader learns one thing rather than two. The underline it replaces had a second
+problem: a *solid* line is the measured half of this app's own
+solid-against-broken ladder, spent on the half that is ours.
+
+**Dropping the dashed line as well was the tidier option and was rejected.**
+With the solid one gone the dashes no longer mean "unannounced" — they mean *his
+club's rotation, not his own*, which is what dashes have meant here since the
+percentile card's first dotted bar — and italic alone cannot say which of two
+unannounced tiers a name is in. A 10px caption has room for one more signal and
+this is the one that costs no height.
+
+**Measured, and the height claim holds either side.** All three tiers render at
+**11px** in the grid before and after, and at **16px** on the player page's
+Schedule tab, which wears the two modifiers on its `.ovw-next-vs` line — driven
+there and read back: four announced names upright at 16px, six unannounced
+italic at 16px, the estimated ones carrying the dashed line. The whole change
+costs the table **≤0.17px of width** at every measured state (roster 760.50 →
+760.67 at 390, board 748.42 → 748.59 at 320).
+
+#### The `SP` mark is a border round the day, with the word breaking its bottom stroke
+
+**A pill under the opponent made the reader pair two things; a border round the
+opponent is the one thing.** The mark is a fact about a *day* — he is starting
+this one — so it is drawn as the day, with `SP` sitting in the middle of the
+bottom stroke the way a fieldset's legend sits in its border. What was three
+lines in the cell (`vs PIT`, the starter's name, an `SP` pill) is two.
+
+**And it buys the row back.** The pill was a laid-out third line — 12.8px plus a
+pixel of margin — which put a start day's cell at 39.19px against the 33px a
+58px row leaves between its 12px paddings and its rule, so **the row grew to
+64.19**. The legend is `position: absolute`, so it costs the cell nothing but
+the 5px the box reserves below itself for the half of the word that hangs under
+the stroke. Measured on the live roster (pitcher tab, `sched=7`) and the SP
+board at **1400 / 390 / 320**, with an `estimated` tier forced into the payload
+so all three draw:
+
+| | start rows before → after | cell content | plain rows |
+| --- | --- | --- | --- |
+| roster · 1400 / 390 / 320 | 58×3 + **64.19×4** → **58×7** | 39.19 → **32.39** (21.39 with no starter named) | 48×1 + 58×7, unchanged |
+| board · 1400 / 390 / 320 | 58×3 + **64.19×29** → **58×32** | 39.19 → **32.39** | 58×18, unchanged |
+
+That is **33 of 39 start rows on the two tables back to 58px**, the figure the
+other three wide tables keep, and it is the honest reversal of the "+6.19px a
+start day" line the table above this section records as the cost of naming the
+opposing starter. Column widths move by **≤0.17px** and page-body and document
+overflow are **0** in all six states.
+
+**The box is a flex container rather than the block a flex item is otherwise
+blockified into**, which is worth 1.2px of that budget: a block draws a *strut*
+off its own inherited font — the `<td>`'s 13px against the opponent's 12 — so
+the first pass measured **17.59px** of box round a 14.39px line, put the cell at
+33.59 and the row at **58.59**. A flex container has no strut; the box is
+16.39px and cannot drift if the opponent's own size ever changes.
+
+**The negative right margin is what keeps the column lined up.** A day cell is
+right-aligned so the abbreviations share one edge down the column, and 4px of
+padding plus a 1px stroke would push a start day's `vs PIT` 5px in from every
+other day's. Pulled back by exactly that, the *text* holds the edge and the
+stroke overhangs into the cell's own gutter — and **5px is the number because it
+is the floor of both gutters**, `clamp(5px, 1.9vw, 28px)` on the summary table
+and `clamp(5px, 1.6vw, 13px)` on the board, so the stroke can touch a column
+boundary and can never cross one. Measured over **79 start-against-plain pairings
+on the roster and 1198 on the board**, the two opponents' right edges agree to
+**0.00px**; the tightest the stroke comes to its own `<td>`'s edge is **0.11px**
+(board at 320) and **1.08px** (roster at 320).
+
+**The legend's ground is `var(--cell-bg)`, and that is the whole of how the
+stroke breaks.** This is the rule the stylesheet already states for the summary
+table — a cell's ground is *named* rather than assigned, because two things need
+the same color and must not be able to disagree: here the cell behind the box
+and the patch of it painted over the stroke. Assigning `--bg` would put a
+page-colored notch in every even row's zebra stripe and in all four live-role
+tints. Checked on both tables at all three widths: every legend's computed
+`background-color` is byte-identical to its own `<td>`'s — two values in play,
+`rgb(32,33,34)` on the page and `rgb(18,19,20)` on the stripe — and the legend's
+center sits **0.00px** off the stroke's, which is what `bottom: -0.5px` plus a
+half-height translate buys over a plain `bottom: 0` (that lands the word on the
+padding box's edge and leaves the line visible under it).
+
+**The ladder survives; the fill does not.** Three weights, still: an **accent
+solid** stroke where his club has named him, a **muted solid** one where his own
+rotation slot puts him there, a **dashed** one where his club's rotation does —
+and the legend italic on the two nobody has announced. The 14% accent *fill* the
+announced pill carried was dropped and is the alternative rejected here: inside
+a stroke that now encloses `vs PIT` it tints the opponent rather than the mark,
+which reads as a box that has grown or as a selection — and this table already
+spends a ground on the zebra stripe and four live-role tints. What the fill said,
+the accent hue says.
+
+**Each cell's `title` is untouched** — `vs PIT — his club has announced him to
+start`, `@ BOS — estimated to start — his club's rotation, his own record being
+too thin to read one off — Sonny Gray (RHP) — announced by his club` — read back
+off the rendered cells before and after and identical, as is the legend's own
+(`TIER_TITLE` plus the cadence).
+
+**Bundle: 600.22 → 600.35 KB of JS** (178.72 → 178.74 gzipped) and **158.32 →
+158.34 KB of CSS** (28.30 → 28.37) — 130 bytes and 20 bytes raw, for a mark that
+gives 33 rows their 58px back.
 
 #### What it costs is width, which is free here, and one row a screen, which is not
 

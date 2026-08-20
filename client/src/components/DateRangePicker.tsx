@@ -54,7 +54,22 @@ function monthGrid(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export function DateRangePicker({
+/**
+ * **The calendar itself** — the month head, the grid, and the foot that names
+ * what is picked. No field, no popover, no open state: it is the control, and
+ * where it is drawn is the caller's business.
+ *
+ * Split out of `DateRangePicker` when a second surface wanted the calendar
+ * **without** the field in front of it: on the Feed the date face opens this
+ * directly, there being no presets on that view for a field to sit beside. See
+ * `DateControls.tsx::DateBar` and *The date bar* in `client-dates.md`.
+ *
+ * It re-centers on the selected end and drops a half-made selection whenever
+ * `end` moves — which is what keeps it honest under the bar's own arrows: a
+ * step while the calendar is open leaves the grid on the month the reader has
+ * just been moved to rather than on the one he opened.
+ */
+export function DateCalendar({
   start,
   end,
   max,
@@ -64,9 +79,10 @@ export function DateRangePicker({
   end: string;
   /** Latest selectable day (inclusive), as an ISO date. */
   max: string;
+  /** A whole range was picked — the second of the two presses. The caller
+   *  closes whatever this is drawn in; the calendar has no opinion about it. */
   onChange: (start: string, end: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   // First click of a new range; null means the next click starts a fresh range.
   const [anchor, setAnchor] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -75,33 +91,13 @@ export function DateRangePicker({
     const [y, m] = end.split('-').map(Number);
     return [y, m - 1];
   });
-  const rootRef = useRef<HTMLDivElement>(null);
 
-  // Re-center the grid on the selected end whenever the picker (re)opens.
   useEffect(() => {
-    if (!open) return;
     const [y, m] = end.split('-').map(Number);
     setView([y, m - 1]);
     setAnchor(null);
     setHover(null);
-  }, [open, end]);
-
-  // Close on outside click or Escape.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  }, [end]);
 
   const cells = useMemo(() => monthGrid(view[0], view[1]), [view]);
 
@@ -127,7 +123,6 @@ export function DateRangePicker({
     onChange(a, b);
     setAnchor(null);
     setHover(null);
-    setOpen(false);
   };
 
   const shiftMonth = (delta: number) => {
@@ -140,6 +135,111 @@ export function DateRangePicker({
   const next = new Date(Date.UTC(view[0], view[1] + 1, 1));
   const nextMonthStart = iso(next.getUTCFullYear(), next.getUTCMonth(), 1);
   const atMaxMonth = nextMonthStart > max;
+
+  return (
+    <>
+      <div className="drp-head">
+        <button
+          type="button"
+          className="drp-nav"
+          onClick={() => shiftMonth(-1)}
+          aria-label="Previous month"
+        >
+          ‹
+        </button>
+        <span className="drp-month">
+          {MONTH_NAMES[view[1]]} {view[0]}
+        </span>
+        <button
+          type="button"
+          className="drp-nav"
+          onClick={() => shiftMonth(1)}
+          disabled={atMaxMonth}
+          aria-label="Next month"
+        >
+          ›
+        </button>
+      </div>
+      <div className="drp-grid drp-weekdays">
+        {WEEKDAYS.map((w) => (
+          <span key={w} className="drp-weekday">
+            {w}
+          </span>
+        ))}
+      </div>
+      <div className="drp-grid" onMouseLeave={() => anchor && setHover(anchor)}>
+        {cells.map((day, i) =>
+          day === null ? (
+            <span key={`x${i}`} />
+          ) : (
+            <button
+              key={day}
+              type="button"
+              disabled={day > max}
+              className={
+                'drp-day' +
+                (day >= lo && day <= hi ? ' in-range' : '') +
+                (day === lo ? ' edge start' : '') +
+                (day === hi ? ' edge end' : '')
+              }
+              onMouseEnter={() => anchor && setHover(day)}
+              onClick={() => pick(day)}
+            >
+              {Number(day.slice(8))}
+            </button>
+          ),
+        )}
+      </div>
+      {/* **The foot names what is picked, or what the next press does.** It is
+          the only thing in the calendar that says the year, and on a
+          half-made selection it is the only thing that says a second press is
+          expected. */}
+      <div className="drp-foot">{anchor ? 'Pick the range end' : prettyRange(start, end)}</div>
+    </>
+  );
+}
+
+/**
+ * The calendar **behind a field** — a button reading the range, and the grid in
+ * a popover under it.
+ *
+ * This is the shape the Roster's date panel wants: it sits at the end of a row
+ * of preset pills, where a bare calendar would be 260px of grid under six
+ * controls that answer the same question in a word. The Feed's bar draws
+ * `DateCalendar` on its own instead, and the two share the grid rather than
+ * two grids agreeing about how a range is picked.
+ */
+export function DateRangePicker({
+  start,
+  end,
+  max,
+  onChange,
+}: {
+  start: string;
+  end: string;
+  /** Latest selectable day (inclusive), as an ISO date. */
+  max: string;
+  onChange: (start: string, end: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   return (
     <div className="drp" ref={rootRef}>
@@ -169,61 +269,18 @@ export function DateRangePicker({
       </button>
       {open && (
         <div className="drp-popover" role="dialog">
-          <div className="drp-head">
-            <button
-              type="button"
-              className="drp-nav"
-              onClick={() => shiftMonth(-1)}
-              aria-label="Previous month"
-            >
-              ‹
-            </button>
-            <span className="drp-month">
-              {MONTH_NAMES[view[1]]} {view[0]}
-            </span>
-            <button
-              type="button"
-              className="drp-nav"
-              onClick={() => shiftMonth(1)}
-              disabled={atMaxMonth}
-              aria-label="Next month"
-            >
-              ›
-            </button>
-          </div>
-          <div className="drp-grid drp-weekdays">
-            {WEEKDAYS.map((w) => (
-              <span key={w} className="drp-weekday">
-                {w}
-              </span>
-            ))}
-          </div>
-          <div className="drp-grid" onMouseLeave={() => anchor && setHover(anchor)}>
-            {cells.map((day, i) =>
-              day === null ? (
-                <span key={`x${i}`} />
-              ) : (
-                <button
-                  key={day}
-                  type="button"
-                  disabled={day > max}
-                  className={
-                    'drp-day' +
-                    (day >= lo && day <= hi ? ' in-range' : '') +
-                    (day === lo ? ' edge start' : '') +
-                    (day === hi ? ' edge end' : '')
-                  }
-                  onMouseEnter={() => anchor && setHover(day)}
-                  onClick={() => pick(day)}
-                >
-                  {Number(day.slice(8))}
-                </button>
-              ),
-            )}
-          </div>
-          <div className="drp-foot">
-            {anchor ? 'Pick the range end' : prettyRange(start, end)}
-          </div>
+          {/* Mounted only while open, which is what replaced the effect that
+              used to re-center the grid and drop a half-made selection on every
+              `open` — a fresh mount does both in its own initializers. */}
+          <DateCalendar
+            start={start}
+            end={end}
+            max={max}
+            onChange={(s, e) => {
+              onChange(s, e);
+              setOpen(false);
+            }}
+          />
         </div>
       )}
     </div>

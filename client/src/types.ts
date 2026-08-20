@@ -1750,6 +1750,16 @@ export interface EspnStandingsTeam {
   values: Record<number, number>;
 }
 
+/** One matchup period the league's schedule carries, with the days it covers —
+ *  the **observed** span, exactly as `EspnScoreboard.start`/`end` are, so the
+ *  week list and the header above it cannot print different days for the week
+ *  being played. Null dates where the period anchor could not be read. */
+export interface EspnPeriodSpan {
+  period: number;
+  start: string | null;
+  end: string | null;
+}
+
 export interface EspnScoreboard {
   format: EspnScoringFormat;
   /** ESPN's own word, so an unsupported format can be named rather than
@@ -1758,6 +1768,10 @@ export interface EspnScoreboard {
   matchupPeriod: number;
   prevPeriod: number | null;
   nextPeriod: number | null;
+  /** Every matchup period the schedule has materialised, in order. The two
+   *  arrows are members of this list; the header's own press draws the rest of
+   *  it as a list of weeks. */
+  periods: EspnPeriodSpan[];
   /** The days the totals cover — for a live matchup, the days played so far. */
   start: string | null;
   end: string | null;
