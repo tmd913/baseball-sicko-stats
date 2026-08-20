@@ -15063,16 +15063,26 @@ span.mup-move-name:hover {
    giving the ownership block its own line from 640 (see the phone rule below).
    The word is not lost — it is the slot's `title` and its `.sr-only` text.
 
-   **The mark is the sign and nothing else.** It was a filled disc in three
-   state colors — `--hit` for a free pickup, `--hr` for a waiver claim,
-   `--muted` for a drop or either side of a trade, `--on-accent` as the ink —
-   which said what a man *cost* on top of which way he went. That is gone by
-   choice: what a reader of this feed scans for is the direction, the word is
-   a press-and-hold or a screen reader away in the slot's `title`, and the
-   claim/add distinction now lives only there. The row is a run of text again,
-   so the glyph takes the row's own color rather than carrying a ground, and
-   the slot is back to the 14px the sign actually needs — 6px narrower than the
-   disc, which is what moved the phone rule below 416 → 410. */
+   **The mark is the sign, and the color is the move.** It was a filled disc in
+   three state colors with `--on-accent` as the ink; the disc is gone and the
+   color came back onto the glyph, where it costs the row nothing. The slot is
+   the 14px the sign actually needs — 6px narrower than the disc, which is what
+   moved the phone rule below 416 → 410, and the color rides inside that 14px
+   rather than around it.
+
+   **Four tones, one per move**, keyed by `moveTone` exactly as the word is
+   keyed by `moveLabel` — see the note on the pair there. `--hit` for a man
+   taken off the pool for nothing, `--hr` for one who cost a bid and a place in
+   the waiver order, `--strikeout` for one leaving, `--live-purple` for either
+   side of a trade. The disc's three tones said what a pickup *cost* and left a
+   drop and a trade sharing `--muted`; four says which of the four moves this
+   was, which is the distinction `moveLabel` was already drawing in words and
+   the one the row's `title` is there to spell out.
+
+   **Contrast, read off the rendered page in all six themes** — sampled pixels,
+   so the two light palettes' card gradients are in the numbers. The glyph
+   clears the row's own ground by the figures in the table below, against the
+   4.5:1 a 15px glyph owes. */
 .lg-tx-move {
   min-width: 14px;
   flex: none;
@@ -15080,6 +15090,18 @@ span.mup-move-name:hover {
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
+}
+.lg-tx-move-added {
+  color: var(--hit);
+}
+.lg-tx-move-claimed {
+  color: var(--hr);
+}
+.lg-tx-move-dropped {
+  color: var(--strikeout);
+}
+.lg-tx-move-traded {
+  color: var(--live-purple);
 }
 .lg-tx-name {
   background: none;

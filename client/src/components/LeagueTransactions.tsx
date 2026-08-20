@@ -134,6 +134,29 @@ export function moveLabel(p: EspnTransactionPlayer): string {
   return p.via === 'waiver' ? 'Claimed' : 'Added';
 }
 
+/** The color for the move, **keyed exactly as `moveLabel` keys the word** —
+ *  same four cases, same order, same tests. That is the point of writing it as
+ *  a twin rather than folding the color into the label function: the mark says
+ *  one thing in two registers, and a reader who learns that purple is a trade
+ *  has learned what the `title` would have told them.
+ *
+ *  The four are the app's own play palette, borrowed for their *feel* rather
+ *  than their play meaning: `--hit` for a man arriving off the pool for
+ *  nothing, `--hr` for one who cost a bid and a place in the waiver order,
+ *  `--strikeout` for one leaving, and `--live-purple` — the on-base purple —
+ *  for either side of a trade, which is the one move that is neither an
+ *  arrival off the pool nor a departure to it.
+ *
+ *  **A trade is purple on both sides**, and that is deliberate: `move` says
+ *  which way *this* row went and the row's own `to <Team>` says where, so the
+ *  color is free to say the thing neither of them does — that this was a deal
+ *  between two managers rather than a move against the pool. */
+export function moveTone(p: EspnTransactionPlayer): 'traded' | 'dropped' | 'claimed' | 'added' {
+  if (p.via === 'trade') return 'traded';
+  if (p.move === 'drop') return 'dropped';
+  return p.via === 'waiver' ? 'claimed' : 'added';
+}
+
 function PlayerName({
   player,
   onOpenPlayer,
@@ -342,7 +365,7 @@ function PlayerLine({
     <li className={`lg-tx-player lg-tx-${player.move}`}>
       {/* The mark is the direction and nothing else — the word itself stays,
           for the tooltip and for a screen reader. */}
-      <span className="lg-tx-move" title={moveLabel(player)}>
+      <span className={`lg-tx-move lg-tx-move-${moveTone(player)}`} title={moveLabel(player)}>
         <span aria-hidden="true">{player.move === 'drop' ? '−' : '+'}</span>
         <span className="sr-only">{moveLabel(player)}</span>
       </span>
