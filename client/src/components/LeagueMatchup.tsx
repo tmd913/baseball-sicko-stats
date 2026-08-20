@@ -1615,42 +1615,44 @@ export default function LeagueMatchupView({
             That is `order` on the ghost, so the DOM keeps the roster row's own
             order — see `.mup-tool-modes`. */}
         <span
-          /* **What the ghost reserves is the *difference*, not the pair.** The
-             rule is: hold open whatever the roster reading has that this one
-             has not, less whatever this one has that the roster reading has
-             not. `Summary` has nothing of its own, so it reserves both. The
-             Feed reading has the order toggle, so it reserves **one** — and it
-             has to, because a third reading pill took the row's slack: measured
-             at 1400, where the tools row is capped at the 800px card column,
-             the feed run went 452 with both reserved against the roster's 346,
-             and the row wrapped on that reading alone (band 162 → 210, a whole
-             line of pinned chrome appearing under the finger that pressed
-             `Feed` — the exact fault this ghost exists to prevent). With one
-             reserved the run is **333** against 346, the total 729 against 741,
-             and the band is 162 on all three readings.
+          /* **Every reading lays out the same three toggles**, and the ghost
+             hides the ones that do not apply to it: the modes off the roster
+             reading, the order toggle off the Feed reading. So the run is the
+             union at every width and the band cannot move under the finger
+             that pressed a reading pill.
 
-             `Projected` is the one kept (113.5px against `Schedule`'s 111.1),
-             being the nearer of the two to the 126 that would make the runs
-             exactly equal.
+             **It reserved the *difference* before, and that was right when the
+             union was four toggles.** `Schedule` `Projected` `Starters` and the
+             order control came to 452px, which does not fit the 800px card
+             column, so carrying the union wrapped the row on *all three*
+             readings at every desktop width — 210px of pinned band instead of
+             162, bought from every reader to close three seams. `Starters` has
+             since been removed from the app, and the union is 359.2px, which
+             fits: measured at 1400, the run is 359.2 on all three readings and
+             the band is 36 on all three.
 
-             **Exactly equal is available and was rejected**: draw all four in
-             every reading and ghost what does not apply, and the run is 452 on
-             every one of them — but 452 does not fit the 800px column, so the
-             row wraps in *all three* readings and the band is 210 at every
-             desktop width instead of 162, and 258 instead of 210 on a phone.
-             That is 48px of pinned chrome bought from every reader, always, to
-             close three seams. Measured across the readings at nineteen widths,
-             what is left is: **162 / 162 / 162** at 1400, 1000, 900, 800 and
-             780; **210** on all three at 700, 660, 641, 500, 430, 400, 390,
-             375 and 360; **289** on all three at 320 — and three narrow bands
-             of window width where the Feed reading alone is a line out (≈761–773,
-             ≈552–570, ≈333–345, none of them a device width). */
-          className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}${
-            reading === 'feed' ? ' mup-tool-ghost-feed' : ''
-          }`}
+             The difference rule did not survive that arithmetic changing. It
+             was written against a roster reading that reserved *nothing*, and
+             the same merge that removed `Starters` made the roster reading
+             reserve the order toggle — so the roster run held 118.6px open
+             while the feed run held 113.5 where it needed 224.6, and the band
+             jumped **48px** crossing to `Feed` at 780, 700, 400, 390, 375 and
+             320. Neither branch could see it; both were measured before the
+             other landed.
+
+             Measured after, across the three readings at fifteen widths:
+             **36 / 36 / 36** at 1400, 1000, 900 and 800; **84** on all three at
+             780, 700, 660, 641, 500, 430 and 360; **132** on all three at 400,
+             390, 375 and 320. Equal at every width, and equal by construction
+             rather than by a number — which is what the difference rule, being
+             a subtraction of two measured widths, could never be.
+
+             The cost is a wrapped line on the Feed reading between 660 and 780
+             that it did not pay before. That is the line the other two readings
+             were already paying at those widths, and it does not move. */
+          className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}`}
           aria-hidden={reading === 'roster' ? undefined : true}
         >
-          {reading !== 'feed' && (
           <ScheduleToggle
             on={scheduleSpan !== null}
             loading={scheduleLoading}
@@ -1667,7 +1669,6 @@ export default function LeagueMatchupView({
               })
             }
           />
-          )}
           {/* **The projected reading, after the Schedule view** — the roster
               row's own order, where these two are the third of *which page,
               which kind, which reading of it, which players, which days*: the
