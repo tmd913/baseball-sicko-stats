@@ -81,7 +81,10 @@ export function ProjectionKey({
         <p>
           <b>Every figure is what he has already done over the days in view</b> plus what he
           should add {over} to play. A day that has been played is his real line; a day still to
-          come is the estimate below.
+          come is the estimate below. <b>Games</b> is how many he appears in over those days —
+          the ones he bats in, or for a pitcher his outings, a start and a relief appearance
+          alike — and <b>Starts</b> is how many of the days his club plays your fantasy lineup
+          has room for him.
         </p>
       )}
       <p>

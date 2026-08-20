@@ -30,6 +30,7 @@ import {
   baseballDay,
   isInjured,
   isStartingOn,
+  LEAGUE_POLL_MS,
   projectStarters,
   rangeDatesOf,
   startedOn,
@@ -113,33 +114,6 @@ import type { LeagueTab } from './components/LeagueView';
 // (`hooks.ts`), which is a delay before a mark goes up rather than a floor on
 // how long it stays.
 const MIN_SPIN = 450;
-
-/**
- * How often the League page re-reads what it is showing, while it is showing
- * it.
- *
- * The three tabs are the one part of this app that describes a thing which
- * moves while you watch it — a matchup's category totals climb through an
- * evening's games, the standings under them climb with them, and a leaguemate
- * can drop somebody at any hour — and until now all three were read on entry
- * and then left, so a page anybody actually sits on quietly went stale.
- *
- * A minute rather than the report's twenty seconds, and the reason is what is
- * being watched. That poll tracks a *plate appearance* — bases, count, the
- * batter at the plate — where this tracks a **week's** totals, which ESPN's own
- * scoreboard does not move faster than about a minute anyway. It is matched to
- * `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
- * or goes and asks, which is the cheapest way to be a minute behind ESPN and no
- * more.
- *
- * **A tick is skipped while the tab is hidden**, which is where this parts from
- * the report poll deliberately: a league read is 10–120KB upstream against a
- * league that has no idea we are doing it, and a forgotten background tab
- * polling it all night buys nobody anything. Coming back to the tab polls
- * immediately rather than waiting out the interval, so what a reader returns to
- * is current — which is also what keeps the Transactions dot honest.
- */
-const LEAGUE_POLL_MS = 60_000;
 
 /**
  * The app's three pages. **Roster** is the summary table over the date range,
@@ -1913,7 +1887,10 @@ export default function App() {
   }, [needsScoreboard, matchupPeriod, espnLeagueId]);
 
   /**
-   * The projection, read on the first press of `Projected` and kept.
+   * The projection, read on the first press of `Projected` — and re-read on the
+   * League page's own minute for as long as the week is live, since half of
+   * what a projected card shows is the side's *current* total and that half is
+   * re-read on the very same tick (see `pollLeague`).
    *
    * **Lazy on the toggle**, which is where this parts from the board above it:
    * that one is 10KB and read by everybody who opens the page, and this joins
@@ -1928,38 +1905,47 @@ export default function App() {
    * a period change** first, because a projection is a fact about *one* week and
    * drawing last week's over this one is the one thing it must not do.
    */
+  const leagueProjRead = useRef(0);
+  const loadLeagueProjection = useCallback(
+    (quiet = false) => {
+      // Sequence-numbered rather than canceled per run, for the reason the
+      // roster lens's read is: the poll below means two can be in flight at
+      // once, and only the newest may write.
+      const seq = ++leagueProjRead.current;
+      if (!quiet) setProjLoading(true);
+      return api
+        .espnProjection(matchupPeriod)
+        .then((p) => {
+          if (seq === leagueProjRead.current) setProjection(p);
+        })
+        .catch((e: Error) => {
+          // A failed projection costs the toggle its figures and nothing else —
+          // the board it was drawn over is untouched, so the cards fall back to
+          // the live ones rather than the page becoming a message.
+          if (seq === leagueProjRead.current) console.error('reading the projection failed:', e.message);
+        })
+        .finally(() => {
+          if (seq === leagueProjRead.current && !quiet) setProjLoading(false);
+        });
+    },
+    [matchupPeriod],
+  );
+
   useEffect(() => {
     // **The matchup page is the only reader**, the Scoreboard's toggle having
     // moved there — so a reader who never opens a card never pays for it.
     if (!projected || view !== 'league' || matchupId == null || !espnConnected) {
       // **Cleared on the way out, not only on the way in.** Turning the lens off
-      // while a read is in flight cancels the run below, so its `finally` is
-      // skipped — and a flag left true is a ball spinning for ever on a button
-      // that is no longer doing anything. The same shape is why the roster and
-      // team-page reads clear theirs here too.
+      // while a read is in flight discards its answer — and a flag left true is
+      // a ball spinning for ever on a button that is no longer doing anything.
+      // The same shape is why the roster and team-page reads clear theirs here
+      // too.
+      leagueProjRead.current += 1;
       setProjLoading(false);
       return;
     }
-    let canceled = false;
-    setProjLoading(true);
-    api
-      .espnProjection(matchupPeriod)
-      .then((p) => {
-        if (!canceled) setProjection(p);
-      })
-      .catch((e: Error) => {
-        // A failed projection costs the toggle its figures and nothing else —
-        // the board it was drawn over is untouched, so the cards fall back to
-        // the live ones rather than the page becoming a message.
-        if (!canceled) console.error('reading the projection failed:', e.message);
-      })
-      .finally(() => {
-        if (!canceled) setProjLoading(false);
-      });
-    return () => {
-      canceled = true;
-    };
-  }, [projected, view, matchupId, espnConnected, matchupPeriod]);
+    loadLeagueProjection();
+  }, [projected, view, matchupId, espnConnected, loadLeagueProjection]);
 
   /** A projection belongs to one matchup period, so stepping the arrows drops
    *  it rather than letting last week's figures be drawn over this one. */
@@ -2119,13 +2105,37 @@ export default function App() {
     if ((leagueTab === 'scoreboard' || matchupId != null) && scoreboardLive) {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
     }
+    // **A projected card is half live figures**, so the half that is read
+    // separately has to ride the same minute: the card is what the side has
+    // already scored plus what the projection adds, and the first half is
+    // re-read on this very tick. Left alone, an evening's play moved one half
+    // of every category and not the other — and the projection's own share of
+    // it only shrinks as games are played, so the two drifted apart in a
+    // direction nobody could see. Quiet, on success alone, and only where the
+    // week can still move.
+    if (projected && matchupId != null && scoreboardLive) {
+      // The loader carries its own failure handling — see `loadLeagueProjection`,
+      // which logs and leaves the last answer standing, which is what `quiet`
+      // does for the reads beside it.
+      void loadLeagueProjection(true);
+    }
     if (leagueTab === 'rankings' && rankSpanLive) {
       // The lens rides along, or a tick would quietly swap a projected table
       // back to the live one a minute after the reader asked for it.
       api.espnRankings(rankSpan, false, rankProjected).then(setRankings).catch(quiet('rankings'));
     }
     api.espnTransactions().then(setTransactions).catch(quiet('transactions'));
-  }, [leagueTab, matchupId, scoreboardLive, rankSpanLive, matchupPeriod, rankSpan, rankProjected]);
+  }, [
+    leagueTab,
+    matchupId,
+    scoreboardLive,
+    rankSpanLive,
+    matchupPeriod,
+    rankSpan,
+    rankProjected,
+    projected,
+    loadLeagueProjection,
+  ]);
 
   /** The latest tick, so the interval below can be set up once per visit to the
    *  page rather than torn down and rebuilt every time a poll lands — which is
@@ -2336,14 +2346,15 @@ export default function App() {
     const slotDay = fantasyRoster.endRoster || end > baseballToday() ? end : null;
     for (const p of fantasyRoster.endRoster ?? fantasyRoster.players) {
       if (p.mlbId === null) continue;
-      // How many of the days in view he was in the lineup on — the fact the
-      // chip's one-day slot can't carry over a range. Null without the per-day
-      // map, where there is no second fact to state.
+      // Which of the days in view he was in the lineup on — the fact the chip's
+      // one-day slot can't carry over a range, and the days rather than a count
+      // of them because the projected table's `Starts` column needs to know
+      // *which* (see `SummaryTable.tsx::playedStarts`). Null without the
+      // per-day map, where there is no second fact to state.
       const startedDays =
         fantasyLineups === null
           ? null
-          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting))
-              .length;
+          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting));
       for (const kind of p.kinds) {
         map.set(`${kind}-${p.mlbId}`, {
           slot: p.slot,
@@ -3287,32 +3298,42 @@ export default function App() {
    * than the page becoming a message, which is the direction the schedule
    * window already fails in.
    */
+  const projRead = useRef(0);
+  const loadRosterProjection = useCallback(
+    (quiet = false) => {
+      // Sequence-numbered rather than canceled per run, which the poll below is
+      // what makes necessary: two reads can now be in flight at once — the one
+      // the range change fired and the one the twenty-second tick did — and the
+      // rule is the app's own, that only the newest may write.
+      const seq = ++projRead.current;
+      if (!quiet) setRosterProjLoading(true);
+      return api
+        .rosterProjection(start, end, usingFantasy ? 'fantasy' : 'watchlist', fantasyTeamId)
+        .then((p) => {
+          if (seq === projRead.current) setRosterProjection(p);
+        })
+        .catch((e: Error) => {
+          if (seq === projRead.current) console.error('reading the roster projection failed:', e.message);
+        })
+        .finally(() => {
+          if (seq === projRead.current && !quiet) setRosterProjLoading(false);
+        });
+    },
+    [start, end, usingFantasy, fantasyTeamId],
+  );
+
   useEffect(() => {
     if (!rosterProjected) {
-      // Turning the lens off while a read is in flight cancels the run below,
-      // so its `finally` never fires — and a flag left true is a ball spinning
-      // for ever inside a toggle that is no longer doing anything. Clearing it
-      // here is what makes the mark say what it means.
+      // Turning the lens off while a read is in flight discards its answer —
+      // and a flag left true is a ball spinning for ever inside a toggle that
+      // is no longer doing anything. Clearing it here is what makes the mark
+      // say what it means.
+      projRead.current += 1;
       setRosterProjLoading(false);
       return;
     }
-    let canceled = false;
-    setRosterProjLoading(true);
-    api
-      .rosterProjection(start, end, usingFantasy ? 'fantasy' : 'watchlist', fantasyTeamId)
-      .then((p) => {
-        if (!canceled) setRosterProjection(p);
-      })
-      .catch((e: Error) => {
-        if (!canceled) console.error('reading the roster projection failed:', e.message);
-      })
-      .finally(() => {
-        if (!canceled) setRosterProjLoading(false);
-      });
-    return () => {
-      canceled = true;
-    };
-  }, [rosterProjected, start, end, usingFantasy, fantasyTeamId, roster]);
+    loadRosterProjection();
+  }, [rosterProjected, loadRosterProjection, roster]);
 
   /**
    * **Turning the lens on moves the reader to the days it is about**, which is
@@ -3615,11 +3636,37 @@ export default function App() {
      slow read still shows its own "Reading your roster's games" regardless of
      where the pills stand. */
   const initialLoadSettled = reportSettled && espnStatusSettled;
+  /**
+   * **The projection rides the same tick**, because a projection of a day being
+   * played is a figure that moves: the server projects only the games that have
+   * not started, so every first pitch takes a game out of the estimate and puts
+   * it on the report beside it, and an inning's runs cross from one half of the
+   * row to the other. Left un-re-read, the lens froze at the moment it was
+   * pressed while the report under it went on updating — the one state where
+   * the two halves of a row are drawn from different minutes, and the row
+   * counts a game twice.
+   *
+   * **Quietly**, which is rule 1: no ball in the toggle, no blank cells, the
+   * last answer standing until the next lands. And on the *same* timer as the
+   * report rather than one of its own, so the played half and the projected
+   * half of every row move together.
+   *
+   * The lens is read off a ref rather than named in the deps: the report's own
+   * clock is not the lens's to reset, and a dep would restart the twenty
+   * seconds on every press of a button that has nothing to do with polling.
+   */
+  const projectedRef = useRef(rosterProjected);
+  useEffect(() => {
+    projectedRef.current = rosterProjected;
+  });
   useEffect(() => {
     if (!hasRealLiveGame) return;
-    const t = setInterval(() => loadReport(true), 20_000);
+    const t = setInterval(() => {
+      loadReport(true);
+      if (projectedRef.current) loadRosterProjection(true);
+    }, 20_000);
     return () => clearInterval(t);
-  }, [hasRealLiveGame, loadReport]);
+  }, [hasRealLiveGame, loadReport, loadRosterProjection]);
 
   // Show a "back to top" button once the user has scrolled down a screenful.
   const [showBackToTop, setShowBackToTop] = useState(false);

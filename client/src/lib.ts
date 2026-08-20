@@ -1667,3 +1667,35 @@ export function prettyDate(iso: string | null): string {
     timeZone: 'UTC',
   });
 }
+
+/**
+ * How often the League page re-reads what it is showing, while it is showing
+ * it.
+ *
+ * In `lib.ts` because two files set a timer by it now — App's own league tick
+ * and the matchup page's projection, which has to move on the same minute the
+ * board under it does or the two halves of a projected card come from different
+ * ones.
+ *
+ * The three tabs are the one part of this app that describes a thing which
+ * moves while you watch it — a matchup's category totals climb through an
+ * evening's games, the standings under them climb with them, and a leaguemate
+ * can drop somebody at any hour — and until now all three were read on entry
+ * and then left, so a page anybody actually sits on quietly went stale.
+ *
+ * A minute rather than the report's twenty seconds, and the reason is what is
+ * being watched. That poll tracks a *plate appearance* — bases, count, the
+ * batter at the plate — where this tracks a **week's** totals, which ESPN's own
+ * scoreboard does not move faster than about a minute anyway. It is matched to
+ * `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
+ * or goes and asks, which is the cheapest way to be a minute behind ESPN and no
+ * more.
+ *
+ * **A tick is skipped while the tab is hidden**, which is where this parts from
+ * the report poll deliberately: a league read is 10–120KB upstream against a
+ * league that has no idea we are doing it, and a forgotten background tab
+ * polling it all night buys nobody anything. Coming back to the tab polls
+ * immediately rather than waiting out the interval, so what a reader returns to
+ * is current — which is also what keeps the Transactions dot honest.
+ */
+export const LEAGUE_POLL_MS = 60_000;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
-import { projectStarters, rangeDatesOf } from '../lib';
+import { projectStarters, rangeDatesOf, startedOn } from '../lib';
 import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
@@ -9,6 +9,7 @@ import { FeedFilterPills } from './FeedFilters';
 import type { FeedLens } from './FeedFilters';
 import { SummaryTable } from './SummaryTable';
 import type { ScheduleIndex } from './schedule';
+import { playerKey } from '../types';
 import type {
   EspnRosterPlayer,
   EspnStandingsTeam,
@@ -183,6 +184,16 @@ export default function LeagueTeam({
     };
   }, [teamId, start, end]);
 
+  /** The per-day lineup map, as `projectStarters` wants it. Collapsed to null
+   *  when it is empty, so "no lineups" and "not asked for" are one state. */
+  const byDate = useMemo(() => {
+    if (!lineups) return null;
+    const map = new Map<string, Set<number>>();
+    for (const [date, ids] of Object.entries(lineups)) map.set(date, new Set(ids));
+    return map.size > 0 ? map : null;
+  }, [lineups]);
+
+  const dates = useMemo(() => rangeDatesOf(start, end), [start, end]);
   /**
    * The slot chips, for this team rather than the reader's.
    *
@@ -191,10 +202,16 @@ export default function LeagueTeam({
    * exactly the kind the `day` field was added to stop. It is the possessive
    * form because that is where it lands in the sentence.
    *
-   * `startedDays`/`rangeDays` are null, which is honest rather than lazy: the
-   * count comes off a per-day lineup map, and this page reads one day's roster.
-   * The chip then simply does not claim a count, which is what it already does
-   * on a single-day range and with an older server.
+   * `startedDays` is **the days this manager had him in his lineup**, off the
+   * same per-day map the `Starters` filter on this page reads (`byDate`, with
+   * the end-of-range roster as its fallback — `startedOn`'s own two tiers). It
+   * was null here, on the stated grounds that "the count comes off a per-day
+   * lineup map and this page reads one day's roster" — which was true of the
+   * chip and stopped being true of the page: the map is read for the filter and
+   * the projected table's `Starts` column needs the days to count the half of
+   * the span that has been played. Null survives where there is no map, which
+   * is what an older server and a failed read leave, and the chip goes on not
+   * claiming a count there.
    */
   const slots = useMemo(() => {
     if (!roster) return null;
@@ -211,30 +228,23 @@ export default function LeagueTeam({
           // whichever span that is.
           day: end,
           injuryStatus: p.injuryStatus,
-          startedDays: null,
-          rangeDays: null,
+          startedDays:
+            byDate === null
+              ? null
+              : dates.filter((d) => startedOn(byDate, d, p.mlbId as number, p.starting)),
+          rangeDays: byDate === null ? null : dates.length,
           owner,
         });
       }
     }
     return map;
-  }, [roster, team, end]);
+  }, [roster, team, end, byDate, dates]);
 
   const kindCards = useMemo(
     () => (report ?? []).filter((r) => (kind === 'pitcher' ? r.kind === 'pitcher' : r.kind !== 'pitcher')),
     [report, kind],
   );
 
-  /** The per-day lineup map, as `projectStarters` wants it. Collapsed to null
-   *  when it is empty, so "no lineups" and "not asked for" are one state. */
-  const byDate = useMemo(() => {
-    if (!lineups) return null;
-    const map = new Map<string, Set<number>>();
-    for (const [date, ids] of Object.entries(lineups)) map.set(date, new Set(ids));
-    return map.size > 0 ? map : null;
-  }, [lineups]);
-
-  const dates = useMemo(() => rangeDatesOf(start, end), [start, end]);
   /** The stream's identity: which kind, over which days — App's own `feedKey`,
    *  and what both the remount and the paging position are keyed by. */
   const feedKey = `${kind}-${start}-${end}`;
@@ -252,11 +262,23 @@ export default function LeagueTeam({
    * chips: `starting` is the flag on the day the span ends, which is the same
    * answer the app falls back to when a per-day read fails.
    */
-  const cards = useMemo(() => {
-    if (!starters) return kindCards;
+  const starterCards = useMemo(() => {
     const startingIds = new Set((roster ?? []).flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : [])));
     return projectStarters(kindCards, dates, byDate, (r) => startingIds.has(r.id));
-  }, [kindCards, starters, roster, byDate, dates]);
+  }, [kindCards, roster, byDate, dates]);
+  const cards = starters ? starterCards : kindCards;
+  /**
+   * **The same answer as a set of player keys**, for the summary table's `Total`
+   * divider — `SummaryTable.tsx::splitStarters`, and App does this on its own
+   * roster in the same two lines.
+   *
+   * Computed whether the button is pressed or not, for the reason it is over
+   * there: the divider needs the set the button uses, and a second test written
+   * for it is a second test that will one day disagree with the button —
+   * silently, the button narrowing to one set while the line above the total
+   * drew another.
+   */
+  const starterKeys = useMemo(() => new Set(starterCards.map(playerKey)), [starterCards]);
 
   // Never over data: the block wait is behind the app's own delay, so a warm
   // answer never flashes one, and a span change re-reads with the old rows
@@ -316,6 +338,8 @@ export default function LeagueTeam({
           onOpenDetails={onOpenDetails}
           schedule={schedule}
           projection={projection}
+          /* Who sits above the `Total` line — see `splitStarters`. */
+          starters={starterKeys}
         />
       ) : (
         <>

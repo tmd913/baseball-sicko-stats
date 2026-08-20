@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { FantasySlotTag, ProjectedSlotTag } from './FantasySlot';
+import { FantasySlotTag, ProjectedSlotTag, readLineup } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { PlayerIdentity } from './PlayerIdentity';
@@ -16,11 +16,13 @@ import {
   tallyWords,
 } from './schedule';
 import type { ScheduleIndex } from './schedule';
-import { useEligible, useFullPage } from '../hooks';
+import type { FantasySlot } from '../hooks';
+import { useEligible, useFantasyRoster, useFullPage } from '../hooks';
 import type {
   BattingLine,
   PitchingLine,
   PlayerGame,
+  PlayerKind,
   PlayerReport,
   ProjectedPlayerLine,
   RosterProjection,
@@ -44,6 +46,7 @@ import {
   mostRecentGameFirst,
   pitchingCorner,
   positionCell,
+  prettyGameDate,
   surname,
   whipOf,
 } from '../lib';
@@ -293,6 +296,61 @@ function ProjectablePitchCells({ line, projected }: { line: PitchingLine; projec
   );
 }
 
+/** Did he play in this one — each kind's own test, and both are the app's
+ *  existing ones: a batter's game he came to the plate in (`PlayerCard`'s own
+ *  `played`) and a pitcher's game he threw in (`aggregatePitching`'s filter).
+ *  Neither counts the placeholder games a report carries for the days his club
+ *  played without him. */
+function playedGame(kind: PlayerKind, g: PlayerGame): boolean {
+  return kind === 'pitcher' ? g.pitching != null : g.plateAppearances.length > 0;
+}
+
+/** Games of the range he actually played. Read by the `Games` column and by
+ *  `playedStarts` beside it, which asks the same question of a smaller set of
+ *  days. */
+function playedGames(r: PlayerReport): number {
+  return r.games.filter((g) => playedGame(r.kind, g)).length;
+}
+
+/**
+ * **The played half of `Starts`** — the games he played on days your lineup
+ * actually had him.
+ *
+ * It is the exact counterpart of `playedGames` beside it, and that is the whole
+ * of the decision: `Games` is *what he has already done + what he should still
+ * add*, so a `Starts` counting only the second half would be the one cell on
+ * the row keeping a different arithmetic — which is precisely what it was.
+ * Measured on the live roster on 2026-08-19, a day whose games are all played:
+ * `Games 5 · Starts 4` for a man started every day of the span, the missing
+ * start being today's, already in the books.
+ *
+ * **Two tiers, `projectStarters`' own**: the per-day lineup map where there is
+ * one (`FantasySlot.startedDays`), and the single end-of-range answer where
+ * there is not — an older tab, a failed read — which is the direction the whole
+ * of that filter fails in.
+ *
+ * A game he played on a day you had him **benched** is not a start, and his row
+ * still counts it: the row is what the *player* did, which is the rule the two
+ * arithmetics below rest on.
+ */
+function playedStartDays(r: PlayerReport, spot: FantasySlot | null): string[] {
+  if (!spot) return [];
+  const days = spot.startedDays ? new Set(spot.startedDays) : null;
+  const kept = r.games.filter(
+    (g) => playedGame(r.kind, g) && (days ? days.has(g.date) : spot.starting),
+  );
+  // **Days, not games**, which is what keeps the column consistent with its own
+  // other half: the plan seats a man once a day however many games that day
+  // holds, so a doubleheader you started him for is one start against two
+  // games. `Games 2 · Starts 1` is the same relationship a play-share gives
+  // every other row, arrived at from the other side.
+  return [...new Set(kept.map((g) => g.date))];
+}
+
+function playedStarts(r: PlayerReport, spot: FantasySlot | null): number {
+  return playedStartDays(r, spot).length;
+}
+
 /**
  * **How many games a projected row's figures are drawn over** — the ones he has
  * already played over the days in view, plus the ones he is expected still to
@@ -318,10 +376,7 @@ function projectedGames(
   proj: ProjectedPlayerLine | undefined,
   seated = false,
 ): number {
-  const played =
-    r.kind === 'pitcher'
-      ? r.games.filter((g) => g.pitching).length
-      : r.games.filter((g) => g.plateAppearances.length > 0).length;
+  const played = playedGames(r);
   // The same split the lines take: a row counts the chances he has, the `Total`
   // counts the ones the lineup gives him.
   const ahead = seated ? (proj?.lineup?.chances ?? proj?.chances) : proj?.chances;
@@ -338,15 +393,26 @@ function projectedGames(
  * out of a week of them, most of which nobody has played. What a projected row
  * *is* read against is how many games it is made of, which is the same question
  * the Schedule view's leading column answers — hence the same header.
+ *
+ * *(The header is the word now, not the letter: `G` beside a `Starts` column
+ * has two readings on a pitcher's row and one of them is the other column —
+ * `G` is appearances and `GS` is games started in every baseball table ever
+ * printed. It costs 14px at 390 and nothing at 1400. The Schedule view's own
+ * `G` is untouched: it counts a club's fixtures rather than a man's
+ * appearances, and nothing sits beside it to be confused with.)*
  */
-function ProjectedGamesHead() {
+function ProjectedGamesHead({ kind }: { kind: PlayerKind }) {
   return (
     <th
       className="sum-num"
       scope="col"
-      title="Games behind these figures — the ones he has played over the days in view plus the ones he is expected still to get"
+      title={
+        kind === 'pitcher'
+          ? 'Appearances behind these figures — games he pitches in, a start and a relief outing alike: the ones already thrown over the days in view plus the ones he is expected still to get'
+          : 'Games behind these figures — the ones he has come to the plate in over the days in view plus the ones he is expected still to get'
+      }
     >
-      G
+      Games
     </th>
   );
 }
@@ -357,6 +423,131 @@ function ProjectedGamesHead() {
  *  — the same absence `chances: 0` already dashes the rest of his row for. */
 function ProjectedGamesCell({ n }: { n: number }) {
   return <td className="sum-num">{n > 0 ? projCount(n) : '—'}</td>;
+}
+
+/**
+ * **How many days of the span the projection actually starts him**, in a column
+ * of its own beside the `G` it qualifies.
+ *
+ * It was on the slot chip — `2B 5/5`, `3B/UTIL 4/5` — which put the one fact
+ * about the *span* on this row into the one cell that carries facts about the
+ * *player*, and put it where no two rows' figures line up to be read against
+ * each other. Every other thing the lens says about a week is a column: a
+ * reader scans it, compares two rows at a glance, and adds it up at the foot.
+ * A count buried at the end of a pill in the name column could do none of the
+ * three, and the `Total` row had nowhere to say how many seat-days the plan
+ * spends. So the chip keeps *where* he plays and this keeps *how often* — the
+ * split the two questions had all along.
+ *
+ * **Both halves of the row, like every figure beside it.** The days already
+ * played that your lineup had him plus the days ahead the plan seats him —
+ * `playedStarts` and `lineup.days`. It counted only the second when it was
+ * built, which made it the one cell on the row keeping a different arithmetic
+ * from the `Games` next to it: measured on the live roster on an evening whose
+ * games were all played, a man started every day of the span read **`Games 5 ·
+ * Starts 4`**, the missing start being today's, already in the books. That is
+ * not a rounding difference a reader can talk themselves into — it is the
+ * column disagreeing with its neighbor about what a span is.
+ *
+ * **A whole number, where every other projected figure is a tenth.** Those are
+ * shares of a game (`chances` is play-share weighted, and half a game is a real
+ * answer); a start is a decision made on a named day, and there is no such
+ * thing as 4.3 of them. It is why `Starts` sits *above* `Games` on most rows
+ * and should: four starts of a man who bats in 80% of the games he is started
+ * for is `Starts 4 · Games 3.3`, which is the two questions answered
+ * separately.
+ *
+ * **`0` where nobody started him on any of it, a dash where there was nothing
+ * to decide either way** — no day played with him in your lineup, and no day
+ * left for his club. The dash is this table's standing rule that a nought is
+ * never drawn where the honest answer is *nothing was asked*, and it is the
+ * same absence that dashes the rest of that row.
+ *
+ * Drawn only where there is a lineup to fill. A saved watchlist and a league
+ * that published no slot counts have no plan and so no starts, and a column of
+ * dashes states nothing — see `anyLineup` in each table.
+ */
+function ProjectedStartsHead({ kind }: { kind: PlayerKind }) {
+  return (
+    <th
+      className="sum-num"
+      scope="col"
+      title={
+        // **Whose lineup is left unsaid**, since this table draws a leaguemate's
+        // roster on a matchup's team page as readily as your own — the chip in
+        // the name column is the one that says whose, and it has an owner to
+        // say it with.
+        'Days the projection puts him in a lineup slot, of the days his club plays — the rest it benches him for.' +
+        // **A pitcher's column says which kind of start it means.** `Starts`
+        // beside a pitcher's line is `GS` in every other baseball table there
+        // is, and this one counts days in a lineup slot — a reliever holding a
+        // seat all week reads `Games 1 · Starts 4`, which is the row that has
+        // to be unambiguous or it is worse than no column.
+        (kind === 'pitcher' ? ' A lineup slot, not a start on the mound.' : '')
+      }
+    >
+      Starts
+    </th>
+  );
+}
+
+/**
+ * A `Starts` cell: the days already played that you started him on plus the
+ * days ahead the plan seats him, with both named on the title — `readLineup`'s
+ * own sentence for the second half, which is the sentence the chip beside it
+ * carries word for word.
+ *
+ * **A dash only where there was nothing to decide either way** — no day played
+ * with him in your lineup and no day left for his club — which is the same
+ * absence that dashes the rest of his row. `0` is the other thing: days were
+ * there and the answer was no.
+ */
+function ProjectedStartsCell({
+  r,
+  lineup,
+  spot,
+}: {
+  r: PlayerReport;
+  lineup?: ProjectedPlayerLine['lineup'];
+  spot: FantasySlot | null;
+}) {
+  const played = playedStarts(r, spot);
+  const read = lineup && lineup.openDays.length > 0 ? readLineup(lineup) : null;
+  if (!read && played === 0) return <td className="sum-num">—</td>;
+  const n = played + (read?.seated ?? 0);
+  const playedDays = playedStartDays(r, spot);
+  const parts = [
+    playedDays.length > 0 ? `started ${playedDays.map(prettyGameDate).join(', ')}` : '',
+    read ? `projected ${read.tail}` : '',
+  ].filter(Boolean);
+  return (
+    <td className="sum-num" title={`${n} ${n === 1 ? 'start' : 'starts'} — ${parts.join('; ')}`}>
+      {n}
+    </td>
+  );
+}
+
+/** The `Starts` total: the lineup days the men above the line spend between
+ *  them — started and projected alike, which is the column added up as this
+ *  table's standing rule requires. */
+function ProjectedStartsTotal({ n }: { n: number }) {
+  return (
+    <td className="sum-num" title="Lineup spots these players fill over these days — the ones already started and the ones the projection fills — added up">
+      {n}
+    </td>
+  );
+}
+
+/**
+ * **The whole row's starts** — the days already played that you started him on,
+ * plus the days ahead the plan seats him.
+ *
+ * The same shape as `projectedGames` beside it and for the same reason: every
+ * figure on this row is *what has happened + what is still to come*, and a
+ * count of one half would read as a count of the row.
+ */
+function startsOf(r: PlayerReport, proj: ProjectedPlayerLine | undefined, spot: FantasySlot | null): number {
+  return playedStarts(r, spot) + (proj?.lineup?.days.length ?? 0);
 }
 
 /**
@@ -790,6 +981,19 @@ type Expand = { isFull: boolean; toggle: () => void };
  * the button, and the two would disagree *silently*, the button narrowing to
  * one set while the line above the total drew another.
  *
+ * **Under the projected lens the plan answers, and that is the same rule
+ * rather than an exception to it.** There is still exactly one test in this app
+ * for who is starting, and over days nobody has played it is not ESPN's
+ * lineup: that one describes today, and on a future span the `Starters`
+ * filter's own fallback is today's lineup carried forward — a guess, where the
+ * projection has just filled every one of those days seat by seat. So a man the
+ * plan starts on any day of the span is above the line, the foot beside it adds
+ * up precisely the men it seated, and the chip in each name column already says
+ * which of them they are. The two halves of a straddling range each take their
+ * own answer: the plan for the days ahead, `starters` for the days behind, so
+ * nothing a man banked on Monday falls out of the foot because Thursday's
+ * lineup has no room for him.
+ *
  * That means the word carries the filter's own two readings and its own edge
  * cases, which are argued in full at `projectStarters`: on your own roster a
  * starter is a man in tonight's posted lineup or named as today's starting
@@ -814,11 +1018,28 @@ type Expand = { isFull: boolean; toggle: () => void };
 function splitStarters(
   players: PlayerReport[],
   starters: Set<string> | null,
+  projection: ProjectedLines | null,
+  slots: Map<string, FantasySlot> | null,
 ): { top: PlayerReport[]; rest: PlayerReport[] } {
-  if (!starters) return { top: players, rest: [] };
-  const top = players.filter((r) => starters.has(playerKey(r)));
+  // Under the lens the plan is the answer — see the paragraph above. Splitting
+  // on anything else puts a man above a `Lineup` total his own seat is not in.
+  // And it is the **column's** own count that decides, both halves of it: the
+  // ordinary press straddles today, so a projected span has a played half the
+  // plan does not answer for and which must not be allowed to drop — a man you
+  // started on Monday and the projection benches on Thursday earned you Monday,
+  // his row carries it, and the foot beside this line adds it up. One test for
+  // the line and the figure printed on it.
+  const plan = projection && players.some((r) => projection.get(playerKey(r))?.lineup != null);
+  const isTop = plan
+    ? (r: PlayerReport) =>
+        startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null) > 0
+    : starters
+      ? (r: PlayerReport) => starters.has(playerKey(r))
+      : null;
+  if (!isTop) return { top: players, rest: [] };
+  const top = players.filter(isTop);
   if (top.length === 0 || top.length === players.length) return { top: players, rest: [] };
-  return { top, rest: players.filter((r) => !starters.has(playerKey(r))) };
+  return { top, rest: players.filter((r) => !isTop(r)) };
 }
 
 /**
@@ -874,7 +1095,12 @@ function BatterTable({
 }) {
   const lineOf = (r: PlayerReport): BattingLine =>
     projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
-  const { top, rest } = splitStarters(batters, starters);
+  const slots = useFantasyRoster();
+  const { top, rest } = splitStarters(batters, starters, projection, slots);
+  /** Whether the plan filled a lineup at all — what the `Starts` column is
+   *  drawn on. Over the whole tab rather than over `top`, so the header and
+   *  the cells under it cannot disagree about how many columns there are. */
+  const anyLineup = projection != null && batters.some((r) => projection.get(playerKey(r))?.lineup != null);
   // The total's two arithmetics are one arithmetic wherever no lineup was
   // filled — a saved watchlist, a league with no slot counts — and the label
   // says `Total` there, which is what it has always said. Read off `top`
@@ -908,6 +1134,13 @@ function BatterTable({
             {projection && (
               <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
             )}
+            {anyLineup && (
+              <ProjectedStartsCell
+                r={r}
+                lineup={projection?.get(playerKey(r))?.lineup}
+                spot={slots?.get(playerKey(r)) ?? null}
+              />
+            )}
             <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
           </>
         )}
@@ -930,12 +1163,16 @@ function BatterTable({
           ) : (
             <>
               {projection ? (
-                <ProjectedGamesHead />
+                <ProjectedGamesHead kind="batter" />
               ) : (
                 <th className="sum-opp-col" scope="col">
                   Opponent
                 </th>
               )}
+              {/* **How often the plan starts him**, which the slot chip used to
+                  carry and which belongs in a column — see
+                  `ProjectedStartsHead`. */}
+              {anyLineup && <ProjectedStartsHead kind="batter" />}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -974,6 +1211,16 @@ function BatterTable({
               ) : (
                 <td className="sum-opp" aria-hidden="true" />
               )}
+              {anyLineup && (
+                <ProjectedStartsTotal
+                  n={top.reduce(
+                    (n, r) =>
+                      n +
+                      startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
+                    0,
+                  )}
+                />
+              )}
               <ProjectableStatCells line={total} projected={projection != null} />
             </>
           )}
@@ -1004,7 +1251,10 @@ function PitcherTable({
 }) {
   const lineOf = (r: PlayerReport): PitchingLine =>
     projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
-  const { top, rest } = splitStarters(pitchers, starters);
+  const slots = useFantasyRoster();
+  const { top, rest } = splitStarters(pitchers, starters, projection, slots);
+  /** See `BatterTable`'s own. */
+  const anyLineup = projection != null && pitchers.some((r) => projection.get(playerKey(r))?.lineup != null);
   /** See `BatterTable`'s own. */
   const hasPlan = top.some((r) => projection?.get(playerKey(r))?.lineup != null);
   const totalLine = projection
@@ -1035,6 +1285,13 @@ function PitcherTable({
             {projection && (
               <ProjectedGamesCell n={projectedGames(r, projection.get(playerKey(r)))} />
             )}
+            {anyLineup && (
+              <ProjectedStartsCell
+                r={r}
+                lineup={projection?.get(playerKey(r))?.lineup}
+                spot={slots?.get(playerKey(r)) ?? null}
+              />
+            )}
             <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
           </>
         )}
@@ -1057,12 +1314,16 @@ function PitcherTable({
           ) : (
             <>
               {projection ? (
-                <ProjectedGamesHead />
+                <ProjectedGamesHead kind="pitcher" />
               ) : (
                 <th className="sum-opp-col" scope="col">
                   Opponent
                 </th>
               )}
+              {/* **How often the plan starts him**, which the slot chip used to
+                  carry and which belongs in a column — see
+                  `ProjectedStartsHead`. */}
+              {anyLineup && <ProjectedStartsHead kind="pitcher" />}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -1093,6 +1354,16 @@ function PitcherTable({
                 />
               ) : (
                 <td className="sum-opp" aria-hidden="true" />
+              )}
+              {anyLineup && (
+                <ProjectedStartsTotal
+                  n={top.reduce(
+                    (n, r) =>
+                      n +
+                      startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
+                    0,
+                  )}
+                />
               )}
               <ProjectablePitchCells line={totalLine} projected={projection != null} />
             </>

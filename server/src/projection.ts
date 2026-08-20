@@ -572,21 +572,60 @@ const byId = (rows: ResearchRow[]): Map<number, ResearchRow> =>
   new Map(rows.map((r) => [r.id, r]));
 
 /**
+ * **Is this game still ahead of the clock?** — the test `remainingGames` asks of
+ * today, and it asks it of **two** things because one of them goes stale.
+ *
+ * `state` is the honest answer and the one that was here alone: `live` or
+ * `final` means the game is spoken for. But it rides on the league-wide
+ * schedule window, which is cached for **thirty minutes** (`schedule.ts`'s
+ * `WINDOW_TTL`, set by how often *probables* move, which is the slowest thing
+ * in that blob) — so for up to half an hour after a first pitch the window
+ * still says `scheduled`, and a projection built on it goes on projecting a
+ * game whose runs are already coming in on the report beside it. That is
+ * exactly the double count this function exists to prevent, arriving through
+ * the cache rather than through the rule.
+ *
+ * **The first pitch cannot go stale**, so it is read too: a `scheduled` game
+ * whose `startTime` is behind the clock is a game under way that this process
+ * has not been told about yet. The two together make "has it started" a
+ * question about *now* rather than about when the window was fetched, which is
+ * what lets the reader watch a projection come down through an evening.
+ *
+ * It fails toward *not* projecting: a delayed game reads as started and is left
+ * out, which understates by one game where the alternative overstates by one
+ * that is already on the report — and understating is the direction the whole
+ * of this file errs in. No `startTime` at all (the schedule gives none) leaves
+ * `state` to answer alone, which is where this began.
+ */
+function yetToStart(g: ScheduleGame, now: number): boolean {
+  if (g.state !== 'scheduled') return false;
+  if (!g.startTime) return true;
+  const first = Date.parse(g.startTime);
+  return Number.isNaN(first) || first > now;
+}
+
+/**
  * A club's remaining games in the period.
  *
  * **Today counts only where its game has not started**, which is the one rule
  * that keeps this from double-counting: the live scoreboard's own figure already
  * holds today's production (`withAddedComponents` adds it), so a game that is
- * `live` or `final` is spoken for. A **postponement is not a game he gets**,
- * which is `schedule.ts`'s own rule and the one error that would make a game
- * count lie.
+ * `live` or `final` is spoken for — and so is one whose first pitch has passed
+ * while the cached window still calls it `scheduled`, which is `yetToStart`'s
+ * whole subject. A **postponement is not a game he gets**, which is
+ * `schedule.ts`'s own rule and the one error that would make a game count lie.
  */
-function remainingGames(games: ScheduleGame[], today: string, end: string): Map<number, ScheduleGame[]> {
+function remainingGames(
+  games: ScheduleGame[],
+  today: string,
+  end: string,
+  now = Date.now(),
+): Map<number, ScheduleGame[]> {
   const out = new Map<number, ScheduleGame[]>();
   for (const g of games) {
     if (g.date < today || g.date > end) continue;
     if (g.state === 'postponed') continue;
-    if (g.date === today && g.state !== 'scheduled') continue;
+    if (g.date === today && !yetToStart(g, now)) continue;
     for (const id of [g.homeId, g.awayId]) {
       const list = out.get(id);
       if (list) list.push(g);
@@ -1767,7 +1806,10 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
 
   // Every club that still has a game, so the two hitting boards are read for
   // the clubs that matter rather than all thirty regardless.
-  const remaining = remainingGames(schedule.games, from, to);
+  // One clock for the whole assembly, so the games counted as still to come and
+  // the days counted as still to play cannot fall either side of a first pitch.
+  const now = Date.now();
+  const remaining = remainingGames(schedule.games, from, to, now);
   const clubs = [...new Set([...remaining.keys()])];
   const [recentSplits, seasonSplits, lineup] = await Promise.all([
     Promise.all(clubs.map(async (id) => [id, await getTeamHitting(id, RECENT_WINDOW)] as const)),
@@ -1814,13 +1856,16 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
   };
 
   // How many days of the span still have a game to be played — the same test
-  // `remainingGames` applies, counted rather than assumed so a span running past
-  // the schedule window's own reach says how far it actually got.
+  // `remainingGames` applies, down to `yetToStart`'s reading of the clock,
+  // counted rather than assumed so a span running past the schedule window's
+  // own reach says how far it actually got. Written through the same helper
+  // rather than repeated inline, which is how the two came to disagree about a
+  // game already under way in the first place.
   const today = baseballToday();
   let daysLeft = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const any = schedule.games.some(
-      (g) => g.date === d && g.state !== 'postponed' && (d !== today || g.state === 'scheduled'),
+      (g) => g.date === d && g.state !== 'postponed' && (d !== today || yetToStart(g, now)),
     );
     if (any) daysLeft += 1;
   }

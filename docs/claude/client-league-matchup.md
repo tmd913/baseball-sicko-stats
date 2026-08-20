@@ -697,6 +697,25 @@ the page — measured all the same, because "it should already" is not a result:
 press `Projected` on the `BETS` page, `Back`, reopen the card and the page, and
 the toggle is unlit.
 
+**It did need one thing, and this is where it is written down: it re-reads
+itself while the week is being played.** A projection is a figure that moves —
+the engine projects only the games that have **not started**, so every first
+pitch takes a game out of the estimate and puts it on the report beside it — and
+this table's was read once, on the press, while everything around it went on
+polling. So the page sets its own timer on the League page's own minute
+(`lib.ts::LEAGUE_POLL_MS`, which moved there for this second caller), gated on
+`board.live` exactly as `pollLeague` gates the board itself, and reads
+**quietly**: nothing blanks, no ball turns in the toggle, and the last answer
+stands until the next lands. The read is sequence-numbered rather than canceled
+per run, since a tick and a span change can now be in flight at once and only
+the newest may write. Measured on team 4 with the week live: `projection/roster`
+on the press at 12s, then at **72s and 132s** — one a minute, interleaved with
+the board's own ticks at 60 and 120 — with **0** spinners and the table's
+`Starts` column standing throughout. The Roster view's copy of the same
+correction, on the report's twenty seconds rather than this minute, is in
+**Client — the summary table**, *The lens re-reads itself while games are being
+played*.
+
 
 ### A category row opens its chart
 
@@ -1611,6 +1630,27 @@ roster: where the per-day map is missing — an older server, or a read that fai
 chips keeps or drops a whole row. Driven with `lineups` stripped from the
 response: 13 rows → 11, which is the pre-per-day behavior rather than an empty
 table.
+
+**The per-day lineup map fills the slot chips' `startedDays` too**, which was
+`null` here on the stated grounds that this page "reads one day's roster" — true
+of the chip and untrue of the page, which reads the map for the filter above.
+The projected table's `Starts` column needs those days to count the half of the
+span that has been played (**Client — the summary table**, *Both halves, or it
+is not the row's count*), and the chips gain the range title they never had:
+`in The Homewreckers' lineup on 3 of the 5 days in view`.
+
+**The same set now draws the `Total` divider here**, which it did not before.
+`SummaryTable` cuts its table in two at that row — the starters above it, the
+bench and the injured below — and this page handed it no starter set at all, so
+the whole team sat above an undivided foot while the button beside it narrowed
+to eleven of them. It is the set `projectStarters` already returns for the
+filter, computed whether the button is pressed or not and passed down as keys,
+exactly as `App.tsx` does on the reader's own roster: a second test written for
+the line is a second test that will one day disagree with the button, silently.
+Measured on team 4 today: `Total · 16` at the bottom → **`Total · 11` with five
+rows under it**, and pressing `Starters` leaves precisely those eleven. Under
+the projected lens the plan answers instead — see **Client — the summary table**,
+*The `Total` row is a divider now*, where the whole of that rule lives.
 
 **The toggle is `components/StartersToggle.tsx`, shared with the roster row**
 rather than a lookalike — the same `.starters-toggle` class folded onto
