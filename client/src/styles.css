@@ -14220,27 +14220,32 @@ span.mup-move-name:hover {
   visibility: hidden;
   order: 1;
 }
-/* **And below 640 the Feed reading reserves nothing at all**, which is the same
-   arithmetic run at the width where every toggle is a 36px square. There the
-   run the ghost is holding a place in is `Schedule` `Projected` `Starters` =
-   **124px**, and the feed's own is `Oldest first` — a word, not a glyph, and so
-   **98.7px** where a square is 36. One reserved square takes the feed run to
-   187 against 124 and the *second* line over: measured at 375, `kind` + the run
-   came to **354 against the 343** that width leaves, so the reader who pressed
-   `Feed` gained a line of pinned band — the fault, wearing the other shoe.
-   Reserving nothing takes it to **143**, and the readings then agree at every
-   width from 320 up bar two narrow seams (≈552–570 and ≈333–345 of window),
-   which is the price of not making every reading carry the union — see the
-   note in `LeagueMatchup.tsx` for what that would have cost instead.
+/* **Every reading carries the union**, and the two special cases that used to
+   sit here are gone. The Feed reading reserved *one* of the modes, and below
+   640 it reserved *nothing*, both on arithmetic that has since stopped being
+   true: the run being reserved against was `Schedule` `Projected` `Starters`
+   (124px as squares) and the feed's own control was `Oldest first`, a word at
+   98.7px against a square's 36. `Starters` has been removed from the app, and
+   the order toggle now goes to the same 36px square as everything else beside
+   it below its container's 335px. So the union is three toggles rather than
+   four, and each reading lays out exactly three toggles' worth however wide it
+   is — the equality is by construction rather than by a number.
 
-   After the rule it overrides, not beside the rest of the narrow blocks: a
-   media query adds no specificity and both selectors are two classes deep, so
-   the later of the two is the one that wins. */
-@media (max-width: 640px) {
-  .mup-tool-modes.mup-tool-ghost-feed {
-    display: none;
-  }
-}
+   That equality is what the two branches this came from could not each see.
+   One made the roster reading reserve the order toggle; the other made the
+   Feed reading reserve one mode, on the reasoning that the roster reading
+   reserved nothing. Composed, the roster run held 118.6px open and the feed
+   run 113.5 where it needed 224.6, and the band jumped **48px** crossing to
+   `Feed` at 780, 700, 400, 390, 375 and 320 — measured on the merged row,
+   which is the row neither branch's figures described.
+
+   Measured after, across the three readings at fifteen widths: **36 / 36 / 36**
+   at 1400, 1000, 900 and 800; **84** on all three at 780, 700, 660, 641, 500,
+   430 and 360; **132** on all three at 400, 390, 375 and 320. The Feed reading
+   pays a wrapped line between 660 and 780 that it did not pay before, which is
+   what the union costs and is the same line the other two readings were already
+   paying at those widths. The alternative — the band moving under the finger
+   that pressed `Feed` — is the fault this ghost exists for. */
 
 /* ---- A matchup's three pages -------------------------------------------
    The strip that selects one manager's team, the comparison, or the other

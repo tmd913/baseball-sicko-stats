@@ -1499,21 +1499,28 @@ already follows for a half with no matchup period in it.
 
 #### The third pill took the tools row's slack, and the ghost had to be re-derived
 
-**A third reading pill is 88px, and the row had 40.** `.mup-tools` is capped at the 800px card column, and at 1400 the run was `reading 217 · kind 155 · icons` with two 12px gaps. On the roster reading the icons come to **346** (`Schedule` 111 + `Projected` 114 + `Starters` 105) and the total to **741**; on the Feed reading the ghosted pair is still 233 and the order toggle adds 99, so the icons come to **452** and the total to **848** — over the column, so the row wrapped **on that reading alone** and the band went 162 → 210. That is a whole line of pinned chrome appearing under the finger that pressed `Feed`, which is the exact fault the ghost exists to prevent, reintroduced by the pill.
+**A third reading pill is 88px, and the row had 40.** `.mup-tools` is capped at the 800px card column, and at 1400 the run was `reading 217 · kind 155 · icons` with two 12px gaps. On the roster reading the icons came to **346** (`Schedule` 111 + `Projected` 114 + `Starters` 105) and the total to **741**; on the Feed reading the ghosted pair was still 233 and the order toggle added 99, so the icons came to **452** and the total to **848** — over the column, so the row wrapped **on that reading alone** and the band went 162 → 210. That is a whole line of pinned chrome appearing under the finger that pressed `Feed`, which is the exact fault the ghost exists to prevent, reintroduced by the pill.
 
-**So the ghost reserves the *difference*, not the pair.** The rule is: hold open whatever the roster reading has that this one has not, less whatever this one has that the roster reading has not. `Summary` has nothing of its own and reserves **both**. The Feed has the order toggle and reserves **one** — `Projected` (113.5 against `Schedule`'s 111.1, the nearer of the two to the 126 that would make the runs equal). Below 640 it reserves **none**: there every toggle is a 36px square and the roster run is 124, while `Oldest first` is a *word*, not a glyph, and measures 98.7 — one reserved square takes the feed run to 187 and, at 375, `kind` + the run to **354 against the 343** that width leaves, which is the same fault wearing the other shoe. Reserving nothing takes it to 143.
+**The answer was to reserve the *difference*, not the pair** — hold open whatever the roster reading has that this one has not, less whatever this one has that the roster reading has not — and **that rule has since been withdrawn.** It was correct arithmetic over a union of four toggles, and both of its inputs stopped being true within one merge:
 
-**Exactly equal was available and was rejected.** Draw all four in every reading and ghost what does not apply and the run is 452 on every one of them — but 452 does not fit an 800px column, so the row wraps in *all three* readings and the band is 210 at every desktop width instead of 162, and 258 instead of 210 on a phone. That is 48px of pinned chrome bought from every reader, always, to close three seams.
+- **`Starters` was removed from the app.** The union is three toggles now, not four, and it measures **359.2px** — which *fits* the 800px column, where 452 did not. The whole case for a difference rule was that carrying the union cost every reading a wrapped line; it no longer does.
+- **The roster reading started reserving the order toggle.** The difference rule was derived against a roster reading that reserved nothing. Composed with a roster reading that reserves 118.6px, the Feed reading's single reserved mode (113.5) left it holding 113.5 where it needed 224.6.
 
-**Measured across the three readings at nineteen window widths** (`?view=league&mup=110&mt=5`, band height in px):
+**Measured on the merged row, the band jumped 48px crossing to `Feed`** at 780, 700, 400, 390, 375 and 320 — the original fault, restored by two fixes that were each right alone. Neither branch could see it: each was measured before the other landed, which is the standing hazard of parallel work against one base and the reason this row is measured after every merge that touches it.
+
+**So every reading now carries the union.** All three lay out the same three toggles and the ghost hides the ones that do not apply — the modes off the roster reading, the order toggle off the Feed reading. The runs are equal **by construction** rather than by a subtraction of two measured widths, which is the property the difference rule could never have: it was a number, and a number goes stale when a button is added or a word becomes a glyph.
+
+**Measured across the three readings at the same nineteen window widths** (`?view=league&mup=110&mt=5`, band height in px):
 
 | window | 1400 | 1000 | 900 | 800 | 780 | 770 | 700 | 660 | 641 | 640 | 560 | 500 | 430 | 400 | 390 | 375 | 360 | 340 | 320 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Roster | 162 | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 210 | 241 | 289 |
-| Summary | 162 | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 210 | 241 | 289 |
-| Feed | 162 | 162 | 162 | 162 | 162 | **162** | 210 | 210 | 210 | 162 | **210** | 210 | 210 | 210 | 210 | 210 | 210 | **289** | 289 |
+| Roster | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 162 | 210 | 210 | 210 | 258 | 258 | 258 | 210 | 241 | 289 |
+| Summary | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 162 | 210 | 210 | 210 | 258 | 258 | 258 | 210 | 241 | 289 |
+| Feed | 162 | 162 | 162 | 162 | 210 | 210 | 210 | 210 | 210 | 162 | 210 | 210 | 210 | 258 | 258 | 258 | 210 | 241 | 289 |
 
-Three seams remain, all of them narrow bands of window width where the Feed reading alone is a line out — **≈761–773, ≈552–570, ≈333–345** — and none of them is a device width. Every common one (320, 360, 375, 390, 430, 500, 640, 800, 900, 1000, 1400) is identical across all three readings.
+**No seams.** The three that survived the difference rule (≈761–773, ≈552–570, ≈333–345) are gone, and the readings are identical at every width measured rather than at every *common* one.
+
+**What it costs, stated plainly.** The band is taller at some widths than it was under the difference rule — 210 rather than 162 at 780, and 258 rather than 210 at 400, 390 and 375 — because every reading now carries a run that only the widest of them used to. That is the trade the difference rule was invented to avoid, and it is taken now for two reasons that did not hold then: the union is 93px narrower without `Starters`, and a band that is stable but taller is the one the ghost was always for. A band that moves under a press is the fault; a band that is 48px taller at four widths is a cost.
 
 #### The dates row lost its own margin, which was the roster bar's rule all along
 
