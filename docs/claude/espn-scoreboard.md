@@ -525,6 +525,41 @@ this is those two dates falling out of a payload the file already parses;
 measured through the route, **103 bytes**. The client reads it once per session
 on a connected league, the terms the ownership map is on.
 
+### Every period, dated — the list the week face opens
+
+**The scoreboard publishes `periods`, one entry per matchup period the schedule
+has materialised, and it is the *same* arithmetic `start`/`end` are, run for the
+whole schedule instead of for the week being shown.** The client draws it as the
+list behind the header's own press — see *The week reads like the app's date
+face* in **Client — the League view**. The two arrows are two members of it.
+
+**It is derived, not fetched, and that was the constraint.** `leagueMeta.periods`
+is already in hand on every scoreboard read — it is what `prevPeriod` and
+`nextPeriod` are computed from — and `dateForPeriod` awaits one **cached** period
+anchor and then does `addDays`. So the whole list is that one await and no
+upstream request at all. Written as one expression over `meta.periods` rather
+than beside the header's own pair, deliberately: the week the header is on and
+that week's own row in the list are then the same two calls, and cannot come to
+print different days.
+
+**The dates are the observed span**, which is the truncation the header already
+carries on the live period and is the right reading *here* for exactly that
+reason — a row that read further than the face above it would be two dates for
+one week. The whole-period reading is the section above, and it has its own route
+because it answers a different question.
+
+Checked against the live league through the route: **19 entries**, contiguous
+with 0 gaps, `Week 1 · 2026-03-25 → 2026-04-05` (the 12-day opening week) through
+`Week 19 · 2026-08-10 → 2026-08-19`, period 15 reading its 14 days, and the entry
+for period 19 byte-identical to the payload's own `start`/`end`.
+
+**No cache version was bumped and none was owed.** The rule is whether anything
+reads the field back *out of a stored blob*, and the scoreboard's frozen blob
+holds `EspnMatchup[]` alone (`scoreboardBlobKey`) — this rides on the assembled
+`EspnScoreboard`, which is built fresh from `meta` on every call. Null dates
+where the anchor could not be read, the same failure the header's own dates take;
+the list then names the week without them rather than dropping it.
+
 ### The Rankings tab, and the five spans
 
 **The season table the League page opened with was the raw values, and a value
