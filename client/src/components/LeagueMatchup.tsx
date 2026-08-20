@@ -1463,9 +1463,12 @@ export default function LeagueMatchupView({
             that way they are out of the tab order and out of the accessibility
             tree, which is what `.mv-callouts-ghost` relies on too.
 
-            Only where it pays: above the width at which the row wraps the ghost
-            is `display: none`, the run simply being shorter with nothing under
-            it to move. See `.mup-tool-modes`. */}
+            And it is held open at the **end** of the run rather than in place,
+            which is what makes it free at a width where nothing wraps: trailing
+            blank in the last group of a left-aligned row is invisible, where in
+            place it left the feed's lone clipboard 90px adrift of its own line.
+            That is `order` on the ghost, so the DOM keeps the roster row's own
+            order — see `.mup-tool-modes`. */}
         <span
           className={`mup-tool-modes${reading === 'roster' ? '' : ' mup-tool-ghost'}`}
           aria-hidden={reading === 'roster' ? undefined : true}
