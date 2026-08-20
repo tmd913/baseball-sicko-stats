@@ -1120,7 +1120,11 @@ he is doing now; this is what he has coming. *Now → next → the record* is on
 direction of travel, and it is the same argument the Overview makes for putting
 Projected Starts directly under the day — the two halves of "what is he doing"
 must not end up in two places. Last in the strip would have put six tabs of
-season history between them.
+season history between them. *(It is seventh now, after the Game Log — see
+**The Overview carries the forward half, so the tab moved** below. The paragraph
+is left as it was written, this file's rule for its own superseded reasoning:
+what changed is not the argument but its premise, the Overview having taken the
+forward half onto itself.)*
 
 **The strip is eight tabs now, and nine on a pitcher** — it was seven and eight.
 It has needed nothing structural, as it did not for News: `.details-tabs`
@@ -1131,6 +1135,11 @@ sits 96 from the strip's left edge with 171 to spare), the strip is **34px** tal
 at both widths, and the page body and the overlay each overflow by **0**.
 
 #### Two kinds of row, because it is two questions
+
+*(Superseded — there is **one** kind of row now, and a starter's turns are marked
+within his club's fixtures rather than replacing them. See **A starter gets the
+fortnight too, with his turns marked in it** below. The reasoning is left as it
+was written, and the half of it that still stands is named there.)*
 
 **A batter is in every game his club plays and a reliever could be in any of
 them**, so what either has coming *is* his club's fixture list. **A starting
@@ -1252,6 +1261,11 @@ sentences (`emptyText`), each driven and read off the page:
 | he is on no club | `Aaron Judge isn’t on a club right now, so there are no games to list.` |
 | his club really has nothing left | `Nothing left on his club’s schedule in the next 14 days.` |
 
+*(A rotation starter now gets these four as well, his tab being his club's
+fixtures like everybody else's — see **A starter gets the fortnight too**. His
+five rotation refusals are still drawn, on the Overview block that still asks
+that question. The paragraph below is left as written.)*
+
 A **rotation starter** with nothing to show gets `ProjectedStartsBlock`'s own
 five refusal sentences instead, which is the point of drawing that block rather
 than a list — checked on the live season, Mick Abel's tab reads *"Mick Abel isn’t
@@ -1332,6 +1346,182 @@ then the retry.
 over the wire, for a tab, a list, four sentences and a read hoisted a level. The
 CSS is one extra selector and two comments because the tab is a fold rather than
 a surface.
+
+### A fixture is a press, and it opens what an upcoming game opens
+
+**Every row on this tab named a game and did nothing**, which is half a
+sentence in exactly the way the Projected Starts rows were half a sentence
+before they became presses: a manager reading `Aug 26 · vs HOU · RHP Lambert` is
+deciding whether to start a man in that game, and the app already knows the
+thing that decides it. So a fixture row is a press, and what it raises is not a
+new box — it is **the dialog an upcoming game already raises in the feed**,
+picked by the same test that file makes.
+
+| the row belongs to | the box | the test for whether a row is a press |
+| --- | --- | --- |
+| a pitcher | `OpponentSection` over the opposing club's season line | not a press once the server answers with **no board** for that club |
+| a batter | `BatterSplitsTab`, with the half the other club's starter creates marked | a press only where that starter has a **hand** — the feed's own `spHand !== null` |
+
+**The two tests differ because the two facts arrive at different times**, which
+is the distinction `A row with nothing behind it is not a press` already draws
+for a projected start. A batter's is decidable before anything is drawn: a
+platoon half needs a hand to mark, and a game nobody has been named for has
+none. A pitcher's cannot be, the club's line not being read until somebody
+presses — so the row is a press by default and goes static on the one answer
+that says there is nothing behind it. **Measured on Aaron Judge's thirteen
+rows: 9 are presses and 4 are static**, which is the same 9-of-13 the opposing
+starter is named on, because it is the same fact.
+
+**The club-line cache moved rather than being written twice.** It was
+`ProjectedStartsBlock`'s own `opps`/`asked`/`loadOpponent`, and two lists of
+dated rows now read one club's season line on a press, so it is
+`useOpponentBoards` in `OpponentTable.tsx` — beside the table it feeds, which is
+also what keeps `PlayerOverview.tsx` and `PlayerSchedule.tsx` from importing
+each other now that the Overview draws the Schedule tab's block. `StartOpponent`
+went with it as `OpponentRead`, which is the same three states named by what
+they are rather than by which list asked.
+
+**The press is a `<button>`, which is this app's answer to *a press arms on
+`pointerdown` and decides on release* wherever the target is a whole row.** The
+feed's Upcoming bar and the Projected Starts row are both plain buttons, and a
+click is by definition armed on the press and decided on the release, with the
+browser cancelling it when the gesture becomes a scroll. Driven with synthesized
+touches on a fixture row at 1200×900: a touch that lands on the row and moves
+**60px** before lifting leaves `dialogs` at **0**, and one that lands and lifts
+**2px** away opens **1**. A second interaction spelled by hand here would have
+been a second answer to a question the app has already answered three times.
+
+**What the box says about a guess it is looking at.** A dialog inherits none of
+the row's marks, so both of the row's caveats are repeated inside it where the
+reader is: a projected turn of his own carries *Projected from his rotation
+slot — nobody has named this start yet*, and a batter's row against a projected
+opposing starter carries *HOU hasn't named a starter this far out — Peter
+Lambert (RHP) is who their rotation puts on the mound, so this is the half of
+his split that would apply.* Read off the page, with the marked half's own title
+reading `Peter Lambert (RHP) throws right-handed, so this is the half that
+applies to this game.` on `.spl-head-side--on`. An announced row carries neither
+sentence.
+
+### A starter gets the fortnight too, with his turns marked in it
+
+**The tab was two lists and is one.** A rotation starter got
+`ProjectedStartsBlock` — his five turns and nothing else — on the argument that
+he is in one in five of his club's games, so his turns are what he *has coming*.
+What that leaves out is that the other four are what he does **not** have
+coming, and a manager holding a two-start week is reading the fortnight to find
+out: five turns cannot answer *does he go again before Sunday* without the days
+they fall between. So every player's tab is his club's fixture list, and a
+starter's turns are **marked** within it — which is the reading the roster's
+Schedule grid has always given a pitcher's row, where `SP` sits on the days he
+takes the ball and the club's other games are still drawn.
+
+**The half of the old argument that stands** is that a rotation is a different
+reading from a fixture list, and it keeps its own block: `Projected Starts` is
+unmoved on the Overview, with its tiers, its cadence note and its five refusal
+sentences. What changed is that it stopped standing in for the tab.
+
+**The mark is `startTierOn`, the grid's own function**, over the window this
+list is already built from — not the `/api/players/:id/projected-starts`
+payload the Overview draws. That is the same fold as `buildScheduleIndex` one
+paragraph up: the rows and the marks on them come off **one** read, so a row
+here and a cell on the grid cannot place a turn on two different days. It also
+takes the rotation read off this tab entirely — `PlayerDetails`' `startsReq` is
+gated on the Overview alone again, which is where the block that draws it lives.
+
+**The tag wears the ladder and the row does not**, and that is the one place
+this departs from the Projected Starts block it borrows from. There, a projected
+row is muted *and* tagged, because every row is a start and the whole line is a
+guess. Here the date, the time and the matchup are a game his club is scheduled
+to play whatever we think of the rotation, so muting them would mark a fact as a
+guess — the guess is confined to the thing that is one. Measured on Walker
+Buehler's tab: the marked rows' `.ovw-next-when` is `rgb(223, 225, 226)`, the
+same `--text` as every unmarked row's, and the tag alone carries the three
+weights (`rgb(158, 161, 162)`, `--muted`, solid border on a projection).
+
+**The words differ from the block's for the same reason the mark does.** There
+the heading says `Projected Starts` and the tag says how sure it is
+(`Announced` / `Projected` / `Estimated`); here most rows are not his starts at
+all, so a tag has to say **that he starts** before it says how sure — `Start`,
+`Proj. start`, `Est. start`. The three weights are the existing ones, folded
+onto tag-level classes (`.start-tag--announced` and its two siblings share the
+selector list `.start-row--announced .start-tag` already had) rather than given
+rules that agree today.
+
+**Driven on two starting pitchers at 1200×900.** Walker Buehler's tab draws
+**11 rows where it drew 5 turns**, two of them marked — `Aug 23 · 4:10 PM · vs
+MIN · RHP Ober · Start` in the accent and `Aug 29 · 4:10 PM · @ TB · Proj.
+start` in the muted outline — and all 11 are presses. The second pitcher's draws
+**12 rows with 2 marked**, both `Proj. start`, which is the right count at a
+five-game cadence over a fortnight. Aaron Judge's is unchanged at **13 rows with
+0 marks**, a mark that would never be true not being drawn at all.
+
+**And the request economy is unchanged where it was argued and honest where it
+moved.** Logged in the page: a **starter's** page opens with `/api/schedule`
+**zero** times (his Overview block is his rotation, so nothing asks for the
+window), the first press of Schedule fires it **once**, and two further presses
+fire it **zero** more times, with `/api/projected-starts` sitting at **1**
+throughout. A **batter's** page now fires `/api/schedule` **once on opening**,
+which is new and is what the Overview's five rows cost; three presses of
+Schedule fire it **zero** further times. One object for every player, held by
+`App` for the session, so the third and fourth surfaces to ask for it are free
+after the first.
+
+### The Overview carries the forward half, so the tab moved
+
+**`Next 5 games` sits in the slot Projected Starts occupies on a starter**, and
+the two are never both drawn. That is the same test the day block above them has
+just made (`isRotationStarter`): a batter is in every game his club plays and a
+reliever could be in any of them, so what either has coming is the fixture list;
+a starter is in one in five and his turns are the answer. The Overview's rhythm
+is *now → next → what has happened → the record*, and `next` is now **one block
+whoever the reader opened the page on** rather than a block a starter has and
+nobody else does.
+
+**It is the Schedule tab's own component with two props changed**, which is the
+rule this tab already keeps for the Game Log and the News: `limit` is 5 against
+the tab's fortnight, and `onSeeAll` puts a `Schedule →` door in the head row.
+Everything else — the rows, the presses, the marks, the doubleheader sort and
+the four empty sentences — has one definition. The door needed the one CSS rule
+in this whole change: `.ovw-starts`'s head row is `flex-start` so a *note* reads
+beside its heading, and a *door* belongs over the right edge of the rows it
+opens, so `.ovw-starts.ovw-upcoming` turns the justification back on. Measured,
+it lands at **x=1000**, which is exactly where the `News →` door two blocks
+below lands.
+
+**Measured at 1200×900 and 390×844, on Aaron Judge.** The block is **800 × 186px
+at x=200** at 1200 — centered on the tab's own axis to the pixel (200 + 400 =
+600 = 16 + 1168/2), beside `Today` and `News`, which are 800 at 200 — and **358
+× 186 at x=16** at 390, the same five rows at **30px** each and the same height,
+a row at this width wrapping at neither. The page body and the overlay each
+overflow by **0** at both. The tab's block order reads `Today · Next 5 games ·
+News · Season · Last 5 games` on a batter and `Today · Projected Starts · News ·
+Season · Last 5 games` on either starting pitcher.
+
+**Which is what moved the tab.** `Schedule` went in second on the argument that
+*now → next → the record* is one direction of travel and the two halves of "what
+is he doing" must not sit at two ends of a strip. They no longer do: they sit in
+two blocks of **one tab**, with a door between them. What is left for the tab is
+the fortnight behind that preview — a deeper reading rather than a first one —
+so it belongs where the other deep readings are. **The strip as rendered**, read
+off the page at 1200×900: `Overview · Percentile Rankings · Splits · News ·
+Stats · Game Log · Schedule · Charts`, with `Arsenal` third on a pitcher. At
+390×844 the strip is **34px** tall, the selected tab lands **fully inside** it
+(Schedule sits 244px from the strip's left edge), and the page body and the
+overlay each overflow by **0**.
+
+**A tab is a key and nothing stores a position**, which is why moving it was a
+one-place change: the button moved in the JSX and the `DetailsTab` union was
+re-ordered to match for reading. The tab is not in the URL (it is state, not a
+param), no `cols`-style saved preference carries it, and `PlayerOrderEditor` —
+the one reorder screen in the app — is about the order of **players** on a
+roster. All three were checked rather than assumed.
+
+**Bundle: 591.79 → 594.14 KB of JS** (176.58 → 177.17 gzipped) and **157.84 →
+157.98 KB of CSS** (28.18 → 28.21) — 2.35KB and 0.14KB raw, 0.59KB and 0.03KB
+over the wire, for a press on every fixture row, two dialogs, a block on the
+Overview, a mark on a starter's fortnight and a cache lifted into the file that
+owns the table it feeds. The CSS is one new rule and three folded selectors,
+which is what a change made of folds costs.
 
 ### Where the rest of the player page's documentation lives
 
