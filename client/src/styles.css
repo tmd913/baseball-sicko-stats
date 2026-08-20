@@ -10796,168 +10796,26 @@ button.start-line:focus-visible {
 .feed-filter-kinds::-webkit-scrollbar {
   display: none;
 }
-/* **The stream's direction, and it is in the pinned tab row now.** It was at
-   the right end of the pill row for a spell; the argument for moving it is in
-   `FeedFilters.tsx` and comes to this — the pills answer the question the page
-   was opened with and are worked on arrival, where an order is wanted by a
-   reader already well down a stream, and a control reached *while scrolling* is
-   what the tab row exists for.
+/* ---- The stream's direction: removed ------------------------------------
+   `.feed-order` and its `-arrow`, `-word`, `-said` and `-ghost` parts are gone
+   with the control (see `FeedFilters.tsx`), and so are the two **container
+   queries** that dropped its word — the only queries either container had.
 
-   Bare here: in the tab row it is a plain `.research-toggle`, `--control-h`
-   (36px) like `Starters` beside it, and nothing about it is the pill row's. */
-.feed-order {
-  flex: none;
-}
-/* ---- The direction, said in an arrow and a word -------------------------
-   It was a lit toggle reading `Oldest first` in both states, the label being
-   what pressing it *does*. It is a direction control now and the label is the
-   state the stream is **in** — `Oldest first` or `Newest first`, behind an
-   arrow. `FeedFilters.tsx::FeedOrderToggle` carries the argument; what is here
-   is the geometry, which is the whole of what the old rule was protecting.
+   `container-type: inline-size` came off `.view-tools` and `.newplays-head`
+   with them, and that is worth doing rather than leaving: inline-size
+   containment is the promise that a box's inline size does not depend on its
+   contents, which is a real layout effect and a trap this file records
+   elsewhere (declared on a shrink-to-fit flex item it takes that item's
+   intrinsic contribution to nought — measured, a whole tab row 1356px → 0). A
+   container nothing queries is that hazard sitting in the file with nothing to
+   show for it.
 
-   **The arrow takes the research board's sort-mark box**, and for its reason:
-   the glyph is a character whose metrics belong to whichever installed face
-   claims ▲/▼, so both dimensions are declared and a fallback face's larger
-   triangle overflows visually rather than pushing the word along. `▲` is
-   ascending, and oldest-first is ascending — the day's clock running down the
-   page. The 6px gap to the word is `.research-toggle`'s own. */
-.feed-order-arrow {
-  display: block;
-  flex: none;
-  width: 8px;
-  line-height: 1;
-  font-size: 9px;
-  text-align: center;
-}
-/* **Both words in one grid cell**, the one not in force hidden — so the button
-   is the width of the wider of the two in *both* states and nothing moves under
-   the finger that pressed it. That is *reserve the worst case by laying it out*
-   rather than by declaring a width: the two words are set in a font this app
-   does not choose, and measured in the app's own stack (13px Inter) `Newest
-   first` is **78.58px against `Oldest first`'s 72.72** — 5.86px the button
-   would otherwise jump on every press. Driven: **118.58 × 36 at x=606.72**, lit,
-   unlit and lit again. `visibility: hidden` rather than `opacity: 0` —
-   the ghost must be out of the accessibility tree and untouchable, and it is
-   `aria-hidden` besides. */
-.feed-order-word {
-  display: grid;
-  grid-template-areas: 'order';
-  white-space: nowrap;
-}
-.feed-order-word > span {
-  grid-area: order;
-}
-.feed-order-ghost {
-  visibility: hidden;
-}
-/* ---- The word goes where the bar cannot hold it -------------------------
-   **A container query rather than a breakpoint**, and the reason is that this
-   one button sits in three bars of three different widths at the same window
-   width: the tab row is the window less the app's 22px gutters, the new-plays
-   head is `--card-column` (800) capped by 16px gutters, and `mup-tools` was
-   `--card-column` inside the matchup page. A media query would have answered
-   for one of them and guessed at the other two. (There are two bars now, not
-   three: a matchup team page draws `.view-tools` itself — the same row, folded
-   rather than resembled — so it takes this container and these thresholds
-   rather than a set of its own.)
+   The thresholds are on the record in case a bar ever wants this shape again:
+   the word went below **335px** of the tab row's container and **360px** of the
+   new-plays head's, two numbers rather than one *because the two bars are
+   different widths at the same window width* — at 390 they were 346 and 358 —
+   which is the whole reason it was a container query and not a breakpoint. */
 
-   So each bar declares itself a container, and the threshold is measured off
-   that bar rather than off the window — the width at which carrying the word
-   costs the bar a wrapped line. See the blocks below, each with its own number
-   and where that number came from. A container query with no container silently
-   fails, which is why the declaration sits on the bar and not on the button.
-
-   **It is `.view-tools` now, and that is a move rather than a rewrite.** The
-   toggle this measures used to sit in the tab row and sits in the tools row;
-   the thresholds below were measured on a box that is the full content width at
-   every size, and this one is too, so the numbers carry over unchanged. What
-   the old note recorded is worth keeping because it is the trap and not the
-   selector: the declaration was on `.view-bar` rather than on `.view-bar-tabs`
-   because *inline-size containment is the promise that a box's inline size does
-   not depend on its contents*, so declaring it on a shrink-to-fit flex item
-   takes that item's intrinsic contribution to nought — measured then, the whole
-   tab row **1356px → 0px** at 1400, every tab still painted and overflowing a
-   zero-width box. The container has to be a box that is already filling its
-   parent. `.view-tools` is a block-level box in a block container (and a
-   block-level child of the pane on the Roster's table reading), so it takes the
-   declaration where it stands, exactly as the other two do. */
-.view-tools,
-.newplays-head {
-  container-type: inline-size;
-}
-/* **Two thresholds, because they were measured on two bars and the two bars
-   disagree — which is the whole reason this is a container query.** At a 390px
-   window the tab row's container is 346 and the new-plays head's is 358, and
-   the word fits one and not the other. A media query would have had to pick a
-   number for both and be wrong about one of them.
-
-   **The tab row: 335px.** Below 456 of container the row is two lines whatever
-   this button says, and the button is on the second one with the kind tabs and
-   `Starters`. That second line is **333.69px of content with the word and
-   251.11 without**, so below ~334 the word pushes the button onto a *third*
-   line. Driven at 1400 / 900 / 640 / 390 / 320, the row is **1 / 1 / 2 / 2 / 3 lines
-   with the word and 1 / 1 / 1 / 2 / 2 without**, and the app's own pinned
-   chrome goes **309 → 261px at 320**.
-
-   Above 335 the word is carried **even where it costs the row a line** — a 640
-   window and the band around 700 are both two-line rows that would be one
-   without it. That is the trade taken deliberately: the `title` is the only
-   other thing on this button that says which way the stream runs, and a touch
-   device has no pointer to raise one with, so at the widths this app is read on
-   the word is the *whole* statement of what the control is doing. 48px of
-   chrome, against a control that cannot say what it is.
-
-   The `aria-label` and the `title` carry the sentence in both states, so
-   nothing is lost below either threshold that a screen reader or a pointer
-   could have had. */
-@container (max-width: 335px) {
-  .feed-order-word {
-    display: none;
-  }
-  /* And the button becomes **the app's own 36px square**, which is what
-     `Schedule` and `Projected` beside it take below 640 and for that rule's
-     reason: a run of icon buttons that are 36 and 34 reads as two kinds of
-     thing. Measured at a 320 window, they are the same square in the same row.
-     (This named `Starters` when it was written — that button went in the same
-     breath as this one arrived, and the rule it stated is the mode toggles'
-     as much as it was ever the filter's.) */
-  .feed-order {
-    width: var(--control-h);
-    padding: 0;
-    justify-content: center;
-  }
-}
-/* **The new-plays head: 360px**, and it is a bigger number than the tab row's
-   because the head is one line rather than a row that may wrap to two — losing
-   the word there costs nothing, and keeping it costs a whole second line of
-   *pinned* chrome. `Back` (80.1) and this button (118.6) with two 20px gaps
-   leave the name-and-range block 119px, and the range's own line is about that
-   wide (`12:43 PM – 11:48 PM`), so the head wraps just under 359. Measured with
-   a range line up: the head is **46px at a container of 358 and 94px (wrapped)
-   at 345**, taking `--details-chrome-h` to **130**; with the word gone it is
-   46 and the chrome 82 at every width down to 288.
-
-   A range that spans two days (`Aug 18, 7:12 PM – Aug 19, 4:07 PM`) is wider
-   still and will wrap the head above this number — which is why the head keeps
-   its `row-gap` and why the chrome's height is measured rather than declared.
-   The threshold is where the *usual* line falls, not a promise about every
-   string. */
-@container (max-width: 360px) {
-  .newplays-head .feed-order-word {
-    display: none;
-  }
-  .newplays-head .feed-order {
-    width: var(--control-h);
-    padding: 0;
-    justify-content: center;
-  }
-}
-/* There was a second drawing of it — inside the pill row, on the new-plays
-   page's navbar, right-aligned with `margin-left: auto` and shrunk to
-   `.feed-filter-pill`'s 30px so that row was one height. That row is gone: the
-   page's pills are in the page and the toggle is in its pinned head beside
-   `Back`, where it is the same 36px control it is in the tab row. Nothing here
-   is conditional on where it sits any more. */
 /* Tighter than a control on the tab row: eight of these share the row, and each
    is two to five characters where a labeled toggle is a word. */
 .feed-filter-pill {

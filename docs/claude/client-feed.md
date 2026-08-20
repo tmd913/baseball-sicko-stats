@@ -384,6 +384,61 @@ bottom at 165.
 than beside it: a row of pills over a page with no players on it would be a
 control over nothing, and the empty state there names its own cause already.
 
+### The stream cannot be read forwards any more
+
+**`Oldest first` is gone.** The control, both of its states, both of its
+parameters (`oldest=1` and `noldest=1`), the two pieces of state behind them and
+the two `.sort()` calls that read them. The stream runs newest-first, which is
+what it opens on and what makes it a stream — see `byRecency`, and
+`byPlayOrder`'s own note that a *game* is the thing read forwards.
+
+**Six sections below are the record of that control** — *The stream can be read
+forwards*, *The marker and the cycle*, *The order toggle went to the navbar*,
+*The new-plays page splits its two controls*, *The order control says its
+direction* and *The new-plays page keeps its own direction* — and they are left
+as written, this file's rule for its own superseded reasoning. Four things in
+them outlive the button and are why they are worth keeping:
+
+- **Which controls belong in a pinned row.** An order is the one feed control a
+  reader reaches *while scrolling*; the kind pills are worked once on arrival
+  and stay in the page at the head of the list they narrow. That is the test to
+  apply to the next control that asks for the row, and the pills' half of it is
+  still live.
+- **A label that names a state rather than an action.** This was the only one in
+  the app, and the reason was the second stream: two directions on two pages
+  means two buttons that have to say which is which, and a lit border is a
+  weaker statement than a word.
+- **Reserving a box by laying it out.** Both words in one grid cell, the one not
+  in force under `visibility: hidden` — measured at **118.58 × 36px, lit and
+  unlit and back again**, against the 5.86px an unreserved box would have jumped
+  on every press (`Newest first` is 78.58px of text against `Oldest first`'s
+  72.72).
+- **A container query rather than a breakpoint.** The word was dropped below
+  **335px** of the tab row's container and **360px** of the new-plays head's —
+  two numbers because the two bars are different widths at the same window width
+  (346 and 358 at a 390px window), which is the whole reason it could not be a
+  media query.
+
+**What went with it in the stylesheet**: `.feed-order` and its `-arrow`,
+`-word`, `-said` and `-ghost` parts, and both container queries — the only
+queries either container had, so `container-type: inline-size` came off
+`.view-tools` and `.newplays-head` as well. A container nothing queries is not
+inert: inline-size containment is the promise that a box's inline size does not
+depend on its contents, which this file records elsewhere as a trap (declared on
+a shrink-to-fit flex item it takes that item's intrinsic contribution to nought
+— measured, a whole tab row 1356px → 0).
+
+**And what survives in the code**: `byPlayOrder` itself, which is `byRecency`
+negated and still orders the Live block's in-progress events cause-then-effect;
+`FeedFilterPills`, which was never part of this control; and the new-plays
+page's head, which is `Back` and the name and nothing else now — measured, its
+chrome is **70px** where it was 82 with the button in it.
+
+**An `?oldest=1` or `?noldest=1` link still opens.** The params are simply not
+read and the first URL sync drops them, which is the courtesy `group=player`
+and the pre-two-way ids in `readKeys` already get, and the safe direction for an
+old link to fail in.
+
 ### The stream can be read forwards
 
 **`Oldest first` turns the day round**, and it is at the right end of the pill

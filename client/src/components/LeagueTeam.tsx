@@ -71,7 +71,6 @@ export default function LeagueTeam({
   reading,
   lens,
   onLens,
-  oldestFirst,
   schedule,
   projection,
   chrome,
@@ -93,9 +92,6 @@ export default function LeagueTeam({
    *  guard as it. */
   lens: FeedLens;
   onLens: (lens: FeedLens) => void;
-  /** Which way the stream runs, and the press that turns it — the overlay's,
-   *  beside the lens, so crossing to the other manager keeps both. */
-  oldestFirst: boolean;
   /** The Schedule view's index, or null for the ordinary stat columns — the
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
@@ -387,7 +383,6 @@ export default function LeagueTeam({
                day against it and `Clear` would mark the reader's own feed read
                from a page that is not it. See `LeagueMatchup`'s `feedLens`. */
             playFilter={lens !== 'all' ? lens : undefined}
-            oldestFirst={oldestFirst}
           />
         </>
       )}

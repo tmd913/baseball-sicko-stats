@@ -90,7 +90,6 @@ import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loadin
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
-  FeedOrderToggle,
   FeedToggle,
   playFilterParam,
   toPlayFilter,
@@ -619,67 +618,16 @@ export default function App() {
   const [feedNewOnly, setFeedNewOnlyState] = useState<boolean>(
     () => initialParams.get('newplays') === '1',
   );
-  /**
-   * **Which way the feed's stream runs** — false is newest-first, which is what
-   * makes a stream a stream and what this page has always opened on; true is the
-   * day read forwards from its first pitch.
-   *
-   * **In the URL under `oldest=1`**, by the same rule as `newplays=1` and
-   * `hideil=1` beside it: it changes *which* items are at the top of the view,
-   * so a link that carries it describes a different page. Absent is the default,
-   * which is how every binary lens in this app spells "off" — and it means the
-   * order can be redefined later without anyone's link needing revisiting. An
-   * `oldest=` of anything else reads as the default, which is the direction
-   * every parameter here fails in.
-   *
-   * **Gated on the view rather than on the kind tab**, unlike the pills beside
-   * it and for the opposite reason: a pitcher's stream has a clock too, so this
-   * one is in force on both tabs and the toggle is drawn on both.
-   *
-   * **Not a saved preference**, on `playFilter`'s own line: which way you want
-   * to read this afternoon is not a fact about you, and a saved copy would mean
-   * a feed silently running backwards a week later.
-   */
-  const [feedOldestFirst, setFeedOldestFirst] = useState<boolean>(
-    () => initialParams.get('oldest') === '1',
-  );
-  /**
-   * **Which way the *new-plays page's* stream runs**, which is a second piece of
-   * state and not the one above.
-   *
-   * It was `feedOldestFirst` itself: one direction shared by the stream and the
-   * page over it, on the reading that a reader who wants the day forwards wants
-   * it forwards wherever they are. Driven, that is not what it does — the page
-   * is a bounded catch-up that is read and left, the stream underneath is the
-   * whole day and is *still on screen behind it*, and turning the page round on
-   * the way through left the reader back at a feed running backwards with no
-   * control on the page that had said so. A press about one page must not
-   * rearrange another; that is the same rule as *a lens is put away when its
-   * page leaves the screen*, read from the other end.
-   *
-   * **`noldest=1` in the URL, and only while the page is open.** Two params must
-   * never mean two things (`proj=1` is a matchup's and `rproj=1` is the
-   * roster's, deliberately), so the page's direction gets a name of its own
-   * rather than a second reading of `oldest=`; the `n` is `newplays=`'s own
-   * letter, the way `rproj`'s `r` is the roster's. It is written only under
-   * `newplays=1` — a direction for a page nobody has open is `starters=1` over
-   * a range with no today in it, a claim about something the link does not show.
-   *
-   * **It defaults to newest-first, the same way the stream does**, and the
-   * alternative was seriously held: the page is a *catch-up*, a bounded set with
-   * its own stated window in the head, and a catch-up read forwards
-   * reconstructs the afternoon in the order it happened. What decides it against
-   * is that the set is not reliably small — a reader away for a day opens this
-   * on 51 plays paged twenty at a time, and oldest-first buries the play that
-   * raised the red button at the bottom of two presses of `Load more`. The play
-   * that made the count is the reason the page is open. So the page opens the
-   * way the stream it opened over opens, and absence in the URL means that —
-   * which is how every binary lens here spells "off", and what lets the default
-   * be redefined later without anyone's link needing revisiting.
-   */
-  const [newPlaysOldestFirst, setNewPlaysOldestFirst] = useState<boolean>(
-    () => initialParams.get('noldest') === '1',
-  );
+  /* **The stream's direction was two pieces of state and is none.**
+     `feedOldestFirst` (`oldest=1`) turned this page's stream round and
+     `newPlaysOldestFirst` (`noldest=1`) the new-plays page's — deliberately two,
+     on the rule that a press about one page must not rearrange another, and
+     deliberately two *params*, on the rule that two params must never mean two
+     things. The toggle that set them is gone from the app (see
+     `FeedFilters.tsx`), so both streams run newest-first, which is what a feed
+     opens on. An `?oldest=1` link still opens; the param is simply not read,
+     and the first URL sync drops it — the courtesy `group=player` and the
+     pre-two-way ids in `readKeys` already get. */
   /**
    * **How far down the feed's stream of plays this reader has got** — epoch ms
    * of the newest play they marked read, which is what draws the red
@@ -3065,15 +3013,6 @@ export default function App() {
       const plays = playFilterParam(playFilter);
       if (plays) p.set('plays', plays);
       if (feedNewOnly) p.set('newplays', '1');
-      // The stream's direction — see `feedOldestFirst`. Inside the same view
-      // gate and outside the batter one, the pitcher tab's outings reversing on
-      // the same press.
-      if (feedOldestFirst) p.set('oldest', '1');
-      // And the new-plays page's own direction, which is a second parameter
-      // because it is a second stream — see `newPlaysOldestFirst`. Written only
-      // while the page is up, on `starters=1`'s rule: a direction for a page
-      // the link does not open is a claim about nothing.
-      if (feedNewOnly && newPlaysOldestFirst) p.set('noldest', '1');
     }
     // The mode and its span as one param, so it can never say a span with no
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
@@ -3112,8 +3051,6 @@ export default function App() {
     helpOpen,
     playFilter,
     feedNewOnly,
-    feedOldestFirst,
-    newPlaysOldestFirst,
     projected,
   ]);
 
@@ -4774,44 +4711,14 @@ export default function App() {
     <FeedFilterPills lens={feedLens} onSelect={selectFeedLens} />
   ) : null;
 
-  /* **`Oldest first` is in the tab row**, and it is the one feed control that
-     is — which is the standing rule applied rather than a second reversal of
-     it. What the tab row protects is a control a reader has to reach *while
-     scrolling*; the pills above are not that (worked once on arrival, the
-     answer to the question the page was opened with) and an order is exactly
-     that, wanted by a reader already forty items down a day. Drawn on both kind
-     tabs, unlike the pills: an outing carries a clock the same way a plate
-     appearance does. See `FeedOrderToggle`. */
-  const feedOrderToggle =
-    view === 'feed' ? (
-      <FeedOrderToggle
-        oldestFirst={feedOldestFirst}
-        onToggle={() => setFeedOldestFirst((v) => !v)}
-      />
-    ) : null;
-
-  /* **The new-plays page's own direction**, which is the same control in the
-     same kind of place — its pinned head is that page's tab row — and *not the
-     same state*. It reads and writes `newPlaysOldestFirst`, where the toggle
-     above reads `feedOldestFirst`: the page is a bounded catch-up over a stream
-     that is still on screen behind it, and turning one round must not turn the
-     other. See `newPlaysOldestFirst` for the argument and for why the page
-     opens newest-first. The word, the box and the arrow are one component
-     (`FeedOrderToggle`), so the two drawings cannot come to differ in anything
-     but the state they are reporting — which is now the one thing the label
-     says out loud.
-
-     The page's **pills** are `feedFilterPills` itself, handed down as it stands:
-     one description of one row, lit by one `feedLens` and pressed into one
-     `selectFeedLens`, drawn in whichever box is on screen. The page decides
-     whether to draw it at all — see `NewPlaysPage`, which gates it on there
-     being something to narrow. */
-  const newPlaysOrder = feedHasBatters ? (
-    <FeedOrderToggle
-      oldestFirst={newPlaysOldestFirst}
-      onToggle={() => setNewPlaysOldestFirst((v) => !v)}
-    />
-  ) : null;
+  /* **`Oldest first` stood here and is gone.** It was the one feed control in
+     the pinned row rather than in the page, on the standing rule that a row of
+     tabs protects a control a reader reaches *while scrolling* — the kind pills
+     are worked once on arrival, an order is wanted forty items down a day. That
+     rule is unchanged and is the test for the next control that asks for the
+     row; what has gone is the only control that met it. The new-plays page's
+     own copy went with it (`newPlaysOrder`), along with both directions and
+     both params. See `FeedFilters.tsx`. */
 
   /* ---------------------------------------------------------------------
      The tools row — the band under the tabs, above the dates.
@@ -4843,7 +4750,7 @@ export default function App() {
      Its groups keep the tab row's own rule — each is `flex: none`, so the row
      fits as many whole ones per line as the width allows and breaks between two
      rather than inside one. The order is the order the questions come in:
-     which reading, then how it is ordered, then what it is drawn from. */
+     which reading, then what it is drawn from. */
   const rosterTools = isRosterView(view) && showRosterViews && !editMode;
   const viewTools =
     rosterTools || view === 'research' || (view === 'league' && espnConnected) ? (
@@ -4862,10 +4769,6 @@ export default function App() {
             {scheduleControl}
             {/* And what those days are worth — see `projectedToggle`. */}
             {projectedToggle}
-            {/* Which way the stream's clock runs — see `feedOrderToggle`. The one
-                feed control up here, and the pills are not: an order is wanted
-                halfway down a stream, where a kind of play is chosen on arrival. */}
-            {feedOrderToggle}
           </>
         )}
         {/* The research board's own controls. They are the same kind of
@@ -6198,20 +6101,11 @@ export default function App() {
             onShowNew={feedHasBatters ? showNewPlays : undefined}
             onShowAll={feedHasBatters ? showAllPlays : undefined}
             onClearNew={feedHasBatters ? clearNewPlays : undefined}
-            /* The new-plays page's two controls, in its two boxes: the order in
-               its pinned head, the pills in the page at the head of the list
-               they narrow. Gated with the six above for the same reason. */
-            newPlaysOrder={feedHasBatters ? newPlaysOrder : undefined}
+            /* The new-plays page's one control now, in the page at the head of
+               the list it narrows. Gated with the six above for the same
+               reason. (Its second was the order, in that page's pinned head,
+               and both directions are gone — see `FeedFilters.tsx`.) */
             newPlaysFilters={feedHasBatters ? feedFilterPills : undefined}
-            /* Not gated on the batter tab, where the six above are: this one is
-               not a lens over kinds of play but the direction the clock runs,
-               and a pitcher's outings are stamped with one exactly as a plate
-               appearance is. */
-            oldestFirst={feedOldestFirst}
-            /* And the page over it has its own — see `newPlaysOldestFirst`.
-               Gated with the six above rather than with the line above it: the
-               page is only ever drawn on the batter tab. */
-            newOldestFirst={feedHasBatters ? newPlaysOldestFirst : undefined}
           />
           </>
         )

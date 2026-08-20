@@ -2320,6 +2320,12 @@ with it, so the two cannot come apart.
 
 ### And `Oldest first` left that row for `mup-tools`
 
+*(Superseded — the control is gone from the app; see **Client — the Feed view**,
+*The stream cannot be read forwards any more*, for what it was and which four of
+its arguments outlive it. What that leaves here is a reading run of exactly four
+toggles on every reading, which is what this row's ghost machinery was trying to
+buy by other means.)*
+
 **The section above is intact and this is one control leaving it**, which is the
 Feed view's own move a page along. `client-feed.md`'s *The order toggle went to
 the navbar, and the pills did not* carries the argument: what the pinned row

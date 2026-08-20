@@ -57,15 +57,17 @@
  * pills in the page is what separates them: the pills answer the question the
  * page was opened with and are worked once on arrival, where an order is a
  * control a reader reaches *while scrolling*, halfway down a stream they have
- * been reading. See `FeedOrderToggle`.
+ * been reading. *(The order control is gone — see the note above
+ * `FeedGlyph`. The distinction it was the other half of is what this paragraph
+ * is for and is unchanged: this row stays in the page because it is worked on
+ * arrival.)*
  *
- * **And the new-plays page separates them the same way now.** It was the one
- * caller that drew both on one row — its navbar had no tab row to hang an order
- * off — so this row took an `order` prop and put the toggle back inside itself.
- * That row is gone: the page's pills are in its page, at the head of the list
- * they narrow, and `Oldest first` is in its pinned head beside `Back`. The prop
- * went with its last caller, and so did `FeedOrderToggle`'s `compact`, which
- * existed only to make the toggle 30px tall in that one row.
+ * **And the new-plays page separated them the same way.** It was the one caller
+ * that drew both on one row — its navbar had no tab row to hang an order off —
+ * so this row took an `order` prop and put the toggle back inside itself. That
+ * row is gone: the page's pills are in its page, at the head of the list they
+ * narrow. The prop went with its last caller, and so did the order toggle's own
+ * `compact`, which existed only to make it 30px tall in that one row.
  */
 
 /**
@@ -200,10 +202,9 @@ export function playFilterParam(key: PlayFilterKey | null): string | null {
  * is the app's own lit state and a pill here is the same object as a pill
  * anywhere else.
  *
- * **The order toggle is not part of this row anywhere** — it is in the pinned
- * bar, which is the tab row on the page and the page's own head on the
- * new-plays page (`FeedOrderToggle`, below, which carries the argument). This
- * row is the kinds and nothing else.
+ * **The order toggle was never part of this row** — it lived in the pinned bar,
+ * and it is gone from the app altogether (see the note above `FeedGlyph`). This
+ * row is the kinds and nothing else, which is now the whole of what it is.
  */
 export function FeedFilterPills({
   lens,
@@ -251,84 +252,32 @@ export function FeedFilterPills({
   );
 }
 
-/**
- * **The stream's direction, and it says which direction that is** — an arrow
- * and the words `Oldest first` or `Newest first`. One button, drawn in three
- * places (the tab row, the new-plays page's head, the matchup's team feed), and
- * the three are one component so they cannot come to word or shape the same
- * control differently.
- *
- * **In the pinned bar, beside `Starters` on the page and beside `Back` on the
- * new-plays page**, which is a reversal for this one control of the argument
- * `FeedFilterPills` makes for itself. What the tab-row rule protects is a control a reader has to reach
- * *while scrolling* — the research board's filters over a six-hundred-row
- * table are the case it was written for. The kind pills are not that: they are
- * the answer to the question the page was opened with and are worked once on
- * arrival, so they stay in the page at the head of the stream they narrow. An
- * **order** is the other kind. A reader forty items down a day's plays who
- * wants it read forwards is exactly the reader the pills' argument excludes,
- * and reaching a control at the top of a scrolled stream is a journey back up
- * it. So this one goes with the tabs, which are pinned and are always there.
- *
- * **A lit toggle rather than a segmented `Newest | Oldest` run**, which is the
- * other shape this app has for a two-valued control. A segmented run says its
- * two values are *peers* — Roster/Feed/Research, Batters/Pitchers — and these
- * are not: newest-first is what makes a stream a stream (see `byRecency`, and
- * `byPlayOrder`'s own note that a *game* is the thing read forwards), and
- * oldest-first is the departure from it. This app spells a departure as a lit
- * toggle whose absence is the default — `Starters`, `Watchlist`, `Projected`,
- * `hideil` — and carries only the departure in the URL (`oldest=1`, and
- * `noldest=1` for the new-plays page's own).
- *
- * **The label names the state the stream is in, not what pressing does**, which
- * reverses what stood here. The old rule was that `Oldest first` is both at
- * once — what pressing it does and what being lit means — and that a label
- * which flipped would change the button's width under the finger that pressed
- * it, *reserve the box* broken by a control that is nothing but a box. The
- * first half of that is only true while the button is the *only* order control
- * on screen. It is not: the new-plays page has its own direction now
- * (`noldest=1`), so a reader crossing between two streams meets two buttons
- * that may disagree, and a button whose word is the same in both states cannot
- * say which stream they are looking at. A lit border is a weaker statement than
- * a word, and it is the statement that has to carry a *state* when the word
- * only carries an action.
- *
- * **The box is reserved rather than declared**, which is how the second half of
- * that rule is kept while the first is dropped. Both words are laid out in one
- * grid cell and the one that is not in force is `visibility: hidden` — the
- * app's own *reserve the worst case by laying it out* device (`.research-arrow`
- * reserves its own mark on every column for exactly this reason, sorted or
- * not) — so the button is the width of the wider word in both states and
- * nothing moves under the finger. Measured in the tab row at 1400: **118.58 ×
- * 36px, at x=606.72, lit and unlit and back again** — `Newest first` is 78.58px
- * of text against `Oldest first`'s 72.72, so an unreserved box would have
- * jumped 5.86px on every press.
- *
- * **The arrow is `▲`/`▼`, leading the word**, which is the board's own sort
- * mark (`.research-arrow`, and see `ResearchTable`'s header button, where the
- * glyph leads the label for the same reason it does here): ascending is `▲`,
- * and oldest-first *is* ascending — the day's clock running down the page. Its
- * box is fixed in both axes on that rule's own measurement, the glyph being a
- * character whose metrics are a font this app does not choose.
- *
- * **Where the bar is too narrow for the word, the arrow stands alone**, and
- * that is a container query rather than a breakpoint: the two bars this button
- * sits in are different widths at the same window width (the tab row is the
- * window less the app's gutters; the new-plays head is `--card-column`), so a
- * media query would answer for one of them and guess at the other. Each bar
- * declares itself a container (`.view-bar-tabs`, `.newplays-head`,
- * `.mup-tools`) and the word is dropped below the width at which it costs the
- * bar a line — see `styles.css`, which carries the measured thresholds. The
- * `title` and the `aria-label` still carry the whole sentence, that being the
- * one thing on a button that can change size for free.
- *
- * **One box everywhere, and `compact` is gone with the row that needed it.** It
- * made this button 30px tall (`.feed-filter-pill`) for the one row where it
- * stood shoulder to shoulder with the pills — the new-plays navbar — and that
- * row no longer exists: there it now sits beside `Back` in the page's own head,
- * where `--control-h` is what the row is made of. A prop with no caller is a
- * prop nobody misses.
- */
+/* **The stream's order was a control here and is not one any more.**
+
+   `FeedOrderToggle` — a lit toggle reading `Newest first` / `Oldest first`,
+   drawn in the app's reading run, in a matchup team page's and in the new-plays
+   page's own head — is gone, and with it `oldest=1`, `noldest=1`,
+   `feedOldestFirst`, `newPlaysOldestFirst` and the two `.sort()` calls that
+   read them. The stream runs newest-first, which is what it opens on and what
+   makes it a stream: see `byRecency`, and `byPlayOrder`'s own note that a
+   *game* is the thing read forwards.
+
+   Two things it was measured against are worth keeping, because both outlive
+   the button. **An order is the one feed control a reader wants while
+   scrolling**, where the kind pills are worked once on arrival — which is why
+   the pills are in the page at the head of the stream they narrow and this one
+   was up in the pinned row, and it is the test to apply to the next control
+   that asks for that row. And **its label named a state rather than an
+   action**, alone in this app, on the grounds that a reader crossing between
+   two streams with two directions meets two buttons that have to say which is
+   which; the box was reserved by laying both words out in one grid cell under
+   `visibility: hidden`, measured at **118.58 × 36px, lit and unlit and back
+   again**, against the 5.86px an unreserved box would have jumped on every
+   press.
+
+   `byPlayOrder` survives it — the Live block still reads its in-progress
+   events cause-then-effect. */
+
 /** The Feed reading's mark: a day as a run of entries down a rail, which is
  *  what the stream is — deliberately not a clock or a list icon, the other two
  *  candidates, since what distinguishes this reading from the table beside it
@@ -392,44 +341,3 @@ export function FeedToggle({
   );
 }
 
-export function FeedOrderToggle({
-  oldestFirst,
-  onToggle,
-}: {
-  oldestFirst: boolean;
-  onToggle: () => void;
-}) {
-  const said = oldestFirst ? 'Oldest first' : 'Newest first';
-  return (
-    <button
-      type="button"
-      className={`research-toggle feed-order${oldestFirst ? ' on' : ''}`}
-      aria-pressed={oldestFirst}
-      /* The words below are `aria-hidden`, both of them: one is a reservation
-         and neither is drawn at all where the bar is too narrow for it, so the
-         button would be a nameless glyph exactly where a name matters most.
-         The label is the same sentence the visible word is. */
-      aria-label={said}
-      onClick={onToggle}
-      title={
-        oldestFirst
-          ? 'The day read forwards, first play first — press to put the newest back on top'
-          : 'The day read backwards, newest play first — press to read it forwards from the first pitch'
-      }
-    >
-      <span className="feed-order-arrow" aria-hidden="true">
-        {oldestFirst ? '▲' : '▼'}
-      </span>
-      {/* Both words, in one grid cell, so the box is the wider of the two
-          whichever is in force — see the note above. */}
-      <span className="feed-order-word" aria-hidden="true">
-        <span className={oldestFirst ? 'feed-order-said' : 'feed-order-ghost'}>
-          Oldest first
-        </span>
-        <span className={oldestFirst ? 'feed-order-ghost' : 'feed-order-said'}>
-          Newest first
-        </span>
-      </span>
-    </button>
-  );
-}

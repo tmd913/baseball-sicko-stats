@@ -15,7 +15,7 @@ import { InfoKey } from './InfoKey';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
 import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
-import { FeedOrderToggle, FeedToggle } from './FeedFilters';
+import { FeedToggle } from './FeedFilters';
 import type { FeedLens } from './FeedFilters';
 import { ProjectedToggle } from './Projection';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
@@ -633,20 +633,9 @@ export default function LeagueMatchupView({
    * never meaning two things.
    */
   const [feedLens, setFeedLens] = useState<FeedLens>('all');
-  /**
-   * **And which way that stream runs**, held beside the lens and for its
-   * reasons: it is chrome above *both* team pages, so it must survive crossing
-   * managers, and it stays out of the URL because `mup`, `mt` and `mr` are the
-   * whole of what a matchup link carries.
-   *
-   * It arrived by collision rather than by design — the matchup feed gained the
-   * pill row and the app's feed gained an order toggle in two branches written
-   * against the same base, so the parity one drew a control the other had just
-   * given a required prop. Resolved by giving this page the toggle too, which
-   * is what parity meant: the row is one control and shipping half of it here
-   * would be the two pages disagreeing about what the pills *are*.
-   */
-  const [feedOldest, setFeedOldest] = useState(false);
+  /* Which way that stream ran was a second piece of state here, held beside the
+     lens and out of the URL for the same reason (`mup`, `mt` and `mr` are the
+     whole of what a matchup link carries). It is gone with the control. */
   const [dateOpen, setDateOpen] = useState(false);
   /* Stable for `useDismissable`'s sake — see the same note on the app's own
      copy, whose effect is keyed on the callback it is handed. */
@@ -1735,15 +1724,10 @@ export default function LeagueMatchupView({
             : `${sidePossessive} table over this matchup so far — every day of it up to today, which is the span the category card is summed over`
         }
       />
-      {/* **Which way the stream's clock runs**, on the feed reading alone —
-          there being no order to a table. It is in this run rather than in the
-          pill row inside the page for the Feed view's own reason: the pills
-          answer the question the page was opened with and are worked on
-          arrival, where an order is wanted by a reader already well down a
-          stream. See `FeedOrderToggle`. */}
-      {reading === 'feed' && (
-        <FeedOrderToggle oldestFirst={feedOldest} onToggle={() => setFeedOldest((v) => !v)} />
-      )}
+      {/* The stream's direction was a fifth button here, on the feed reading
+          alone. It is gone from the app — see `FeedFilters.tsx` — so this run
+          is four readings at every one of them, which is what the ghosts this
+          row used to carry were trying to buy. */}
     </div>
   );
 
@@ -1822,7 +1806,6 @@ export default function LeagueMatchupView({
                  states in there already name their own cause. */
               lens={feedLens}
               onLens={setFeedLens}
-              oldestFirst={feedOldest}
               schedule={reading === 'roster' ? scheduleIndex : null}
               /* Held with the team it was read for, so crossing to the other
                  manager draws the plain table until his own answer lands rather
