@@ -1034,6 +1034,30 @@ which is `clubFor`'s own answer to the same question one file over.
   day and one read at nine at night projects almost none of it, which is the
   honest reading either way. A **postponement is not a game he gets**, which is
   `schedule.ts`'s own rule.
+
+  **And "already under way" is asked of the clock as well as of the state**,
+  which is a correction rather than an addition. `state` is right and goes
+  *stale*: it rides on the league-wide schedule window, cached **thirty
+  minutes** (`WINDOW_TTL`, set by how often probables move — the slowest thing
+  in that blob), so for up to half an hour after a first pitch the window still
+  says `scheduled` and this went on projecting a game whose runs were already
+  landing on the report beside it. That is the double count this rule exists to
+  prevent, arriving through the cache instead of through the rule. `yetToStart`
+  reads `startTime` too, which cannot go stale: a `scheduled` game whose first
+  pitch is behind the clock is a game under way that this process has not been
+  told about yet. **Measured** against a deliberately staled window — today's
+  games put back to `scheduled`, which is exactly what the cache says half an
+  hour in — over a 28-man roster on 2026-08-19 at 21:50 ET with all fifteen of
+  the day's games played or playing: the old state-only rule answers **5 days
+  left and 59.40 expected games**, the new one **4 and 46.20** — 13.2 games of
+  double count, every one of them already on the report. On a window that is
+  *not* stale the two agree exactly (46.20 either way), which is the other half
+  of the measurement. It fails toward *not* projecting: a delayed game reads as
+  started and is left out, understating by a game where the alternative
+  overstates by one that is already counted — and understating is the direction
+  the whole of this file errs in. `daysLeft` is counted through the same helper
+  rather than repeating the test inline, which is how the two came to disagree
+  about a game under way in the first place.
 - **It does not guess at lineup changes** — *superseded; it now fills the lineup
   a day at a time, and the argument and the numbers are in* **The lineup is
   filled a day at a time** *below.* The reasoning it replaced is left standing
@@ -1460,9 +1484,11 @@ pulled warm nightly.
 
 `buildContext(from, to)` assembles it and `projectOneBatter` / `projectOnePitcher`
 are the per-player core; `projectTeam` is a loop over them that merges the buckets,
-which is what it always was written as. **`remainingGames`' rule is unchanged and
-is what keeps a figure from being counted twice**: today counts only where its
-games have not started, and a postponement is not a game anybody gets.
+which is what it always was written as. **`remainingGames`' rule is what keeps a
+figure from being counted twice**: today counts only where its games have not
+started — `yetToStart`, which reads the first pitch as well as the cached state,
+for the reason set out under *What it deliberately does not do* — and a
+postponement is not a game anybody gets.
 
 **`getRosterProjection(players, start, end)` is the second entry point.** It keeps
 the per-player buckets apart rather than merging them and turns each into the

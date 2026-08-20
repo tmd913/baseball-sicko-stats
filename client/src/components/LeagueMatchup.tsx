@@ -41,7 +41,7 @@ import {
   TeamLogo,
 } from './LeagueView';
 import { moveLabel } from './LeagueTransactions';
-import { addDays, easternDate } from '../lib';
+import { addDays, easternDate, LEAGUE_POLL_MS } from '../lib';
 import type {
   EspnCategory,
   EspnMatchupSeries,
@@ -731,32 +731,62 @@ export default function LeagueMatchupView({
    * falls back to the report's own numbers rather than the page becoming a
    * message, which is the direction the schedule window already fails in.
    */
+  const teamProjRead = useRef(0);
+  const loadTeamProjection = useCallback(
+    (quiet = false) => {
+      if (sideTeamId === null) return;
+      // Sequence-numbered rather than canceled per run, which the poll below is
+      // what makes necessary — two reads can be in flight at once, and only the
+      // newest may write. The team id rides on the answer as it always has, so
+      // a page that has moved to the other manager cannot be drawn from this
+      // one's.
+      const seq = ++teamProjRead.current;
+      if (!quiet) setTeamProjLoading(true);
+      void api
+        .rosterProjection(span.start, span.end, 'fantasy', sideTeamId)
+        .then((p) => {
+          if (seq === teamProjRead.current) setTeamProjection({ teamId: sideTeamId, p });
+        })
+        .catch((e: Error) => {
+          if (seq === teamProjRead.current) console.error('reading the team projection failed:', e.message);
+        })
+        .finally(() => {
+          if (seq === teamProjRead.current && !quiet) setTeamProjLoading(false);
+        });
+    },
+    [sideTeamId, span.start, span.end],
+  );
+
   useEffect(() => {
     if (!teamProjected || sideTeamId === null) {
-      // Turning the lens off mid-read cancels the run below and skips its
-      // `finally`, so the flag has to be cleared on the way out as well as set
-      // on the way in — otherwise the ball goes on spinning inside a toggle
-      // that is doing nothing.
+      // Turning the lens off mid-read discards its answer, so the flag has to
+      // be cleared on the way out as well as set on the way in — otherwise the
+      // ball goes on spinning inside a toggle that is doing nothing.
+      teamProjRead.current += 1;
       setTeamProjLoading(false);
       return;
     }
-    let canceled = false;
-    setTeamProjLoading(true);
-    api
-      .rosterProjection(span.start, span.end, 'fantasy', sideTeamId)
-      .then((p) => {
-        if (!canceled) setTeamProjection({ teamId: sideTeamId, p });
-      })
-      .catch((e: Error) => {
-        if (!canceled) console.error('reading the team projection failed:', e.message);
-      })
-      .finally(() => {
-        if (!canceled) setTeamProjLoading(false);
-      });
-    return () => {
-      canceled = true;
-    };
-  }, [teamProjected, sideTeamId, span.start, span.end]);
+    loadTeamProjection();
+  }, [teamProjected, sideTeamId, loadTeamProjection]);
+
+  /**
+   * **And it re-reads itself while the week is being played**, on the League
+   * page's own minute — the same correction the Roster view's lens takes on the
+   * report's twenty seconds, for the same reason. The server projects only the
+   * games that have not started, so every first pitch moves a game out of this
+   * table's estimate and onto the report beside it; read once when the toggle
+   * was pressed, the lens was the one thing on a live page frozen at the moment
+   * of the press.
+   *
+   * `board.live` is the gate, which is the poll's own rule up in App: a settled
+   * week has nothing left to move. **Quiet**, so nothing blanks and no ball
+   * turns in the toggle, and the last answer stands until the next one lands.
+   */
+  useEffect(() => {
+    if (!teamProjected || sideTeamId === null || !board.live) return;
+    const t = setInterval(() => loadTeamProjection(true), LEAGUE_POLL_MS);
+    return () => clearInterval(t);
+  }, [teamProjected, sideTeamId, board.live, loadTeamProjection]);
 
   /**
    * **Turning the lens on moves the reader to the days it is about**, which is

@@ -1111,6 +1111,93 @@ rule to add; measured on the live fantasy roster, the batting table goes
 — and **1400 → 1400 at 1400**, with the row 58.00px, the header row 51.00, the
 headshot column pinned at 0 and page-body overflow 0 either way.
 
+#### The header is the word, not the letter
+
+*(Which supersedes the header in the section above — `G` is now **`Games`**.
+The column is the same column and everything argued for it stands.)*
+
+**`G` beside `Starts` is a letter with two readings, and one of them is the
+other column.** On a pitcher's row especially: `G` in every baseball table ever
+printed is *appearances* and `GS` is *games started*, so a reader meeting `G 1 ·
+Starts 4` against a reliever has every reason to read the pair as "one game,
+four of them started", which is not merely unhelpful but backwards. The word
+costs 14 pixels at 390 (`797.8 → 812`, and 872.8 on the pitcher tab, where the
+table already scrolls inside its pane) and **0 at 1400**, where the surplus
+absorbs it whole, so the letter was buying nothing.
+
+**And the title says which games, per kind**, because *games* means two
+different things across the two tabs and only the pitcher tab's is
+counter-intuitive:
+
+- batting — `Games behind these figures — the ones he has come to the plate in
+  over the days in view plus the ones he is expected still to get`
+- pitching — `Appearances behind these figures — games he pitches in, a start
+  and a relief outing alike: the ones already thrown over the days in view plus
+  the ones he is expected still to get`
+
+**`Starts` gets the disclaimer on the same grounds**, and only where the
+ambiguity exists: the pitcher tab's title ends `A lineup slot, not a start on
+the mound.` A word that reads two ways on one tab and one way on the other is a
+word that says so on the tab where it does. **Whose lineup goes unsaid** in that
+title — this table draws a leaguemate's roster on a matchup team page as readily
+as your own, and the chip in the name column is the one with an owner to name.
+
+**The Schedule view's own `G` is untouched.** It counts a *club's fixtures* over
+the days ahead where this counts a *man's appearances*, which are two facts
+rather than one shared header, and nothing sits beside it there to be confused
+with — the ambiguity this fixes is the pair `G · Starts`, which exists only
+under the lens.
+
+**The key behind the toggle names both columns**, which is where a reader who
+has no hover at all is left: `Games is how many he appears in over those days —
+the ones he bats in, or for a pitcher his outings, a start and a relief
+appearance alike — and Starts is how many of the days his club plays your
+fantasy lineup has room for him.` It goes in the roster branch of
+`ProjectionKey` alone; the League page's half of that panel is about a side's
+categories and has no such columns.
+
+#### The lens re-reads itself while games are being played
+
+**A projection of a day being played is a figure that moves**, and it was drawn
+once. The server projects only the games that **have not started**, so every
+first pitch takes a game out of the estimate and puts it on the report beside
+it; an inning's runs cross from the projected half of a row to the played half.
+The report under the table already re-polls every twenty seconds while anything
+is live — so the lens, read once when it was pressed, was the one thing on the
+page frozen at the moment of the press, and the two halves of every row were
+drawn from different minutes.
+
+**It rides the report's own tick rather than a timer of its own**, which is the
+point: the played half and the projected half of a row have to move together or
+the row counts a game twice on the way past. `loadRosterProjection(true)` goes
+in the same interval callback, guarded by a ref rather than named in the deps —
+the report's clock is not the lens's to reset, and a dep would restart the
+twenty seconds on every press of a button that has nothing to do with polling.
+
+**Quietly**, which is rule 1 of the loading system: no ball in the toggle, no
+blank cells, the last answer standing until the next lands. And
+**sequence-numbered**, which the poll is what makes necessary — two reads can
+now be in flight at once, the one a range change fired and the one the tick did,
+and only the newest may write. The single-run `canceled` flag it replaced could
+not tell them apart.
+
+**Measured.** With the lens on and games live, the two reads go out **together
+on every tick** — `report` and `projection/roster` at 21s, 41s and 61s, one pair
+per twenty seconds and no read in between. Driven against a server patched to
+move the answer on every request, the table follows it — the first row's `Games`
+reading **8.3 → 9.3 → 10.3** as each answer lands, each within a tick of its own
+read — with **0** spinners in the toggle across the whole run and no cell blank
+at any point.
+
+**The other two projections take the same correction**, on the League page's own
+minute rather than this one's twenty seconds: the matchup card's (half of which
+is the side's live total, re-read on the very same tick) and a team page's. They
+are in **Client — the League view**, *A projected card is polled with the board
+it is drawn over*, and **Client — a league matchup**, *The team pages' own lens*.
+
+**Bundle for the header and the three polls together: 598,222 → 599,538 bytes
+of JS** (176,298 → 176,705 gzipped), **CSS byte-identical**.
+
 #### The caption, and the key behind it
 
 *(Superseded in its first two thirds, and kept because the paragraph below is

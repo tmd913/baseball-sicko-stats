@@ -21,6 +21,7 @@ import type {
   BattingLine,
   PitchingLine,
   PlayerGame,
+  PlayerKind,
   PlayerReport,
   ProjectedPlayerLine,
   RosterProjection,
@@ -345,15 +346,26 @@ function projectedGames(
  * out of a week of them, most of which nobody has played. What a projected row
  * *is* read against is how many games it is made of, which is the same question
  * the Schedule view's leading column answers — hence the same header.
+ *
+ * *(The header is the word now, not the letter: `G` beside a `Starts` column
+ * has two readings on a pitcher's row and one of them is the other column —
+ * `G` is appearances and `GS` is games started in every baseball table ever
+ * printed. It costs 14px at 390 and nothing at 1400. The Schedule view's own
+ * `G` is untouched: it counts a club's fixtures rather than a man's
+ * appearances, and nothing sits beside it to be confused with.)*
  */
-function ProjectedGamesHead() {
+function ProjectedGamesHead({ kind }: { kind: PlayerKind }) {
   return (
     <th
       className="sum-num"
       scope="col"
-      title="Games behind these figures — the ones he has played over the days in view plus the ones he is expected still to get"
+      title={
+        kind === 'pitcher'
+          ? 'Appearances behind these figures — games he pitches in, a start and a relief outing alike: the ones already thrown over the days in view plus the ones he is expected still to get'
+          : 'Games behind these figures — the ones he has come to the plate in over the days in view plus the ones he is expected still to get'
+      }
     >
-      G
+      Games
     </th>
   );
 }
@@ -396,12 +408,24 @@ function ProjectedGamesCell({ n }: { n: number }) {
  * that published no slot counts have no plan and so no starts, and a column of
  * dashes states nothing — see `anyLineup` in each table.
  */
-function ProjectedStartsHead() {
+function ProjectedStartsHead({ kind }: { kind: PlayerKind }) {
   return (
     <th
       className="sum-num"
       scope="col"
-      title="Days the projection starts him in the fantasy lineup, of the days his club plays — the rest it benches him for"
+      title={
+        // **Whose lineup is left unsaid**, since this table draws a leaguemate's
+        // roster on a matchup's team page as readily as your own — the chip in
+        // the name column is the one that says whose, and it has an owner to
+        // say it with.
+        'Days the projection puts him in a lineup slot, of the days his club plays — the rest it benches him for.' +
+        // **A pitcher's column says which kind of start it means.** `Starts`
+        // beside a pitcher's line is `GS` in every other baseball table there
+        // is, and this one counts days in a lineup slot — a reliever holding a
+        // seat all week reads `Games 1 · Starts 4`, which is the row that has
+        // to be unambiguous or it is worse than no column.
+        (kind === 'pitcher' ? ' A lineup slot, not a start on the mound.' : '')
+      }
     >
       Starts
     </th>
@@ -1045,7 +1069,7 @@ function BatterTable({
           ) : (
             <>
               {projection ? (
-                <ProjectedGamesHead />
+                <ProjectedGamesHead kind="batter" />
               ) : (
                 <th className="sum-opp-col" scope="col">
                   Opponent
@@ -1054,7 +1078,7 @@ function BatterTable({
               {/* **How often the plan starts him**, which the slot chip used to
                   carry and which belongs in a column — see
                   `ProjectedStartsHead`. */}
-              {anyLineup && <ProjectedStartsHead />}
+              {anyLineup && <ProjectedStartsHead kind="batter" />}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -1184,7 +1208,7 @@ function PitcherTable({
           ) : (
             <>
               {projection ? (
-                <ProjectedGamesHead />
+                <ProjectedGamesHead kind="pitcher" />
               ) : (
                 <th className="sum-opp-col" scope="col">
                   Opponent
@@ -1193,7 +1217,7 @@ function PitcherTable({
               {/* **How often the plan starts him**, which the slot chip used to
                   carry and which belongs in a column — see
                   `ProjectedStartsHead`. */}
-              {anyLineup && <ProjectedStartsHead />}
+              {anyLineup && <ProjectedStartsHead kind="pitcher" />}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}

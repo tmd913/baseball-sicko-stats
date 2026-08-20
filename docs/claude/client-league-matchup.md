@@ -697,6 +697,25 @@ the page — measured all the same, because "it should already" is not a result:
 press `Projected` on the `BETS` page, `Back`, reopen the card and the page, and
 the toggle is unlit.
 
+**It did need one thing, and this is where it is written down: it re-reads
+itself while the week is being played.** A projection is a figure that moves —
+the engine projects only the games that have **not started**, so every first
+pitch takes a game out of the estimate and puts it on the report beside it — and
+this table's was read once, on the press, while everything around it went on
+polling. So the page sets its own timer on the League page's own minute
+(`lib.ts::LEAGUE_POLL_MS`, which moved there for this second caller), gated on
+`board.live` exactly as `pollLeague` gates the board itself, and reads
+**quietly**: nothing blanks, no ball turns in the toggle, and the last answer
+stands until the next lands. The read is sequence-numbered rather than canceled
+per run, since a tick and a span change can now be in flight at once and only
+the newest may write. Measured on team 4 with the week live: `projection/roster`
+on the press at 12s, then at **72s and 132s** — one a minute, interleaved with
+the board's own ticks at 60 and 120 — with **0** spinners and the table's
+`Starts` column standing throughout. The Roster view's copy of the same
+correction, on the report's twenty seconds rather than this minute, is in
+**Client — the summary table**, *The lens re-reads itself while games are being
+played*.
+
 
 ### A category row opens its chart
 

@@ -679,6 +679,21 @@ to `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
 or goes and asks, which is the cheapest way to be a minute behind ESPN and no
 more.
 
+**A projected card is polled with the board it is drawn over.** Half of what one
+shows is what the side has *already* scored and half is what the projection adds
+to it, and only the first half was on this tick — so an evening's play moved one
+half of every category and left the other where it was pressed. It is worse than
+it sounds, because the projection's own share of a week only *shrinks* as games
+are played (the engine projects the games that have not started), so the two
+drifted apart in the one direction nobody can see on screen. The read rides the
+same rules as the board: the lens on, a card open, and the week still live —
+`App.tsx::pollLeague`, and `LeagueMatchup`'s **team pages** set their own timer
+by the same minute for the same reason (`LEAGUE_POLL_MS`, which moved to
+`lib.ts` when the second file needed it). Measured on the live league with a
+card open and `proj=1`: `espn/projection` on the open, then paired with
+`espn/scoreboard` at 60s and at 120s — one read a minute, on the same tick,
+with **0** spinners on the button.
+
 **Only what is on screen, and only what can still change.** The scoreboard is
 polled when its tab is open **and the week it is showing is still being played**
 — a settled period is read back off a blob with no freshness test at all, so
