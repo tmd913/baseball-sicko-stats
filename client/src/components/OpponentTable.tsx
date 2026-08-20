@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useDelayedFlag } from '../hooks';
 import { ordinal } from '../lib';
@@ -346,4 +346,112 @@ export function OpponentSection({
       {body}
     </div>
   );
+}
+
+/**
+ * What a caller has learned about one opposing club's season line: nothing yet,
+ * a read in flight, a read that threw, or an answer — which may itself be
+ * `null`, the server's honest "no board for that club".
+ */
+export type OppRead = { board?: TeamHitting | null; loading?: boolean; error?: boolean };
+
+/**
+ * The club-line cache two lists of dated rows share.
+ *
+ * **It was `ProjectedStartsBlock`'s own state** and is now the Schedule tab's
+ * as well — both are lists where a row is a press that opens an opposing
+ * lineup — so it lives beside the table it feeds rather than inside either
+ * list. That is the move `GameLogTable` and `NewsList` already made when a
+ * preview and a tab came to draw one thing, and here it also keeps the two
+ * player-page files from importing each other: the Overview draws the Schedule
+ * tab's block, so the Schedule tab must not have to reach back for this.
+ *
+ * **Lazily, on the press, and held.** A reader who opens no row costs the
+ * server nothing; a three-game series against one club costs one read; and
+ * closing a dialog and reopening it costs none. `key` is the player the list is
+ * about — a different man is a different list of clubs, and the ids would
+ * collide harmlessly (a club's line is a club's line) but the cache is his.
+ *
+ * **The mark comes off on failure**, which is the one departure from the rule
+ * this codebase states at length elsewhere — *never mark a request answered
+ * before it is answered*. Here the mark says "asked", the answer always lands
+ * (this is a press handler, not an effect with a cleanup that could discard
+ * it), and unmarking in the `catch` is what makes the dialog's `Try again` a
+ * retry rather than a no-op.
+ */
+export function useOpponentBoards(key: number) {
+  const [opps, setOpps] = useState<Record<number, OppRead>>({});
+  const asked = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    asked.current = new Set();
+    setOpps({});
+  }, [key]);
+  const load = useCallback((teamId: number) => {
+    if (asked.current.has(teamId)) return;
+    asked.current.add(teamId);
+    setOpps((p) => ({ ...p, [teamId]: { loading: true } }));
+    api
+      .teamHitting(teamId, 'season')
+      .then((board) => setOpps((p) => ({ ...p, [teamId]: { board } })))
+      .catch(() => {
+        asked.current.delete(teamId);
+        setOpps((p) => ({ ...p, [teamId]: { error: true } }));
+      });
+  }, []);
+  return { opps, load };
+}
+
+/**
+ * The dialog body a pressed row draws: the same `OpponentSection` a pitcher's
+ * Upcoming row opens in the feed, over the club's season line once it lands.
+ *
+ * **The same component rather than a thinner one**, which is the whole point —
+ * nine cuts, three rows, ten columns, the span and venue controls and the
+ * accented hand row are drawn once in the app and read the same wherever a
+ * pitcher's opponent is. What these callers supply that the feed's does not is
+ * the *season* board itself, there being no `PlayerGame` here to have carried
+ * it.
+ *
+ * The three states before the table are the app's own loading discipline:
+ * nothing at all under `WAIT_DELAY` (a club already read comes back in a tick,
+ * and a wait that flashes reads as the page breaking), then the block wait, then
+ * an error line with the retry the press has to offer — the row behind the
+ * dialog being `inert` while it is open, so there is nowhere else to put one.
+ */
+export function OpponentRead({
+  opp,
+  opponent,
+  opponentId,
+  hand,
+  onRetry,
+}: {
+  opp: OppRead | undefined;
+  opponent: string;
+  opponentId: number;
+  /** The hand on the mound, which decides which row of the table is accented.
+   *  A game nobody has played has no `stand` to read it off, so a caller
+   *  drawing a fixture passes the pitcher's own throwing hand. */
+  hand: string | null;
+  onRetry: (teamId: number) => void;
+}) {
+  const board = opp && 'board' in opp ? opp.board : undefined;
+  const waiting = useDelayedFlag(board === undefined && !opp?.error);
+  if (board) {
+    return <OpponentSection hitting={board} opponent={opponent} hand={hand} />;
+  }
+  if (opp?.error) {
+    return (
+      <div className="details-error opp-status">
+        Couldn&rsquo;t read the opponent&rsquo;s line.{' '}
+        <button type="button" className="ovw-link" onClick={() => onRetry(opponentId)}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+  // A board that came back `null` — the server has no row for that club. The row
+  // behind this dialog goes static on the same answer, so this is what a reader
+  // sees once and never again.
+  if (board === null) return <div className="opp-status">No line for {opponent}.</div>;
+  return waiting ? <LoadingBlock>Reading the opponent&rsquo;s line</LoadingBlock> : null;
 }

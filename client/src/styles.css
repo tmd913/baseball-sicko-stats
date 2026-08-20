@@ -4318,6 +4318,15 @@ body {
   justify-content: flex-start;
   flex-wrap: wrap;
 }
+/* Except on the one block of this shape whose second item **is** a door: the
+   Overview's `Next 5 games` ends in `Schedule →`, which is the `News →` /
+   `Stats →` device and belongs over the right edge of the rows it opens, not
+   tucked against the heading where a note goes. The rule above is about a
+   phrase; this is about a link, so the block that has one turns the
+   justification back on. */
+.ovw-starts.ovw-upcoming .ovw-head-row {
+  justify-content: space-between;
+}
 .start-list {
   list-style: none;
   margin: 0;
@@ -4448,16 +4457,28 @@ button.start-line:focus-visible {
 
    Both guesses keep `--muted` text for the reason the chip does — a 10px
    uppercase tag at `--faint` measures 3.18:1 on Midnight's zebra stripe — so the
-   border style is what separates the two. */
-.start-row--announced .start-tag {
+   border style is what separates the two.
+
+   **Each weight is also addressable on the tag itself**, which is a fold rather
+   than a second ladder: the Schedule tab's fixture list marks the rows that are
+   *his* starts and leaves the rest of his club's games plain, so there the tier
+   is a fact about the tag and not about the row. Muting that row the way
+   `.start-row--projected` does would be wrong there and is right on a list of
+   nothing but starts — the date and the matchup on a fixture row are a game his
+   club is playing whatever we think of the rotation. Same three declarations,
+   two ways in. */
+.start-row--announced .start-tag,
+.start-tag--announced {
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   color: var(--accent);
 }
-.start-row--projected .start-tag {
+.start-row--projected .start-tag,
+.start-tag--projected {
   border-color: color-mix(in srgb, var(--muted) 55%, transparent);
   color: var(--muted);
 }
-.start-row--estimated .start-tag {
+.start-row--estimated .start-tag,
+.start-tag--estimated {
   color: var(--muted);
   border-style: dashed;
   border-color: color-mix(in srgb, var(--faint) 85%, transparent);

@@ -284,14 +284,23 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
  * for a chart of the season rather than for one named chart — the card inside
  * it still says `Rolling xwOBA`, which is what that chart *is*.
  */
+/**
+ * **A tab is a key, never an index**, which is what made reordering the strip a
+ * one-place change: the strip's order is the order the buttons are written in
+ * and nothing anywhere stores a position. The key is not in the URL either (the
+ * tab is state, not a param — see the paragraph above), and the reorder screen
+ * `PlayerOrderEditor` is about the order of *players* on a roster, so it has no
+ * opinion about this. The union below is written in strip order for reading,
+ * and that is all it is.
+ */
 type DetailsTab =
   | 'overview'
-  | 'schedule'
   | 'percentiles'
   | 'splits'
   | 'news'
   | 'stats'
   | 'gamelog'
+  | 'schedule'
   | 'arsenal'
   | 'charts';
 
@@ -1037,11 +1046,10 @@ export function PlayerDetails({
 
   /**
    * Whether he works out of the rotation — `lib.ts::isRotationStarter`, the
-   * app's one definition of it, read off the day report. It decides two things
-   * on this page: that the Overview draws Projected Starts, and that the
-   * Schedule tab draws his turns rather than his club's fixtures. Read here as
-   * well as in the two components so the *read* below can be gated on it: a
-   * batter has no rotation to ask about.
+   * app's one definition of it, read off the day report. It decides which block
+   * the Overview draws in its second slot — his Projected Starts, or the first
+   * five of his club's fixtures. Read here as well as in the component so the
+   * *read* below can be gated on it: a batter has no rotation to ask about.
    */
   const wantStarts = day !== null && isPitcher && isRotationStarter(day);
   /**
@@ -1058,19 +1066,27 @@ export function PlayerDetails({
   /**
    * His rotation, lazily and once — on either of the two tabs that draw it.
    *
-   * It was `ProjectedStartsBlock`'s own effect until that block became the
-   * whole of the Schedule tab as well as a section of the Overview, at which
-   * point mounting it fetched: a tab switch away and back was a fresh read, and
-   * two of them in development, StrictMode double-invoking an effect guarded
-   * only by a `live` flag its cleanup cleared. Measured before the move,
-   * pressing Schedule three times fired **6** requests.
+   * It was `ProjectedStartsBlock`'s own effect until that block was drawn on
+   * two tabs, at which point mounting it fetched: a tab switch away and back
+   * was a fresh read, and two of them in development, StrictMode
+   * double-invoking an effect guarded only by a `live` flag its cleanup
+   * cleared. Measured before the move, pressing Schedule three times fired
+   * **6** requests.
+   *
+   * **The Schedule tab no longer draws that block** — it draws his club's
+   * fixtures with his turns marked off the shared window's own rotation, which
+   * is the grid's reading and keeps a row here and a cell there from placing a
+   * turn on two different days. So the gate is the Overview alone again. That
+   * is not a narrowing in practice, the Overview being the tab this page opens
+   * on, and it is one in principle: the rotation is read for the block that
+   * draws it.
    *
    * The ref is the test and there is no cleanup flag, which is this page's
    * standing rule and the hang it is written for — see the percentile read
-   * above. The error path nulls the ref, so re-opening either tab retries.
+   * above. The error path nulls the ref, so re-opening the tab retries.
    */
   useEffect(() => {
-    if (!wantStarts || (tab !== 'overview' && tab !== 'schedule')) return;
+    if (!wantStarts || tab !== 'overview') return;
     if (startsReq.current === playerId) return;
     startsReq.current = playerId;
     setStartsLoading(true);
@@ -1468,25 +1484,6 @@ export function PlayerDetails({
           >
             Overview
           </button>
-          {/* **Second, directly after Overview, and that is the strip's own
-              ordering argument rather than an exception to it.** Every tab from
-              the percentile card rightward is a reading of a season already
-              played; Overview is what he is doing *now*, and this is what he has
-              coming. Now → next → the record behind him is one direction of
-              travel, and it is the same argument the Overview makes for putting
-              its own Projected Starts block directly under the day: the two
-              halves of "what is he doing" must not end up at two ends of a
-              strip. Last would have put six tabs of season history between
-              them. */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'schedule'}
-            className={`details-tab${tab === 'schedule' ? ' is-active' : ''}`}
-            onClick={() => setTab('schedule')}
-          >
-            Schedule
-          </button>
           <button
             type="button"
             role="tab"
@@ -1570,6 +1567,30 @@ export function PlayerDetails({
           >
             Game Log
           </button>
+          {/* **Schedule reads after the Game Log, where it used to be second.**
+              It went in directly after Overview on the argument that *now →
+              next → the record* is one direction of travel, and what that
+              argument left out is which of the two questions this page is
+              opened with. The Overview now carries the forward half itself — a
+              rotation starter's next five turns, and everybody else's next five
+              games with a `Schedule →` door on the heading — so the two halves
+              of "what is he doing" are on **one tab** rather than two adjacent
+              ones, which is the thing the old ordering was protecting. What is
+              left for the tab is the fortnight behind that preview, which is a
+              deeper reading rather than a first one, and it belongs where the
+              other deep readings are: past the pictures and the numbers, at the
+              end where a reader goes on purpose. It is also the one tab a
+              *door* leads to, so its place in the strip stopped being how it is
+              reached. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'schedule'}
+            className={`details-tab${tab === 'schedule' ? ' is-active' : ''}`}
+            onClick={() => setTab('schedule')}
+          >
+            Schedule
+          </button>
           {/* **`Charts`, where this read `Rolling xwOBA`.** The strip names the
               *kind* of reading a tab holds — Overview, Splits, Stats, Game Log —
               and this was the one entry naming a single card instead, which is
@@ -1611,17 +1632,24 @@ export function PlayerDetails({
           starts={starts}
           startsLoading={startsPending}
           startsFailed={startsFailed}
+          /* The same window the Schedule tab draws, handed to the block that
+             previews it — one object for every player, read once for the
+             session, so the second surface to ask costs nothing. */
+          scheduleWindow={scheduleWindow}
+          scheduleError={scheduleError}
+          onNeedSchedule={onNeedSchedule}
+          pitcherLookup={pitcherLookup}
           onTab={setTab}
           onOpenDetails={onOpenDetails}
         />
       )}
 
-      {/* The Schedule tab draws its own waits and its own empty states — a
-          rotation starter's rows are the Overview's Projected Starts block and
-          everybody else's are his club's fixtures off the shared window — so
-          there is nothing to gate here the way the tabs below are gated. The
-          day it reads is the same `day` the Overview draws, which is why it is
-          handed down rather than fetched again. */}
+      {/* The Schedule tab draws its own waits and its own empty states — every
+          player's rows are his club's fixtures off the shared window, with a
+          starter's own turns marked within them — so there is nothing to gate
+          here the way the tabs below are gated. The day it reads is the same
+          `day` the Overview draws, which is why it is handed down rather than
+          fetched again. */}
       {tab === 'schedule' && (
         <PlayerScheduleTab
           report={day}
@@ -1629,9 +1657,6 @@ export function PlayerDetails({
           playerId={playerId}
           name={name}
           isPitcher={isPitcher}
-          starts={starts}
-          startsLoading={startsPending}
-          startsFailed={startsFailed}
           scheduleWindow={scheduleWindow}
           scheduleError={scheduleError}
           onNeedSchedule={onNeedSchedule}
