@@ -10612,6 +10612,142 @@ button.start-line:focus-visible {
 .feed-order {
   flex: none;
 }
+/* ---- The direction, said in an arrow and a word -------------------------
+   It was a lit toggle reading `Oldest first` in both states, the label being
+   what pressing it *does*. It is a direction control now and the label is the
+   state the stream is **in** — `Oldest first` or `Newest first`, behind an
+   arrow. `FeedFilters.tsx::FeedOrderToggle` carries the argument; what is here
+   is the geometry, which is the whole of what the old rule was protecting.
+
+   **The arrow takes the research board's sort-mark box**, and for its reason:
+   the glyph is a character whose metrics belong to whichever installed face
+   claims ▲/▼, so both dimensions are declared and a fallback face's larger
+   triangle overflows visually rather than pushing the word along. `▲` is
+   ascending, and oldest-first is ascending — the day's clock running down the
+   page. The 6px gap to the word is `.research-toggle`'s own. */
+.feed-order-arrow {
+  display: block;
+  flex: none;
+  width: 8px;
+  line-height: 1;
+  font-size: 9px;
+  text-align: center;
+}
+/* **Both words in one grid cell**, the one not in force hidden — so the button
+   is the width of the wider of the two in *both* states and nothing moves under
+   the finger that pressed it. That is *reserve the worst case by laying it out*
+   rather than by declaring a width: the two words are set in a font this app
+   does not choose, and measured in the app's own stack (13px Inter) `Newest
+   first` is **78.58px against `Oldest first`'s 72.72** — 5.86px the button
+   would otherwise jump on every press. Driven: **118.58 × 36 at x=606.72**, lit,
+   unlit and lit again. `visibility: hidden` rather than `opacity: 0` —
+   the ghost must be out of the accessibility tree and untouchable, and it is
+   `aria-hidden` besides. */
+.feed-order-word {
+  display: grid;
+  grid-template-areas: 'order';
+  white-space: nowrap;
+}
+.feed-order-word > span {
+  grid-area: order;
+}
+.feed-order-ghost {
+  visibility: hidden;
+}
+/* ---- The word goes where the bar cannot hold it -------------------------
+   **A container query rather than a breakpoint**, and the reason is that this
+   one button sits in three bars of three different widths at the same window
+   width: the tab row is the window less the app's 22px gutters, the new-plays
+   head is `--card-column` (800) capped by 16px gutters, and `mup-tools` is
+   `--card-column` inside the matchup page. A media query would have answered
+   for one of them and guessed at the other two.
+
+   So each bar declares itself a container, and the threshold is measured off
+   that bar rather than off the window — the width at which carrying the word
+   costs the bar a wrapped line. See the blocks below, each with its own number
+   and where that number came from. A container query with no container silently
+   fails, which is why the declaration sits on the bar and not on the button.
+
+   **`.view-bar` and not `.view-bar-tabs`**, which is the app's *layout
+   containment* rule met in its second form. The tab row is the only child of
+   `.view-bar`, which is a flex row, so the row is a **flex item whose width is
+   shrink-to-fit** — and inline-size containment is precisely the promise that
+   the box's inline size does not depend on its contents, so its intrinsic
+   contribution goes to nought. Measured with the declaration on the row: the
+   whole tab row **1356px → 0px** at 1400, every tab still painted and
+   overflowing a zero-width box. The container has to be a box that is already
+   filling its parent, and the bar around it is one. The other two are
+   block-level boxes in block containers and take the declaration where they
+   stand. */
+.view-bar,
+.newplays-head,
+.mup-tools {
+  container-type: inline-size;
+}
+/* **Two thresholds, because they were measured on two bars and the two bars
+   disagree — which is the whole reason this is a container query.** At a 390px
+   window the tab row's container is 346 and the new-plays head's is 358, and
+   the word fits one and not the other. A media query would have had to pick a
+   number for both and be wrong about one of them.
+
+   **The tab row: 335px.** Below 456 of container the row is two lines whatever
+   this button says, and the button is on the second one with the kind tabs and
+   `Starters`. That second line is **333.69px of content with the word and
+   251.11 without**, so below ~334 the word pushes the button onto a *third*
+   line. Driven at 1400 / 900 / 640 / 390 / 320, the row is **1 / 1 / 2 / 2 / 3 lines
+   with the word and 1 / 1 / 1 / 2 / 2 without**, and the app's own pinned
+   chrome goes **309 → 261px at 320**.
+
+   Above 335 the word is carried **even where it costs the row a line** — a 640
+   window and the band around 700 are both two-line rows that would be one
+   without it. That is the trade taken deliberately: the `title` is the only
+   other thing on this button that says which way the stream runs, and a touch
+   device has no pointer to raise one with, so at the widths this app is read on
+   the word is the *whole* statement of what the control is doing. 48px of
+   chrome, against a control that cannot say what it is.
+
+   The `aria-label` and the `title` carry the sentence in both states, so
+   nothing is lost below either threshold that a screen reader or a pointer
+   could have had. */
+@container (max-width: 335px) {
+  .feed-order-word {
+    display: none;
+  }
+  /* And the button becomes **the app's own 36px square**, which is what
+     `Starters` beside it takes below 640 and for that rule's reason: a run of
+     icon buttons that are 36 and 34 reads as two kinds of thing. Measured at a
+     320 window, the two are the same square in the same row. */
+  .feed-order {
+    width: var(--control-h);
+    padding: 0;
+    justify-content: center;
+  }
+}
+/* **The new-plays head: 360px**, and it is a bigger number than the tab row's
+   because the head is one line rather than a row that may wrap to two — losing
+   the word there costs nothing, and keeping it costs a whole second line of
+   *pinned* chrome. `Back` (80.1) and this button (118.6) with two 20px gaps
+   leave the name-and-range block 119px, and the range's own line is about that
+   wide (`12:43 PM – 11:48 PM`), so the head wraps just under 359. Measured with
+   a range line up: the head is **46px at a container of 358 and 94px (wrapped)
+   at 345**, taking `--details-chrome-h` to **130**; with the word gone it is
+   46 and the chrome 82 at every width down to 288.
+
+   A range that spans two days (`Aug 18, 7:12 PM – Aug 19, 4:07 PM`) is wider
+   still and will wrap the head above this number — which is why the head keeps
+   its `row-gap` and why the chrome's height is measured rather than declared.
+   The threshold is where the *usual* line falls, not a promise about every
+   string. */
+@container (max-width: 360px) {
+  .newplays-head .feed-order-word {
+    display: none;
+  }
+  .newplays-head .feed-order {
+    width: var(--control-h);
+    padding: 0;
+    justify-content: center;
+  }
+}
 /* There was a second drawing of it — inside the pill row, on the new-plays
    page's navbar, right-aligned with `margin-left: auto` and shrunk to
    `.feed-filter-pill`'s 30px so that row was one height. That row is gone: the
@@ -10649,31 +10785,62 @@ button.start-line:focus-visible {
 .newplays-view {
   z-index: 48;
 }
+/* **And its own bottom padding**, which `.details-chrome` has none of and is
+   right not to. On the player page the chrome's last child is the tab strip,
+   whose active tab's 2px underline *is* the bar's bottom edge — the inset
+   shadow is drawn under it deliberately, and a padding there would lift the
+   underline off the line it is part of. This page has no tab strip. Its last
+   child is a head with a name and a control in it, and with the parent's
+   padding at nought that head's own bottom margin **collapsed straight through
+   the bar** and became the gap *below* it: measured at 1400, the chrome was
+   66px — 20 of top padding plus a 46px head plus nothing — with `Back`,
+   `New plays` and the order control sitting flush on the hairline, and the 16px
+   the head thought it had was outside the box.
+
+   So the number moves onto this element, where a padding cannot collapse, and
+   `.newplays-head` gives its margin up. 16px rather than the 20 above it: the
+   top padding is clearing a window edge and a rounded corner where this is
+   clearing text from a rule, and 16 is the gap every other box on this page
+   reads. The gap to the pills below is untouched — that is `.details-chrome`'s
+   own `margin-bottom: 16px`, which was what the head's margin was collapsing
+   into and is now the only thing there.
+
+   `--details-chrome-h` follows by itself: `useOverlayChromeOffset` measures the
+   border box, so 66 → **82** at 1400 and 390 without a line of it being told. */
+.newplays-chrome {
+  padding-bottom: 16px;
+}
 /* The head takes the feed's own column rather than the player page's 680: every
    card under it is `--card-column` wide, so a 680 head would be indented 60px
    from the content it names. `.details-head` is otherwise unchanged — a wrapping
-   flex row centered by its own auto margins, and what it wraps now is
-   `Oldest first`, which sits at its right end on one line at 1400 and 390 and
-   takes a second line at 320. */
+   flex row centered by its own auto margins, and what it wraps is the order
+   control at its right end — which since that control drops its word below a
+   360px container **no longer wraps at any width this app is read at**:
+   measured, the head is 46px from a 288px container up. It can still wrap on a
+   range that names two days, which is why the row gap below stays declared. */
 .newplays-head {
   max-width: var(--card-column);
   flex-wrap: wrap;
-  /* **The gap between the head's two rows when it wraps**, which at 320 it does:
-     `Back`, the name and a 99px `Oldest first` come to 399px of content on a
-     288px line, so the toggle takes a line of its own. `.details-head`'s own
-     row gap is 20px, which is the gap between a head and the tab strip *under*
-     it; a control that has wrapped off this row is the same statement carried
-     on, so it takes the 12px that separated this head from the pill row while
-     the pills were up here. Measured at 320: the navbar is 114px with this and
-     122 without it, against 112 with the pills in it. */
+  /* **The gap between the head's two rows when it wraps.** It wrapped at 320
+     while the order control carried its word there — `Back`, the name and a
+     99px `Oldest first` came to 399px of content on a 288px line — and does not
+     any more, the word going below a 360px container. It is kept because a
+     two-day range line (`Aug 18, 7:12 PM – Aug 19, 4:07 PM`) is wider than a
+     one-day one and can wrap this head at a width no threshold here knows
+     about. `.details-head`'s own row gap is 20px, which is the gap between a
+     head and the tab strip *under* it; a control that has wrapped off this row
+     is the same statement carried on, so it takes the 12px that separated this
+     head from the pill row while the pills were up here. Measured at 320 when
+     it did wrap: the navbar was 114px with this and 122 without it. */
   row-gap: 12px;
-  /* **The chrome's bottom padding, carried by its last child**, which is what
-     the pill row carried while the pills were in here (`.details-chrome` has
-     none of its own — see there). It was 12px then, on the argument that a head
-     and the controls directly under it are one box; with the controls gone the
-     number is the gap from the pinned bar's text to its own edge, and 16 is what
-     the box below it reads. */
-  margin-bottom: 16px;
+  /* **No bottom margin, and the 16px it used to carry is a padding on the
+     chrome now.** It stood here as "the chrome's bottom padding, carried by its
+     last child" — the pill row's old job, `.details-chrome` having none of its
+     own. A margin cannot do that job: with no padding or border on the parent's
+     bottom edge it **collapses through it**, so the 16px was never inside the
+     bar at all and the head sat flush on the hairline. See `.newplays-chrome`,
+     which carries the number and the measurement. */
+  margin-bottom: 0;
 }
 .newplays-id {
   flex: 1 1 auto;

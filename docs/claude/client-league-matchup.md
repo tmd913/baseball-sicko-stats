@@ -1997,6 +1997,17 @@ there is no order to a table, and there is no honest projected version of a
 stream. `{reading === 'feed' && …}` is the whole of the gate, and it takes the
 same 99 × 36 box `Starters` sits next to.
 
+**The button says its direction now** — `▲ Oldest first` / `▼ Newest first`, and
+the arrow alone where the bar is too narrow for the word. `mup-tools` declares
+itself a container for that (`container-type: inline-size`) and takes the tab
+row's own 335px threshold; measured here, that costs this bar nothing —
+**1 / 1 / 2 / 2 / 2 / 3 rows at 1400 / 640 / 480 / 390 / 360 / 320 with the word
+and the same six without it** — so all it buys is horizontal slack, the button
+reading `▼ Newest first` down to a 358px container and `▼` at 328. The box is
+118.58 × 36 with the word and a 36 × 36 square without. See `client-feed.md`'s *The order
+control says its direction*, which carries the argument and the other two bars'
+numbers.
+
 **Which leaves the pill row the batter tab's alone.** It was drawn on both tabs
 *because* of the toggle — an outing carries a clock exactly as a plate appearance
 does — so with the toggle gone a pitcher tab would draw an empty row.

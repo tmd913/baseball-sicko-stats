@@ -364,14 +364,15 @@ It is also the narrower control, on a row whose kinds already overflow at 320 an
 390: **94px measured**, where a segmented pair has to carry both words at once and
 can never be narrower than the two of them.
 
-**The label does not change when it lights.** `Oldest first` is both what
-pressing it does and what being lit means; a label that flipped to `Newest first`
-would change the button's width under the finger that pressed it, which is
-*reserve the box* broken by a control that is nothing but a box. Measured: **94 ×
-30px lit and unlit**, at every width. The `title` carries the state instead —
-`Read the day forwards instead, from its first play` off, `The day read forwards,
-first play first — press to put the newest back on top` on — that being the one
-thing on a button that can change size for nothing.
+**The label did not change when it lit, and now it does** — see *The order
+control says its direction* below, which is a straight reversal of this
+paragraph and carries the reason and the measurements. What stood here: ``Oldest
+first`` is both what pressing it does and what being lit means; a label that
+flipped to `Newest first` would change the button's width under the finger that
+pressed it, which is *reserve the box* broken by a control that is nothing but a
+box. Measured then: **94 × 30px lit and unlit**, at every width. The half of
+that which survived is the geometry — the box is still identical in both states,
+by reservation rather than by refusing to say anything.
 
 **It sits outside the scrollport rather than at the end of it**, which is the one
 piece of geometry this control cost. `.feed-filters` was itself the scrolling box;
@@ -407,7 +408,10 @@ the row instead of scrolling.
 
 **`oldest=1` in the URL**, absent meaning the stream as it has always opened —
 `newplays=1` and `hideil=1`'s own spelling, and it means the default can be
-redefined later without anyone's link needing revisiting. **Gated on the view and
+redefined later without anyone's link needing revisiting. **It is this stream's
+alone**: the new-plays page has `noldest=1`, a second parameter for a second
+stream, and the two never read each other — see *The new-plays page keeps its own
+direction*. **Gated on the view and
 not on the batter tab**, unlike the pills beside it: a pitcher's outings are
 stamped with a clock exactly as a plate appearance is, so the toggle is drawn and
 in force on both kind tabs where the kind group is the batter tab's alone. Not a
@@ -698,6 +702,13 @@ the newest (`Stewart, CIN vs STL, 6th`); and **`newplays=banana` opens the plain
 feed on 10 items** rather than emptying it, which is the direction every parameter
 in this app fails in.
 
+**The middle of those three no longer holds, and only the middle.** `oldest=1`
+is the *stream's* direction and stops at the page: the page has one of its own
+under `noldest=1`, which is a second parameter and had to be — see *The
+new-plays page keeps its own direction* below, where the four-way table is
+driven. `newplays=1` is still the only thing that says this page is open, which
+is what the paragraph above is about.
+
 **The page has its own empty state and its own way out named in it**, which is
 what the section it replaces could not do without also naming the pills: `Nothing
 new since you last marked the feed read. Back is the whole day again.` and, with a
@@ -755,9 +766,18 @@ arrived, and the rule the head used to carry — *no top margin, and the 16px
 bottom one `.details-chrome` takes from its last child* — went with them:
 `.newplays-head` carries it now, its `margin-bottom` going 12 → 16.
 
+**That margin was the wrong shape for the job and has become a padding on the
+chrome.** A margin on a last child with no padding or border under it collapses
+*through* its parent, so the 16px was never inside the pinned bar at all and the
+head sat flush on its hairline — see *The new-plays navbar has a bottom edge
+again* below.
+
 **46px of pinned chrome given back at 1400 and 390, and two pixels spent at
-320.** There the head wraps — `Back`, the name and a 99px `Oldest first` come to
-399px of content on a 288px line — so the navbar is 114 where it was 112,
+320.** There the head wrapped — `Back`, the name and a 99px `Oldest first` came
+to 399px of content on a 288px line — so the navbar was 114 where it had been
+112 (**the wrap is gone**: the order control is an arrow alone below a 360px
+container now, and the head is 46px at 320 again — see *The order control says
+its direction*),
 against a pill row that was 46 of those 112 and now scrolls away with the
 stream. **The row gap for that wrap is declared as 12px on `.newplays-head`**
 rather than left at `.details-head`'s 20: measured, 20 makes the navbar **122**
@@ -801,6 +821,209 @@ The Feed's own page is unmoved — chrome **213px at 390**, the pill row at y=22
 in the page, `Oldest first` in the tab row, the red button reading `51 new
 plays` — and so is the matchup team feed, **7 pills in the page with the toggle
 in `mup-tools`**, which is where this move was copied from.
+
+### The order control says its direction
+
+**It was a lit toggle that read `Oldest first` in both states; it is a direction
+control that says which direction the stream is in.** An arrow and a word —
+`▲ Oldest first` or `▼ Newest first` — the word naming *the state the stream is
+in* rather than what pressing does. *The stream can be read forwards* argues the
+other way above, and its own paragraph is marked as overtaken.
+
+**What broke the old rule is the second stream.** `Oldest first` was both
+readings at once — what the press does and what being lit means — and that only
+holds while the button is the *only* order control on screen. It is not: the
+new-plays page has a direction of its own now (see below), so a reader crossing
+between the two meets two buttons that may disagree, and a button whose word is
+the same in both states cannot say which of the two streams they are looking at.
+A lit border is a weaker statement than a word, and it is being asked to carry a
+*state* that the word is only carrying an *action* for.
+
+**The geometry half of the old rule is kept, by reservation rather than by
+silence.** Both words are laid out in one grid cell and the one not in force is
+`visibility: hidden` — the app's *reserve the worst case by laying it out*
+device, which `.research-arrow` already applies to the board's sort mark on
+every column, sorted or not. Measured in the tab row at 1400: the button is
+**118.58 × 36px at x=606.72, lit, unlit and lit again**, where `Newest first` is
+**78.58px of text against `Oldest first`'s 72.72** — 5.86px the box would have
+jumped on every press without the ghost.
+
+**The arrow is the research board's own sort mark**, `▲`/`▼`, leading the word
+the way it leads a column label there, in an 8 × 9px box declared in both axes
+for that mark's own reason: the glyph's metrics belong to whichever installed
+face claims it. `▲` is ascending, and oldest-first *is* ascending — the day's
+clock running down the page.
+
+**Where the bar is too narrow for the word, the arrow stands alone, and the
+threshold is a container query rather than a breakpoint.** This one button sits
+in three bars, and at *the same window width* they are three different widths:
+at a 390px window the tab row's container is **346**, the new-plays head's is
+**358** and `mup-tools` is **358**. A media query would have had to answer for
+one of them and guess at the other two. So each bar declares
+`container-type: inline-size` and the word is dropped on that bar's own number.
+
+**`.view-bar` and not `.view-bar-tabs`**, which is this app's *layout
+containment* rule met in a second form. The tab row is the only child of
+`.view-bar`, a flex row, so it is a **flex item sized shrink-to-fit** — and
+inline-size containment is exactly the promise that a box's inline size does not
+depend on its contents. Measured with the declaration on the row: the tab row
+went **1356px → 0px** at 1400, every tab still painted and overflowing a
+zero-width box. The container has to be a box already filling its parent.
+
+**The tab row's number is 335px**, measured. Below 456 of container the row is
+two lines whatever this button says and the button is on the second one, with
+the kind tabs and `Starters`; that line is **333.69px of content with the word
+and 251.11 without** (and the whole row is 703.3 against 620.72), so below ~334
+the word pushes the button onto a third line.
+Driven at 1400 / 900 / 640 / 390 / 320:
+
+| container | 1356 | 856 | 596 | 346 | 276 |
+| --- | --- | --- | --- | --- | --- |
+| lines, with the word | 1 | 1 | 2 | 2 | **3** |
+| lines, without | 1 | 1 | 1 | 2 | **2** |
+| `--chrome-h` as shipped | 169 | 169 | 213 | 213 | **261** |
+| the button | 118.58 | 118.58 | 118.58 | 118.58 | **36** |
+
+Above 335 the word is carried **even where it costs the row a line** — a 640
+window and the band around 700 are both two-line rows that would be one without
+it, 48px each. That is the trade taken deliberately: the `title` is the only
+other thing on this button that says which way the stream runs, and **a touch
+device has no pointer to raise one with**, so at the widths this app is actually
+read on the word is the whole statement of what the control is doing. The
+`aria-label` carries the sentence at every width, so nothing is lost below the
+threshold that a screen reader could have had.
+
+**The new-plays head's number is 360**, and it is bigger for a reason that is
+the head's rather than a rounding: that head is one line, not a row that may
+wrap to two, so losing the word costs nothing there and keeping it costs a whole
+second line of **pinned** chrome. `Back` (80.1) and the button (118.6) with two
+20px gaps leave the name-and-range block 119px, and the range line is about that
+wide (`12:43 PM – 11:48 PM`), so the head wraps just under 359. Measured with a
+range up: the head is **46px at a container of 358 and 94px at 345**, taking
+`--details-chrome-h` to **130**; with the word gone it is 46 and the chrome 82 at
+every width down to a 288px container. A two-day range
+(`Aug 18, 7:12 PM – Aug 19, 4:07 PM`) is wider still and will wrap the head above
+this number — which is why the head keeps its `row-gap` and why that height is
+measured rather than declared.
+
+**Below the threshold the button is the app's own 36px square** —
+`width: var(--control-h); padding: 0`, which is what `Starters` beside it takes
+below 640 and for that rule's reason: a run of icon buttons that are 36 and 34
+reads as two kinds of thing. Measured at 320, the two are the same square on the
+same line.
+
+**`mup-tools` takes the tab row's 335 and it costs that bar nothing**: driven on
+the matchup team feed at 1400 / 640 / 480 / 390 / 360 / 320, the band is
+**1 / 1 / 2 / 2 / 2 / 3** rows with the word and the same six numbers without
+it, so there the threshold only buys horizontal slack. The button reads
+`▼ Newest first` down to a 358px container and `▼` at 328.
+
+**The three bars therefore disagree at 390, and that is the point.** The tab row
+shows `▼ Newest first`, the new-plays head shows `▼` alone, and each is
+answering its own width. Driven at 377 the tab row is already down to `▼` while
+`mup-tools` still has the word.
+
+### The new-plays page keeps its own direction
+
+**It was `feedOldestFirst`, shared with the stream underneath, and that is the
+fault.** Turning the new-plays page round turned the feed round with it, and
+leaving the page put the reader back on a whole day running backwards with
+nothing on the page they had just left having said so. A press about one page
+must not rearrange another — the same rule as *a lens is put away when its page
+leaves the screen*, read from the other end. The page is a bounded catch-up read
+and left; the stream under it is the whole day and is **still on screen behind
+it**.
+
+**So two flags and two parameters: `oldest=1` here, `noldest=1` there.** Two
+params must never mean two things — `proj=1` is a matchup's and `rproj=1` is the
+roster's, deliberately — so the page's direction takes a name of its own rather
+than a second reading of `oldest=`. The `n` is `newplays=`'s own letter, the way
+`rproj`'s `r` is the roster's. It is written **only under `newplays=1`**, on
+`starters=1`'s rule: a direction for a page the link does not open is a claim
+about something nobody can see.
+
+**It defaults to newest-first, and the alternative was seriously held.** The
+page is a catch-up with its own stated window in its head, and a catch-up read
+forwards reconstructs the afternoon in the order it happened. What decides it
+against is that the set is not reliably small: a reader away for a day opens
+this on 51 plays paged twenty at a time, and oldest-first buries the play that
+raised the red button under two presses of `Load more` — and that play is the
+reason the page is open at all. So the page opens the way the stream it opened
+over opens, and absence in the URL means that, which is how every binary lens
+here spells "off" and what lets the default be redefined later without anyone's
+link needing revisiting.
+
+**One list is re-sorted, not merged twice.** `newRecent` is `allRecent`
+filtered — `filter` hands back a fresh array — and then sorted on its own flag
+with the same pair the stream uses (`byPlayOrder` / `byRecency`), so the two
+lists cannot come to disagree about a play's own grouped events. Live and
+Upcoming are not on the page at all, so the three-sections note above is the
+whole of what an order can turn here.
+
+**Driven on the roster's 2026-08-19 (51 new plays, the marker planted at 8am
+that morning), at 1400:**
+
+| link | feed head | page head | tab row | the page's own |
+| --- | --- | --- | --- | --- |
+| `newplays=1` | Betts | Betts | Newest first | Newest first |
+| `newplays=1&oldest=1` | **McGonigle** | Betts | Oldest first, lit | Newest first |
+| `newplays=1&noldest=1` | Betts | **McGonigle** | Newest first | Oldest first, lit |
+| both | **McGonigle** | **McGonigle** | Oldest first, lit | Oldest first, lit |
+| `noldest=banana` | Betts | Betts | Newest first | Newest first |
+
+`noldest=banana` also leaves the URL on the next sync, which is the direction
+every parameter in this app fails in.
+
+**And the round trip, which is the report this fixed.** Opened at
+`newplays=1&oldest=1`, the page's own toggle pressed three times and then `Back`:
+the feed's head is **Kevin McGonigle at every one of the five snapshots**, its
+ten items stay ten, `oldest=1` never leaves the URL, `noldest=1` arrives and
+leaves with each press and goes on `Back` — because it is only written while the
+page is up. The tab row's button reads `Oldest first, lit` throughout and the
+page's flips under it.
+
+### The new-plays navbar has a bottom edge again
+
+**Its head sat flush on the bar's own hairline**, `Back`, `New plays` and the
+order control against the bottom of the pinned box with the 16px that was
+supposed to be under them outside it. The cause is margin collapsing:
+`.details-chrome` carries **no bottom padding** — right on the player page,
+where its last child is the tab strip and the active tab's 2px underline *is*
+the bar's bottom edge — and with no padding or border there, `.newplays-head`'s
+own `margin-bottom` collapsed straight through the box and became the gap
+*below* it. Measured at 1400 before: the chrome is **66px**, which is 20 of top
+padding plus a 46px head plus nothing.
+
+**So the number moves onto `.newplays-chrome`, where a padding cannot collapse,
+and the head gives its margin up.** 16px rather than the 20 above it: the top
+padding is clearing a window edge and a rounded corner where this is clearing
+text from a rule, and 16 is the gap every other box on this page reads. The gap
+*under* the bar is unchanged — that is `.details-chrome`'s own
+`margin-bottom: 16px`, which is what the head's margin was collapsing into and
+is now the only thing there.
+
+**`--details-chrome-h` follows by itself**, `useOverlayChromeOffset` measuring
+the border box on a `ResizeObserver`. Driven with a range line up, before →
+after:
+
+| | 1400 | 640 | 480 | 390 | 320 |
+| --- | --- | --- | --- | --- | --- |
+| `.newplays-chrome` | 66 → **82** | 66 → **82** | 66 → **82** | 66 → **82** | 114 → **82** |
+| `--details-chrome-h` | 66 → **82** | 66 → **82** | 66 → **82** | 66 → **82** | 114 → **82** |
+| head → bar's bottom | 0 → **16** | 0 → **16** | 0 → **16** | 0 → **16** | 0 → **16** |
+| bar's bottom → pills | 16 → **16** | 16 → **16** | 16 → **16** | 16 → **16** | 16 → **16** |
+| the head itself | 46 | 46 | 46 | 46 | 94 → **46** |
+
+**320 is the row that gains twice.** It was 114 because the head wrapped there —
+`Back`, the name and a 99px `Oldest first` on a 288px line — and the arrow-alone
+form fits, so the head is 46 again and the bar is 82 like every other width. The
+`row-gap: 12px` that wrap needs stays declared: a two-day range will still wrap
+it, and the height is measured for exactly that reason.
+
+**Bundle: 602.26 → 602.83 KB of JS** (179.31 → 179.45 gzipped) and **159.54 →
+160.17 KB of CSS** (28.57 → 28.67) — 0.57KB of JS for a second piece of state, a
+second parameter and two spans, and 0.63KB of CSS for the reservation grid, the
+three container declarations and the two queries.
 
 ### What counts as a play, and the ones that were not plays
 

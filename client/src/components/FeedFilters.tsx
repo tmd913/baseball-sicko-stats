@@ -252,9 +252,11 @@ export function FeedFilterPills({
 }
 
 /**
- * **`Oldest first`** — the stream turned round, first play of the day at the
- * top. One button, drawn in two places, and the two are one component so they
- * cannot come to word or shape the same control differently.
+ * **The stream's direction, and it says which direction that is** — an arrow
+ * and the words `Oldest first` or `Newest first`. One button, drawn in three
+ * places (the tab row, the new-plays page's head, the matchup's team feed), and
+ * the three are one component so they cannot come to word or shape the same
+ * control differently.
  *
  * **In the pinned bar, beside `Starters` on the page and beside `Back` on the
  * new-plays page**, which is a reversal for this one control of the argument
@@ -275,14 +277,50 @@ export function FeedFilterPills({
  * `byPlayOrder`'s own note that a *game* is the thing read forwards), and
  * oldest-first is the departure from it. This app spells a departure as a lit
  * toggle whose absence is the default — `Starters`, `Watchlist`, `Projected`,
- * `hideil` — and carries only the departure in the URL (`oldest=1`).
+ * `hideil` — and carries only the departure in the URL (`oldest=1`, and
+ * `noldest=1` for the new-plays page's own).
  *
- * **The label does not change when it lights.** `Oldest first` is what pressing
- * it does and what being lit means; a label that flipped to `Newest first`
- * would change the button's width under the finger that pressed it, which is
- * this app's *reserve the box* rule broken by a control that is nothing but a
- * box. The `title` carries the state instead, that being the one thing on a
- * button that can change size for free.
+ * **The label names the state the stream is in, not what pressing does**, which
+ * reverses what stood here. The old rule was that `Oldest first` is both at
+ * once — what pressing it does and what being lit means — and that a label
+ * which flipped would change the button's width under the finger that pressed
+ * it, *reserve the box* broken by a control that is nothing but a box. The
+ * first half of that is only true while the button is the *only* order control
+ * on screen. It is not: the new-plays page has its own direction now
+ * (`noldest=1`), so a reader crossing between two streams meets two buttons
+ * that may disagree, and a button whose word is the same in both states cannot
+ * say which stream they are looking at. A lit border is a weaker statement than
+ * a word, and it is the statement that has to carry a *state* when the word
+ * only carries an action.
+ *
+ * **The box is reserved rather than declared**, which is how the second half of
+ * that rule is kept while the first is dropped. Both words are laid out in one
+ * grid cell and the one that is not in force is `visibility: hidden` — the
+ * app's own *reserve the worst case by laying it out* device (`.research-arrow`
+ * reserves its own mark on every column for exactly this reason, sorted or
+ * not) — so the button is the width of the wider word in both states and
+ * nothing moves under the finger. Measured in the tab row at 1400: **118.58 ×
+ * 36px, at x=606.72, lit and unlit and back again** — `Newest first` is 78.58px
+ * of text against `Oldest first`'s 72.72, so an unreserved box would have
+ * jumped 5.86px on every press.
+ *
+ * **The arrow is `▲`/`▼`, leading the word**, which is the board's own sort
+ * mark (`.research-arrow`, and see `ResearchTable`'s header button, where the
+ * glyph leads the label for the same reason it does here): ascending is `▲`,
+ * and oldest-first *is* ascending — the day's clock running down the page. Its
+ * box is fixed in both axes on that rule's own measurement, the glyph being a
+ * character whose metrics are a font this app does not choose.
+ *
+ * **Where the bar is too narrow for the word, the arrow stands alone**, and
+ * that is a container query rather than a breakpoint: the two bars this button
+ * sits in are different widths at the same window width (the tab row is the
+ * window less the app's gutters; the new-plays head is `--card-column`), so a
+ * media query would answer for one of them and guess at the other. Each bar
+ * declares itself a container (`.view-bar-tabs`, `.newplays-head`,
+ * `.mup-tools`) and the word is dropped below the width at which it costs the
+ * bar a line — see `styles.css`, which carries the measured thresholds. The
+ * `title` and the `aria-label` still carry the whole sentence, that being the
+ * one thing on a button that can change size for free.
  *
  * **One box everywhere, and `compact` is gone with the row that needed it.** It
  * made this button 30px tall (`.feed-filter-pill`) for the one row where it
@@ -298,19 +336,37 @@ export function FeedOrderToggle({
   oldestFirst: boolean;
   onToggle: () => void;
 }) {
+  const said = oldestFirst ? 'Oldest first' : 'Newest first';
   return (
     <button
       type="button"
       className={`research-toggle feed-order${oldestFirst ? ' on' : ''}`}
       aria-pressed={oldestFirst}
+      /* The words below are `aria-hidden`, both of them: one is a reservation
+         and neither is drawn at all where the bar is too narrow for it, so the
+         button would be a nameless glyph exactly where a name matters most.
+         The label is the same sentence the visible word is. */
+      aria-label={said}
       onClick={onToggle}
       title={
         oldestFirst
           ? 'The day read forwards, first play first — press to put the newest back on top'
-          : 'Read the day forwards instead, from its first play'
+          : 'The day read backwards, newest play first — press to read it forwards from the first pitch'
       }
     >
-      Oldest first
+      <span className="feed-order-arrow" aria-hidden="true">
+        {oldestFirst ? '▲' : '▼'}
+      </span>
+      {/* Both words, in one grid cell, so the box is the wider of the two
+          whichever is in force — see the note above. */}
+      <span className="feed-order-word" aria-hidden="true">
+        <span className={oldestFirst ? 'feed-order-said' : 'feed-order-ghost'}>
+          Oldest first
+        </span>
+        <span className={oldestFirst ? 'feed-order-ghost' : 'feed-order-said'}>
+          Newest first
+        </span>
+      </span>
     </button>
   );
 }

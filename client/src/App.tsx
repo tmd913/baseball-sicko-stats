@@ -644,6 +644,43 @@ export default function App() {
     () => initialParams.get('oldest') === '1',
   );
   /**
+   * **Which way the *new-plays page's* stream runs**, which is a second piece of
+   * state and not the one above.
+   *
+   * It was `feedOldestFirst` itself: one direction shared by the stream and the
+   * page over it, on the reading that a reader who wants the day forwards wants
+   * it forwards wherever they are. Driven, that is not what it does — the page
+   * is a bounded catch-up that is read and left, the stream underneath is the
+   * whole day and is *still on screen behind it*, and turning the page round on
+   * the way through left the reader back at a feed running backwards with no
+   * control on the page that had said so. A press about one page must not
+   * rearrange another; that is the same rule as *a lens is put away when its
+   * page leaves the screen*, read from the other end.
+   *
+   * **`noldest=1` in the URL, and only while the page is open.** Two params must
+   * never mean two things (`proj=1` is a matchup's and `rproj=1` is the
+   * roster's, deliberately), so the page's direction gets a name of its own
+   * rather than a second reading of `oldest=`; the `n` is `newplays=`'s own
+   * letter, the way `rproj`'s `r` is the roster's. It is written only under
+   * `newplays=1` — a direction for a page nobody has open is `starters=1` over
+   * a range with no today in it, a claim about something the link does not show.
+   *
+   * **It defaults to newest-first, the same way the stream does**, and the
+   * alternative was seriously held: the page is a *catch-up*, a bounded set with
+   * its own stated window in the head, and a catch-up read forwards
+   * reconstructs the afternoon in the order it happened. What decides it against
+   * is that the set is not reliably small — a reader away for a day opens this
+   * on 51 plays paged twenty at a time, and oldest-first buries the play that
+   * raised the red button at the bottom of two presses of `Load more`. The play
+   * that made the count is the reason the page is open. So the page opens the
+   * way the stream it opened over opens, and absence in the URL means that —
+   * which is how every binary lens here spells "off", and what lets the default
+   * be redefined later without anyone's link needing revisiting.
+   */
+  const [newPlaysOldestFirst, setNewPlaysOldestFirst] = useState<boolean>(
+    () => initialParams.get('noldest') === '1',
+  );
+  /**
    * **How far down the feed's stream of plays this reader has got** — epoch ms
    * of the newest play they marked read, which is what draws the red
    * `N new plays` button and what the `New` filter narrows to.
@@ -2970,6 +3007,11 @@ export default function App() {
       // gate and outside the batter one, the pitcher tab's outings reversing on
       // the same press.
       if (feedOldestFirst) p.set('oldest', '1');
+      // And the new-plays page's own direction, which is a second parameter
+      // because it is a second stream — see `newPlaysOldestFirst`. Written only
+      // while the page is up, on `starters=1`'s rule: a direction for a page
+      // the link does not open is a claim about nothing.
+      if (feedNewOnly && newPlaysOldestFirst) p.set('noldest', '1');
     }
     // The mode and its span as one param, so it can never say a span with no
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
@@ -3010,6 +3052,7 @@ export default function App() {
     playFilter,
     feedNewOnly,
     feedOldestFirst,
+    newPlaysOldestFirst,
     projected,
   ]);
 
@@ -4755,12 +4798,16 @@ export default function App() {
       />
     ) : null;
 
-  /* **`Oldest first` for the new-plays page**, which is the same control in the
-     same kind of place: its pinned head is that page's tab row. It is built
-     separately from `feedOrderToggle` above only because that one is gated on
-     the Feed view and this page is drawn from inside it — the word, the box and
-     the handler are one component (`FeedOrderToggle`), so the two drawings
-     cannot come to differ.
+  /* **The new-plays page's own direction**, which is the same control in the
+     same kind of place — its pinned head is that page's tab row — and *not the
+     same state*. It reads and writes `newPlaysOldestFirst`, where the toggle
+     above reads `feedOldestFirst`: the page is a bounded catch-up over a stream
+     that is still on screen behind it, and turning one round must not turn the
+     other. See `newPlaysOldestFirst` for the argument and for why the page
+     opens newest-first. The word, the box and the arrow are one component
+     (`FeedOrderToggle`), so the two drawings cannot come to differ in anything
+     but the state they are reporting — which is now the one thing the label
+     says out loud.
 
      The page's **pills** are `feedFilterPills` itself, handed down as it stands:
      one description of one row, lit by one `feedLens` and pressed into one
@@ -4769,8 +4816,8 @@ export default function App() {
      being something to narrow. */
   const newPlaysOrder = feedIsBatters ? (
     <FeedOrderToggle
-      oldestFirst={feedOldestFirst}
-      onToggle={() => setFeedOldestFirst((v) => !v)}
+      oldestFirst={newPlaysOldestFirst}
+      onToggle={() => setNewPlaysOldestFirst((v) => !v)}
     />
   ) : null;
 
@@ -6073,6 +6120,10 @@ export default function App() {
                and a pitcher's outings are stamped with one exactly as a plate
                appearance is. */
             oldestFirst={feedOldestFirst}
+            /* And the page over it has its own — see `newPlaysOldestFirst`.
+               Gated with the six above rather than with the line above it: the
+               page is only ever drawn on the batter tab. */
+            newOldestFirst={feedIsBatters ? newPlaysOldestFirst : undefined}
           />
           </>
         )
