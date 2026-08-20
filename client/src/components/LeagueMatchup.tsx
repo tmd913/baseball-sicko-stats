@@ -1331,14 +1331,20 @@ export default function LeagueMatchupView({
       onNext={mupNext.run}
       prevTitle={mupPrev.title}
       nextTitle={mupNext.title}
+      /* The same rule the roster's bar is on, from the same component: in the
+         Schedule reading the span run *is* the panel. This page's preset row
+         leads with a `Matchup` pill of its own, and that is exactly the pill
+         that would be least true there — the days on screen are the span's. */
+      spanControl={
+        mupScheduleReading ? (
+          <ScheduleSpanTabs
+            span={scheduleSpan!}
+            matchup={matchupWindow}
+            onChange={setScheduleSpan}
+          />
+        ) : null
+      }
     >
-      {mupScheduleReading && (
-        <ScheduleSpanTabs
-          span={scheduleSpan!}
-          matchup={matchupWindow}
-          onChange={setScheduleSpan}
-        />
-      )}
       <DateRow
         presets={spanPresets}
         activePreset={span.preset}
