@@ -219,6 +219,14 @@ const IL_SLOT = 17;
  * `seatKinds` below decides which of a two-way player's two rows one seat is
  * about. It was declared in both until the second reader arrived; one table of
  * three numbers is one table.
+ *
+ * **It was then declared twice more, in this one file**, by two branches that
+ * each needed it and landed a day apart — the ownership join's `slotKinds` and
+ * the seat test above. That is the same rule failing at a smaller scale, and
+ * the detail the second copy carried is worth keeping: everything from `C` (0)
+ * to `UTIL` (12), plus the middle-infield group (19), is a place a batter
+ * stands, and `BE` (16) and `IL` (17) are where either of them sits and say
+ * nothing about which side of the ball a man is on.
  */
 export const PITCHING_SLOTS = new Set([13, 14, 15]);
 
@@ -675,12 +683,6 @@ function matchPlayer(
 // decides everything: the club, then what he plays, then null.** Neither test
 // is new and neither is a tie-break — a tie-break would pick a winner where
 // there is no reason to prefer one, and this returns null there instead.
-
-/** ESPN's three pitching slots — `P`, `SP`, `RP`. Everything from `C` (0) to
- *  `UTIL` (12), plus the middle-infield group (19), is a place a batter
- *  stands; `BE` (16) and `IL` (17) are where either of them sits and say
- *  nothing. */
-const PITCHING_SLOTS = new Set([13, 14, 15]);
 
 /**
  * Which board an ESPN row's own `eligibleSlots` puts him on — the second test,
