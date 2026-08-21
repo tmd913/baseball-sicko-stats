@@ -381,9 +381,19 @@ function SummaryToggle({ on, onToggle, title }: { on: boolean; onToggle: () => v
       onClick={onToggle}
       title={title}
     >
-      {/* Three rows over a rule — a column of days added up. Drawn here rather
-          than imported: it is this page's only use, and it is 19px to match
-          `ProjectedGlyph` beside it rather than the 17 that glyph defaults to. */}
+      {/* **A report card**: two lines of subjects and the grade under them, on a
+          card. It was three bare rows over a rule — a column of days added up —
+          and it is the same statement drawn as the thing it produces, which is
+          what this toggle makes of a roster: the week's totals, marked.
+
+          Drawn here rather than imported: it is this page's only use, and it is
+          19px to match `ProjectedGlyph` beside it rather than the 17 that glyph
+          defaults to. **Portrait, and deliberately so** — `ScheduleGlyph` sits
+          two buttons away and is a *landscape* box with a grid in it, so a
+          16×19 card and a 19×16 calendar are told apart by their silhouette
+          before either one's contents are legible, which at 19px is most of
+          the reading. The grade keeps the outgoing glyph's heavier stroke, for
+          the same reason it had one: it is the line the others add up to. */}
       <svg
         viewBox="0 0 24 24"
         width={19}
@@ -392,10 +402,12 @@ function SummaryToggle({ on, onToggle, title }: { on: boolean; onToggle: () => v
         stroke="currentColor"
         strokeWidth={2.2}
         strokeLinecap="round"
+        strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d="M5 6h14M5 11h14M5 16h9" />
-        <path d="M5 20.5h14" strokeWidth={2.6} />
+        <rect x="4.5" y="3" width="15" height="18" rx="2.5" />
+        <path d="M8 9h8M8 13h8" />
+        <path d="M8 17h4" strokeWidth={2.8} />
       </svg>
       <span className="summary-toggle-label">Summary</span>
     </button>

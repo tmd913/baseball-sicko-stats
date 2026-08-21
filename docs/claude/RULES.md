@@ -75,10 +75,13 @@ cannot import from each other. Change one and change the other in the same
 breath — nothing will catch it for you, and a field that exists on one side and
 not the other fails at runtime rather than at build time.
 
-**The season is pinned in nine places** and they must stay in sync. The list is
+**The season is pinned in ten places** and they must stay in sync. The list is
 in `CLAUDE.md`; **check the count against the code rather than trusting the
 prose** — `grep -rln "hfSea\|CURRENT_SEASON = \|SEASON = " server/src/` is what
-it is derived from, and it has been one behind before.
+it is derived from, and it has been one behind before (it was, again:
+`teamResearch.ts`). That grep answers **eleven** against a count of ten, and
+always will — `playerSplits.ts` answers it by *using* an imported `SEASON`
+rather than declaring one. Count the declarations, not the filenames.
 
 **All cache reads and writes go through `storage.ts`.** No module outside it
 should touch `fs` for cache purposes. Reads degrade to a miss; **writes are
@@ -249,7 +252,7 @@ paint over the box covering it.
 ### State, and where it lives
 
 - **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`,
-  `hideil`, `starters`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
+  `hideil`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
   `win`, `board`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `lwk`, `proj`,
   `rproj`, `rankproj`, `cut`. A link that leaves one out describes a different page.
 

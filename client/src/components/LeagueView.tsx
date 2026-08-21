@@ -318,7 +318,7 @@ function outcome(
  * with no knowledge of projections at all.
  *
  * The card's whole job is to compare two sides across the league's categories and
- * colour the winner, and that arithmetic is identical whether the figures are
+ * color the winner, and that arithmetic is identical whether the figures are
  * what has happened or what is going to. So rather than teaching it a second mode
  * — a second set of cells, a second tally, a second `leading` test — the *data*
  * is swapped and everything downstream is the code that was already checked.
