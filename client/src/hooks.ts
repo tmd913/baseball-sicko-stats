@@ -263,6 +263,71 @@ export function useScrollIntoViewOnExpand<T extends HTMLElement>(expanded: boole
 }
 
 /**
+ * How much of the window a pinned bar may take before pinning stops being worth
+ * it — **one third**, and it is a ratio rather than a window height because the
+ * thing it is rationing is the bar, and the bar's height is a function of the
+ * *width* it wraps at.
+ *
+ * It replaces `@media (max-height: 560px)`, which stood the chrome down on any
+ * short window and was written for the right reason off the wrong variable:
+ * *"a phone held sideways is about 390px tall, against a chrome that reaches
+ * 303px at its widest wrap"*. Both halves of that are true and they never
+ * happen together — 303px is the chrome at **320px wide**, and a phone held
+ * sideways is 844 or 932 wide, where the chrome is one row. Measured across the
+ * widths the chrome wraps at, with the ratio each produces on the window it
+ * belongs to:
+ *
+ * | window | `.app-chrome` | of the window | 560px rule | this rule |
+ * | --- | --- | --- | --- | --- |
+ * | 390×844 (iPhone 14 upright) | 100 | 12% | pinned | pinned |
+ * | 844×390 (iPhone 14 sideways) | **102** | **26%** | **static** | **pinned** |
+ * | 932×430 (Pro Max sideways) | **102** | **24%** | **static** | **pinned** |
+ * | 667×375 (SE sideways) | 158 | 42% | static | static |
+ * | 320×500 | 148 | 30% | static | pinned |
+ * | 320×390 | 148 | 38% | static | static |
+ *
+ * So the two cases the constant got wrong are exactly the two the report is
+ * about: on a modern iPhone in landscape the chrome is **one row**, and 26% of
+ * the screen is the same bargain 12% is on the same phone upright. The 667 and
+ * 736 band — where the header regains its labels and its search field and takes
+ * two rows before there is width for them — is the case the constant was
+ * *right* about, and one third still stands it down there.
+ *
+ * A third rather than a quarter or a half because the measurements fall either
+ * side of it with room: the nearest pair is 26% against 42%, seven points clear
+ * on both sides, so no window this app is read on sits near the line and no
+ * hysteresis is needed for one that resizes across it.
+ *
+ * `.details-chrome` takes the same rule and gets a different answer — 165px of
+ * a 390px landscape window is 42% — which is the whole argument for measuring
+ * rather than declaring: one statement, two boxes, two answers, where a single
+ * viewport height had to be a compromise between them.
+ */
+const STICKY_BUDGET = 1 / 3;
+
+/**
+ * Decide whether a bar can afford to be pinned, and say so on the element as
+ * `data-unpinned` for the stylesheet to key on.
+ *
+ * The decision is **made in JS and executed in CSS**, which is the one ordering
+ * that works: the height is a runtime measurement no media query can read, and
+ * `position` is not a thing JS should be setting on a box the stylesheet owns.
+ * It is stamped *before* the caller reads `position` off the computed style, so
+ * one pass settles it — reading a computed value forces the style recalc the
+ * attribute invalidated.
+ *
+ * No feedback loop: `position: sticky` and `position: static` lay a box out at
+ * the same height, so nothing this writes can change what it measured, and the
+ * `ResizeObserver` watching it does not fire on the attribute.
+ */
+function budgetSticky(el: HTMLElement, height: number): void {
+  const room = window.innerHeight;
+  const affordable = room <= 0 || height <= room * STICKY_BUDGET;
+  if (affordable) el.removeAttribute('data-unpinned');
+  else el.setAttribute('data-unpinned', '');
+}
+
+/**
  * Measures the pinned chrome and publishes its height as `--chrome-h` on the
  * document root, which `--scroll-offset` adds to its own breathing room.
  *
@@ -277,11 +342,12 @@ export function useScrollIntoViewOnExpand<T extends HTMLElement>(expanded: boole
  * It is measured rather than declared because there is no one number to
  * declare: the bar wraps to two and three rows as the window narrows (115px on
  * a desktop, 303px at 320px wide), and it stands down altogether on the summary
- * and research views and under `max-height: 560px`, where the offset must go
- * back to the bare gap. So the height is whatever the element currently is, and
- * zero whenever it isn't actually pinned — read off the computed `position`,
- * which is the same answer the CSS gives rather than a second copy of the rules
- * that decide it.
+ * and research views and wherever it would cost more than a third of the window
+ * (`STICKY_BUDGET` above — which this hook now decides as well as reads), where
+ * the offset must go back to the bare gap. So the height is whatever the element
+ * currently is, and zero whenever it isn't actually pinned — read off the
+ * computed `position`, which is the same answer the CSS gives rather than a
+ * second copy of the rules that decide it.
  *
  * A `ResizeObserver` catches the wraps; the per-render pass catches everything a
  * resize can't see (a view swap that makes the bar static, an error banner
@@ -297,6 +363,9 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
   const height = useRef(0);
   const sync = useCallback(() => {
     const el = ref.current;
+    // Before the computed read below, which is what decides whether this bar
+    // counts: the answer depends on the attribute this stamps.
+    if (el) budgetSticky(el, el.getBoundingClientRect().height);
     const pinned = el && getComputedStyle(el).position === 'sticky';
     // **Rounded down, never to nearest** — see `usePublishedHeight`, which is
     // the same measurement and the same reason: this number is the `top` the
@@ -314,9 +383,11 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
     ro.observe(el);
     // The window listener is not the observer's understudy — it catches the one
     // case the observer cannot see at all: a *shorter* window unpins the bar
-    // (`max-height: 560px`) without changing its height by a pixel, so nothing
-    // resizes and React never re-renders. A phone turned sideways would
-    // otherwise keep clearing 159px of bar that is no longer there.
+    // without changing its height by a pixel, so nothing resizes and React
+    // never re-renders. A phone turned sideways would otherwise keep clearing
+    // 159px of bar that is no longer there — and now that the budget is a
+    // *ratio* this listener is load-bearing twice over, since the denominator
+    // it divides by is the very thing a resize changes.
     window.addEventListener('resize', sync);
     return () => {
       ro.disconnect();
@@ -428,6 +499,11 @@ export function useOverlayChromeOffset<T extends HTMLElement>(
   const height = useRef(0);
   const sync = useCallback(() => {
     const el = ref.current;
+    // The same budget the page's chrome takes, and on this box it lands the
+    // other way: 165px of a 390px-tall landscape window is 42%, so the overlay's
+    // head still stands down where the app's now stays pinned. See
+    // `STICKY_BUDGET` — one rule giving two boxes two answers is what it is for.
+    if (el) budgetSticky(el, el.getBoundingClientRect().height);
     const pinned = el && getComputedStyle(el).position === 'sticky';
     // Down, for the reason the other two do it — this band is what the
     // matchup's own date bar sticks below, and a published height *over* the
@@ -927,10 +1003,10 @@ export function useDismissable(
  * **Three triggers, each for something the others cannot see.** Opening is when
  * the element exists to be measured; `resize` is a window that changed under an
  * open menu (a phone turned sideways is the case this whole hook is about); and
- * a **capture-phase `scroll`** is the one that is easy to miss — under
- * `max-height: 560px` the app's chrome is deliberately *not* sticky, which is
- * precisely a short window, so scrolling there carries the anchor up the page
- * and the room below it grows. A scroll event does not bubble, hence capture.
+ * a **capture-phase `scroll`** is the one that is easy to miss — on a window
+ * short enough that the app's chrome cannot afford to be pinned
+ * (`STICKY_BUDGET`) it is deliberately *not* sticky, so scrolling there carries
+ * the anchor up the page and the room below it grows. A scroll event does not bubble, hence capture.
  *
  * It cannot feed back on itself: capping a box's height does not move its top,
  * so the measurement is the same before and after it is applied.

@@ -450,10 +450,12 @@ one.
 (`.app > .date-bar`, `top: var(--chrome-h)`, `z-index: 39` — under the chrome's
 41). `--chrome-h` is zero wherever the chrome is not pinned (the fixed-height
 columns, a short window), so one declaration answers three states with no rule
-per view; `@media (max-height: 560px)` unpins the bar for the reason it unpins
-the chrome, and by name rather than by inheritance, since a zero `--chrome-h`
-would otherwise leave the bar as the one thing holding a band against a 390px
-screen. `--scroll-offset` gained `--date-bar-h` with it, or a clip scrolled to
+per view; a window with no room for the chrome unpins the bar for the reason it
+unpins the chrome, and **off the chrome's own answer rather than by inheritance**
+(`.app-chrome[data-unpinned] ~ .date-bar`), since a zero `--chrome-h` would
+otherwise leave the bar as the one thing holding a band against a 390px screen.
+That test was `@media (max-height: 560px)` twice over and is a measurement now —
+see *The chrome stood down on a landscape iPhone* below. `--scroll-offset` gained `--date-bar-h` with it, or a clip scrolled to
 the top of the window on the Feed lands behind 54px of dates.
 
 **`--date-bar-h` is measured, by `hooks.ts::usePublishedHeight`** — the third of
@@ -619,11 +621,13 @@ drawn in has moved. See **The page scrolls, and the head stays** in
 
 **It carries a tone of its own** — a vertical ombré from `--panel` down to `--bg-2`, the same two steps the cards are built from, under a soft accent glow at the top right echoing the one the page itself carries. The first version painted the body's *exact* gradient, pinned the same way (`background-attachment: fixed`), so the box lined up with the pixel behind it and was invisible until something scrolled under it. That was the wrong instinct for a bar that is always there: a strip which only appears once you have scrolled reads as an artefact of scrolling, where this is a permanent part of the app and should say so at rest. Both layers are the element's own rather than the viewport's, so the ombré runs across the bar's own height and reads the same whether it is 65px or the 300px of wrapped tabs a 320px screen produces. Deliberately shallow: measured off the rendered page it runs **#15233d → #111a2e** against a page of **#0d1425 → #0b1220** — about two steps of the app's own palette, enough to separate it and not enough to read as a panel sitting on one. A hairline and a shadow much softer than `--shadow` finish the edge; the shadow is what says the page passes *under* the bar rather than stopping at it.
 
-Two places it stands down. **A short window opts out of sticky altogether** (`@media (max-height: 560px)`): a phone held sideways is about 390px tall against a chrome that reaches 303 at its widest wrap, and chrome that eats most of the screen is not worth the trade — below that height it scrolls away as it always did. Height rather than width, since height is what's scarce. And **`.app.summary-mode` / `.research-mode` opt out explicitly** rather than relying on sticky being a no-op in a column that doesn't scroll — which it isn't, quite: `overflow: hidden` makes that column a scrollport of its own, and a sticky box in one is held against its **padding** box, which undoes the negative top margin and leaves a 14px strip of page above the bar that no other view shows. Static there puts it back in normal flow, where the margin does what it was written to do. The error banner is deliberately outside the box, for the reason it is outside `.app.edit-mode`'s hide list: a failed report is news about the page rather than a control over it, and it has no business holding a permanent row against the top of the window.
+Two places it stands down. **A window with no room for it opts out of sticky altogether** — measured against the window rather than declared (`hooks.ts::budgetSticky`), and the two sections below are what that replaced and why. Chrome that eats most of the screen is not worth the trade. And **`.app.summary-mode` / `.research-mode` opt out explicitly** rather than relying on sticky being a no-op in a column that doesn't scroll — which it isn't, quite: `overflow: hidden` makes that column a scrollport of its own, and a sticky box in one is held against its **padding** box, which undoes the negative top margin and leaves a 14px strip of page above the bar that no other view shows. Static there puts it back in normal flow, where the margin does what it was written to do. The error banner is deliberately outside the box, for the reason it is outside `.app.edit-mode`'s hide list: a failed report is news about the page rather than a control over it, and it has no business holding a permanent row against the top of the window.
+
+
 
 **Everything that scrolls itself to the top now clears the bar** — `--chrome-h`, the bar's measured height, published on the document root by `hooks.ts::useStickyChromeOffset` and added to `--scroll-offset`, which every `scroll-margin-top` in the stylesheet reads. Pinning the chrome moved the top of the *window* out from under the top of the page, and the whole app scrolls to the window: `useScrollIntoViewOnExpand`'s `block: 'start'` on the collapsibles that are left — the game blocks on the two unrendered cards, everything else in the feed and every inning of an outing having become popups, which move nothing — and a clip when it plays. (A third was `App.tsx::scrollToPlayer`, the jump a name in the summary table used to make to a card on the grouped feed; that name opens the player page now, which *covers* the bar rather than clearing it, so the arithmetic has no caller left and is gone.) All of them went on landing their target 12px from the top of the viewport, which is now 115px (or 159, or 303) *behind* the bar — so opening a card scrolled it under the one thing that was pinned to stay visible.
 
-It has to be **measured rather than declared**, because there is no one number: the bar wraps to two and three rows as the window narrows, and it stands down entirely on the summary and research views and under `max-height: 560px`, where the offset must go back to the bare 12px. So the hook reads the element's own height, and **reads `position` off the computed style to decide whether it counts** — the same answer the CSS gives, rather than a second copy in JS of the three rules that decide it. Three things drive a re-measure and each catches what the others can't: a `ResizeObserver` for the wraps, a layout effect on **every** render for a view swap that makes the bar static, and a **`resize` listener** for the one case neither sees — a *shorter* window unpins the bar without changing its height by a pixel or re-rendering anything, so a phone turned sideways would go on clearing 159px of bar that is no longer there. Layout effects rather than plain ones, so the property is set before the browser paints and before the scroll a click has just triggered reads it. The hook still hands its height back as a ref and nothing reads it any more — `scrollToPlayer` was the one caller that did its own arithmetic rather than going through `scroll-margin-top`, and it went with the jump. Checked in a browser at 900 and 390 wide and on a short window: a card, a game block, an at-bat and a feed item all land exactly 12px below the bar, and 12px from the top of the page wherever the bar isn't pinned.
+It has to be **measured rather than declared**, because there is no one number: the bar wraps to two and three rows as the window narrows, and it stands down entirely on the summary and research views and on any window it would cost more than a third of (`STICKY_BUDGET`, below), where the offset must go back to the bare 12px. So the hook reads the element's own height, and **reads `position` off the computed style to decide whether it counts** — the same answer the CSS gives, rather than a second copy in JS of the three rules that decide it. Three things drive a re-measure and each catches what the others can't: a `ResizeObserver` for the wraps, a layout effect on **every** render for a view swap that makes the bar static, and a **`resize` listener** for the one case neither sees — a *shorter* window unpins the bar without changing its height by a pixel or re-rendering anything, so a phone turned sideways would go on clearing 159px of bar that is no longer there. Layout effects rather than plain ones, so the property is set before the browser paints and before the scroll a click has just triggered reads it. The hook still hands its height back as a ref and nothing reads it any more — `scrollToPlayer` was the one caller that did its own arithmetic rather than going through `scroll-margin-top`, and it went with the jump. Checked in a browser at 900 and 390 wide and on a short window: a card, a game block, an at-bat and a feed item all land exactly 12px below the bar, and 12px from the top of the page wherever the bar isn't pinned.
 
 **Each page keeps its own place, and going back to it lands where you left.** The Games view and the Feed were two readings of the same days over one window scroller, so the offset used to carry straight across a tab switch: leaving Games 800px down opened the Feed 800px into a stream of somebody else's at-bats, and coming back clamped to wherever the shorter page ended. (Those two are now one page and a toggle, so that exact pair can no longer collide — but Feed and Research still can. The kind tabs were a third way one page became another and are gone.) That is as old as the tabs and **only became reachable when the chrome was pinned** — they used to be at the top of the page, so getting to one meant scrolling back up first and a reset came free with having to go there. `App.tsx` now keeps a scroll offset per page, restored in a layout effect when the page changes. Keyed by view alone — it was keyed by view **and kind** while the kind tabs swapped the whole list for a different set of players, and with both kinds on one page Feed/Batters and Feed/Pitchers are no longer two pages by that test — and **not** by the date range, which changes the numbers in the rows rather than which rows they are, so the row being read is still on screen. A page not yet visited opens at the top. The summary and research boards scroll an inner element rather than the window (`.summary-scroll`, `.research-scroll`, both fixed-height columns), so the memory reads and writes through whichever of the two is on screen; the listener is a single **capture-phase** one on the document, since a scroll event doesn't bubble and those inner scrollers would otherwise be unheard. The research board narrows that: the memory answers *which page* you are on, and the board answers *which table* — changing its population or its order scrolls it back to the top rather than restoring anything (see **research** below). App holds one more thing on the same terms and for the same reason — how far the feed's Recent section has been paged out (`feedShown`, below) — since an offset is only ever restorable into a page long enough to hold it.
 
@@ -644,6 +648,164 @@ It has to be **measured rather than declared**, because there is no one number: 
 **What the third one was for, and what it could not answer.** The two that remain are the two shapes of the answer — the grip (an element the page does not scroll from) and the inline axis (an axis the page is not read with) — and the Columns dialog's reorder chips look like the first case, are not, and turn out not to be the second either. They looked like the first because of a browser behavior worth naming once and remembering: **Chrome performs touch adjustment**, snapping a touch that lands near a small target onto it, so a `touch-action: none` region is effectively wider than the element that declares it by roughly the radius of the finger. Measured on the Columns dialog at 390px, a 9×13px grip swallowed a band from 10px left of it to past the chip's right edge — the scroll it forbade was forbidden over half the chip, and over the first six chips **40 of 85 sample flicks moved the dialog 0px**. Enlarging the grip makes it worse rather than better, the band growing outward from whatever box it is given. So the property went to `pan-y`, handing the block axis back to the scroller, and **that fixed the scrolling and broke the reordering**: those chips *wrap*, so the commonest reorder on a phone is a downward drag, and the axis rule threw exactly those away — measured, **10 of 30** drags landed where they were dragged. There was no third scope to try. What answered it was changing the *gesture*: on touch the drag is gone and a press picks a column up, which no scroller competes for, so the declaration went with it. The lesson the three of them make together is that `touch-action` can only arbitrate between two gestures that differ in **place or axis**, and when they differ in neither the gesture is what has to move. Where they share the axis — the edit screen, whose rows are dragged down a page that scrolls down — the element is the separator, and `.order-grip` keeps `none` for exactly that reason.
 
 **Measured on the edit screen, so the cost of keeping `none` there is on the record**: the same snap widens `.order-grip`'s 27×58 box to a band running x=268–310 of a 346px row — **42px, 12% of it**, about 10px of which is the name column to its left. That is the price of a same-axis drag and it is paid deliberately: the grip is a target a finger can actually aim at, the other 88% of the row scrolls, and there is no axis to scope to. (Checked at 390×380, in the running app: a flick from the name scrolls the page 128px and reorders nothing; the same flick from the grip scrolls 0 and starts a drag.)
+
+### The chrome stood down on a landscape iPhone, and the threshold was measuring the wrong thing
+
+**`@media (max-height: 560px)` un-pinned the chrome, the date bar and the player
+page's head on every phone held sideways**, which is what "sticky sections do not
+stick in landscape" turned out to be. The rule is old, its reasoning is quoted
+above, and the reasoning is where the fault is: *a phone held sideways is about
+390px tall against a chrome that reaches 303 at its widest wrap*. **Both halves
+are true and they never happen at the same time.** 303px is this bar at **320px
+wide**, where it wraps to three rows; a phone held sideways is 844 or 932 wide,
+where it is one row of 102. The query tested the height and spent the answer on
+the width.
+
+Measured, sweeping the window width at a fixed short height and reading
+`.app-chrome`'s own box:
+
+| width | 320 | 360–640 | **667** | **736** | 780+ |
+| --- | --- | --- | --- | --- | --- |
+| `.app-chrome` | 148 | 100 | **158** | **158** | 102 |
+
+— three rows at 320, two again from 667 to 779 (where the header gets its labels
+and its search field back before there is width to lay them out on one line), one
+row either side. So the height a landscape phone actually meets is **102**, and
+against the window it is in:
+
+| window | chrome | of the window | old rule | now |
+| --- | --- | --- | --- | --- |
+| 390×844 iPhone 14 upright | 100 | 12% | pinned | pinned |
+| **844×390 iPhone 14 sideways** | **102** | **26%** | **static** | **pinned** |
+| **932×430 Pro Max sideways** | **102** | **24%** | **static** | **pinned** |
+| 667×375 SE sideways | 158 | 42% | static | static |
+| 320×390 | 148 | 38% | static | static |
+| 320×500 | 148 | 30% | static | **pinned** |
+| 1200×900 | 102 | 11% | pinned | pinned |
+
+**26% of a landscape iPhone is the same bargain 12% is on the same phone
+upright**, and the constant threw the pinning away at exactly the width that had
+made it cheap.
+
+**So the test is the ratio, measured at runtime** — `STICKY_BUDGET`, one third —
+and it is the measure-don't-declare rule applied to the one variable the old
+query could not see: this bar's height is a function of the width it wraps at and
+of a font this app does not choose, which is the same sentence `--chrome-h` is
+already written under two paragraphs above. `useStickyChromeOffset` was already
+measuring the box on every render, every resize and every `ResizeObserver` tick;
+`budgetSticky` is one comparison inside that pass.
+
+**Decided in JS, executed in CSS**, and stamped *before* the hook reads
+`position` back off the computed style, so one pass settles it — reading a
+computed value forces the recalc the attribute invalidated. `position` stays the
+stylesheet's (`.app-chrome[data-unpinned] { position: static }`), because a hook
+setting `position` on a box three view classes already argue about is how the
+three of them come to disagree. There is no feedback loop to guard against:
+sticky and static lay a box out at the same height, so nothing this writes can
+change what it measured.
+
+**An attribute on the element, not a class on the root**, and that is the payoff
+rather than a detail. `.details-chrome` — the player page's head — takes the
+identical rule and **gets the opposite answer in landscape**:
+
+| window | `.details-chrome` | of the window | now |
+| --- | --- | --- | --- |
+| 390×844 | 219 | 26% | pinned |
+| 844×390 | **165** | **42%** | static |
+| 932×430 | **165** | **38%** | static |
+| 320×500 | 234 | 47% | static |
+| 1200×900 | 165 | 18% | pinned |
+
+One statement, two boxes, two answers. A single viewport height had to be a
+compromise between them and its own note said so — *less brutal than the
+303-of-390 the page's bar reaches, this is a closer call, but one threshold
+across the app beats two that nearly agree*. One threshold across the app is
+still what this is; it is just a threshold in the units the question is asked in.
+
+**A third, and the nearest pair is seven points clear either side of it** (26%
+against 42%), so no window this app is read on sits near the line and a window
+dragged across it needs no hysteresis. A quarter would unpin the landscape phone
+this was written to fix; a half would pin 158px of chrome onto a 375px screen.
+
+**The date bar follows the chrome's answer rather than repeating the test**
+(`.app-chrome[data-unpinned] ~ .date-bar`), which is what the two media queries
+were doing — the bar is a later sibling of the box whose budget was spent, so one
+selector says *this bar follows a chrome that could not afford to pin*. It
+outranks `.app > .date-bar` on specificity (0,3,0 against 0,2,0) so it wins
+wherever it sits, and it is kept beside that rule anyway, this file having been
+bitten five times by a block that only won on order. The two boards' bars are
+inside the pane and are not siblings of the chrome, so they are untouched — which
+is right: those stick to the pane.
+
+**Measured after, on the Feed in landscape**, at rest and 400px down:
+
+| | 844×390 at rest | +400 | 932×430 at rest | +400 |
+| --- | --- | --- | --- | --- |
+| `.app-chrome` | y 0, h 102, sticky | **y 0** | y 0, h 102, sticky | **y 0** |
+| `.view-tools` | y 102 | −298 | y 102 | −298 |
+| `.date-bar` | y 152, sticky | **y 102** | y 152, sticky | **y 102** |
+| `--chrome-h` | **102px** (was 0) | | **102px** (was 0) | |
+
+which is the ladder the app has upright, in landscape, for the first time. Page
+body overflow 0 at both. `.details-chrome` at those two windows is unchanged and
+still static, `--details-chrome-h` still 0 — the case the old threshold was right
+about.
+
+### Safari's own bottom bar, and why this arrangement pins it
+
+**Mobile Safari collapses its bottom bar as the page scrolls, and on the Roster's
+table reading and the research board the page never scrolls at all.** Measured at
+390×844: `document.scrollHeight` is **844** against a `clientHeight` of **844** on
+both — the document has no scroll range for Safari's chrome to react to, because
+`.app.summary-mode` / `.research-mode` is `height: 100dvh; overflow: hidden` with
+`.summary-scroll` / `.research-scroll` scrolling inside it. (`.matchup-mode` and
+`.league-rank-mode` are the same column and the same answer.) On the Feed the
+document is **2403** tall against the same 844, so there the bar behaves.
+
+That is the cause, and it is the arrangement rather than a bug in it. Safari's
+toolbar auto-hide is driven by the *document*'s scroll; an inner `overflow: auto`
+element scrolling is not something it watches. **That last sentence is reasoned
+from the platform's behavior and from the standing developer report about
+viewport-tall apps — it is not measured here, because a headless Chrome cannot
+show you Safari's chrome.** Everything above it is measured.
+
+**And the two cannot both be had.** The lever is which element owns the vertical
+scroll, and the table's header row is on the other end of it. Driven, on the
+research board at 390×844, scrolling 600px each way:
+
+| | document scrolls? | pane scrolls y | `thead` at rest | after 600px |
+| --- | --- | --- | --- | --- |
+| **A — as shipped** | **no** (844 = 844) | yes | y 295 | **y 189**, held |
+| **B — `height: auto`, pane `overflow-y: visible`** | **yes** (3305 of 844) | no | y 295 | **y −305**, gone |
+
+In B the document scrolls, so Safari's bar would collapse — and the column
+headings are off the top of the screen by 600px of a 3305px board. `position:
+sticky` still *computes* as sticky in B; it has simply nothing to stick to. **A
+sticky box sticks to the box that scrolls**, and a table that must scroll
+sideways has to be a scroll container, which makes it a scroll container in the
+block axis too (`overflow-x: auto` with anything but `visible` beside it is a
+scrollport in both). Give the document the vertical scroll and the pane stops
+being what the head is measured against.
+
+**What survives the swap and what does not**, so the trade is priced rather than
+described: the sticky **first column** survives (that is the inline axis, and the
+pane keeps it — `scrollWidth > clientWidth` is still true in B); the **head** does
+not; the tools row and the date bar could be made to stick to the document
+instead, at the cost of the two rules that put them inside the pane. So the bill
+for a collapsing Safari toolbar on those views is **the column headings on a
+44-column board read on a 390px screen**, which is the one thing on that page a
+phone reader cannot do without.
+
+**Two half-measures were considered and neither is worth shipping.** `100vh` in
+place of `100dvh` makes the column one toolbar-height taller than the visible
+area, which gives the *document* a small scroll range and would let a drag
+collapse the bar — but it also hides the foot of the table behind the toolbar
+until somebody performs that drag, and `overscroll-behavior: none` on the pane
+(which is load-bearing — see *Nothing in this app bounces*) means a flick that
+starts inside the table never reaches the document to perform it. `min-height` in
+place of `height` changes nothing: the column still cannot scroll. So the
+arrangement stands, and **the Feed, the games list and every overlay already
+collapse the bar**, those being ordinary scrolling pages.
 
 ### A card doesn't highlight when you scroll past it
 

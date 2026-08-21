@@ -834,8 +834,10 @@ writes to a temp file and renames. Both are set out under **Roster, watchlist,
 users and auth**.
 
 **The boot script is the only place a palette color is written outside the
-stylesheet** — two `--bg` values and two `color-scheme` words — and it is inline,
-blocking and tiny because it has to have finished before the first paint.
+stylesheet** — two `--bg` values, two `color-scheme` words and, since the strips
+above and below an iPhone's page were found to be following none of them, a
+`theme-color` — and it is inline, blocking and tiny because it has to have
+finished before the first paint.
 
 **And it paints the root, so the stylesheet has to clear the root again**
 (`html { background: none }`, declared beside the `overscroll-behavior` rule
@@ -869,6 +871,73 @@ parsed, and the stylesheet link is the last thing in it (checked in the built
 `index.html`; in dev Vite injects its styles at runtime, which appends later
 still). A stylesheet that somehow lost that tie would paint a flat page rather
 than a broken one.
+
+### The two strips iOS paints, which followed nothing at all
+
+**On an iPhone the notch strip above the page and the home-indicator strip below
+it kept the palette the tab had opened with.** Reported as switching color scheme
+not repainting the top and bottom of the screen, and it is neither a paint bug
+nor a gradient reaching the wrong edge: **those strips are not the page**. Safari
+tints them from `<meta name="theme-color">`, and this app had no such tag — six
+palettes, thirty tokens apiece, and the two bands the reader's thumb rests
+nearest were outside all of it.
+
+**Which makes the *old* behavior the interesting half.** With no tag, Safari
+falls back to sampling the document's own background — and the one flat color
+this document ever has is the one the boot script paints
+(`html{background:#0b1220}` and its five siblings), which the stylesheet then
+clears (`html { background: none }`, above). So what Safari had to sample was a
+color that exists for a few hundred milliseconds at load and is *the theme the
+page was opened with*; nothing about picking a different scheme in the settings
+menu goes near it. That is exactly the report — not "the strips are wrong" but
+"the strips are one scheme behind" — and it is why the fix cannot be a CSS rule.
+There is no selector for a region that is not in the document.
+
+**So the tag is written, and rewritten in both the places a theme is put on the
+page**: `index.html`'s boot script for the first frame, `theme.ts::applyTheme`
+for every change after it. That is the same pair, in the same order, that
+`data-theme` and `color-scheme` already travel in — the tag joins the convoy
+rather than getting a mechanism of its own.
+
+**Its value is the theme's own `--bg`, and that is measured rather than
+reasoned.** Read off the rendered page at 390×844, the middle of the **top row of
+pixels** and the middle of the **bottom row with the feed scrolled to its foot**:
+
+| theme | `--bg` | top pixel | foot of the page | `theme-color` now |
+| --- | --- | --- | --- | --- |
+| Dark | `#121314` | `#121314` | `#121314` | `#121314` |
+| Light | `#ffffff` | `#ffffff` | `#ffffff` | `#ffffff` |
+| Midnight | `#0b1220` | `#0b1220` | `#0b1220` | `#0b1220` |
+| Lavender | `#1c1b22` | `#1c1b22` | `#1c1b22` | `#1c1b22` |
+| Maroon | `#1d1319` | `#1d1319` | `#1d1319` | `#1d1319` |
+| Powder Blue | `#ffffff` | `#ffffff` | `#ffffff` | `#ffffff` |
+
+Both ends land on `--bg` for a reason each, and the two are worth keeping
+straight: the top is `.app-chrome`'s own ground, which is flat `--bg` since the
+chrome gave up its ombré; the foot is the *body gradient's last stop*, which is
+`--bg` from 55% down. A palette that moved either — a chrome painted `--panel`,
+a gradient that ran to something else at the bottom — would need a second value
+here, and the table above is the check to re-run.
+
+**One tag, and deliberately no `media` attribute.** The obvious-looking
+alternative is the pair the spec allows — one `theme-color` under
+`(prefers-color-scheme: dark)` and one under light — and it is wrong for this
+app in particular: that pair hands the choice to the reader's **system**
+appearance, and this app's whole point is that the reader picked a palette. A
+`Light` scheme on a phone in dark mode must get white strips, not the system's
+black ones. Driven both ways with `prefers-color-scheme` emulated, all six
+palettes against both appearances — twelve readings — and `theme-color`,
+`color-scheme` and the rendered page are **identical in the two halves**: the
+system's setting reaches nothing. It cannot, and that is by construction rather
+than by luck: `styles.css` contains no `prefers-color-scheme` query at all, and
+`applyTheme` writes `color-scheme` on the root as an inline style, which is
+what stops the *browser's* own widgets going the other way from the page.
+
+**`color-scheme` was already right and is what the strips' glyphs read.** Safari
+picks the color of the text and icons in those bars off the tint's luminance, so
+the white schemes get dark glyphs and the five dark ones light — nothing to
+declare there, but it is the reason a mid-tone `theme-color` would be a bad idea
+if a future palette wanted one.
 
 ### The picker
 
@@ -992,11 +1061,19 @@ the element exists to be measured. *`resize`* is a window that changed under an
 open menu, which is the case this is for at all — measured, a phone turned
 sideways with the menu open takes it **403 → 320px** and its foot 461 → 378, and
 turning it back restores both. And a **capture-phase `scroll`** is the one that
-is easy to miss: under `max-height: 560px` the app's chrome is deliberately
-*not* sticky, which is precisely a short window, so scrolling there carries the
-anchor up the page and the room below it grows — measured on a 900×420 feed
-(chrome confirmed `static`), scrolling 300px takes the anchor to −242 and the
-cap from 350px to 650, so the menu un-caps to its natural height. A scroll event
+is easy to miss: on a window with no room for it the app's chrome is deliberately
+*not* sticky, so scrolling there carries the anchor up the page and the room
+below it grows — measured on a **667×375** feed (chrome confirmed `static` at
+158px, 42% of the window), scrolling 300px takes the anchor from 58 to **−242**
+and the cap from **305px to 605**, so the menu un-caps to its natural 403.
+**The window this was first measured on no longer shows it**, and that is worth
+recording rather than quietly restating: it was a 900×420 feed, back when
+`@media (max-height: 560px)` stood the chrome down on any short window. The test
+is a measured ratio now (`hooks.ts::STICKY_BUDGET`), and at 900 wide the chrome
+is one row of 102 — 24% of 420 — so it stays pinned there and the anchor no
+longer moves at all (checked: y=58 before and after a 300px scroll, cap 350px
+throughout). The listener is unchanged and still necessary; only the window that
+demonstrates it is narrower. A scroll event
 does not bubble, hence capture.
 
 It cannot feed back on itself: capping a box's height does not move its top, so
