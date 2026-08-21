@@ -6714,6 +6714,7 @@ button.start-line:focus-visible {
 .league-scroll > .date-bar,
 .research-scroll > .view-tools,
 .research-scroll > .research-head,
+.research-scroll > .research-condensed-rail,
 .research-scroll > .error-banner,
 .research-scroll > .empty-state {
   position: sticky;
@@ -10270,7 +10271,11 @@ button.start-line:focus-visible {
    system to it, which is also why the run is simply drawn from the first frame
    when expanded. `z-index` above the head's 4. */
 .research-condensed-rail {
-  position: sticky;
+  /* `position: sticky` and `left: 0` come from the fold above — this pane
+     scrolls **sideways** as well as down, and a box pinned only at the top
+     rides off the left edge with the columns. Reported: the condensed run
+     scrolling away horizontally while the table moved under it. What is this
+     box's own is the `top`, the zero height, and the layer. */
   top: 0;
   height: 0;
   z-index: 5;

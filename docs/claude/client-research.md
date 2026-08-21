@@ -86,7 +86,12 @@ the writes they existed for.
 
 Sticky rather than `position: fixed` so it needs no arithmetic about where the
 pane begins: the expanded box and the ordinary pane are the same coordinate
-system to it. The two boxes held under it take measured offsets —
+system to it. **And it is folded onto the pane's `left: 0` list, not given a
+`top` alone** — this pane scrolls sideways as well as down, and the first
+version pinned only the top, so the run rode off the left edge with the columns
+while the table moved under it. Measured after, stuck at 390 with the pane
+scrolled 300 and 900 to the right: the run's box stays at `left: 0` and 390
+wide, the same answer the head and the count give. The two boxes held under it take measured offsets —
 `.research-head` sticks at `var(--research-cond-h, 0px)` and the header row at
 `calc(var(--research-cond-h, 0px) + var(--research-head-h, 0px))` — and that
 token is `0px` whenever the rail is not drawn, so both are `top: 0` at rest by
