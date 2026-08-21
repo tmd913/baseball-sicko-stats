@@ -144,6 +144,32 @@ Page-body overflow is **0** at every one of those widths, and the page draws cor
 
 **Bundle: 545.25 → 548.32 KB of JS** (161.87 → 162.43 gzipped) and **146.00 → 146.87 KB of CSS** (26.02 → 26.19) — 3.1KB and 0.9KB raw, 0.6KB and 0.17KB over the wire, for a page, its three states and the paragraphs above restated where the rules are.
 
+### The page also says how to keep the app on a home screen
+
+**An invite link is opened on a phone, and what it opens is a browser tab.** The reader has just been handed a whole app by somebody else, and the only thing carrying them back to it tomorrow is a Safari tab among their other Safari tabs — so the page ends with the one instruction that turns it into an icon: `Share` → `Add to Home Screen`. It is the last block on the page and the only one that is not part of the question the page is for, which is exactly why it is drawn as a **card on the page's own ground** (`.onboard-tip`, `--panel` inside `--control-radius`) rather than as a fourth paragraph in the column — a reader who is done can leave without reading it.
+
+**It is shown to everybody and worded for the phone**, rather than gated on a user-agent string. The one reader it has nothing for is the one already looking at the installed app, and *that* is a fact the platform will state rather than a guess off a string: `INSTALLED` is `display-mode: standalone` **or** `navigator.standalone`, the two answering for different vintages of iOS, asked once at import because neither can change while the tab is open. Everyone else gets three lines whose heading names their own audience — a desktop reader skips it in the time it takes to read `On your iPhone`. The alternative, an `iPad|iPhone|iPod` test like the viewport script's in `index.html`, buys a shorter page for exactly the readers who are least likely to be on this page at all, at the cost of a sniff that is wrong for every browser that fakes it.
+
+**And the claim in its last sentence is a meta tag's, not the tip's.** `<meta name="apple-mobile-web-app-capable" content="yes">` in `client/index.html` is what makes an added icon open the app rather than launching Safari with its address bar; without it the tip describes something the app does not do, so the tag ships with the tip and its comment says so in both directions. **Deliberately only that tag and `apple-mobile-web-app-title`:** `viewport-fit` is left alone, so iOS lays the web view out *inside* the safe area and the notch never covers the pinned header — `styles.css` contains no `env(safe-area-inset-*)` anywhere, so a page drawn under it would have nothing to inset itself by — and `apple-mobile-web-app-status-bar-style` is left off for the same reason, `black-translucent` being the value that would put content under the status bar by another route. The strip is tinted from the `theme-color` meta the boot script already keeps in step with the palette.
+
+**Two things about a standalone iOS web app are true and are not in the tip**, both worth knowing before this is pushed harder than a card at the foot of one page: a home-screen web app has **its own storage container**, so the session in `localStorage` does not come across from Safari and the reader signs in again inside the icon; and the sign-in that follows is a redirect to the Cognito hosted UI, which leaves the app's scope. Neither could be driven from here — **there is no iPhone in this loop, and `Emulation.setEmulatedMedia` with `display-mode: standalone` is accepted and ignored by the headless shell** (it replies `{}` and `matchMedia(…).matches` stays false), so the standalone half of `INSTALLED` is argued rather than measured. The other half was driven: with `navigator.standalone` planted before the module evaluates, `.onboard-tip` count goes **1 → 0** and the rest of the page is untouched (2 buttons in `.onboard-actions` either way).
+
+**Measured, driven at 390×844, 320×568 and 1200×900 in Dark, Light, Powder Blue and Midnight**, against the page rendered with a stubbed twelve-team league:
+
+| | |
+| --- | --- |
+| the card at 390 | 358 × 150.38 at x=16, the same box as `.onboard-note` above it |
+| at 320 | 288 × 173.47, still the note's box |
+| at 1200 | **458.55** × 127.28, and `.onboard-note` is 458.55 — the same right edge |
+| before the `font-size` | **524.06** at 1200, sixty-five pixels past the note |
+| page-body overflow | **0** at every width |
+| the card's ground | `#202122` (Dark), `#16213a` (Midnight), `#ffffff` (Light and Powder, where the border carries it, as it does for the select and the swatches beside it) |
+| the Share glyph | 14 × 14, `currentColor` inside the `<strong>`, so it is the ink of the word rather than a color of its own |
+
+That `font-size: 14px` on the card is the one rule on it that is not decoration: `ch` is a unit of the **element's own** type, and 52 of them on a box inheriting the page's 17px is not 52 of them on the 14px paragraph inside it. Nothing in the card reads the size — the label and the note each declare their own — so it is there purely to make the two blocks at the foot of the page end on one edge.
+
+**Bundle: 615.40 → 616.38 KB of JS** (183.68 → 183.93 gzipped), **162.98 → 163.25 KB of CSS** (29.28 → 29.33) and **5.77 → 6.29 KB of `index.html`** (2.45 → 2.62), the last being two meta tags and the comment above them, which ships.
+
 ### Naming a team for the first time turns the fantasy roster on
 
 **Joining a league by an invite link left the app reading a roster the joiner has nothing in.** The link attaches them to the league and opens the onboarding page (above; it was the Fantasy league page when this was written), they pick which team is theirs, and then — nothing. `UserPrefs.rosterSource` was still `saved`, so the Roster and Feed views went on reporting on the list they built here, which for somebody who has just arrived is empty; the way out was the roster-source toggle in the fantasy popover, which is a control they have no reason to know exists. The last step of joining a league is to say which team is yours, and after it the app should be reading that team.

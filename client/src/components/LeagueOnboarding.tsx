@@ -7,6 +7,44 @@ import { LoadingBlock } from './Loading';
 import { ThemeSwatches } from './ThemePicker';
 
 /**
+ * Whether this tab is already the installed app, asked once at import: a page
+ * telling somebody how to install what they are looking at is the one reader
+ * this tip has nothing for. Both tests, because they answer for different
+ * vintages of iOS — `display-mode: standalone` is what a manifest-era home
+ * screen web app matches, and `navigator.standalone` is Safari's own flag,
+ * which is the only one older iOS sets. Neither can change while the tab is
+ * open, so a constant rather than state.
+ */
+const INSTALLED =
+  window.matchMedia?.('(display-mode: standalone)').matches === true ||
+  (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+/** The iOS Share glyph — the box with an arrow out of it, which is what the
+ *  reader is looking for in Safari's toolbar and is quicker to recognize than
+ *  the word. `currentColor`, so it is the ink of the `<strong>` it sits in
+ *  rather than a color of its own, and `aria-hidden` because the word beside it
+ *  already says it. */
+function ShareGlyph() {
+  return (
+    <svg
+      className="onboard-share"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 3.6v10.2" />
+      <path d="M8.6 7 12 3.6 15.4 7" />
+      <path d="M7.6 10.4H5.2v10h13.6v-10h-2.4" />
+    </svg>
+  );
+}
+
+/**
  * The page an invite link lands on: the league you have just joined, a list of
  * its teams, and one button that says which is yours and puts you in the app.
  *
@@ -288,6 +326,39 @@ export function LeagueOnboarding({
             it, from the <strong>fantasy button</strong> beside the settings gear
             at the top of the page.
           </p>
+        )}
+
+        {/* **Last, and an aside rather than a step.** The page is one question
+            and its answer; this is neither, so it comes after the note that
+            closes them off and is drawn as a card on its own ground rather than
+            as another line of the flow — a reader who is done here can leave
+            without reading it.
+
+            **Shown to everyone, worded for the phone.** The alternative was a
+            user-agent sniff, and it buys nothing here: the one reader this has
+            nothing for is the one already looking at the installed app, and
+            that is a fact the platform will state (`INSTALLED`) rather than a
+            guess off a string. A desktop reader gets a card whose first three
+            words name its audience, and is past it in the time it takes to
+            read them.
+
+            The claim in the last sentence is `apple-mobile-web-app-capable`'s,
+            declared in `client/index.html` — without that meta an added icon
+            opens a Safari tab like any bookmark, and this would be describing
+            something the app does not do. */}
+        {phase !== 'loading' && !INSTALLED && (
+          <aside className="onboard-tip">
+            <p className="espn-label">Add it to your home screen</p>
+            <p className="espn-note onboard-tip-note">
+              On your iPhone, tap{' '}
+              <strong>
+                <ShareGlyph /> Share
+              </strong>{' '}
+              in Safari&rsquo;s toolbar, then <strong>Add to Home Screen</strong>.
+              It opens from the home screen the way an app does — full screen, no
+              address bar, no tab to find again.
+            </p>
+          </aside>
         )}
       </div>
       </div>

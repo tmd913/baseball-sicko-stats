@@ -13129,6 +13129,46 @@ button.start-line:focus-visible {
 .onboard-note {
   max-width: 52ch;
 }
+/* **The home-screen tip**, the last thing on the page and the only block on it
+   that is not part of the one question. So it is a card on the page's own
+   ground rather than a fourth paragraph in the column — `--panel` inside the
+   app's own `--control-radius`, which is what every other quiet box here is
+   made of, `.espn-code` on the settings page being the nearest one. Its column
+   is `.onboard-note`'s 52ch rather than `.espn-note`'s 62, so the two blocks at
+   the foot of the page share an edge instead of ending a hand's width apart —
+   and the `font-size` is here for that and nothing else: `ch` is a unit of the
+   element's *own* type, so 52 of them on a box inheriting the page's 17px came
+   out 524.06 against the note's 458.55, sixty-five pixels past it. Declared at
+   the paragraph's own 14px, the two are the same 458.55 at 1200 wide. Nothing
+   inside reads it — the label and the note each set their own size.
+
+   It borrows `.espn-label` for its heading — this page's own word for "what
+   the thing under this is" — rather than a second small-caps rule that agrees
+   with it today. */
+.onboard-tip {
+  max-width: 52ch;
+  font-size: 14px;
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+}
+/* The card is the block's own bottom edge, so the paragraph inside it does not
+   carry `.espn-note`'s 10px of it. */
+.onboard-tip-note {
+  margin: 0;
+}
+/* The Share glyph, sized in `em` so it is the height of the word it sits beside
+   whatever font the phone resolves for the sentence, and inked in
+   `currentColor` so it is the `<strong>`'s ink rather than a color of its own —
+   this app spends color on state, and an icon of a button is not a state. */
+.onboard-share {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.14em;
+  margin-right: 1px;
+}
 /* The way out, and deliberately the quietest thing on the page: skipping leaves
    the league connected and the team unnamed, which is a real state and a poor
    default. Text on the page's own ground rather than a second button — an
