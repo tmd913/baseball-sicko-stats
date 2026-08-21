@@ -1086,3 +1086,145 @@ banner.
 over the wire, and that figure carries the two spinner fixes below as well as
 this. Through the route, the response goes **12,206 → 12,240 bytes**, which is
 the four new fields.
+
+### The table opens on `OVR`, best first
+
+**It opened on the league standing** — `{ kind: 'team' }`, ESPN's own seed — and
+that is the *Scoreboard's* order rather than this tab's. A reader crossing to
+Rankings has come to find out who is actually piling up the categories; the seed
+answers a different question, which is who has won more head-to-head weeks, and
+the two come apart the moment a team wins close and loses wide.
+
+Measured on the live 12-team league over the season span, the first four rows in
+seed order carried `OVR` **1st · 6th · 3rd · 5th** — so the column the tab leads
+with, and the only column that is a summary of all the others, was the one
+column not in order. Sorted on it they read **1st · 2nd · 3rd · 3rd**, and the
+whole board reads **1st · 2nd · 3rd · 3rd · 5th · 6th · 7th · 8th · 9th · 9th ·
+11th · 12th** down twelve rows, the two ties sharing a rank exactly as the key
+says they do.
+
+**`asc: true` is best first**, here as it is on every column of this table:
+every column sorts on its *rank* rather than on its value, so 1 is first
+whichever direction the category itself runs — which is the point `toggle`
+already makes and the reason this default needs no per-column exception.
+
+**It falls back to the standing where there is no `OVR` to sort on.** `OVR` is
+drawn only where there is more than one side of the ball to combine (see *Three
+summary columns*), so a league scoring one side has no overall on any row — and
+a sort keyed to a column that is not drawn is a table opening with no lit header
+and, every team's overall being null, whatever order the rows arrived in. The
+initializer reads `hasOverall`, which is the same test the header cell reads, so
+the two cannot disagree.
+
+**A lazy `useState` initializer rather than an effect**, because the first
+render is the one that has to be right: `RankTable` is not mounted until
+`rankings` has landed (the wait is above it), so the rows are in hand when the
+initializer runs, and a span change re-renders rather than remounting — which is
+what keeps a reader's own sort from being reset under him every time he crosses
+the span strip.
+
+### The band scrolls away, and the header row pins to the pane
+
+**This tab was the one wide table in the app whose chrome could not leave the
+screen.** `.app.league-rank-mode` is a `100dvh` flex column in which only
+`.league-scroll` scrolls — which is right, and is what lets the header row pin
+at all — but the tools row and the caption were left *above* that pane, in a
+column that never moves. `position: sticky` on a box in a column that does not
+scroll is not stickiness; it is a band that simply cannot go anywhere. Measured
+at 1200×900 with the pane scrolled to its end, before: `.view-tools` at **y=102
+→ 102** and `.lg-span-detail` at **y=166 → 166**, both immovable, with the table
+reading through a 680px slot under 104px of chrome that had nothing left to say.
+
+**So the Rankings tab takes the Roster's own answer** (see `paneChrome` in
+**Client — the Roster view**): App hands the tools row down as `rankPaneChrome`,
+`LeagueRankings` puts it and the caption in front of the table as
+`.league-scroll`'s first children, and both then stick against **the same
+scrollport the header row does**. There is no date bar in it — this view is not
+read over a range of days, the span strip in the row itself being what says
+which games the numbers are drawn from — so it is two rows rather than the
+Roster's three.
+
+Measured at 1200×900 on the live league, before → after, at rest and with the
+pane scrolled to its end (107px, which is all it has):
+
+| | before, at rest | before, scrolled | after, at rest | after, scrolled |
+| --- | --- | --- | --- | --- |
+| `.app-chrome` | y 0, h 102 | 0 | 0 | **0** |
+| `.view-tools` | y 102 | **102** | y 102 | **−5** |
+| `.lg-span-detail` | y 166 | **166** | y 166 | **59** |
+| `.league-scroll` | y 206, h 680 | — | **y 102, h 784** | — |
+| `thead` | y 207 | 207 | y 206 | **102** |
+
+which is the chrome's own bottom edge, and nothing else on screen that isn't a
+row. The pane gained **104px** of table at that width; at 390×844 it gained the
+same and the header row pins at **y=100**, at 320×700 at **y=148**, and at
+1920×1080 the whole table fits and nothing moves at all. Page-body overflow is
+**0** at 320 / 390 / 844×390 / 1200 / 1920, scrolled to the far right and the
+bottom on each; the badge column still pins at **x=0** and the top-left corner
+cell with it.
+
+**The three renders with no pane draw the row themselves.** The block wait and
+the two empty states have no `.league-scroll` to put it in, and a tools row that
+vanished with the table would take the League tabs with it — leaving a reader
+looking at `Reading your league's rankings` with no way back to the Scoreboard.
+So `LeagueRankings` renders it as a sibling of `.lg-rankings` there, where it is
+a child of `.league-view`; that box is folded onto `.app > .view-tools`'s bleed
+rule rather than given one of its own. Driven with the network throttled to a
+4s latency and the tab opened for the first time: the wait draws with
+`.view-tools` at **y=102, x=0, w=1200** — the same place it sits on every other
+view — and all three League tabs pressable.
+
+**Expanded, nothing changes.** The full-page box covers the app's chrome, so the
+tools row is not drawn there at all (the Roster's does the same) and the caption
+goes back above the pane, where `.lg-rankings.is-expanded > .lg-span-detail`
+already had a rule for it — it *is* that mode's chrome, being the only statement
+left of which span the table is. Driven: expanded, caption at **y=10, x=12,
+h=30** and `thead` at **51**; back out, caption at **y=166** inside the pane at
+**h=40** (its 10px of pane padding, which is the `gap` `.lg-rankings` used to
+give it) and `thead` at 206. Crossing to Scoreboard and back moves the row from
+`.league-scroll` to `.app` and back, measured at **y=102 on both**.
+
+**Two rules the chrome above needed by name.** `.app-chrome:has(+ .view-tools)`
+is what zeroed the chrome's bottom margin and killed its shadow on this tab, and
+the tools row is no longer its next sibling — so `.app.league-rank-mode
+.app-chrome` joins `.app.summary-mode .app-chrome` in both lists, which is the
+same fix for the same reason on the second view to move its band into a pane.
+And the pane's own top hairline goes with them (`.lg-rankings:not(.is-expanded)
+> .league-scroll`), the chrome closing itself with a hairline of its own: two
+lines a pixel apart is what the Roster's pane already avoids.
+
+#### A sticky row of chrome traps the popover it opens
+
+**And this is the fault that was found on the way, on the Roster rather than
+here.** `position: sticky` opens a stacking context *whatever* its `z-index` —
+it is in the same clause of the spec as `fixed` — so the `z-index: 40` on a
+popover opened from a row of pane chrome resolves inside that row and against
+nothing outside it. The row itself is `z-index: auto`, which is 0 among the
+table's own pinned layers: the first column at 1, the header row at 2, its
+top-left corner at 3, the pane's date bar at 4.
+
+Measured on the Roster at 1200 with the `Projected` key open, `elementFromPoint`
+60px into the panel returned **`date-bar date-bar-anchored`** — the date bar
+painting over the key, and it had been doing so since the row moved into the
+pane. On the Rankings caption inside the pane it was worse: the team badges and
+the header row both showed through the panel that explains what the badges mean.
+
+**`z-index: 5` on all four rows**, folded onto the one rule that already gives
+them `position: sticky; left: 0`. It costs the rows nothing, and the reason is
+worth writing down because it is not obvious: **a row of pane chrome and the
+sticky box under it never overlap.** Each sticks at the pane's top and each sits
+directly under the one above it in flow, so the lower one leaves its natural
+position at exactly the moment the upper one leaves the pane. Driven on the
+Roster at eight scroll positions from 0 to 300 — `.view-tools`'s bottom edge
+minus `.date-bar`'s top is **0, 0, 0, 0, 0, −10, −70, −250**, never positive,
+and `elementFromPoint` at the bar's own top edge returns the **bar** at every
+one of them. The bar's `z-index: 4` is declared later and stands, which is
+right: it wants to be under the row above it rather than over it.
+
+After: the same probe returns **`B`** — a `<b>` inside the panel — and the
+Rankings key paints over the header row and the badges it is about.
+
+**Bundle: 600.91 → 601.32 KB of JS** (178.76 → 178.88 gzipped) and **159.36 →
+159.63 KB of CSS** (28.51 → 28.54) — 0.41KB and 0.27KB raw, 0.12KB and 0.03KB
+over the wire, and that carries the default sort, the pane chrome and the
+stacking fix together.
