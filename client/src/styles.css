@@ -7878,6 +7878,66 @@ button.start-line:focus-visible {
   background: var(--cell-bg);
   pointer-events: none;
 }
+/* ---- …and the one thing these tables draw *inside* that band ---------------
+   The cover above is a strip of the next cell's ground laid over the boundary,
+   and being a positioned child of that cell it paints above everything in the
+   cell to its left. That is free while nothing is drawn in the last 3px of a
+   cell's padding — which was true of every column in this app until the
+   Schedule view arrived. A start day's box is pulled 5px right of its cell's
+   content edge so its *text* keeps the column's shared right edge
+   (`.sched-opp-box`, `margin-right: -5px`), which puts its 1px **stroke** inside
+   that band wherever the column's gutter is under 8px — and the gutter is
+   `clamp(5px, 1.6vw, 13px)` on the board and `clamp(5px, 1.9vw, 28px)` on the
+   roster, so that is every phone.
+
+   Measured on the board's Schedule view at **390**, where the gutter resolves to
+   6.24px: the box's border box ends 1.24px short of the boundary, the next
+   cell's cover starts 3px back from it (snapped to the device pixel at 365 on a
+   1× screen), and what is painted out is the **whole right-hand side of the
+   mark** — the vertical stroke and the outer half of both corner arcs. The left
+   stroke, 20px inside the same cell, is untouched, which is what makes it read
+   as a box someone forgot to close. At **1400** the gutter is 13px, the stroke
+   clears the band by 8px, and nothing is wrong — which is why this was a phone
+   bug reported against a table that looked right on a desktop.
+
+   **So the day cell covers its own seam rather than being covered.** The strip
+   moves to the start cell's own `::after` at `z-index: -1`, inside a cell made a
+   stacking context by `isolation` — which is the one place a positioned strip
+   can sit *above* a cell's ground and *below* its content. It still straddles
+   the boundary by the same 3px either side and is still painted solid by one
+   cell, so the seam is covered exactly as before; the half that overhangs is
+   then repainted by the next cell's own ground, which is the same color by the
+   rule this table already keeps. The next cell's cover comes **off that one
+   boundary**, because leaving it is the whole of the fault: two strips of the
+   same ground in the same place, and the later one draws over the stroke.
+
+   `:has()` rather than a class, for the reason `.app-chrome:has(+ .view-tools)`
+   gives — the condition *is* "this cell holds a start box", and it is the same
+   condition on both wide tables, where a class would have to be threaded
+   through two different column models to say the same thing twice. */
+.summary-table td:has(.sched-opp-box) + th::before,
+.summary-table td:has(.sched-opp-box) + td::before {
+  content: none;
+}
+.summary-table td:has(.sched-opp-box) {
+  isolation: isolate;
+}
+.summary-table td:has(.sched-opp-box)::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  width: 6px;
+  top: 0;
+  bottom: 0;
+  z-index: -1;
+  background: var(--cell-bg);
+  pointer-events: none;
+}
+/* The last cell in a row has no boundary to its right — only the table's own
+   edge — so a strip hanging 3px past it is ground painted outside the table. */
+.summary-table td:has(.sched-opp-box):last-child::after {
+  content: none;
+}
 /* Zebra striping so rows are easy to track across the wide table. The sticky
    headshot cell is included so its background matches its row (a transparent
    sticky cell would let scrolled columns show through). Hover uses a distinct,
