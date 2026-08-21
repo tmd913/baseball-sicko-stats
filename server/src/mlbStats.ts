@@ -1097,6 +1097,50 @@ function isPostponedFeed(feed: LiveFeed): boolean {
   return isPostponedStatus(feed.gameData?.status);
 }
 
+/**
+ * **A final game is not finished being written**, and that is the difference
+ * between a game that is over and a game it is safe to freeze for ever.
+ *
+ * `isFinalFeed` above turns true on the last out. MLB fills the rest of the box
+ * score in *after* that: the winning and losing pitchers, the save, and the
+ * **holds** — the one credit that exists nowhere else in the payload
+ * (`FEED_FIELDS` says so). A snapshot taken in that gap keeps the blanks for
+ * ever, because a cached final game is never re-read.
+ *
+ * **Found by a number that would not add up, and then counted.** Team 5's
+ * fantasy week read 11 saves-plus-holds against ESPN's 12; the missing one was
+ * Brent Headrick's hold on 2026-08-12 (gamePk 823511), which MLB credits today
+ * and our blob — written at 22:10 that night — records as `holds: 0`, with
+ * `decisions` an **empty object** beside it. Over the whole cache that is
+ * **1 blob in 622**: every other frozen game names a winner and a loser.
+ *
+ * So the tell is free and it is already in the payload. A game MLB has finished
+ * writing names both pitchers; one it has not names neither.
+ *
+ * **Two games legitimately name neither, and both are recognized here rather
+ * than waited on.** A postponement or a cancellation is settled the moment it
+ * is called — there is no decision coming. And a **tie** has no winner and no
+ * loser by definition, so it is read off the linescore instead: equal runs on a
+ * final game is the whole of it. Without that second branch a tie would be
+ * re-fetched on every cold read of its day for ever and its day never
+ * snapshotted, which is a worse fault than the one being fixed.
+ *
+ * A clock was the alternative — *trust a final that is a day old whatever it
+ * says* — and it was written first and thrown away: it blesses every blob
+ * already frozen too early, which is the one game this was found by. The
+ * payload answers the question; a timer only guesses at it.
+ */
+function isSettledFeed(feed: LiveFeed): boolean {
+  if (!isFinalFeed(feed)) return false;
+  if (isPostponedFeed(feed)) return true;
+  const d = feed.liveData?.decisions;
+  if (d?.winner?.id && d?.loser?.id) return true;
+  const ls = feed.liveData?.linescore?.teams;
+  const home = ls?.home?.runs;
+  const away = ls?.away?.runs;
+  return typeof home === 'number' && typeof away === 'number' && home === away;
+}
+
 // Compact (field-filtered) feed — used for reads of completed games we persist.
 const feedUrl = (gamePk: number) =>
   `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live?fields=${FEED_FIELDS}`;
@@ -1591,6 +1635,10 @@ export interface StatsApiGame {
   pitchingStarters: Set<number>;
   // The winning / losing / save pitcher ids for a decided game (null until final).
   decisions: { win: number | null; loss: number | null; save: number | null };
+  /** Whether MLB has **finished writing** this game, not merely whether it is
+   *  over — `isSettledFeed`. Only a settled game may be frozen, here or in the
+   *  day snapshot a caller builds out of it. */
+  settled: boolean;
   runsByRunner: Map<number, number>;
   sbByRunner: Map<number, number>;
   csByRunner: Map<number, number>;
@@ -2011,7 +2059,18 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
 
   // A cached entry only ever exists for a completed game, so a hit means we can
   // skip the network; otherwise resolve the live snapshot via diffPatch.
-  const feedCached = await readCache(feedFile);
+  //
+  // **Unless the blob was frozen before MLB had finished writing the game** —
+  // see `isSettledFeed`. One of the 622 on disk was, and it is short a hold it
+  // will never be given, so a blob that fails that test is read as a miss and
+  // fetched again. Rewriting it is the branch below, whose `feedCached === null`
+  // becomes "there is nothing usable on disk" rather than "there is nothing on
+  // disk" — the same distinction a cache version draws, made per blob because
+  // the fault is per blob rather than in the shape of what is stored.
+  let feedCached = await readCache(feedFile);
+  if (feedCached !== null && !isSettledFeed(JSON.parse(feedCached) as LiveFeed)) {
+    feedCached = null;
+  }
   let feed: LiveFeed;
   let winExpByAtBat: Map<number, number>;
   if (feedCached !== null) {
@@ -2023,11 +2082,14 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
     winExpByAtBat = live.winExp;
   }
 
-  const isFinal = isFinalFeed(feed);
-
-  // Once the game is over, persist a compact (field-filtered) snapshot so the
-  // cache stays small, then drop the live snapshot from memory.
-  if (isFinal && feedCached === null) {
+  // Once the game is over **and MLB has finished writing it**, persist a compact
+  // (field-filtered) snapshot so the cache stays small, then drop the live
+  // snapshot from memory. `isSettledFeed` rather than `isFinal` is the whole of
+  // the fix: freezing on the last out is what left one game's holds at nought
+  // for ever. The cost is one extra read of a game in the half-hour or so
+  // between the final out and the box score being closed out, which is a window
+  // the app was already re-reading every 20 seconds while the game was live.
+  if (isSettledFeed(feed) && feedCached === null) {
     const [compact, wpText] = await Promise.all([
       fetchText(feedUrl(gamePk)).catch(() => null),
       fetchText(winProbabilityUrl(gamePk)).catch(() => null),
@@ -2311,15 +2373,20 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
       loss: feed.liveData?.decisions?.loser?.id ?? null,
       save: feed.liveData?.decisions?.save?.id ?? null,
     },
+    settled: isSettledFeed(feed),
     runsByRunner,
     sbByRunner,
     csByRunner,
     baseEvents,
     pitcherBaseEvents,
   };
-  // Final games are immutable — memoize forever. Live games are rebuilt each
-  // request from the (throttled) snapshot in liveState, so don't cache them here.
-  if (isFinal) gameMemCache.set(gamePk, game);
+  // A settled game is immutable — memoize forever. A game that is over but not
+  // yet written is **not**, and neither is a live one: both are rebuilt each
+  // request from the (throttled) snapshot in `liveState`, so don't cache them
+  // here. Memoizing on `isFinal` was the other half of the same fault — it
+  // pinned the unwritten box score for the life of the process, which is why
+  // dropping the bad blob on disk did nothing until the server was restarted.
+  if (isSettledFeed(feed)) gameMemCache.set(gamePk, game);
   return game;
 }
 

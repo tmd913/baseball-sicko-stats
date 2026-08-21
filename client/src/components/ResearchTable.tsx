@@ -5,7 +5,6 @@ import { PlayerNewsMark } from './NewsMark';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
-import { createPortal } from 'react-dom';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { RankBadge, RanksButton, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
@@ -20,6 +19,7 @@ import {
   PlayerStatusContext,
   useFullPage,
   usePlayerStatus,
+  usePublishedHeight,
 } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
 import type {
@@ -659,12 +659,6 @@ interface Props {
    *  here is a patch of one field of one board. */
   ui: ResearchUi;
   onUiChange: (update: (prev: ResearchUi) => ResearchUi) => void;
-  /** Where the control set renders: a box App keeps inside the pinned chrome,
-   *  so the research page has one top section rather than a band of controls
-   *  stacked under the app's own. Null on the first render — App has to have
-   *  committed the element before it can be handed over — and the bar simply
-   *  isn't drawn for that one frame, which happens before paint. */
-  controlsHost: HTMLElement | null;
 }
 
 /** An unrecognized `win=` is the season, matching `toResearchPos`'s rule and the
@@ -947,7 +941,6 @@ export function ResearchTable({
   onOpenDetails,
   ui,
   onUiChange,
-  controlsHost,
 }: Props) {
   // Every column this board *has* — what the picker lists, what a filter can be
   // built on, and the canonical order. `columns` below is the visible subset.
@@ -1306,6 +1299,19 @@ export function ResearchTable({
    * for free by reading whichever cell is actually pinned.
    */
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * **The head's height, measured, because there is no one number.** The column
+   * headings stick directly under it (`--pane-bar-h` in the stylesheet), so the
+   * offset they are held at *is* this box's height — and this box is a count
+   * line and a row of badges that wraps: one line of it on a desktop, three on
+   * a phone with a filter or two built, and any of those the moment a position,
+   * a window or a search string changes the words in it. A constant would be a
+   * band of rows showing through the gap on every width but the one it was
+   * written at, which is the fault `--chrome-h` and `--date-bar-h` already
+   * record. Published on the root, floored, by the same hook they use.
+   */
+  const headRef = useRef<HTMLDivElement | null>(null);
+  usePublishedHeight(headRef, '--research-head-h');
   useLayoutEffect(() => {
     const box = scrollRef.current;
     if (!box) return;
@@ -1445,7 +1451,37 @@ export function ResearchTable({
     placedSignature.current = boardSignature;
     // A layout effect, so the new rows are never painted once at the old
     // offset before being yanked to the top.
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    //
+    // **The top of the table, and never downwards** — which was `scrollTop = 0`
+    // for as long as those were the same place. They are not any more: the
+    // control set is inside this scroller now, so 0 is the top of the *pills*,
+    // and a reader who sorted by `HR` from row 400 would be answered with a
+    // screenful of buttons and the leaders below them. The target is the offset
+    // at which the head is exactly where it sticks — the table's own offset in
+    // the content, less the head's height — measured as 110 on a checked board
+    // at 1200 and 158 at 390, where the table's top lands exactly on the head's
+    // bottom edge (143 and 172) either way.
+    //
+    // `Math.min` is the other half of it, and it is what keeps the *press* case
+    // still: every control that can change this signature is up in that row,
+    // so a reader who can see the control they just pressed is by definition
+    // above the target, and scrolling *to* it would take the control they are
+    // using off the screen from under them. Only a sort — the one board-changing
+    // press that is reachable from row 400, the header row being sticky — ever
+    // moves anything, which is the case the reset was written for.
+    const box = scrollRef.current;
+    if (box) {
+      const table = box.querySelector('table');
+      const head = headRef.current;
+      const top =
+        table && head
+          ? box.scrollTop +
+            table.getBoundingClientRect().top -
+            box.getBoundingClientRect().top -
+            head.offsetHeight
+          : 0;
+      box.scrollTop = Math.min(box.scrollTop, Math.max(0, top));
+    }
     // The reading position goes back to the top with the scroll, and for the
     // same reason: a page into a table is a fact about *that* table, and this
     // is a different one. It is also what stops a reader who had 400 rows open
@@ -1772,109 +1808,121 @@ export function ResearchTable({
 
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
 
-  return (
-    <div ref={fullRef} className={`research-view${isFull ? ' is-expanded' : ''}`}>
-      {/* Expanded, the board's whole control set is hidden — but a table you
-          cannot see the controls of is a table you cannot read: "of 622" means
-          nothing without knowing it is the 30-day window, free agents only, and
-          shortstops. So every setting that is doing something states itself as
-          a badge. Labels, not controls: the app's round pill is the shape it
-          reserves for things you read, and the way to change any of them is the
-          same button that got you here. */}
-      {isFull && (
-        <div className="expanded-chrome research-badges">
-          <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
-          {/* One badge per set the board is including — the watchlist among
-              them, since it is one of the sets the board is a union of rather
-              than a filter over them — or one saying it is including none,
-              which is a state the buttons can reach and a blank row would leave
-              unexplained. */}
-          {nothingIncluded ? (
-            <span className="research-badge">Nobody included</span>
-          ) : (
-            includeKeys(include).map((k) => (
-              <span key={k} className="research-badge">
-                {includeMeta(k, espnConnected).full}
-              </span>
-            ))
-          )}
-          {includeWatchlist && <span className="research-badge">Watchlist</span>}
-          {/* The badges under the values are a setting like any other, and one
-              the reader most needs named here: expanded there is no toggle on
-              screen to explain a second number in every cell. */}
-          {showRanks && !schedule && (
-            <span
-              className="research-badge"
-              title={`Every value carries its percentile against the whole ${windowLabel(
-                statWindow,
-              )} board — 100 is best`}
-            >
-              Ranks
-            </span>
-          )}
-          {/* **What span of days the columns are**, which expanded is the one
-              thing nothing else on screen can say: the toggle and its span tabs
-              are behind this box, and a grid of dates whose header says `Fri
-              8/15` still leaves "how far does this run" unanswered. The rule
-              this row exists for — a table narrowed with nothing on screen to
-              say why — applies to a table *widened* into the future exactly as
-              it does to one narrowed to shortstops. */}
-          {scheduleSpan !== null && (
-            <span
-              className="research-badge"
-              title={
-                schedule
-                  ? `Every club's games from ${schedule.dates[0]} to ${
-                      schedule.dates[schedule.dates.length - 1]
-                    }`
-                  : 'The days ahead, still loading'
-              }
-            >
-              {/* The span in its own words — a named one reads `Schedule ·
-                  this matchup` where a numeric one reads `next 7 days`, since
-                  a badge saying "next matchup days" would be nonsense and a
-                  badge saying "7" over a fortnight of columns would be a lie.
-                  `spanLabel` is the same wording the pills carry, lower-cased
-                  into the badge's own sentence. */}
-              Schedule ·{' '}
-              {spanLabel(effectiveSpan(scheduleSpan, matchupWindow), matchupWindow)
-                .label.replace(/^Next (\d+)$/, 'next $1 days')
-                .toLowerCase()}
-            </span>
-          )}
-          <span className="research-badge">{windowLabel(statWindow)}</span>
-          {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
-          {filters.map((f) => (
-            <span key={f.id} className="research-badge">
-              {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
-            </span>
-          ))}
-        </div>
+  /* **Every setting the board is on, stated as a badge**, and it is the head
+     of the table rather than a mode's chrome. The control set scrolls away
+     above it — see `controls` — and expanded it is behind a full-page box, so
+     on both surfaces the same sentence is missing without this: "of 622" means
+     nothing without knowing it is the 30-day window, free agents only, and
+     shortstops.
+
+     Labels, not controls: the app's round pill is the shape it reserves for
+     things you read, and the way to change any of them is a scroll up, or the
+     button that expanded the table. */
+  const badges = (
+    <>
+      <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
+      {/* One badge per set the board is including — the watchlist among
+          them, since it is one of the sets the board is a union of rather
+          than a filter over them — or one saying it is including none,
+          which is a state the buttons can reach and a blank row would leave
+          unexplained. */}
+      {nothingIncluded ? (
+        <span className="research-badge">Nobody included</span>
+      ) : (
+        includeKeys(include).map((k) => (
+          <span key={k} className="research-badge">
+            {includeMeta(k, espnConnected).full}
+          </span>
+        ))
       )}
-      {/* **The control set renders in the app's pinned chrome, not here.**
-          `.app-chrome` is the header, the search bar and the view tabs in one
-          box — everything that says where you are and what you are looking at —
-          and this bar is the rest of that sentence on this page: which players,
-          which span, which position, which columns. Left below the box it read
-          as a second control area stacked under the first, two bands of chrome
-          with a hairline between them and nothing to say why.
+      {includeWatchlist && <span className="research-badge">Watchlist</span>}
+      {/* The badges under the values are a setting like any other, and one
+          the reader most needs named here: expanded there is no toggle on
+          screen to explain a second number in every cell. */}
+      {showRanks && !schedule && (
+        <span
+          className="research-badge"
+          title={`Every value carries its percentile against the whole ${windowLabel(
+            statWindow,
+          )} board — 100 is best`}
+        >
+          Ranks
+        </span>
+      )}
+      {/* **What span of days the columns are**, which expanded is the one
+          thing nothing else on screen can say: the toggle and its span tabs
+          are behind this box, and a grid of dates whose header says `Fri
+          8/15` still leaves "how far does this run" unanswered. The rule
+          this row exists for — a table narrowed with nothing on screen to
+          say why — applies to a table *widened* into the future exactly as
+          it does to one narrowed to shortstops. */}
+      {scheduleSpan !== null && (
+        <span
+          className="research-badge"
+          title={
+            schedule
+              ? `Every club's games from ${schedule.dates[0]} to ${
+                  schedule.dates[schedule.dates.length - 1]
+                }`
+              : 'The days ahead, still loading'
+          }
+        >
+          {/* The span in its own words — a named one reads `Schedule ·
+              this matchup` where a numeric one reads `next 7 days`, since
+              a badge saying "next matchup days" would be nonsense and a
+              badge saying "7" over a fortnight of columns would be a lie.
+              `spanLabel` is the same wording the pills carry, lower-cased
+              into the badge's own sentence. */}
+          Schedule ·{' '}
+          {spanLabel(effectiveSpan(scheduleSpan, matchupWindow), matchupWindow)
+            .label.replace(/^Next (\d+)$/, 'next $1 days')
+            .toLowerCase()}
+        </span>
+      )}
+      <span className="research-badge">{windowLabel(statWindow)}</span>
+      {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
+      {filters.map((f) => (
+        <span key={f.id} className="research-badge">
+          {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
+        </span>
+      ))}
+    </>
+  );
 
-          A portal rather than a move, because the alternative is to lift the
-          bar into App and the bar is inseparable from the board's *vocabulary*
-          — the column list, the visible set, the filter builder, every one of
-          which the table beneath also reads. Portalling relocates the DOM and
-          leaves that where it belongs; lifting would split this file in two and
-          thread a dozen values back down. The one price is the host having to
-          exist first, which is the `controlsHost &&` below.
-
-          The include buttons, the window tabs, the positions and the five
-          disclosure buttons all share one wrapping row: every group is only as
-          wide as its own content, so on a desktop the whole control set fits on
-          a single line, and the row breaks to two (or three) as the screen
-          narrows. */}
-      {controlsHost &&
-        createPortal(
-          <>
+  /**
+   * **The control set, as the tools row itself.** `.view-tools` is the band
+   * that says which *reading* of a page you are on, and this bar is the whole
+   * of that sentence on this page: which players, which span, which position,
+   * which columns.
+   *
+   * **It is this file's box now, where it used to be a portal into one App
+   * kept.** That portal was written when the row lived in the app's pinned
+   * chrome — a different subtree, which only a portal could reach without
+   * lifting the bar into App and the board's whole column vocabulary with it.
+   * The row is inside this board's own scroller now, which is this component's
+   * own tree, so there is nothing left to reach across.
+   *
+   * **And the portal was costing the board its place on the way back in.** A
+   * host handed over by a callback ref is empty for the commit that creates it
+   * and filled by the re-render that ref triggers, so the row was 28px tall for
+   * one frame and 110 the next — an 82px growth *above* the viewport, which the
+   * browser's scroll anchoring answers by adding 82 to `scrollTop`, and which
+   * App's own restore reads as the reader having taken the scroll and stops
+   * placing. Measured: left at 800, back at **882**; left at 1,500, back at
+   * **1,582**. Rendered inline the row is its full height in the first commit
+   * and there is no growth to compensate for — back at 800 and 1,500 on the
+   * nose.
+   *
+   * The include buttons, the window tabs, the positions and the five
+   * disclosure buttons all share one wrapping row: every group is only as wide
+   * as its own content, so on a desktop the whole control set fits on a single
+   * line, and the row breaks to two (or three) as the screen narrows.
+   * `.research-chrome` and `.research-bar` are `display: contents`, so their
+   * groups are items of the row's own flex container and take part in its wrap.
+   */
+  const controls = (
+    <div className="view-tools">
+      <div className="research-chrome">
           <div className="research-bar">
           {/* Ahead of the position pills, and a separate control from them:
               which rosters and which position both apply, so folding them into
@@ -2308,49 +2356,82 @@ export function ResearchTable({
             />
           )}
 
-          </>,
-          controlsHost,
+      </div>
+    </div>
+  );
+
+  return (
+    <div ref={fullRef} className={`research-view${isFull ? ' is-expanded' : ''}`}>
+      {/* **The whole page is in the pane**, and the pane is the one box on this
+          view that scrolls (`.app.research-mode` is a viewport-tall flex column
+          — see the stylesheet). Everything above the rows therefore scrolls
+          away with them: the control set first, then the head, which stops at
+          the top of the pane and stays there with the column headings holding
+          directly under it.
+
+          Rendered **whatever the board holds**, where the table it contains is
+          not. Two reasons, and the second is the one that decided it. The pane
+          is where the control set lives now, so a pane that came and went with
+          the rows would take the controls with it — every button on the board
+          unmounting and remounting on the keystroke that narrows it to nobody,
+          which is a search field losing the caret mid-word. And an empty state
+          reads under the count it explains, not on the far side of a hairline
+          from it. */}
+      <div className="research-scroll" ref={scrollRef} onScroll={wantMore}>
+        {/* The control set — see `controls`. First, because everything under
+            it sticks and it is the one thing here that scrolls away. */}
+        {controls}
+
+        {/* Suppressed behind a failed load, where "0 of 0 batters" would read as
+            a finding about the league rather than as nothing having arrived. It
+            stays under the controls rather than traveling up into the chrome
+            with them: a board that failed to load is news about the table, the
+            same argument that keeps App's own error banner outside the chrome. */}
+        {error && <div className="error-banner">⚠ {error}</div>}
+
+        {/* **The head of the table**: what the board is set to, and how much of
+            it survived — the two things the reader needs on screen at row 400,
+            where the controls that set them are a page above. It is the one box
+            here that sticks, and the column headings stick under it at its
+            *measured* height (`--research-head-h`).
+
+            The count reads as the table's caption — how many rows the filters
+            left, out of the board they were applied to. No season: the app
+            shows one season and says so nowhere else on the page either.
+
+            The wait and the answer arrive in the same place, which is why this
+            is a `LoadingLine` rather than a block: the caption is the one line
+            on the page that is about to hold the count, so the ball turning in
+            it says the count is on its way. App keeps the rows it already has
+            while a re-read is in flight (`loading` is gated on the cache being
+            empty), so this can only ever be a board with nothing on it yet. */}
+        <div className="research-head" ref={headRef}>
+          {(loading || boardRows.length > 0) && (
+            <div className="research-count" role="status">
+              {loading ? (
+                <LoadingLine>Reading the league leaderboard</LoadingLine>
+              ) : (
+                `${visible.length} of ${boardRows.length} ${
+                  kind === 'pitcher' ? 'pitchers' : 'batters'
+                }`
+              )}
+            </div>
+          )}
+          {badges}
+        </div>
+
+        {!loading && !error && visible.length === 0 && boardRows.length > 0 && (
+          <div className="empty-state">
+            <p className="empty-title">No players match these filters</p>
+            <p>Loosen a threshold or clear a filter above.</p>
+          </div>
         )}
 
-      {/* Suppressed behind a failed load, where "0 of 0 batters" would read as
-          a finding about the league rather than as nothing having arrived. It
-          stays on the page rather than traveling up into the chrome with the
-          controls: a board that failed to load is news about the table, the
-          same argument that keeps App's own error banner outside the chrome. */}
-      {error && <div className="error-banner">⚠ {error}</div>}
+        {/* Every reason the board can be empty, each naming its own cause and
+            the way out — see `emptyBoard`. */}
+        {!loading && !error && boardRows.length === 0 && emptyBoard()}
 
-      {/* Directly above the table, reading as its caption — how many rows the
-          filters left, out of the board they were applied to. No season: the
-          app shows one season and says so nowhere else on the page either. */}
-      {/* The wait and the answer arrive in the same place, which is why this is
-          a `LoadingLine` rather than a block: the caption is the one line on
-          the page that is about to hold the count, so the ball turning in it
-          says the count is on its way. App keeps the rows it already has while
-          a re-read is in flight (`loading` is gated on the cache being empty),
-          so this can only ever be a board with nothing on it yet. */}
-      {(loading || boardRows.length > 0) && (
-        <div className="research-count" role="status">
-          {loading ? (
-            <LoadingLine>Reading the league leaderboard</LoadingLine>
-          ) : (
-            `${visible.length} of ${boardRows.length} ${kind === 'pitcher' ? 'pitchers' : 'batters'}`
-          )}
-        </div>
-      )}
-
-      {!loading && !error && visible.length === 0 && boardRows.length > 0 && (
-        <div className="empty-state">
-          <p className="empty-title">No players match these filters</p>
-          <p>Loosen a threshold or clear a filter above.</p>
-        </div>
-      )}
-
-      {/* Every reason the board can be empty, each naming its own cause and the
-          way out — see `emptyBoard`. */}
-      {!loading && !error && boardRows.length === 0 && emptyBoard()}
-
-      {visible.length > 0 && (
-        <div className="research-scroll" ref={scrollRef} onScroll={wantMore}>
+        {visible.length > 0 && (
           <table className="summary-table research-table">
             <thead>
               <tr>
@@ -2517,7 +2598,8 @@ export function ResearchTable({
               })}
             </tbody>
           </table>
-          {/* The foot of the board: the mark that says the next page is coming.
+        )}
+        {/* The foot of the board: the mark that says the next page is coming.
               See `PAGE_BEAT` for why it is held up at all — the rows are in
               memory, so without the beat it would never paint.
 
@@ -2534,13 +2616,12 @@ export function ResearchTable({
               the pane — left alone it sits off the left edge of the screen the
               moment the reader is out at Chase%, which is where a mark about
               the foot of the list would be least use. */}
-          {shown < visible.length && (
-            <div className="research-more">
-              {loadingMore && <LoadingLine>Loading more players</LoadingLine>}
-            </div>
-          )}
-        </div>
-      )}
+        {shown < visible.length && (
+          <div className="research-more">
+            {loadingMore && <LoadingLine>Loading more players</LoadingLine>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

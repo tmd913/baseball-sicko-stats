@@ -88,6 +88,37 @@ export interface BattingLine {
   bb: number;
   so: number;
   hbp: number;
+  /**
+   * **Sacrifice flies, and the only reason they are here is the OBP
+   * denominator.**
+   *
+   * On-base percentage is `(H + BB + HBP) / (AB + BB + HBP + SF)` — the one
+   * rate in baseball whose denominator is not the plate appearances minus the
+   * obvious. The line carried no SF at all, so `lib.ts::lineOps` divided by
+   * `AB + BB + HBP` and every OPS in this app ran a hair high. Measured against
+   * the live fantasy league: a manager's eleven-day lineup read `.824` where
+   * ESPN read `.8221`, and the whole of the difference was two sacrifice flies
+   * (143/428 against 143/430).
+   *
+   * **It costs no upstream read.** A sacrifice fly is already an event on the
+   * plate appearances this line is summed from — `sac_fly` and
+   * `sac_fly_double_play`, both of which `classifyHit` already had to know
+   * about to keep them out of the at-bats. Probed against MLB's own boxscores
+   * before it was built on: over **104 player-games** of the live league,
+   * deriving SF this way reproduces `sacFlies` exactly, alongside AB, H, BB,
+   * HBP and PA — 0 mismatches.
+   *
+   * **Sacrifice hits are deliberately not here.** SH is not in the OBP
+   * denominator and nothing in this app computes anything from it, so it would
+   * be a field nobody reads. What the SH side did cost was an at-bat: see
+   * `savant.ts::classifyHit`.
+   *
+   * On a **projected** line this carries the whole sacrifice residue (SF + SH)
+   * rather than sacrifice flies alone, which is deliberate and is what makes a
+   * projected OPS recompute to the OBP it was built from — see
+   * `projection.ts::projectBatter`, where the residue is split.
+   */
+  sf: number;
   runs: number;
   rbi: number;
   sb: number;
