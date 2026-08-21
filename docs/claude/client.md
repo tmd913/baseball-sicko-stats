@@ -200,6 +200,54 @@ margin**, or the 14px *above* the band would be the same strip of container one
 row up. `:has()` rather than a class, because nothing about the chrome changes —
 what changes is what follows it.
 
+**They drop their *shadow* as well, and that was the last seam.** `--shadow-bar`
+says *the page passes under this bar*; where a reading band follows, what is
+under it is more chrome, and a soft dark wash laid across the top of the band is
+what made one band read as two — measured on the dark palette, `rgb(21,22,23)`
+at the band's top ramping to `rgb(25,26,27)` by y=120 against a flat
+`rgb(25,26,27)` below. `.app-chrome` closes itself with a `border-bottom` so
+`none` leaves its hairline standing; `.mup-chrome` carries its hairline *inside*
+the shadow (`inset 0 -1px 0`), so there the inset is what is left. The two
+fixed-height views take a named selector rather than `:has()`, the band being
+inside the table's pane there and so not the chrome's next sibling.
+
+**The band has one shadow, at its own bottom edge, and getting it to stay there
+took three goes.** The bar's own `box-shadow` bled back up over the row above
+it, which is the other half of the same seam. Both failed attempts are worth
+recording, because each is a thing that reads as true and is not:
+
+- **A blur radius does not extend by half of itself.** `blur/2 − offset` said a
+  2px inset would close it; measured, a **7px** ramp survived. `R` is defined as
+  a Gaussian of standard deviation `R/2`, which is visible to about two standard
+  deviations — so a shadow extends by roughly the whole blur radius.
+- **A negative `z-index` child paints *after* its own stacking context's
+  background, not before it.** Insetting by the full `blur − offset` (10px) and
+  putting the pseudo at `z-index: -1` moved the ramp *inside* the bar instead:
+  the painting order for a stacking context is its own background, then the
+  negative layer, so `-1` never put the shadow under the ground meant to hide
+  it.
+
+What ends it is `clip-path: inset(100% -40px -40px -40px)` on a pseudo-element
+carrying the shadow: the visible region begins at the pseudo's own bottom edge,
+so nothing it paints can reach back over the band, and the negative side and
+bottom insets let the shadow spread outward as before. On the pseudo rather than
+the bar, which would take the calendar popover with it; a pseudo rather than a
+second shadow token, the value being themed and a "down-only" variant six more
+overrides.
+
+**Measured by reading a pixel column down the band and counting distinct
+values**: **102 of 102 rows** at exactly `rgb(215,215,220)` from the chrome's
+hairline to the bar's bottom border, on the Roster's table reading, its stream
+reading and a matchup team page alike, and **100 of 100** at 390. Below the bar
+the shadow is still there and still fades — 231 → 235 over the 20px under it.
+
+**The row's contents are centered**, which is the band's other half: the bar's
+face is centered on the window and the readings sat against the gutter, so the
+two rows read as two controls rather than as one band. A wrapped row centers
+each line on its own, which is right here — every group in it is atomic, so a
+line holds whole groups and centering balances them rather than stranding one at
+an edge. Page-body overflow measured **0** at 320 / 390 / 1200 / 1920 after.
+
 **Measured after, reading a vertical line down the middle of the two rendered
 pages and differencing them pixel by pixel**: identical at every sampled row
 from the tab strip to the first row of content, but for 3–4 levels over the 6px

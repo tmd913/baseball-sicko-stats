@@ -6005,6 +6005,14 @@ button.start-line:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  /* **Centered, like the face of the bar directly under it.** The two rows are
+     one band and the band has one center line; left-aligned, the readings sat
+     against the gutter while the dates sat in the middle of the window, which
+     reads as two controls rather than as two rows of one. A wrapped row centers
+     each line on its own, which is the right behavior here — every group in it
+     is atomic (`flex: none` below), so a line holds whole groups and centering
+     balances them rather than stranding one at an edge. */
+  justify-content: center;
   gap: 10px 12px;
   /* **It paints its own ground, and that is what makes the readings look the
      same on every surface.** This row is rendered into three different boxes —
@@ -6281,7 +6289,44 @@ button.start-line:focus-visible {
   background: var(--bg-2);
   border-top: none;
   border-bottom: 1px solid var(--border);
+}
+/* **The shadow is drawn by a child, inset from this bar's own top edge**, and
+   that is arithmetic rather than fussiness. `--shadow-bar` is `0 6px 16px`; a
+   16px blur shows 8px either side of the shadow's rect, so at a 6px offset the
+   shadow paints **2px above the box it belongs to** — which, on a band whose two
+   halves share one ground, is a soft dark ramp drawn straight across the middle
+   of it. Measured on the light palette, the band read a flat `rgb(215,215,220)`
+   with the nine rows above the seam ramping to `rgb(210,210,215)`.
+
+   **Clipped to below the bar, after two arithmetic attempts that were both
+   wrong.** Insetting the pseudo's top edge by `blur/2 − offset` (2px) left a
+   **7px** ramp: a blur radius of `R` is defined as a Gaussian of standard
+   deviation `R/2`, which reads as "extends `R/2`" and does not — a Gaussian is
+   visible to about two standard deviations, so Chrome extends a shadow by
+   roughly the whole blur radius. Insetting by `blur − offset` (10px) moved the
+   ramp *inside* the bar instead, because **a negative `z-index` child paints
+   after its own stacking context's background, not before it** — the painting
+   order for a stacking context is its background, then its negative layer, so
+   `-1` never put the shadow behind the ground it was supposed to hide under.
+
+   `clip-path: inset(100% …)` ends both of those: the visible region starts at
+   the pseudo's own bottom edge, so nothing it paints — shadow included — can
+   reach back over the band, and the negative side and bottom insets let the
+   shadow spread outward as it always did. It clips the pseudo alone, so the
+   calendar popover, which is a sibling inside the bar, is untouched.
+
+   A pseudo-element rather than a second shadow token per palette (the value is
+   themed, so a "down-only" variant would be six more overrides), and rather
+   than `clip-path` on the bar itself, which would take the popover with it. */
+.app > .date-bar::after,
+.mup-view > .date-bar::after,
+.summary-scroll > .date-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   box-shadow: var(--shadow-bar);
+  clip-path: inset(100% -40px -40px -40px);
+  pointer-events: none;
 }
 .app > .date-bar {
   position: sticky;
@@ -6371,6 +6416,30 @@ button.start-line:focus-visible {
 .app-chrome:has(+ .view-tools),
 .mup-chrome:has(+ .view-tools) {
   margin-bottom: 0;
+}
+/* **And it drops its shadow, which is what made one band read as two.** That
+   shadow says *the page passes under this bar*; where a reading band follows,
+   what is under it is more chrome, and a soft dark wash laid across the top
+   fourteen pixels of the band is the seam that was reported — measured on the
+   dark palette, the band ran **rgb(21,22,23) at its top ramping to (25,26,27)
+   by y=120** against a flat (25,26,27) everywhere below. The band is one
+   object with one shadow, at its own bottom edge, which is the date bar's.
+
+   `.app-chrome` closes itself with a `border-bottom`, so `none` leaves the
+   hairline standing; `.mup-chrome` carries its hairline *in* the shadow
+   (`inset 0 -1px 0`), so there the inset is what is left rather than nothing.
+
+   **The two fixed-height views need naming rather than `:has()`**, and that is
+   the placement rule again: on a table reading the band is inside the table's
+   own pane, so the chrome's next sibling is the pane and the adjacent selector
+   above cannot see it. */
+.app-chrome:has(+ .view-tools),
+.app.summary-mode .app-chrome {
+  box-shadow: none;
+}
+.mup-chrome:has(+ .view-tools),
+.mup-view.roster-mode > .mup-chrome {
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 .summary-scroll > .date-bar {
   top: 0;
