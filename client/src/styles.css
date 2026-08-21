@@ -14502,13 +14502,13 @@ button.start-line:focus-visible {
      `--mup-track-h` is here for the same reason the two widths are: the track,
      its radius and the fill's two half-round ends all have to agree about one
      number, and the narrow tier below changes it. */
-  --mup-val-w: 78px;
-  --mup-cat-w: 60px;
-  --mup-track-h: 12px;
+  --mup-val-w: 70px;
+  --mup-cat-w: 56px;
+  --mup-track-h: 11px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
-  padding: 20px;
+  padding: 18px;
   max-width: var(--mup-card-w);
   margin: 0 auto;
 }
@@ -14602,9 +14602,9 @@ button.start-line:focus-visible {
      head — is inside the **pinned chrome** rather than on this card, and its
      badge, name and record are chrome over a roster table rather than part of
      the page being scaled. */
-  --lg-logo-w: 54px;
-  --lg-logo-h: 42px;
-  --lg-logo-glyph: 23px;
+  --lg-logo-w: 48px;
+  --lg-logo-h: 38px;
+  --lg-logo-glyph: 21px;
 }
 .mup-heads-bye {
   grid-template-columns: 1fr auto;
@@ -14662,10 +14662,10 @@ button.start-line:focus-visible {
    had at 14/15 — on a duel the numbers are the subject and the names are who
    they belong to. */
 .mup-heads .mup-side-name {
-  font-size: 20px;
+  font-size: 18px;
 }
 .mup-heads .mup-side-rec {
-  font-size: 15px;
+  font-size: 14px;
 }
 /* The headline triple, in the accent for the side ahead and muted for the other
    — the scoreboard's own rule, which marks a winner rather than shouting a
@@ -14678,7 +14678,7 @@ button.start-line:focus-visible {
      headline. **26 against the row's 18** is half as big again, which is the
      ratio a headline wants, and it is still under the `<h1>` of any page in
      the app. */
-  font-size: 32px;
+  font-size: 29px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -14746,7 +14746,7 @@ button.start-line:focus-visible {
      alone: `BATTERS` is wider than `SVHD` and would spill over the tracks. */
   grid-column: 2 / 5;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -14757,7 +14757,7 @@ button.start-line:focus-visible {
    losing the arms. Quieter than a category figure and quieter than the
    headline triple it is a part of, being a subtotal of both. */
 .mup-group-tally {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--faint);
@@ -14807,8 +14807,8 @@ button.start-line:focus-visible {
     var(--mup-val-w) minmax(0, 1fr) var(--mup-cat-w)
     minmax(0, 1fr) var(--mup-val-w);
   align-items: center;
-  gap: 12px;
-  padding: 12px 0;
+  gap: 11px;
+  padding: 10px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   border-radius: 4px;
 }
@@ -14841,11 +14841,11 @@ button.start-line:focus-visible {
      the rail is for is the **scale** — where the end is, so a bar reaching it
      reads as a category that is gone — and that survives at a third of it.
 
-     **24% rather than the 32 it was tuned at, because the rail got taller.**
-     32% was measured against a 9px track; at 12 the same twenty rails cover a
-     third more of the card, so holding the ink constant means `32 × 9/12 = 24`.
+     **26% rather than the 32 it was tuned at, because the rail got taller.**
+     32% was measured against a 9px track; at 11 the same twenty rails cover a
+     fifth more of the card, so holding the ink constant means `32 × 9/11 = 26`.
      The weight this rule argues about is area, not opacity. */
-  background: color-mix(in srgb, var(--border) 24%, transparent);
+  background: color-mix(in srgb, var(--border) 26%, transparent);
 }
 /* **Anchored at the label, growing outward** — the Splits card's own rule that
    a bar grows out of its zero, which here is the category it belongs to. Only
@@ -14875,7 +14875,7 @@ button.start-line:focus-visible {
   border-bottom: none;
 }
 .mup-cat {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -14887,7 +14887,7 @@ button.start-line:focus-visible {
   white-space: nowrap;
 }
 .mup-val {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -14940,7 +14940,7 @@ button.start-line:focus-visible {
    trade between these two teams puts the same man in both columns, where
    `Traded` on both says nothing about which way he went. */
 .mup-move-dir {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -14962,7 +14962,7 @@ button.start-line:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.35;
 }
 .mup-moves-right .mup-move {
@@ -15057,7 +15057,7 @@ span.mup-move-name:hover {
   /* 14 against the row's 9px track: this is the *whole* matchup where those are
      one category each, so it is the one bar on the card that should be read
      first, and at 10 it was thinner than the type beside it. */
-  height: 18px;
+  height: 16px;
   border-radius: 999px;
   /* The track shows through the gaps, so the runs read as counted segments
      rather than as one continuous fill — and clips them to the pill. */
@@ -15321,7 +15321,7 @@ span.mup-move-name:hover {
      Declared on the page rather than on the card because `.mup-note` under it
      has to line up with the card's edges, and two literals that must agree is
      what `--mup-val-w` above already exists to avoid. */
-  --mup-card-w: 1060px;
+  --mup-card-w: 970px;
 }
 /* **A team page's roster reading is a fixed-height column**, so the table's own
    header row and total row stick — which is `.app.summary-mode`'s answer to
