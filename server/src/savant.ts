@@ -2,6 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { readBlob, readGzipBlob, writeBlob, writeGzipBlob } from './storage.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
+import { clearRevisions, revisedSince } from './revisions.js';
 import { getTeamHitting } from './teamHitting.js';
 import { fipLike, ipToOuts, LEAGUE_HR_PER_FB } from './leagueRates.js';
 import {
@@ -155,6 +156,16 @@ interface ParsedDay {
   reports: Map<string, PlayerReport>;
   games: DayGame[];
   fetchedAt: number;
+  /**
+   * When this day's model was last built **from the wire**, as opposed to read
+   * back off disk — the stamp `revisions.ts::revisedSince` compares a reported
+   * revision against. A fresh parse stamps now; a day read out of a snapshot
+   * carries the snapshot's own stamp, which is the whole point of storing it.
+   *
+   * It is not `fetchedAt`: that is when this *object* was made, and a snapshot
+   * read four months later would claim to have been fetched today.
+   */
+  builtAt: number;
   /** Whether every game of the day is one **MLB has finished writing** — see
    *  `mlbStats.ts::isSettledFeed`. A day whose last game is over but whose box
    *  score is still being closed out looks final and is not: freezing it there
@@ -808,7 +819,14 @@ function attachArsenalBaselines(pitching: PitcherGame, season: SeasonArsenals): 
 
 // ---- Primary day builder (MLB Stats API) ---------------------------------
 
-async function buildStatsApiDay(date: string): Promise<{
+async function buildStatsApiDay(
+  date: string,
+  /** The games on this date MLB has rescored since we last built it — read as a
+   *  miss by `getStatsApiGame` rather than served off disk. Empty on every
+   *  ordinary build, which is what makes the rule cost nothing when nothing has
+   *  moved. See `revisions.ts`. */
+  revised: number[] = [],
+): Promise<{
   byBatter: Map<number, { name: string; games: PlayerGame[] }>;
   byPitcher: Map<number, { name: string; games: PlayerGame[] }>;
   dayGames: DayGame[];
@@ -818,9 +836,10 @@ async function buildStatsApiDay(date: string): Promise<{
   allSettled: boolean;
 }> {
   const scheduled = await getGamesForDate(date);
+  const rescored = new Set(revised);
   const games = await mapLimit(scheduled, GAME_CONCURRENCY, async (s) => {
     try {
-      return { game: await getStatsApiGame(s.gamePk), sched: s };
+      return { game: await getStatsApiGame(s.gamePk, rescored.has(s.gamePk)), sched: s };
     } catch (err) {
       console.error(`live feed fetch failed for game ${s.gamePk}:`, err);
       return null;
@@ -1073,8 +1092,20 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  carried the `sac_fly` events (`game-<pk>-v8`, untouched), `HitCounts` in
  *  `teamHitting.ts` has counted `sacFlies` from the start, the research board
  *  takes OBP off Savant's own leaderboard rather than computing one, and
- *  `StatcastCounts` holds no batting line at all. */
-const DAY_SNAPSHOT_VERSION = 8;
+ *  `StatcastCounts` holds no batting line at all.
+ *
+ *  **v9 stamps the day with the moment it was built** (`builtAt`), which is
+ *  what `revisions.ts` compares a reported rescoring against. A v8 snapshot
+ *  deserializes without it and reads as `builtAt: 0`, which is safe — it is
+ *  older than any revision and so is rebuilt the first time MLB names its date
+ *  — but it is a field read straight back out of the blob, which is the test
+ *  this file applies. **`FEED_CACHE_VERSION` deliberately did not move with
+ *  it**: a v8 game blob's bytes and their meaning are unchanged, and the eight
+ *  blobs measured to be wrong are all healed by the seeded first poll (their
+ *  last MLB update is between 0.84 and 10.45 days old against a 14-day
+ *  lookback), so a bump would re-download 622 games to arrive at 614
+ *  byte-identical ones. */
+const DAY_SNAPSHOT_VERSION = 9;
 
 /**
  * The on-the-wire form of a day.
@@ -1087,6 +1118,9 @@ interface StoredDay {
   date: string;
   reports: Record<string, PlayerReport>;
   games: StoredDayGame[];
+  /** When this day was built from the wire — see `ParsedDay.builtAt` and
+   *  `revisions.ts`. Absent on a v8 blob, which reads as 0. */
+  builtAt: number;
 }
 
 type StoredDayGame = Omit<DayGame, 'homeStarters' | 'awayStarters'> & {
@@ -1132,6 +1166,11 @@ async function readDaySnapshot(date: string, filter: DayFilter): Promise<ParsedD
       reports,
       games: (stored.games ?? []).map(loadGame),
       fetchedAt: Date.now(),
+      // Not `fetchedAt`: this is when the day was built from MLB, which for a
+      // snapshot is whenever it was written. A v8 blob has no stamp and reads
+      // as 0, which makes it older than any revision and so rebuilt the first
+      // time MLB names its date.
+      builtAt: stored.builtAt ?? 0,
       // A snapshot only exists for a settled day — that is the condition it is
       // written under, one screen down.
       settled: true,
@@ -1147,6 +1186,7 @@ async function writeDaySnapshot(day: ParsedDay): Promise<void> {
     date: day.date,
     reports: Object.fromEntries(day.reports),
     games: day.games.map(storeGame),
+    builtAt: day.builtAt,
   };
   await writeGzipBlob(snapshotKey(day.date), JSON.stringify(stored));
 }
@@ -1164,6 +1204,23 @@ function rememberProjection(key: string, day: ParsedDay): ParsedDay {
   }
   projectedCache.set(key, day);
   return day;
+}
+
+/**
+ * Forget every copy of a day this process is holding.
+ *
+ * **Every** copy, which is why it is not two `delete`s at the call site: a day
+ * lives in `memCache` once and in `projectedCache` once per watchlist that has
+ * read it, and a rebuild that dropped only the projection the current reader
+ * asked for would leave the next reader's own projection standing with the
+ * superseded line in it.
+ */
+function forgetDay(date: string): void {
+  memCache.delete(date);
+  const prefix = `${date}|`;
+  for (const key of [...projectedCache.keys()]) {
+    if (key.startsWith(prefix)) projectedCache.delete(key);
+  }
 }
 
 /** How many days / games of a report may be in flight at once. Caps the socket
@@ -1189,22 +1246,51 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
   // the cached copy without refreshing it.
   const isMutable = date >= baseballToday();
 
+  /**
+   * Whether a copy of this day built at `built` predates a rescoring MLB has
+   * since reported (`revisions.ts`).
+   *
+   * **`false` for every date MLB has not named**, which is nearly all of them,
+   * and then everything below is exactly the frozen path it always was: one map
+   * lookup against a memo the poll refreshes twice an hour. This is the whole
+   * of why the rule is not a TTL — a finished day stays free until MLB says
+   * otherwise, and only then does it cost anything.
+   */
+  const superseded = async (built: number): Promise<boolean> =>
+    !isMutable && (await revisedSince(date, built)).length > 0;
+
   // Frozen days can be served from a snapshot without touching the network or
   // the per-game caches at all.
   if (!isMutable && filter) {
     const pKey = `${date}|${filterKey(filter)}`;
     const hit = projectedCache.get(pKey);
-    if (hit) return hit;
+    if (hit) {
+      if (!(await superseded(hit.builtAt))) return hit;
+      forgetDay(date);
+    }
     const full = memCache.get(date);
-    if (full) return rememberProjection(pKey, projectDay(full, filter));
+    if (full) {
+      if (!(await superseded(full.builtAt))) return rememberProjection(pKey, projectDay(full, filter));
+      forgetDay(date);
+    }
     const snapshot = await readDaySnapshot(date, filter);
-    if (snapshot) return rememberProjection(pKey, snapshot);
+    if (snapshot && !(await superseded(snapshot.builtAt))) {
+      return rememberProjection(pKey, snapshot);
+    }
   }
 
-  const cached = memCache.get(date);
+  let cached = memCache.get(date);
   // A past day held from before the rollover is frozen — **unless it was held
-  // unsettled**, in which case it falls through to the TTL below and is rebuilt.
-  if (cached && !isMutable && cached.settled) return filter ? projectDay(cached, filter) : cached;
+  // unsettled**, in which case it falls through to the TTL below and is rebuilt;
+  // or unless MLB has rescored a game in it since this copy was built, which is
+  // the same verdict reached from outside the payload instead of inside it.
+  if (cached && !isMutable && cached.settled) {
+    if (!(await superseded(cached.builtAt))) return filter ? projectDay(cached, filter) : cached;
+    // Dropped rather than left to the TTL below: a superseded copy must not
+    // answer, and the TTL branch would happily serve it for another ten minutes.
+    forgetDay(date);
+    cached = undefined;
+  }
   if (cached) {
     const states = cached.games.map((g) => g.status.state);
     // Once every game that day is final **and MLB has finished writing every
@@ -1224,7 +1310,12 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
     }
   }
 
-  const { byBatter, byPitcher, dayGames, allSettled } = await buildStatsApiDay(date);
+  // Every game MLB has rescored on this date, so the build below reads those
+  // blobs as a miss instead of off disk. `0` rather than a `builtAt`, because
+  // by this point nothing we were holding survived and the rebuild has to
+  // answer for all of them.
+  const revised = isMutable ? [] : await revisedSince(date, 0);
+  const { byBatter, byPitcher, dayGames, allSettled } = await buildStatsApiDay(date, revised);
 
   let enrichment = EMPTY_ENRICHMENT;
   try {
@@ -1308,6 +1399,9 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
     reports,
     games: dayGames,
     fetchedAt: Date.now(),
+    // Built from the wire, here and only here — every other `ParsedDay` in this
+    // file either is this object or carries a stamp copied off a snapshot.
+    builtAt: Date.now(),
     settled: allSettled,
   };
 
@@ -1322,6 +1416,13 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
   const allFinal =
     dayGames.length > 0 && dayGames.every((g) => g.status.state === 'final') && allSettled;
   if (allFinal) await writeDaySnapshot(parsed);
+
+  // The rescoring has been applied — the games MLB named were read as a miss
+  // above and their blobs written again — so stop reporting it. Cleared on a
+  // successful build rather than on a successful *snapshot*: a day that cannot
+  // settle (an empty slate, a postponement left in it) would otherwise carry
+  // its revision for ever and be rebuilt on every single request.
+  if (revised.length > 0) await clearRevisions(date);
 
   if (!filter) {
     memCache.set(date, parsed);

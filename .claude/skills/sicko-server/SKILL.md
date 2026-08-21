@@ -23,12 +23,14 @@ a table of dashes.
   research board and its windows; how a window is summed a day at a time and why
   everything stored per day is a **count, never a rate**; handedness on the
   season roster; team hitting's nine cuts; the measured league xwOBA; **and the
-  whole cache layout, including the version rule.**
+  whole cache layout, including the version rule.** It also covers
+  `revisions.ts` — official scoring moving days after the game, which games MLB
+  says it moved, and why exactly two blobs are re-read for it.
 
 - **Read `docs/claude/server.md`** before adding or changing a route, or
   touching `etDate.ts`, `schedule.ts`, `rotations.ts`, `gameLog.ts`,
-  `nextGame.ts`, `news.ts`, `recentNews.ts`, `rotowire.ts`, `projectedStarts.ts`
-  or `warmer.ts`. It covers the 3am ET baseball day and why one module
+  `nextGame.ts`, `news.ts`, `recentNews.ts`, `rotowire.ts`, `projectedStarts.ts`,
+  `revisions.ts` or `warmer.ts`. It covers the 3am ET baseball day and why one module
   deliberately no longer reads it, every endpoint and what it answers, the
   rotation engine, and video resolution.
 

@@ -2050,9 +2050,24 @@ function isPlateAppearance(play: FeedPlay, midAtBat: boolean): boolean {
 
 const FEED_CACHE_VERSION = 8;
 
-export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
+/**
+ * @param revalidate MLB has **rescored** this game since we froze it, and says
+ * so in its own change feed (`revisions.ts`). Both caches are then read as a
+ * miss and the blob is written again from the wire. It is passed down from
+ * `savant.ts::getDay` rather than looked up here because a game is only ever
+ * read through its day — this is the one caller — so the day is where the
+ * question can be asked once per date instead of once per game.
+ */
+export async function getStatsApiGame(
+  gamePk: number,
+  revalidate = false,
+): Promise<StatsApiGame> {
   const finalCached = gameMemCache.get(gamePk);
-  if (finalCached) return finalCached;
+  // A settled game is pinned in memory for the life of the process, which is
+  // why dropping a bad blob used to do nothing until the server was restarted
+  // (measured twice, when `isSettledFeed` landed). A revision has to get past
+  // that pin as well as past the disk.
+  if (finalCached && !revalidate) return finalCached;
 
   const feedFile = `game-${gamePk}-v${FEED_CACHE_VERSION}.json`;
   const wpFile = `wp-${gamePk}.json`;
@@ -2067,7 +2082,12 @@ export async function getStatsApiGame(gamePk: number): Promise<StatsApiGame> {
   // becomes "there is nothing usable on disk" rather than "there is nothing on
   // disk" — the same distinction a cache version draws, made per blob because
   // the fault is per blob rather than in the shape of what is stored.
-  let feedCached = await readCache(feedFile);
+  //
+  // **Or unless MLB has rescored it since** — the same "nothing usable on disk"
+  // verdict reached from outside the payload instead of from inside it, because
+  // nothing inside it announces a rescoring. See `revisions.ts` for the 9 plays
+  // in 47,018 that establish this.
+  let feedCached = revalidate ? null : await readCache(feedFile);
   if (feedCached !== null && !isSettledFeed(JSON.parse(feedCached) as LiveFeed)) {
     feedCached = null;
   }
