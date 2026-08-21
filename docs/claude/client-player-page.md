@@ -343,6 +343,77 @@ and it cannot forget to keep a bleed it never had to write.
 → 161,201 and 28,501 → 28,679. +136 and +402 raw, which is two gradients, a
 custom property spent twice and the peek's `getComputedStyle`.
 
+### A two-way player has two pages, and a switch between them
+
+**The page opens on a `${kind}-${id}` key, so Ohtani is two pages** — a batting
+one and a pitching one, exactly as he is two rows on the roster's two tables and
+two rows on the research board. That was reachable only from *two different
+rows on two different tables*: a reader who had arrived at his bat had no route
+to his arm but to close the page, find the pitching table and press the other
+name. `Batting | Pitching` is that route.
+
+**It sits between the head and the tab strip, on a row of its own.** The head
+says *who*, this says *which of him*, the strip under it says *which reading of
+that* — three tiers in the order a reader descends them. The two rejected
+places are worth naming. On the identity line beside the position chip it would
+have read as a *fact about him*, which is what that line is for and what the
+padlock and the newspaper were moved off the `<h1>` to preserve; in the cluster
+on the right it would have joined the two things you *do to* him, where this is
+navigation, like the Back button at the other end of the head.
+
+**It is `.view-switch` / `.view-tab` verbatim** — the app's one segmented
+control, the same two classes the League page's three tabs and the Schedule
+spans wear — so all `.details-kind-row` contributes is the head's own 680px
+reading column and the gap under it. Fold, don't restyle.
+
+**It changes `player=`, and it has to.** The two halves are two keys and a link
+that named the wrong one would describe a different page, which is the rule
+every view in this app follows; so the press goes through the same
+`onOpenDetails` the Overview's scheduled game uses to open the opposing starter.
+One door into a player page however it is reached — and the Back button then
+behaves afterwards exactly as it does on any other page opened over this one.
+
+**Drawn for a two-way player alone**, off `App.tsx`'s `twoWayIds`: the ids the
+season roster lists under two kinds, which is MLB's own `Y` primary-position
+code arriving in the app's currency. It is the same list the position chip and
+the handedness token are read off, and deliberately so — that is the one list at
+boot carrying *everybody*, which is what lets a fact about who a player is reach
+a man nobody has rostered. A switch offering `Pitching` to the other 1,300-odd
+players would be a control that navigates to nothing.
+
+**The reset effect had to gain `kind`, and this is what made that visible.**
+`useEffect(… , [playerId])` cleared eleven pieces of per-player state and the
+tab with them, on the stated grounds that *a new player is a new page*; every
+route into this page changed the id and the kind together until the switch
+existed. Measured by taking the dependency back out: open Ohtani's batting page,
+press `Charts`, wait for the rolling xwOBA to draw, cross to `Pitching` — the
+page **stays on `Charts` and goes on drawing the batting series**, read back
+seven seconds later unchanged and with no request made, `xwobaReq` being keyed
+on the id alone. `arsenal`, `news` and `starts` are keyed the same way. With
+`[playerId, kind]` the same press lands on `Overview` with the pitching day
+under it and `Arsenal` in the strip.
+
+**Measured at 1400×2200**: `--details-chrome-h` on Ohtani's page **165 →
+215px** — a 36px switch and a 14px gap — and on Mookie Betts's beside it **165 →
+165**, there being no row to draw. At 390×844 it is **219 → 269**, the switch
+155.06px wide in a 358px row, so nothing wraps. The tab strip is untouched at
+either width: 747.00px wide at 326.50 from each edge at 1400 and 0 → 390 at 390,
+page overflow 0 — the row sits above the strip's own bled box rather than inside
+it. Crossing the switch grows the strip 747 → 832 at 1400, which is `Arsenal`
+arriving and is the strip's own measured-width rule doing its job.
+
+**It does not arrive late**, which is the thing a pinned head must not do.
+Sampled every 100ms from navigation on a cold deep-link to `?player=batter-
+660271`: the overlay appears already carrying the row (null → 215px in one
+step, twice out of two), because `twoWayIds` and `detailsPlayer` itself are
+resolved off the same season roster — the page cannot draw before the fact that
+decides the row's existence is in hand.
+
+**Bundle**, for the switch and the roster-table fix together: JS 613,346 →
+614,465 raw and 180,557 → 180,982 gzipped; CSS 162,319 → 162,372 and 28,879 →
+28,889. +1,119 and +425 on the script, +53 and +10 on the stylesheet — the
+switch, one memo, `seatKinds` on each side of the wire, and a two-line CSS rule.
+
 ### Every tab's read is lazy now, including the percentile card's
 
 **The percentile card was the one eager fetch on this page and it was the

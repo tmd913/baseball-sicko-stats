@@ -1557,9 +1557,9 @@ export interface EspnRoster {
    */
   endRoster?: EspnRosterPlayer[] | null;
   /**
-   * Your lineup for **each** day of the range in view, as MLB player ids, keyed
-   * by date — present only when the request named a `start`, absent (or null)
-   * when the read failed.
+   * Your lineup for **each** day of the range in view, as **player keys**
+   * (`batter-660271`), keyed by date — present only when the request named a
+   * `start`, absent (or null) when the read failed.
    *
    * `players[].starting` above is one day's answer, the day the roster was read
    * for; this is every day's, each off that day's own ESPN scoring period. It
@@ -1568,8 +1568,15 @@ export interface EspnRoster {
    * seven. A **missing date** is "we couldn't read that day", not "nobody
    * started" — the client falls back to `starting` there, which is what the app
    * did before this existed.
+   *
+   * **Keys rather than MLB ids because a seat has a side of the ball.** ESPN
+   * seats a two-way player once and the app draws him as two rows, so an id
+   * put Ohtani's `UTIL` afternoon on his pitching row as well as his batting
+   * one. The server reads the slot off the same per-day roster this map is
+   * derived from — `espn.ts::seatKinds` — so the answer is per day rather than
+   * per range.
    */
-  lineups?: Record<string, number[]> | null;
+  lineups?: Record<string, string[]> | null;
 }
 
 // ---- The Schedule view -----------------------------------------------------

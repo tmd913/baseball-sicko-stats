@@ -3851,6 +3851,28 @@ body {
   max-width: 680px;
   margin: 0 auto 20px;
 }
+/* **Which half of a two-way player is being read**, on its own line between the
+   head and the tab strip — see `PlayerDetails.tsx` for why it is a tier of its
+   own rather than a chip on the identity line or a third control in the cluster
+   on the right.
+
+   The row is all this rule is: the control inside it is `.view-switch` /
+   `.view-tab` verbatim, the app's one segmented control, which is the point of
+   folding rather than restyling. So there is nothing here but the head's own
+   680px reading column and the gap under it — the head's `20px` above becomes
+   the gap to the switch, and this `14` the gap to the strip.
+
+   Drawn for a two-way player alone, so the cost is his: measured at 1400×2200,
+   `--details-chrome-h` on Ohtani's page **165 → 215px** — the 36px switch and
+   this 14px gap — and on Mookie Betts beside him **165 → 165**, there being no
+   row to draw. The tab strip is untouched either way: 747.00px wide at 326.50
+   from each edge on all four reads, page overflow 0, the row sitting above the
+   strip's own bled box rather than inside it. At 390 the switch is 155.06px
+   wide against a 680px column, so nothing about it wraps. */
+.details-kind-row {
+  max-width: 680px;
+  margin: 0 auto 14px;
+}
 .details-back {
   display: inline-flex;
   align-items: center;

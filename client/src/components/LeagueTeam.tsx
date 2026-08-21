@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
-import { projectStarters, rangeDatesOf, startedOn } from '../lib';
+import { projectStarters, rangeDatesOf, seatKinds, startedOn } from '../lib';
 import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
@@ -165,7 +165,7 @@ export default function LeagueTeam({
    * the filter falls back to the end-of-range roster below — one lineup applied
    * to the range, which is what the app did before per-day lineups existed.
    */
-  const [lineups, setLineups] = useState<Record<string, number[]> | null>(null);
+  const [lineups, setLineups] = useState<Record<string, string[]> | null>(null);
   const [roster, setRoster] = useState<EspnRosterPlayer[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -216,12 +216,14 @@ export default function LeagueTeam({
     };
   }, [teamId, start, end]);
 
-  /** The per-day lineup map, as `projectStarters` wants it. Collapsed to null
-   *  when it is empty, so "no lineups" and "not asked for" are one state. */
+  /** The per-day lineup map, as `projectStarters` wants it — **player keys**,
+   *  a seat having a side of the ball (see `espn.ts::startedKeys`). Collapsed to
+   *  null when it is empty, so "no lineups" and "not asked for" are one
+   *  state. */
   const byDate = useMemo(() => {
     if (!lineups) return null;
-    const map = new Map<string, Set<number>>();
-    for (const [date, ids] of Object.entries(lineups)) map.set(date, new Set(ids));
+    const map = new Map<string, Set<string>>();
+    for (const [date, keys] of Object.entries(lineups)) map.set(date, new Set(keys));
     return map.size > 0 ? map : null;
   }, [lineups]);
 
@@ -251,19 +253,22 @@ export default function LeagueTeam({
     const map = new Map<string, FantasySlot>();
     for (const p of roster) {
       if (p.mlbId === null) continue;
+      // Which of his rows this seat is a fact about — App's own rule over the
+      // reader's roster, run here over a leaguemate's. See `lib.ts::seatKinds`.
+      const seated = new Set(seatKinds(p.kinds, p.slotId));
       for (const k of p.kinds) {
-        map.set(`${k}-${p.mlbId}`, {
+        const key = `${k}-${p.mlbId}`;
+        const starting = p.starting && seated.has(k);
+        map.set(key, {
           slot: p.slot,
-          starting: p.starting,
+          starting,
           // Named rather than "today": this page is read over a span the reader
           // picks, and the day the slot came from is the honest thing to print
           // whichever span that is.
           day: end,
           injuryStatus: p.injuryStatus,
           startedDays:
-            byDate === null
-              ? null
-              : dates.filter((d) => startedOn(byDate, d, p.mlbId as number, p.starting)),
+            byDate === null ? null : dates.filter((d) => startedOn(byDate, d, key, starting)),
           rangeDays: byDate === null ? null : dates.length,
           owner,
         });
@@ -292,11 +297,20 @@ export default function LeagueTeam({
    *
    * The end-of-range fallback is the roster this page already read for its slot
    * chips: `starting` is the flag on the day the span ends, which is the same
-   * answer the app falls back to when a per-day read fails.
+   * answer the app falls back to when a per-day read fails. **As keys rather
+   * than ids**, and per seat — a manager holding a two-way player at `UTIL`
+   * started his bat and not his arm, which is the reading ESPN's own summary
+   * takes and so the one this page's `Summary` foot has to.
    */
   const starterCards = useMemo(() => {
-    const startingIds = new Set((roster ?? []).flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : [])));
-    return projectStarters(teamCards, dates, byDate, (r) => startingIds.has(r.id));
+    const startingKeys = new Set(
+      (roster ?? []).flatMap((p) =>
+        p.starting && p.mlbId !== null
+          ? seatKinds(p.kinds, p.slotId).map((k) => `${k}-${p.mlbId}`)
+          : [],
+      ),
+    );
+    return projectStarters(teamCards, dates, byDate, (r) => startingKeys.has(playerKey(r)));
   }, [teamCards, roster, byDate, dates]);
   /**
    * **The same answer as a set of player keys**, for the summary table's `Total`

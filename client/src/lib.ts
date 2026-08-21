@@ -13,6 +13,7 @@ import type {
   PlayerStatus,
   RosterStatus,
 } from './types';
+import { playerKey } from './types';
 
 /**
  * ESPN's eligibility vocabulary, split by the kind of player it describes.
@@ -1595,6 +1596,27 @@ export function addDays(date: string, delta: number): string {
 }
 
 /**
+ * **Which of a player's kinds a fantasy seat is a fact about** — the client's
+ * half of `espn.ts::seatKinds`, and the same three slot ids.
+ *
+ * A one-kind player is himself whatever seat he is in; a **two-way player is
+ * two rows under one id** and ESPN seats him once, so the slot decides which of
+ * the two that afternoon belongs to. Seated at `UTIL` he is a batter you
+ * started and a pitcher you did not.
+ *
+ * Mirrored rather than imported for the reason `types.ts` is mirrored — the
+ * workspaces cannot import from each other. The server answers this per *day*,
+ * off each day's own roster; this is the end-of-range roster's answer, which is
+ * what the slot chip and the `startedOn` fallback are drawn from.
+ */
+const PITCHING_SLOT_IDS = new Set([13, 14, 15]);
+
+export function seatKinds(kinds: PlayerKind[], slotId: number): PlayerKind[] {
+  if (kinds.length < 2) return kinds;
+  return [PITCHING_SLOT_IDS.has(slotId) ? 'pitcher' : 'batter'];
+}
+
+/**
  * Was this player in a fantasy lineup on `date`?
  *
  * The one place that question is answered, so the filter that credits a
@@ -1603,15 +1625,21 @@ export function addDays(date: string, delta: number): string {
  * started: it falls back to `fallback`, the single end-of-range lineup the
  * chips are drawn from, which is the answer the app gave before per-day lineups
  * existed and the right direction to fail in.
+ *
+ * **It asks by player key rather than by MLB id**, which is what makes it able
+ * to answer for a two-way player at all: the app's rows are `${kind}-${id}` and
+ * an id names only the man. The map arrives keyed the same way (see
+ * `EspnRoster.lineups`), so this is a lookup on the key the caller already
+ * holds instead of on a number it had to dig out of the row.
  */
 export function startedOn(
-  lineups: Map<string, Set<number>>,
+  lineups: Map<string, Set<string>>,
   date: string,
-  mlbId: number,
+  key: string,
   fallback: boolean,
 ): boolean {
   const day = lineups.get(date);
-  return day ? day.has(mlbId) : fallback;
+  return day ? day.has(key) : fallback;
 }
 
 /**
@@ -1639,18 +1667,27 @@ export function startedOn(
  * it is already holding, and a matchup's team page off the roster it read for
  * its chips. It is also the per-day map's own fallback for a day the server
  * could not answer for — see `startedOn`.
+ *
+ * **It asks by player key, which is what a two-way player made the difference
+ * between.** It used to ask by `r.id`, and an id cannot tell a batting row from
+ * a pitching one: Ohtani's single `UTIL` seat answered *started* for both of
+ * his rows, so his pitching row stood above the pitching table's `Lineup`
+ * divider on an afternoon he was seated as a hitter. Both tiers move together —
+ * the per-day map is keyed by key now, and `starting` was always handed the
+ * report and so could always have looked at its kind.
  */
 export function projectStarters(
   cards: PlayerReport[],
   dates: string[],
-  lineups: Map<string, Set<number>> | null,
+  lineups: Map<string, Set<string>> | null,
   starting: (r: PlayerReport) => boolean,
 ): PlayerReport[] {
   if (!lineups) return cards.filter(starting);
   const out: PlayerReport[] = [];
   for (const r of cards) {
     const fallback = starting(r);
-    const days = new Set(dates.filter((d) => startedOn(lineups, d, r.id, fallback)));
+    const key = playerKey(r);
+    const days = new Set(dates.filter((d) => startedOn(lineups, d, key, fallback)));
     if (days.size === 0) continue;
     const games = r.games.filter((g) => days.has(g.date));
     // Identity is preserved where nothing was cut, so a consumer that memoizes

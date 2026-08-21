@@ -34,6 +34,7 @@ import {
   LEAGUE_POLL_MS,
   projectStarters,
   rangeDatesOf,
+  seatKinds,
   startedOn,
 } from './lib';
 import { takeInvite } from './invite';
@@ -2496,11 +2497,18 @@ export default function App() {
   }, [usingFantasy, espnLeagueId, fantasyTeamId, start, end, loadFantasyRoster]);
 
   /**
-   * Your lineup on **each** day of the range, by MLB id — the whole point of
-   * which is that a range is a range of lineups. ESPN answers for one scoring
-   * period at a time, so the server reads one per date (see `espn.ts`'s **The
-   * lineup, one day at a time**); this turns the wire's `{ date: id[] }` into
-   * the shape the filter reads it in.
+   * Your lineup on **each** day of the range, by **player key** — the whole
+   * point of which is that a range is a range of lineups. ESPN answers for one
+   * scoring period at a time, so the server reads one per date (see `espn.ts`'s
+   * **The lineup, one day at a time**); this turns the wire's `{ date: key[] }`
+   * into the shape the filter reads it in.
+   *
+   * **By key rather than by id, because a seat has a side of the ball.** ESPN
+   * seats a two-way player once and this app draws him twice, so an id said
+   * *started* for Ohtani's pitching row on an afternoon he was standing at
+   * `UTIL`. The server reads the slot off the same per-day roster the map is
+   * derived from, so the answer changes with the day rather than with the
+   * range.
    *
    * Null when the views aren't reading a fantasy team, and null when the read
    * didn't happen or failed — in which case everything below falls back to
@@ -2511,8 +2519,8 @@ export default function App() {
   const fantasyLineups = useMemo(() => {
     const raw = usingFantasy ? fantasyRoster?.lineups : null;
     if (!raw) return null;
-    const map = new Map<string, Set<number>>();
-    for (const [date, ids] of Object.entries(raw)) map.set(date, new Set(ids));
+    const map = new Map<string, Set<string>>();
+    for (const [date, keys] of Object.entries(raw)) map.set(date, new Set(keys));
     return map.size > 0 ? map : null;
   }, [usingFantasy, fantasyRoster]);
 
@@ -2545,19 +2553,31 @@ export default function App() {
     const slotDay = fantasyRoster.endRoster || end > baseballToday() ? end : null;
     for (const p of fantasyRoster.endRoster ?? fantasyRoster.players) {
       if (p.mlbId === null) continue;
-      // Which of the days in view he was in the lineup on — the fact the chip's
-      // one-day slot can't carry over a range, and the days rather than a count
-      // of them because the projected table's `Starts` column needs to know
-      // *which* (see `SummaryTable.tsx::playedStarts`). Null without the
-      // per-day map, where there is no second fact to state.
-      const startedDays =
-        fantasyLineups === null
-          ? null
-          : rangeDates.filter((d) => startedOn(fantasyLineups, d, p.mlbId as number, p.starting));
+      // **Which of his rows this seat is a fact about** — `lib.ts::seatKinds`,
+      // the client's half of the server's own. One kind in, the same one kind
+      // out for everybody but a two-way player, who is two rows under one id
+      // and standing in exactly one chair: seated at `UTIL` he is a batter you
+      // started and a pitcher you did not. `starting` is the per-*row* answer
+      // from here on, which is what the `Total` divider, the chip's lit state
+      // and the `startedOn` fallback all read.
+      const seated = new Set(seatKinds(p.kinds, p.slotId));
       for (const kind of p.kinds) {
-        map.set(`${kind}-${p.mlbId}`, {
+        const key = `${kind}-${p.mlbId}`;
+        const starting = p.starting && seated.has(kind);
+        // Which of the days in view he was in the lineup on — the fact the
+        // chip's one-day slot can't carry over a range, and the days rather
+        // than a count of them because the projected table's `Starts` column
+        // needs to know *which* (see `SummaryTable.tsx::playedStarts`). Null
+        // without the per-day map, where there is no second fact to state.
+        // **Per key**, since the map is keyed by key and the fallback beside it
+        // is now this row's own answer rather than the man's.
+        const startedDays =
+          fantasyLineups === null
+            ? null
+            : rangeDates.filter((d) => startedOn(fantasyLineups, d, key, starting));
+        map.set(key, {
           slot: p.slot,
-          starting: p.starting,
+          starting,
           day: slotDay,
           injuryStatus: p.injuryStatus,
           startedDays,
@@ -4064,6 +4084,32 @@ export default function App() {
     () => new Map(knownPlayers.map((p) => [p.id, { bats: p.bats, throws: p.throws }])),
     [knownPlayers],
   );
+  /**
+   * **Who has a page on both sides of the ball** — the ids the season roster
+   * lists under two kinds, which is MLB's own `Y` primary position arriving in
+   * the app's currency (`espn.ts::kindsOf`, `store.ts`'s season read).
+   *
+   * It is read off the **same list** the two maps above are, and for the same
+   * reason: a fact about *who a player is* has to reach a man nobody has
+   * rostered, and this list is the only one at boot that carries everybody. It
+   * is what the player page's Batting/Pitching switch is drawn on — a control
+   * that must not appear for the 1,300-odd players who have only one page,
+   * where it would offer a reading that does not exist.
+   *
+   * A `Set` rather than a per-id list of kinds: the only question anybody asks
+   * of it is *is there another one of him*, the other kind being the one this
+   * page is not (there are two).
+   */
+  const twoWayIds = useMemo(() => {
+    const seen = new Map<number, PlayerKind>();
+    const both = new Set<number>();
+    for (const p of knownPlayers) {
+      const had = seen.get(p.id);
+      if (had === undefined) seen.set(p.id, p.kind);
+      else if (had !== p.kind) both.add(p.id);
+    }
+    return both;
+  }, [knownPlayers]);
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
   // opened for any player, on the watchlist or not. Position always comes from
@@ -6527,6 +6573,11 @@ export default function App() {
           name={detailsPlayer.name}
           position={detailsPlayer.position}
           isPitcher={detailsPlayer.kind === 'pitcher'}
+          /* Whether he has a page on the other side of the ball, which is what
+             draws the Batting/Pitching switch. Off the season roster, the one
+             list at boot that carries every player the page can open on — see
+             `twoWayIds`. */
+          twoWay={twoWayIds.has(detailsPlayer.id)}
           isOnRoster={detailsRostered}
           ownedBy={ownedElsewhere?.get(detailsPlayer.id) ?? null}
           rosterEditable={!usingFantasy}
