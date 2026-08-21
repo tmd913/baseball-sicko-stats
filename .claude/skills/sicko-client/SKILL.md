@@ -9,7 +9,7 @@ description: The client shell every view sits in — App.tsx's URL-as-state, the
 Three views sit in one shell — Roster, Feed, Research, plus League when a
 fantasy league is connected — under a pinned chrome whose height is *measured*
 at runtime (`--chrome-h`) rather than declared, because it wraps to two and
-three rows and stands down entirely on short windows.
+three rows and stands down on any window it would take more than a third of.
 
 Read the reference before changing any of it. Nearly everything here has a
 measurement behind it and several rules are the record of a bug that was shipped
@@ -23,7 +23,10 @@ particular.
   before adding a URL param, a saved preference or a view. It covers: the two
   lists (roster vs watchlist) and which controls ask "is he on my roster *now*";
   player keys (`${kind}-${id}`, a two-way player is two entries); the three
-  views and why a sort order is not a page; the pinned chrome and `--chrome-h`;
+  views and why a sort order is not a page; the pinned chrome, `--chrome-h` and
+  the measured budget that decides whether a bar can afford to be pinned at all;
+  why Mobile Safari's own toolbar stays put on the two board views, and what
+  giving up the fixed-height column would cost;
   per-page scroll memory and why restoring is one write before paint;
   `overscroll-behavior` and `touch-action`; the whole loading system; the kind
   tabs; the header search and `searchFold`; the hide-injured filter; and the

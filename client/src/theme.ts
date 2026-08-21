@@ -42,7 +42,11 @@ export type Theme = {
   scheme: 'dark' | 'light';
   /** The page color, painted before the stylesheet has loaded — see
    *  `index.html` — so a reload does not flash the other theme. It is the
-   *  theme's own `--bg` and is the one value duplicated outside the CSS. */
+   *  theme's own `--bg`, and it has a second reader now: `applyTheme` writes it
+   *  into `<meta name="theme-color">`, which is what iOS Safari paints the
+   *  strips above and below the page with. Same value for both, and measured:
+   *  the top pixel of the rendered page and the foot of its gradient are `--bg`
+   *  in every one of the six. */
   bg: string;
   /** Three stops for the swatch beside the name in the picker: the page, an
    *  edge on it, and the accent. Real palette values rather than a flattering
@@ -190,6 +194,21 @@ export function applyTheme(id: ThemeId): void {
   root.style.colorScheme = theme.scheme;
   const meta = document.querySelector('meta[name="color-scheme"]');
   if (meta) meta.setAttribute('content', theme.scheme);
+  // **And the two strips the page does not own.** On iOS the notch/status-bar
+  // area above the page and the home-indicator area below it are painted by
+  // Safari from `theme-color`, not from anything in the document — so a scheme
+  // change that stops at the stylesheet leaves them on the old palette, which
+  // is exactly what was reported. There is no CSS for it and no event to hook:
+  // the tag has to be rewritten, here, beside the other two writes this
+  // function makes.
+  //
+  // `theme.bg` is the palette's own `--bg`, measured to be the color at the top
+  // and the foot of the rendered page in all six schemes; `index.html` carries
+  // the same table for the first frame. One tag with no `media` attribute, so
+  // the app's chosen polarity wins over the reader's system appearance — see
+  // the tag's note there.
+  const tint = document.querySelector('meta[name="theme-color"]');
+  if (tint) tint.setAttribute('content', theme.bg);
 }
 
 /**

@@ -22,6 +22,13 @@
       })();
     </script>
     <meta name="color-scheme" content="dark" />
+    <!-- What iOS Safari paints the strips above and below the page with. Dark's
+         `--bg` here (the default); the boot script rewrites it before the first
+         paint and `theme.ts::applyTheme` on every change — without that the
+         strips keep whatever Safari sampled at load. One tag and no `media`, so
+         the app's chosen polarity beats the reader's system appearance. Comments
+         in this file ship, so the long form is in docs/claude/theming.md. -->
+    <meta name="theme-color" content="#121314" />
     <title>Statcast Sicko</title>
 
     <!-- Tab icon. The SVG is the header's brand mark and is what every current
@@ -88,6 +95,11 @@
         document.documentElement.style.colorScheme = SCHEME[id];
         var meta = document.querySelector('meta[name="color-scheme"]');
         if (meta) meta.content = SCHEME[id];
+        /* `--bg` again — the value this script already paints the root with.
+           `applyTheme` writes the identical line, so the two stay in step the
+           way the two `color-scheme` writes do. */
+        var tint = document.querySelector('meta[name="theme-color"]');
+        if (tint) tint.content = BG[id];
         var style = document.createElement('style');
         style.textContent = 'html{background:' + BG[id] + '}';
         document.head.appendChild(style);

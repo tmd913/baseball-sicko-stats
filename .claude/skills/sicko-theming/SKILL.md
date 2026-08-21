@@ -24,8 +24,9 @@ moving a color means taking those measurements, not picking one.
   the three things a theme is allowed to move (`--win`, `--logo-plate`,
   `--row-alt`); why a cap logo needs its own ground; the ombré rules and why the
   header gradient must go through `--cell-bg`; the preference, the paint-ahead
-  `localStorage` mirror, the boot script and `html { background: none }`; and the
-  picker.
+  `localStorage` mirror, the boot script and `html { background: none }`; the
+  `theme-color` tag that paints the two strips iOS puts above and below the page,
+  and why it takes no `media` attribute; and the picker.
 
 ## Related
 

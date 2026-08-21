@@ -604,16 +604,33 @@ body {
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-bar);
 }
-/* A short window gets the old behavior back. Pinned chrome is a bargain — a
-   fixed cost at the top in exchange for never having to scroll up for it — and
-   the bargain stops being worth it when the cost is most of the screen: a phone
-   held sideways is about 390px tall, against a chrome that reaches 303px at its
-   widest wrap. Below 560px of viewport it scrolls away as it always did.
-   Height rather than width, because it is the height that is scarce. */
-@media (max-height: 560px) {
-  .app-chrome {
-    position: static;
-  }
+/* A window with no room for it gets the old behavior back. Pinned chrome is a
+   bargain — a fixed cost at the top in exchange for never having to scroll up
+   for it — and the bargain stops being worth it when the cost is most of the
+   screen.
+
+   **The condition is measured now, not declared**, and the constant it replaces
+   is the case for it. It was `@media (max-height: 560px)`, whose own note read:
+   *a phone held sideways is about 390px tall, against a chrome that reaches
+   303px at its widest wrap*. Both halves are true and they never happen
+   together — 303px is this bar at **320px wide**, and a phone held sideways is
+   844 or 932 wide, where it is a single row. Measured on a landscape iPhone 14
+   the chrome is **102px of a 390px window, 26%**, and the rule threw the
+   pinning away at exactly the width that had made it cheap. Reported as sticky
+   sections not sticking in landscape, and this is why.
+
+   So `hooks.ts::budgetSticky` measures the bar against the window it is in and
+   stamps `data-unpinned` when it would take more than a third of it —
+   `STICKY_BUDGET`, where the table of widths and the choice of a third are set
+   out. The decision is JS because the height is a runtime measurement no media
+   query can read (the bar wraps, in a font this app does not choose); the
+   *effect* stays here, because `position` belongs to the stylesheet.
+
+   An attribute rather than a class on the root, so each bar answers for itself:
+   `.details-chrome` takes the identical rule and still stands down in landscape,
+   its head being 165px of the same 390. */
+.app-chrome[data-unpinned] {
+  position: static;
 }
 /* The three fixed-height columns opt out of sticky **explicitly**, rather than
    relying on it being a no-op in a column that does not scroll — which it is
@@ -3833,15 +3850,20 @@ body {
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
 }
-/* A short window gets the old behavior back, on the page's own threshold and
-   for its own reason: a phone held sideways is about 390px tall, and 139px of
-   chrome is 36% of it. Less brutal than the 303-of-390 the page's bar reaches —
-   this is a closer call — but the bargain is the same one, and one threshold
-   across the app beats two that nearly agree. */
-@media (max-height: 560px) {
-  .details-chrome {
-    position: static;
-  }
+/* A window with no room for it gets the old behavior back, on the page's own
+   rule and for its own reason. The note here used to read *a phone held sideways
+   is about 390px tall, and 139px of chrome is 36% of it* — which was the right
+   arithmetic and the wrong way to spend it, since what the stylesheet then
+   declared was the 390 rather than the 36%.
+
+   It takes `.app-chrome`'s budget instead (`hooks.ts::STICKY_BUDGET`, a third of
+   the window), and the interesting thing is that the two boxes come out
+   **differently**: measured at 844×390 and 932×430 this head is **165px, 42% and
+   38%**, so it still stands down where the page's chrome — one row, 26% — now
+   stays pinned. One statement, two boxes, two answers, which is precisely what a
+   single viewport height could not give. */
+.details-chrome[data-unpinned] {
+  position: static;
 }
 .details-head {
   display: flex;
@@ -6618,14 +6640,23 @@ button.start-line:focus-visible {
   top: var(--chrome-h);
   z-index: 39;
 }
-/* A short window unpins the chrome (see `.app-chrome`'s own rule) and this goes
-   with it, for that rule's reason and not by inheriting it: `--chrome-h` would
-   already be 0 here, so the bar would pin itself to the top of the window and
-   be the one thing left holding a band against a 390px-tall screen. */
-@media (max-height: 560px) {
-  .app > .date-bar {
-    position: static;
-  }
+/* A window with no room for the chrome unpins it (see `.app-chrome`'s own rule)
+   and this goes with it, for that rule's reason and not by inheriting it:
+   `--chrome-h` would already be 0 here, so the bar would pin itself to the top
+   of the window and be the one thing left holding a band against a 390px-tall
+   screen.
+
+   Keyed off **the chrome's own answer** rather than repeating the test, which is
+   what the two media queries were: the bar is a later sibling of the box whose
+   height the budget was spent on, so `~` says *this bar follows a chrome that
+   could not afford to pin* in one selector. It outranks `.app > .date-bar` above
+   on specificity (0,3,0 against 0,2,0), so it wins wherever it sits — but it is
+   kept beside that rule anyway, this file having been bitten five times by a
+   block that only won on order. The pane's own bar on the two board views is not
+   a sibling of the chrome and is untouched, which is right: that one sticks to
+   the pane. */
+.app-chrome[data-unpinned] ~ .date-bar {
+  position: static;
 }
 
 /* ---- …and on the Roster's table reading, both rows are inside the pane ----
