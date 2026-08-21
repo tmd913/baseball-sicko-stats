@@ -445,12 +445,6 @@ export function DateBar({
       ref={barRef}
     >
       <div className="date-bar-row">
-        {/* The ghost. It holds the left end open to exactly the width the
-            control at the right end takes, which is what keeps the face on the
-            bar's own center line — the same trick the two equal arrows already
-            play, one track further out. `aria-hidden` and empty: it is a
-            reservation, not a thing. */}
-        {endSlot && <span className="date-bar-ghost" aria-hidden="true" />}
         <button
           type="button"
           className="date-step"
@@ -461,6 +455,13 @@ export function DateBar({
         >
           <Chevron back />
         </button>
+        {/* The ghost, **inside the near arrow** rather than outside the far
+            one. It holds this side open to exactly the width the control
+            opposite takes, which is what keeps the face on the bar's own
+            center line — the same trick the two equal arrows play one track
+            further out, now read inward instead of outward. `aria-hidden` and
+            empty: it is a reservation, not a thing. */}
+        {endSlot && <span className="date-bar-ghost" aria-hidden="true" />}
         <button
           type="button"
           className={`date-face${shown ? ' active' : ''}`}
@@ -483,16 +484,6 @@ export function DateBar({
         >
           <span className="date-face-lead">{lead}</span>
           <span className="date-face-range">{range}</span>
-        </button>
-        <button
-          type="button"
-          className="date-step"
-          onClick={() => onNext?.()}
-          disabled={!onNext}
-          aria-label={nextTitle}
-          title={nextTitle}
-        >
-          <Chevron back={false} />
         </button>
         {endSlot && (
           <span
@@ -520,6 +511,16 @@ export function DateBar({
             {endSlot}
           </span>
         )}
+        <button
+          type="button"
+          className="date-step"
+          onClick={() => onNext?.()}
+          disabled={!onNext}
+          aria-label={nextTitle}
+          title={nextTitle}
+        >
+          <Chevron back={false} />
+        </button>
       </div>
       {shown &&
         (asPopover ? (

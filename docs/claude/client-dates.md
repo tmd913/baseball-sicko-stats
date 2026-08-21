@@ -525,10 +525,10 @@ at 154.95** (27.73) — 0.7KB raw and 0.4KB over the wire, for a derived preset,
 boot gate, a resolver and one more entry in a list; the paragraphs arguing them
 cost the bundle nothing.
 
-### And the bar can carry one control at its right-hand end
+### And the bar can carry one control, inside its far arrow
 
-**`endSlot` on `DateBar`** — one control drawn in the *collapsed* row, beside
-the two steps, rather than inside anything the face opens. It exists for the
+**`endSlot` on `DateBar`** — one control drawn in the *collapsed* row, between
+the face and the far step, rather than inside anything the face opens. It exists for the
 League Rankings tab's ⓘ, the key that explains `OVR`/`BAT`/`PIT`; the whole of
 that move is argued in **Client — the League Rankings tab**, *And then the span
 strip went, and the ⓘ came down into the bar*. What belongs here is the two
@@ -539,28 +539,49 @@ either break the centering the bar's own grid exists for or take a third of the
 middle column on a 320px phone". Both halves were right and each is answered
 separately.
 
-**The centering is a ghost.** The row goes from three tracks to five: an empty
-`aria-hidden` span, a step, the face, a step, the slot, with the first and last
-the same `--bar-end-w` (30px, the app's icon-button width). The two arrows are
+**The centering is a ghost.** The row goes from three tracks to five: a step,
+an empty `aria-hidden` span, the face, the slot, a step — the two arrows stay
+the row's outer edge, and the ghost and the slot are the same `--bar-end-w`
+(30px, the app's icon-button width) one track in.
+
+**The slot is inside the arrows, not beyond them**, and that ordering is the
+point rather than a detail. The arrows are where every other date bar in this
+app ends; a control parked outside them would make the one bar that carries a
+key end differently from the other three, and the reader's model of "the bar
+runs from arrow to arrow" would hold everywhere but here. The two arrows are
 equal for exactly this reason one track in, so holding the far end open to the
 control's own width is the same trick read outward — *reserve the box, don't
 move the page*, spent sideways. Measured on the live 12-team league,
-`face.center − bar.center` is **0.00px at 320, 390, 640, 1200 and 1920**, with
-the slot filled and empty alike, and the face's own width is unchanged at
-**212 / 221.16 / 221.16 / 221.16 / 221.16**.
+`face.center − bar.center` is **0.00px at 320, 390, 431, 432, 640, 1200 and
+1920**, with the slot filled and empty alike. The face's own width is
+**152 / 200 / 200 / 221.16 / 221.16 / 221.16 / 221.16** across those widths —
+the step at 432 is the narrow block letting go, not a track changing.
 
-**The phone is not answered, so it is a width.** Each end slot costs **38px**
-(30px of button and the row's 8px gap), and the widest face the Rankings bar
-prints is its projected reading's, measured at **247.48px**. 247.48 + 2×38 +
-2×44 (the arrows and their gaps) + 20 (the bar's own side padding) is
-**431.48**, so 432 is the narrowest window at which the fourth thing costs the
-face nothing at all. At 320 it would take the face **212 → 136** — 102px of
-content against the 169 the range line alone wants, which is
-`Aug 10 – Aug 2…` where the bar's one job is to say which days. So
-`@media (max-width: 431px)` collapses the ends back to three tracks and hides
-the slot, and the caller keeps its own copy of the control wherever it was: both
-rendered, one media query, neither chosen in JS, which is the swap this
-stylesheet makes for every pill row that becomes a `<select>`.
+**The phone is not answered, it is paid.** Each end slot costs **38px** (30px
+of button and the row's 8px gap), and the widest face the Rankings bar prints is
+its projected reading's, measured at **247.48px**. 247.48 + 2×38 + 2×44 (the
+arrows and their gaps) + 20 (the bar's own side padding) is **431.48**, so 432
+is the narrowest window at which the slot costs the face nothing at all.
+
+**That number was briefly a breakpoint and is not one any more.**
+`@media (max-width: 431px)` collapsed the ends back to three tracks and hid the
+slot, and the caller kept a second copy of the control wherever it had been —
+both rendered, one media query, neither chosen in JS. What it bought was a face
+that never gave up a pixel. What it cost was **the key being in a different
+place on a phone than on a desktop**, and that is the one thing a key must not
+be: `InfoKey`'s own rule is that a key is read once and then in the way, and a
+control read once is a control the reader has to *find*. Finding it twice, in
+two places, for the same table, is worse than a truncated date.
+
+So the five tracks hold at every width and the face gives up the difference.
+Measured at 320: **212 → 152px**, the 152 including a narrow-width block that
+trims the face's 16px side padding to 4 and the row's gap from 8 to 4 — the
+cheapest 40px on the row, scoped to `.date-bar-ends` so only the bar carrying a
+key pays it. What is actually lost is **one line at one width**: at 320 the
+range clips its trailing `· so far` (169px wanted, 142 given) and the lead,
+which already clipped at that width, clips further. **From 390 up nothing clips
+at all** — and at 390 the lead now fits whole where before the collapse it had
+172px against the 187 it wants.
 
 **A press on the slot closes the bar's popover and is not spent on the
 closing.** Two disclosures hang off one bar and only one may be open — measured

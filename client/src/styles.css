@@ -6982,16 +6982,24 @@ button.start-line:focus-visible {
    end slot costs **38px** (a 30px `.info-key-btn` and the row's 8px gap) and
    the widest face this bar prints is the projected reading's **247.48px**;
    247.48 + 2×38 + 2×44 (the arrows and their gaps) + 20 (the bar's own side
-   padding) is **431.48**. So from **432px** up the slot costs the face nothing
-   at all, and below it the ends collapse and the caller's own copy of the
-   control is what is on screen — the swap this file already makes for every
-   pill row that becomes a `<select>`, one media query, both rendered, neither
-   chosen in JS. The narrow block is at the foot of this section, after
-   everything it overrides. */
+   padding) is **431.48**, so 432 was once the narrowest window at which the
+   slot cost the face nothing — and below it the ends collapsed and the caller
+   kept its own copy. **That breakpoint is gone.** Costing the face nothing is
+   not the bar's job at 320: the ⓘ is what the reader has to reach, both face
+   lines already truncate rather than wrap, and a key that vanishes on a phone
+   is a key the phone reader never gets. So the five tracks hold at every
+   width and the face gives up the difference — measured at 320, **212 →
+   152px**, and the narrow block below buys back 40 of what that costs the
+   text. What is actually lost is one line at one width: at 320 the range
+   clips its trailing `· so far`, where before it fit; the lead clipped at 320
+   before this change and clips further now. At 390 and up nothing clips at
+   all. The slot sits
+   **inside** the two arrows now rather than beyond them, so the row reads
+   step · ghost · face · key · step. */
 .date-bar-ends .date-bar-row {
   grid-template-columns:
-    var(--bar-end-w) var(--control-h) minmax(0, 1fr) var(--control-h)
-    var(--bar-end-w);
+    var(--control-h) var(--bar-end-w) minmax(0, 1fr) var(--bar-end-w)
+    var(--control-h);
 }
 /* The app's own icon-button width, which is what `.info-key-btn` takes from
    `.app-dialog-close`. Named rather than repeated, the ghost and the slot
@@ -7010,17 +7018,30 @@ button.start-line:focus-visible {
   align-items: center;
   justify-content: flex-end;
 }
-/* Below the width the fifth and first tracks are free at (see above), the row
-   is the three it always was and the slot is not drawn — the caller keeps its
-   own copy where it was. **After** the two rules it overrides, a media query
-   adding no specificity, which is the trap this file records five times. */
+/* **The face gives up its padding before it gives up a word.** Keeping the key
+   at every width costs the middle column 68px (two 30px tracks and the gaps),
+   and at 320 that left the face a 102px content box against a range line that
+   wants 169 — both lines clipped, the lead among them, which is the one this
+   bar cannot afford to lose: it names the reading. The 16px of side padding
+   and half the row's gap are the cheapest 40px on the row — measured, the
+   face's content box goes 102 → 142px at 320, and at **390 both lines fit
+   whole again** (the lead wants 187 and had 172 before this block). At 320
+   they still clip: the lead wants 187 and the range 169, against 142. That is
+   the real cost and it is stated rather than rounded off — see the width
+   figures above.
+
+   Scoped to `.date-bar-ends`, so the bar that pays is the one carrying the
+   key: every other date bar in the app keeps the padding that makes its face
+   look like a control rather than a label. After the two rules it overrides,
+   a media query adding no specificity — the trap this file records five
+   times — and nothing below this line touches either property. */
 @media (max-width: 431px) {
   .date-bar-ends .date-bar-row {
-    grid-template-columns: var(--control-h) minmax(0, 1fr) var(--control-h);
+    gap: 4px;
   }
-  .date-bar-ghost,
-  .date-bar-end {
-    display: none;
+  .date-bar-ends .date-face {
+    padding-left: 4px;
+    padding-right: 4px;
   }
 }
 /* Edit carries its label, so it overrides the square the shared list gives it —
@@ -15651,18 +15672,19 @@ span.mup-move-name:hover {
    `.league-scroll > .date-bar`, up beside the other three placements.
 
    The ⓘ went up to `.view-tools` with the other buttons, and has since come
-   back down **into the bar itself**, at its right-hand end — see
+   back down **into the bar itself**, inside the far arrow — see
    `.date-bar-ends` for the ghost that keeps the face centered with it there,
-   and `.lg-rank-key` below for the anchor. */
+   and `.lg-rank-key` below for the anchor. It is drawn there at every width;
+   the tools row keeps no copy. */
 
 /* This caller's own half of `InfoKey`, which is one anchor rule per caller by
    that component's own design, and **the box it hands the panel to has changed
    twice with the button**: the ⓘ stood in the table's caption row, then in the
-   app's tools row beside the projection's own key, and is now at the right-hand
-   end of the bar that replaced the caption. It is drawn in **both** of the last
-   two places and one media query decides which — the bar from 432px up, the
-   tools row below it (`.date-bar-ends`, which carries the measurement) — so
-   this rule has to hold for both, and `static` is what makes that possible.
+   app's tools row beside the projection's own key, and is now inside the far
+   arrow of the bar that replaced the caption. It was briefly drawn in **both**
+   of the last two places with a media query deciding which; that breakpoint is
+   gone and the bar holds it at every width. `static` is still what the anchor
+   rests on, and is what let the button move three times without it changing.
 
    `static` is the whole trick and is unchanged through all three: the panel's
    containing block becomes the nearest positioned ancestor, which is
@@ -15681,23 +15703,6 @@ span.mup-move-name:hover {
 .lg-rank-key .info-key-panel {
   left: 0;
   right: auto;
-}
-/* **And the tools row's copy is the narrow one.** Both are rendered and a media
-   query picks — the swap this file makes for every pill row that becomes a
-   `<select>`, rather than a JS media test that could drift from the CSS. The
-   default is hidden and the narrow block below restores it, so the wide case
-   needs no override and the two can never both be on screen.
-
-   `.view-tools` two classes deep, because `.info-key` is a bare `<span>` and
-   an unscoped `.lg-rank-key { display: none }` would take the bar's copy with
-   it. */
-.view-tools .lg-rank-key {
-  display: none;
-}
-@media (max-width: 431px) {
-  .view-tools .lg-rank-key {
-    display: inline;
-  }
 }
 
 /* ---- Rankings -------------------------------------------------------------
