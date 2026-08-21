@@ -34,6 +34,123 @@ So the lineup is read **per day, at that day's own scoring period** (`getTeamRos
 
 **A day you held him but did not start him is a day he was not in your lineup**, which is the honest reading: that Monday's line is his and is not yours. Measured on that same week: **Kyle Stowers started four of the seven and is on the IL today**, so the whole-range rule dropped him outright and the per-day one credits him his four days.
 
+### A prospect is a player MLB's season roster has never listed, and he was invisible
+
+**Reported as: "Kade Anderson is on a team but I can't see him."** He was, and
+he wasn't, and the sentence above about the two unmatched men is where the loss
+was hiding: *the two that didn't are players the MLB season roster has never
+listed, so they could not have reached the board to be marked either way*. The
+first half is true. The second is an argument about the **research board**, and
+it was quietly doing duty for the whole app — a man with no MLB id is not merely
+unmarkable on a board of stat lines, he is **absent from every surface in this
+app**, including the ones that are drawings of the fantasy roster itself.
+
+**Where he was lost, exactly.** `getMlbIndex` is built from
+`sports/1/players?season={SEASON}` — the season's *major leaguers*, **1,401
+rows**. A prospect is not one, so `matchPlayer` answered null,
+`toRosterPlayer` gave him `mlbId: null`, `savantName: null` and `kinds: []`, and
+`rosterToWatchlist` — whose first line is `p.mlbId === null || p.savantName ===
+null ? [] : …` — dropped him. Everything downstream keys on an MLB id, so what
+followed was not a degraded row but no row: no line in the roster views, no
+entry in `owned`, no padlock, no page to open, and no way to type his name into
+the header search, whose list is `/api/players`, which is *the same 1,401 rows*.
+
+**Measured on the live 12-team league on 2026-08-21: 316 roster entries, 311
+matched.** The five: **Kade Anderson**, **Ryan Sloan**, **Franklin Arias**,
+**Jesús Made** — four prospects — and **Spencer Schwellenbach**, a major-league
+starter the season's list has stopped carrying, which is the case that shows
+this was never only about prospects.
+
+**MLB knows all five perfectly well, just not on that list.**
+`people/search?names=…` answers with an id, a club and a position for every one
+of them: Kade Anderson is **807739**, Arkansas Travelers, Seattle's Double-A
+club. So the fix is a **second lookup, not a second source of truth**.
+
+**It is consulted only where the index answers nothing**, which is what makes it
+incapable of changing a match that already works. The passage at the head of this
+file argues that ESPN's minor-league universe is kept *out* of the name index
+because it "would only add collisions" — and that argument is about putting
+eleven thousand extra names into the map **every** join reads (`sports/11` …
+`sports/16` are 1,940 / 1,677 / 1,785 / 2,087 / 4,036 rows, 1.1MB). `extendIndex`
+merges **a handful**, under keys that were empty, driven by the names an actual
+roster asked for. A key the season's own list already holds is never touched, so
+by construction no existing match can move.
+
+**And the ambiguity rule is unweakened, which was the thing to check.** The
+endpoint matches on *substrings* — `names=Anderson` answers with 49,255 bytes of
+Andersons — so a row is kept only where its own normalized full name equals the
+key that was asked for; every survivor is pushed under that key **as a
+candidate**; and `matchMlbPlayer` then applies the two tests it always has.
+Driven against the live endpoint with an empty base index:
+
+| asked | candidates | no club | a club neither is on | the club that resolves it |
+| --- | --- | --- | --- | --- |
+| `Wilmer Flores` | `527038@11`, `695865@116` | **null** | **null** | 695865 |
+| `Kade Anderson` | `807739@136` | 807739 | 807739 | 807739 |
+| `Zzyzx Notaplayer` | — | null | null | null |
+
+**A wrong club can cost a match and can never make one**, which is why the club
+figure being occasionally odd does not matter: `527038@11` is the Giants' Wilmer
+Flores reading as parent org 11 because his `currentTeam` at that moment was a
+complex-league rehab club. The club is consulted **only** when there is more than
+one candidate, and then only to *narrow* — so a wrong one leaves 0 or 2 and the
+answer is null. **The join still fails to null, never to a guess**, and a
+prospect nothing can resolve keeps his name on the transactions feed and the
+matchup roster (both of which already draw an `mlbId === null` row without a
+link) and stays out of the reports, exactly as he was.
+
+**Only somebody currently playing is kept.** The search reaches back through
+every person MLB has ever listed; a retired homonym cannot be on a fantasy
+roster but can very easily make a live prospect ambiguous and so cost him his
+match. All five of the league's unmatched men come back `active: true`.
+
+**What it costs: one request.** `people/search` takes the whole batch — `names=`
+is comma-joined, up to `PROSPECT_BATCH` (40) at a time — and `fields=` trims the
+row from 1,203 bytes to 205. The five names together are **1,201 bytes**, and
+the call is **11–128ms** measured five times. It is asked once per hour per
+process, hit and **miss alike** (a name MLB has never heard of is cached as an
+empty list, or a roster parse a minute later would ask again), with an
+`inFlight` map per batch so the 62-day fan-out at concurrency 6 sends one rather
+than six. Against a cold 7-day `/api/espn/roster` this is inside the noise:
+alternating process-cold reads on the two builds gave 0.96 / 0.78 and 0.29 /
+1.18 seconds, which is ESPN's own spread and not ours.
+
+**Both parse sites take it**, and that is not belt and braces — `getOwnership`
+is what the board and the padlock read, and `fetchTeamRoster` is what the roster
+views and every team page are actually drawn from. They share the cache, so the
+second one is free.
+
+**Measured after, on the live league: 316 of 316.** Kade Anderson carries
+`mlbId: 807739`, `savantName: "Anderson, Kade"`, `kinds: ["pitcher"]`. Team 12's
+report is **26 rows including `Kade Anderson (0g)`**, his row in the pitcher
+table reading `BE · Kade Anderson · — · RP · LHP` with an em dash for the
+opponent, `—` IP, the counting columns 0 and every rate `—` — **the same shape
+Nathan Eovaldi's row takes on a day he has not pitched yet**, which is the point:
+the table's counting columns are a *sum over the range* and the sum of no games
+is genuinely zero, while nothing that would have to be *estimated* is drawn at
+all.
+
+**`espn-lineup-…` goes to `-v3`, and it is a field that has begun to be filled
+rather than a shape that has changed.** A frozen day's blob is read back with no
+freshness test at all, so a v2 blob would have gone on serving `mlbId: null` for
+its prospect for the life of the cache while every live day showed him —
+`rostersToWatchlist` reads all three of the fields that have just started
+carrying values. Nothing prunes the v2 blobs; the cache bucket's own 400-day
+lifecycle is the only expiry, which is the rule `-v2` itself was written under.
+
+**What deliberately did not change.** `getPlayerPool` — the cookie-free 3,921-row
+list behind roster %, eligibility and the trend — still joins against the base
+index alone, so a prospect has **no roster %, no ESPN eligibility and no trend**.
+Extending the fallback to it would mean asking MLB about three thousand names to
+answer for five, and a dash there is the correct reading of a figure ESPN's own
+list does not carry under a name we can match. And the **research board gains no
+row**: its universe is players with a major-league stat line, and none of the
+five has one (checked — `/api/research?kind=pitcher&window=season` is 708 rows
+and holds none of the five ids). A board row for him would be forty columns of
+dashes with no sort value, and the marks on it — the padlock, the roster
+baseball, the `Other Rosters` cut — mark rows. What he gets instead is the thing
+those marks point *at*: a page, reachable by name.
+
 ### The ownership read asks for tomorrow, because a move lands on the next period
 
 **"Kevin Gausman was added today but the board still shows him as a free

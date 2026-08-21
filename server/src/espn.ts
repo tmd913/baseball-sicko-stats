@@ -31,7 +31,7 @@
  */
 
 import { stripAccents, toSavantName } from './names.js';
-import type { PlayerKind, WatchPlayer } from './types.js';
+import type { PlayerKind, SeasonPlayer, WatchPlayer } from './types.js';
 import { readBlob, readJsonBlob, writeBlob, writeJsonBlob } from './storage.js';
 import { addDays, baseballToday, daysBetween, easternDate } from './etDate.js';
 import { mapLimit } from './limit.js';
@@ -292,12 +292,33 @@ export interface IndexEntry {
    *  on what a two-way player is: primary-position code `1` is a pitcher, `Y`
    *  is both, anything else is a batter. */
   kinds: PlayerKind[];
+  /** His club in MLB's own words, his listed position and his two hands —
+   *  filled by the **prospect fallback alone** (`extendIndex`), which is the
+   *  only caller that has to be able to describe a player no other list in the
+   *  app carries. Absent on an entry off the season's own roster, where all
+   *  four are already on `getSeasonPlayers`' row for him. */
+  team?: string;
+  position?: string;
+  bats?: string | null;
+  throws?: string | null;
 }
 
 export interface MlbIndex {
   /** Normalized name to every MLB player who has it — a list, because the
    *  season roster really does hold three collisions of its own. */
   byName: Map<string, IndexEntry[]>;
+  /**
+   * The men in `byName` that the **season's major-league list does not hold** —
+   * empty on the base index and filled only by `extendIndex`, keyed by MLB id.
+   *
+   * They are here in `SeasonPlayer` shape because they are exactly the players
+   * no other list in the app can name: the client holds `/api/players` from
+   * boot for the header search, the details page's fallback and the position
+   * lookup, and that list is `sports/1/players` — the same 1,401 rows this
+   * index is built from. A prospect is in neither, so the only way he can be
+   * searched for or opened is to ride out on the league payload that found him.
+   */
+  beyond: Map<number, SeasonPlayer[]>;
 }
 
 let indexCache: { index: MlbIndex; fetchedAt: number } | null = null;
@@ -336,9 +357,216 @@ export async function getMlbIndex(): Promise<MlbIndex> {
     if (at) at.push(entry);
     else byName.set(key, [entry]);
   }
-  const index = { byName };
+  const index = { byName, beyond: new Map<number, SeasonPlayer[]>() };
   indexCache = { index, fetchedAt: Date.now() };
   return index;
+}
+
+// ---- The prospect fallback: a name the season's major leaguers cannot answer
+
+/**
+ * **A player who has never appeared in a major-league game was invisible in
+ * this app, and the index above is where he was lost.**
+ *
+ * It is built from `sports/1/players?season={SEASON}` — the season's major
+ * leaguers, 1,401 of them — so a prospect on a fantasy roster matched nobody,
+ * `toRosterPlayer` gave him `mlbId: null`, and `rosterToWatchlist` dropped him
+ * outright. Measured on the live 12-team league on 2026-08-21: **316 roster
+ * entries, 311 matched**, and the five that did not were Kade Anderson, Ryan
+ * Sloan, Franklin Arias, Jesús Made and Spencer Schwellenbach — four prospects
+ * and one major leaguer the season's list has stopped carrying.
+ *
+ * **MLB knows all five perfectly well**, just not on that list:
+ * `people/search?names=…` answers with an id, a club and a position for every
+ * one of them (Kade Anderson is 807739, Arkansas Travelers, Seattle's Double-A
+ * club). So the fix is a second lookup rather than a second source of truth.
+ *
+ * **It is consulted only where the index above answers nothing**, which is what
+ * makes it incapable of changing an existing match. `docs/claude/espn.md`
+ * argues at length that ESPN's minor-league universe is kept *out* of the name
+ * index because it "would only add collisions" — and that argument is about
+ * putting eleven thousand extra names into the map every join reads. This
+ * merges a handful, under keys that were empty, driven by the names an actual
+ * roster asked for. A key the season's own list already holds is never touched.
+ *
+ * **And the ambiguity rule is unweakened.** The search is a *substring* match —
+ * `names=Anderson` answers with 49KB of Andersons — so a result is kept only
+ * when its own normalized full name equals the key asked for, every survivor is
+ * pushed under that key as a candidate, and `matchMlbPlayer` then applies the
+ * same two tests it always has: the club decides, and an ambiguity the club
+ * cannot resolve is left **unmatched rather than guessed**. Two Wilmer Floreses
+ * come back from this endpoint too.
+ */
+const PROSPECT_BATCH = 40;
+
+/** MLB's own search, trimmed with `fields` — 253 bytes for one name against the
+ *  1,203 the untrimmed row costs, and `hydrate=currentTeam` is what carries the
+ *  club (and, for a minor leaguer, `parentOrgId`, which is the currency the
+ *  club test is written in). */
+const PEOPLE_FIELDS =
+  'people,id,fullName,active,currentTeam,id,name,parentOrgId,' +
+  'primaryPosition,code,abbreviation,batSide,pitchHand';
+
+interface SearchPerson {
+  id?: number;
+  fullName?: string;
+  active?: boolean;
+  currentTeam?: { id?: number; name?: string; parentOrgId?: number };
+  primaryPosition?: { code?: string; abbreviation?: string };
+  batSide?: { code?: string };
+  pitchHand?: { code?: string };
+}
+
+/** Normalized name → what the search answered with, or an **empty list** where
+ *  it answered with nobody. A miss is remembered exactly as a hit is, so a name
+ *  ESPN carries and MLB has never heard of is asked once an hour rather than
+ *  once per league read. Cleared with the index it supplements. */
+let prospectCache = new Map<string, IndexEntry[]>();
+let prospectFetchedAt = 0;
+/** One batch in flight per set of names, on the same reasoning `inFlight` is
+ *  there for the league read: the per-day fan-out runs six roster parses at
+ *  once and six cold ones would ask MLB the same question six times. */
+const prospectInFlight = new Map<string, Promise<void>>();
+
+async function searchPeople(names: string[]): Promise<SearchPerson[]> {
+  const url =
+    'https://statsapi.mlb.com/api/v1/people/search' +
+    `?names=${encodeURIComponent(names.join(','))}` +
+    `&hydrate=currentTeam&fields=${PEOPLE_FIELDS}`;
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) throw new Error(`MLB Stats API people/search returned ${res.status}`);
+  const data = (await res.json()) as { people?: SearchPerson[] };
+  return data.people ?? [];
+}
+
+/** The kinds rule `getMlbIndex` and `getSeasonPlayers` both use, stated once. */
+function kindsOf(code: string | undefined): PlayerKind[] {
+  return code === 'Y' ? ['batter', 'pitcher'] : code === '1' ? ['pitcher'] : ['batter'];
+}
+
+async function resolveProspects(keys: string[]): Promise<void> {
+  const people = await searchPeople(keys);
+  const found = new Map<string, IndexEntry[]>();
+  for (const p of people) {
+    // **Only somebody currently playing.** The search reaches back through
+    // every person MLB has ever listed, and a retired homonym cannot be on a
+    // fantasy roster but can very easily make a live prospect ambiguous and so
+    // cost him his match. All five of the league's unmatched men come back
+    // `active: true`.
+    if (!p.id || !p.fullName || p.active === false) continue;
+    const key = normalizeName(p.fullName);
+    // The endpoint matches on substrings, so a row is kept only if it is
+    // genuinely the name that was asked for.
+    if (!keys.includes(key)) continue;
+    const at = found.get(key) ?? [];
+    at.push({
+      id: p.id,
+      name: p.fullName,
+      // **The parent club, not the affiliate.** ESPN files a prospect under the
+      // major-league organization that owns him, and the club test compares
+      // against `ESPN_TO_MLB_TEAM`, which is written in major-league ids — so
+      // Kade Anderson's Arkansas Travelers (574) has to read as Seattle (136).
+      // A major leaguer the season list has dropped has no parent and his own
+      // club id is already the right one.
+      teamId: p.currentTeam?.parentOrgId ?? p.currentTeam?.id ?? null,
+      kinds: kindsOf(p.primaryPosition?.code),
+      // Where he actually is, in MLB's own words — `Arkansas Travelers` rather
+      // than a major-league club he has never played for, which is the only
+      // honest thing to print beside his name in a search.
+      team: p.currentTeam?.name ?? '',
+      position: p.primaryPosition?.abbreviation ?? '',
+      bats: p.batSide?.code ?? null,
+      throws: p.pitchHand?.code ?? null,
+    });
+    found.set(key, at);
+  }
+  // A key with no answer is cached empty, which is what stops it being asked
+  // again on the next roster parse a minute later.
+  for (const key of keys) prospectCache.set(key, found.get(key) ?? []);
+}
+
+/**
+ * The index, plus whatever MLB's own search can say about the names in `names`
+ * that it could not answer. Returns the index **unchanged** when there is
+ * nothing to add — including when the search fails, which costs a prospect his
+ * row and never the league read.
+ */
+export async function extendIndex(index: MlbIndex, names: string[]): Promise<MlbIndex> {
+  if (Date.now() - prospectFetchedAt >= INDEX_TTL_MS) {
+    prospectCache = new Map();
+    prospectFetchedAt = Date.now();
+  }
+  const asked = new Set<string>();
+  const missing = new Set<string>();
+  for (const raw of names) {
+    const key = normalizeName(raw);
+    // `normalizeName` leaves only `[a-z ]`, so a key can never carry the comma
+    // the batch is joined on — but the guard is stated rather than assumed,
+    // since one that did would silently split into two names that match
+    // nobody.
+    if (!key || key.includes(',') || index.byName.has(key)) continue;
+    asked.add(key);
+    if (!prospectCache.has(key)) missing.add(key);
+  }
+  if (missing.size > 0) {
+    const keys = [...missing].sort();
+    for (let i = 0; i < keys.length; i += PROSPECT_BATCH) {
+      const batch = keys.slice(i, i + PROSPECT_BATCH);
+      const flightKey = batch.join(',');
+      let job = prospectInFlight.get(flightKey);
+      if (!job) {
+        job = resolveProspects(batch)
+          .catch((err: Error) => {
+            // A failure costs these names their rows, not the request: the
+            // roster still reads, every major leaguer on it still matches, and
+            // the prospect stays exactly as invisible as he was before.
+            console.error('MLB people/search unavailable:', err.message);
+          })
+          .finally(() => {
+            prospectInFlight.delete(flightKey);
+          });
+        prospectInFlight.set(flightKey, job);
+      }
+      await job;
+    }
+  }
+  const extra = [...asked].filter((k) => (prospectCache.get(k)?.length ?? 0) > 0);
+  if (extra.length === 0) return index;
+  const byName = new Map(index.byName);
+  const beyond = new Map(index.beyond);
+  for (const key of extra) {
+    const entries = prospectCache.get(key) as IndexEntry[];
+    byName.set(key, entries);
+    for (const e of entries) {
+      beyond.set(
+        e.id,
+        e.kinds.map((kind) => ({
+          id: e.id,
+          name: e.name,
+          savantName: toSavantName(e.name),
+          kind,
+          team: e.team ?? '',
+          position: e.position ?? '',
+          bats: e.bats ?? null,
+          throws: e.throws ?? null,
+        })),
+      );
+    }
+  }
+  return { ...index, byName, beyond };
+}
+
+/** Every roster entry's name, which is what `extendIndex` needs to know which
+ *  of them the season's own list cannot answer for. */
+function rosterNames(teams: EspnRosterResponse['teams']): string[] {
+  const names: string[] = [];
+  for (const team of teams ?? []) {
+    for (const entry of team.roster?.entries ?? []) {
+      const name = entry.playerPoolEntry?.player?.fullName;
+      if (name) names.push(name);
+    }
+  }
+  return names;
 }
 
 /**
@@ -1403,11 +1631,28 @@ export interface EspnOwnership extends EspnLeagueInfo {
    *  league** and shared by everyone in it — making it user-specific would
    *  turn one upstream read into one per manager. */
   rosters: Record<number, EspnRosterPlayer[]>;
+  /**
+   * The league's rostered players **that `/api/players` does not carry** — the
+   * prospects, resolved by `extendIndex` against MLB's own search.
+   *
+   * It rides here for the reason `rosterPct` and `eligibility` do: this is the
+   * call a connected client already makes, and the gate is the same — having a
+   * league. It could not have gone on `/api/players`, which is the season's
+   * major-league roster, cached per season and served to every user alike;
+   * whose minor leaguers are worth naming is a fact about a *league*.
+   *
+   * The client merges it into that list, which is what makes a prospect
+   * findable in the header search and openable as a player page at all. Five
+   * rows on the live 12-team league, ~600 bytes.
+   */
+  beyondMlb: SeasonPlayer[];
   /** How many roster entries were read, and how many of them found an MLB
-   *  player. The gap is almost entirely prospects who have never played a
-   *  major-league game, and is reported so a bad *season* (an index for the
-   *  wrong year matches nobody) is visible rather than silently emptying the
-   *  filter. */
+   *  player. The gap used to be almost entirely prospects who have never played
+   *  a major-league game and is now almost nothing (**316 read, 316 matched**
+   *  on the live league, against 311 before `extendIndex`), which makes it a
+   *  sharper instrument than it was: it is reported so a bad *season* (an index
+   *  for the wrong year matches nobody) is visible rather than silently
+   *  emptying the filter. */
   rosterCount: number;
   matched: number;
   fetchedAt: number;
@@ -1525,6 +1770,10 @@ export async function getOwnership(
       if (Object.keys(parsed).length > 0) lineupSlotCache.set(creds.leagueId, parsed);
     }
     const info = leagueInfoFrom(creds, data);
+    // The prospect fallback, asked once for the whole league rather than once
+    // per team: every name the season's major-league list cannot answer, in one
+    // `people/search`. See `extendIndex`.
+    const full = await extendIndex(index, rosterNames(data.teams));
     const owned: Record<number, number> = {};
     const rosters: Record<number, EspnRosterPlayer[]> = {};
     let rosterCount = 0;
@@ -1532,7 +1781,7 @@ export async function getOwnership(
     for (const team of data.teams ?? []) {
       const roster: EspnRosterPlayer[] = [];
       for (const entry of team.roster?.entries ?? []) {
-        const player = toRosterPlayer(entry, index);
+        const player = toRosterPlayer(entry, full);
         if (!player) continue;
         rosterCount++;
         if (player.mlbId !== null) {
@@ -1550,6 +1799,11 @@ export async function getOwnership(
       eligibility: pool.eligible,
       trend,
       rosters,
+      // Only the men actually on a roster in *this* league: `beyond` is the
+      // index's own accumulation and an hour of league reads can leave another
+      // league's prospects on it, which would put strangers in this reader's
+      // search results.
+      beyondMlb: [...full.beyond.values()].flat().filter((p) => owned[p.id] !== undefined),
       rosterCount,
       matched,
       fetchedAt: Date.now(),
@@ -1655,11 +1909,20 @@ const LINEUP_CONCURRENCY = 6;
  * the games start) and stay in memory on the ten-minute clock.
  *
  * Keyed by league, team and period, and versioned — a stored blob deserializes
- * with every field added since it missing, so bump `-v1` if the shape ever
- * grows past a list of ids.
+ * with every field added since it missing, so bump `-v2` if the shape ever
+ * grows past a roster.
+ *
+ * **`-v3` is not a shape change, it is a field that has begun to be filled.**
+ * `mlbId`, `savantName` and `kinds` were null, null and empty on every prospect
+ * a v2 blob holds, because the join could not reach him — and a frozen day is
+ * read back with *no freshness test at all*, so those rows would have stayed
+ * unmatched for the life of the cache while every live day showed him. Which is
+ * exactly the case `RULES.md` names: the test is not whether a field rides in
+ * the blob but whether anything reads it back out of one, and
+ * `rostersToWatchlist` reads all three.
  */
 const lineupBlobKey = (leagueId: number, teamId: number, period: number) =>
-  `espn-lineup-${leagueId}-${teamId}-${period}-v2.json`;
+  `espn-lineup-${leagueId}-${teamId}-${period}-v3.json`;
 
 const lineupCache = new Map<string, { roster: EspnRosterPlayer[]; fetchedAt: number }>();
 /** One cold container asking for the same day from three tabs should send one
@@ -1704,9 +1967,14 @@ async function fetchTeamRoster(
   const data = Array.isArray(body) ? body[0] : body;
   const team = (data.teams ?? []).find((t) => t.id === teamId);
   const index = await getMlbIndex();
+  // The same fallback the league-wide read makes, over one team's names — and
+  // it has to be here too, because this is the read the roster views and every
+  // team page are actually drawn from. Its cache is shared with that read, so
+  // a fan-out over 62 days asks MLB nothing after the first day.
+  const full = await extendIndex(index, rosterNames(team ? [team] : []));
   const roster: EspnRosterPlayer[] = [];
   for (const entry of team?.roster?.entries ?? []) {
-    const player = toRosterPlayer(entry, index);
+    const player = toRosterPlayer(entry, full);
     if (player) roster.push(player);
   }
   return sortRoster(roster);
