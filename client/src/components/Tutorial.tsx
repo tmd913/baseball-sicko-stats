@@ -351,7 +351,7 @@ const CHAPTERS: Chapter[] = [
           Both show your whole roster — batters first, then pitchers. On the table the
           pitchers are a second block under the batters with their own column headings,
           and those headings take over the top of the screen as you scroll down to
-          them. On the feed a pitcher's outings are their own section above the plays.{' '}
+          them. On the feed a pitcher's outings are their own section below the plays.{' '}
           <Ui>Research</Ui> is a different animal — the whole league rather than your
           roster — and has the next chapter to itself.
         </p>
