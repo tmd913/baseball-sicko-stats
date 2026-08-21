@@ -22,7 +22,7 @@ import { OPPONENT_KEY, ROSTER_PCT_COLUMN, TREND_BY_KEY } from './researchColumns
  *
  * ---
  *
- * ## The population: the whole board for that kind and window
+ * ## The population: the qualified players on that board, and Savant's bar
  *
  * A percentile means nothing without a stated population, and there were three
  * candidates.
@@ -35,16 +35,56 @@ import { OPPONENT_KEY, ROSTER_PCT_COLUMN, TREND_BY_KEY } from './researchColumns
  *   103 shortstops" against "62nd of the 622 batters"). And the Stats tab has
  *   no pills at all, so a narrowed population is one the two surfaces could
  *   never agree on.
- * - **A qualified subset** — the old `Qualified` rule, 3.1 PA per team game and
- *   the rest — was rejected because that toggle has been removed from the board
- *   and `ResearchRow.qualified` now has no reader on either side of the wire.
- *   Reviving it here to gate a badge would put a rule the reader cannot see
- *   back in the middle of one they can.
- * - **The whole board for that kind and window**, which is what this is: every
- *   row the leaderboard carries for that trade, before any pill or filter — the
- *   `M` in the count line's "455 of 622 batters" with all three include buttons
- *   on. It is fixed for a given board, it is the same set on both surfaces, and
- *   it is a number the reader has already been shown.
+ * - **Everyone on the board for that kind and window** — every row the
+ *   leaderboard carries for that trade, before any pill or filter. This is what
+ *   it used to be, and it is wrong for the reason a leaderboard has a qualifier
+ *   at all: a man with forty plate appearances and a fluke .450 xwOBA is a
+ *   *rung on the ladder* every real hitter is then measured against. That is
+ *   not a rounding error — measured on the live season board, ranking the 634
+ *   batters who have an xwOBA against all 634 rather than against the 247 who
+ *   clear the bar moves a qualified batter's badge by a **mean of 16.8 points
+ *   and as much as 27** (a pitcher's by 8.6 and 18). Masyn Winn's xwOBA reads
+ *   **49** against everyone and **23** against the qualified; Savant says 22.
+ *   Keibert Ruiz reads 33 and 6; Savant says 6.
+ * - **The qualified players on that board**, which is what this is, and the bar
+ *   is **Savant's own** rather than MLB's: 2.1 plate appearances per team game
+ *   for a batter, 1.25 batters faced for a pitcher, measured per span. Both
+ *   figures were reproduced off Savant's own `percentile-rankings` export
+ *   before anything was built on them — see `qualifies` in `research.ts`, which
+ *   carries the measurement and the boundary cases. `ResearchRow.qualified` is
+ *   where it arrives, computed once on the server against the standings, since
+ *   the client has no way to know how many games a club has played.
+ *
+ * **An unqualified player is not dropped and not blanked — he is placed on the
+ * qualified players' scale**, and the badge says so with a dashed ring. Only
+ * the population that *defines* the scale changes; every row on the board still
+ * carries a reading, which is the whole reason this board exists. That answers
+ * the objection that retired the old `Qualified` toggle — reviving a subset
+ * "would put a rule the reader cannot see back in the middle of one they can" —
+ * on both halves: nobody is hidden, and the rule is stated in the badge's own
+ * tooltip, in the toggle's, and in the expanded table's chrome.
+ *
+ * **The dashed ring is not a second meaning for a broken border; it is the same
+ * one arriving on a second surface.** This app's standing rule is that solid
+ * means measured and broken means ours, and the percentile card one tab over
+ * already draws a **dashed ring on exactly these men** (`.pct-bubble--est`):
+ * Savant publishes no `percent_rank_` for a player under its bar, so the card
+ * ranks him itself and marks the bar as ours. That is the same set of players
+ * and the same sentence — *the league publishes no standing for this man, so
+ * this placement is ours* — so it wears the same clothes. The two screens now
+ * agree mark for mark about the same player.
+ *
+ * **What a badge that was both projected and unqualified would draw** was asked
+ * before the ring went on, and the answer is: one ring. Neither surface that
+ * draws a `.col-rank` percentile has a projected reading today — the board and
+ * the Stats tab hold measured stats only, and the League Rankings table's
+ * `.col-rank` is a rank of *teams*, which this modifier is scoped away from.
+ * If one ever arrives, the two claims are the same claim in different words
+ * ("this figure is ours rather than the league's"), and a second broken outline
+ * over the first would be two ways of saying one thing — the argument that took
+ * the third mark off a projected start row. The chrome says `Projected` once
+ * for the whole table, as the matchup card does, and the ring keeps its single
+ * meaning.
  *
  * **Nulls are out of the denominator, not at the bottom of it.** A player
  * Savant has no barrel rate for has not got a bad barrel rate, so he is not one
@@ -135,14 +175,27 @@ const DASHES_AT_ZERO: ReadonlySet<string> = new Set(['wins', 'losses', 'saves', 
  * for turning one of them into a percentile.
  */
 export interface RankScale {
-  /** How many of the board have a value in this column — the denominator, and
-   *  what every tooltip states, since it is not the same in every column. */
+  /** How many of the **qualified** players have a value in this column — the
+   *  denominator, and what every tooltip states, since it is not the same in
+   *  every column. */
   n: number;
+  /** False when nobody on this board cleared the bar and the scale fell back to
+   *  the whole population — see `rankScales`. The tooltip changes its noun
+   *  rather than lying about a qualified population of everybody. */
+  qualifiedScale: boolean;
   /** 0–100 with 100 at the good end, or null for a value the row hasn't got. */
   of(value: number | null): number | null;
 }
 
 export type RankScales = ReadonlyMap<string, RankScale>;
+
+/** The bar in the reader's own terms, for the tooltips that state it. Kept
+ *  beside the scale rather than beside the qualifier on the server, because the
+ *  server ships a boolean and this is the sentence that boolean means. */
+export const QUALIFIER_WORDS: Record<PlayerKind, string> = {
+  batter: '2.1 plate appearances per team game',
+  pitcher: '1.25 batters faced per team game',
+};
 
 /**
  * **Ties share the middle of their run rather than the top of it.**
@@ -186,21 +239,43 @@ function upperBound(sorted: number[], x: number): number {
   return lo;
 }
 
+/** The rows a scale is built from — the qualified ones. Exported so the toggle
+ *  and the expanded table's chrome can say how many of the board they are,
+ *  rather than counting the same thing twice with two rules. */
+export const rankPopulation = (population: ResearchRow[]): ResearchRow[] =>
+  population.filter((r) => r.qualified);
+
 /**
- * Build a scale per rankable column over one population.
+ * Build a scale per rankable column over the **qualified** part of one
+ * population.
  *
  * Sorted once per column and then binary-searched per cell, rather than a
  * percentile stored per row: the board re-renders on every keystroke in the
  * search box and every tap of a pill, and the population is unaffected by both
  * — so the sorting is memoised against the rows and the columns alone, while
  * the lookups ride along with the render that was happening anyway.
+ *
+ * **A board on which nobody qualifies keeps its badges**, ranked against
+ * everybody, and every tooltip on it says "of the N batters" rather than "of
+ * the N qualified batters". It is the standing rule that a failure costs its
+ * own column and never the request, applied to the one input that can go empty:
+ * `qualifies` returns false for the whole league when the window contains no
+ * finished team game at all, and losing every badge on the table would be a
+ * worse answer than ranking against the field and saying so. It is not reachable
+ * on any window the board offers — the shortest is 7 days, where a club has
+ * finished five to seven games and the measured bar is 12 to 14 PA, clearing
+ * 271 of 406 batters — but the failure it guards is a table that silently
+ * empties, which is the one this app least wants.
  */
 export function rankScales(columns: Column[], population: ResearchRow[]): RankScales {
   const out = new Map<string, RankScale>();
+  const qualified = rankPopulation(population);
+  const qualifiedScale = qualified.length > 0;
+  const pool = qualifiedScale ? qualified : population;
   for (const col of columns) {
     if (!isRankable(col)) continue;
     const values: number[] = [];
-    for (const r of population) {
+    for (const r of pool) {
       const v = col.value(r);
       // `Number.isFinite` rather than a null test alone: a derived rate guards
       // its own denominator and returns null, but a stray Infinity or NaN from
@@ -214,6 +289,7 @@ export function rankScales(columns: Column[], population: ResearchRow[]): RankSc
     const lowerIsBetter = col.ascFirst === true;
     out.set(col.key, {
       n,
+      qualifiedScale,
       of(value) {
         if (value === null || !Number.isFinite(value)) return null;
         const lo = lowerBound(values, value);
@@ -276,6 +352,13 @@ function ordinal(n: number): string {
  * columns. Color is reserved for *state*." A green 94 beside a red 12 would be
  * a second color system on the one table whose color vocabulary is already
  * spoken for by the live inning, the postponement and the trend.
+ *
+ * **The one mark it does carry is the dashed ring on a player outside the
+ * population** — argued at the head of this file, and drawn as an `outline` for
+ * the same reason `.pct-bubble--est` is one: an outline is painted rather than
+ * laid out, so a ring that comes and goes down a column cannot change a row's
+ * height or a table's width, which is the `.sched-vs-estimated` argument about
+ * the same choice. Measured: neither moves by a pixel.
  */
 export function RankBadge({
   col,
@@ -283,6 +366,7 @@ export function RankBadge({
   value,
   kind,
   population,
+  qualified,
 }: {
   col: Column;
   scale: RankScale | undefined;
@@ -293,6 +377,11 @@ export function RankBadge({
    *  Named rather than implied, because a reader has to be able to find out
    *  what they are being ranked against. */
   population: string;
+  /** Whether this row is *in* that population — `ResearchRow.qualified`, which
+   *  is Savant's bar measured over this span. False draws the dashed ring and
+   *  adds the sentence explaining it; the number itself is the same either way,
+   *  because he is placed on the same scale. */
+  qualified: boolean;
 }) {
   if (!scale) return null;
   if (value === 0 && DASHES_AT_ZERO.has(col.key)) return null;
@@ -301,12 +390,20 @@ export function RankBadge({
   const dir = col.ascFirst
     ? ' Lower is better in this column, so the rank is read from the small end up.'
     : '';
+  // Only call them qualified where they are: a board on which nobody cleared
+  // the bar is ranked against the field, and says the plain noun instead.
+  const outside = scale.qualifiedScale && !qualified;
+  const who = scale.qualifiedScale ? `qualified ${populationNoun(kind)}` : populationNoun(kind);
+  const short = outside
+    ? ` He is short of that bar himself (${QUALIFIER_WORDS[kind]}), so this is his place on` +
+      ' their scale rather than a standing among them — which is what the dashed ring says.'
+    : '';
   return (
     <span
-      className="col-rank"
-      title={`${col.title}: ${ordinal(pct)} percentile of the ${scale.n} ${populationNoun(
-        kind,
-      )} with a figure on ${population}. 100 is best.${dir}`}
+      className={`col-rank${outside ? ' col-rank--outside' : ''}`}
+      title={`${col.title}: ${ordinal(
+        pct,
+      )} percentile of the ${scale.n} ${who} with a figure on ${population}. 100 is best.${dir}${short}`}
     >
       {pct}
     </span>
@@ -327,7 +424,11 @@ export function RankBadge({
  * bar's line budget: the tools group is one flex item that wraps whole, and the
  * longer word takes it past the width where a 1920px window keeps the whole
  * control set on one row. The tooltip says the long version, which is where the
- * population is stated too.
+ * population is stated too — **including the qualifier**, since a scale built
+ * over a subset owes the reader the rule that made the subset. The caller
+ * supplies the population's words because only it knows the board and the span;
+ * what is added here is the half that is true on both surfaces, that nobody is
+ * dropped for missing the bar.
  */
 export function RanksButton({
   on,
@@ -345,7 +446,7 @@ export function RanksButton({
       className={`research-toggle${on ? ' on' : ''}`}
       aria-pressed={on}
       onClick={onToggle}
-      title={`Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}`}
+      title={`Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`}
     >
       {/* Three bars rising to the right: a rank, drawn as one. */}
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

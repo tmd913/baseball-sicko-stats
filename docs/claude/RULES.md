@@ -99,8 +99,13 @@ changed.
 **A field nobody reads is a field nobody misses.** Remove it with its last
 reader (`teamProbablePitcher`, `NewsItem.url`, `EspnMatchupSeries.live` are the
 precedents). The mirror of that rule: before removing, check for a *second*
-reader — `ResearchRow.qualified` is deliberately kept with no reader at all, and
-says so where it is documented.
+reader — and check whether a *future* one is worth waiting for.
+`ResearchRow.qualified` is the case that vindicates the mirror: it was kept
+deliberately with **no reader at all**, on the grounds that the reasoning behind
+it was still correct, and it has one again — the percentile scale on the
+research board and the player page's Stats tab is built from the rows it
+selects. Had it been pruned, the work would have been the standings fetch, the
+qualifier and the field, put back.
 
 **A failure costs its own column, never the request.** Each upstream is fetched
 in its own `try`: a dead Savant leaves the MLB half standing, a dead RotoWire

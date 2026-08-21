@@ -9,7 +9,7 @@ import {
 } from './researchColumns';
 import type { Column } from './researchColumns';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
-import { RankBadge, RanksButton, rankScales } from './columnRanks';
+import { QUALIFIER_WORDS, RankBadge, RanksButton, rankScales } from './columnRanks';
 import { boardPopulation } from './ResearchTable';
 
 /**
@@ -341,7 +341,7 @@ export function PlayerWindowTable({
         <RanksButton
           on={showRanks}
           onToggle={() => onShowRanksChange(!showRanks)}
-          population="the whole research board for that span"
+          population={`the qualified players on the research board for that span (Savant's bar of ${QUALIFIER_WORDS[kind]})`}
         />
       </div>
       {pickerOpen && (
@@ -435,6 +435,11 @@ export function PlayerWindowTable({
                               ? 'the Season board'
                               : `the ${window}-day board`
                           }
+                          /* His own qualification **in this span**, off that
+                             span's own row — a man who qualifies over the
+                             season may be short of the bar over seven days,
+                             and this table draws both lines at once. */
+                          qualified={row.qualified}
                         />
                       )}
                     </td>

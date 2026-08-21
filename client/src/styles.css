@@ -12463,6 +12463,53 @@ button.start-line:focus-visible {
 .stats-table td .col-rank {
   color: var(--faint);
 }
+/* **The box hugs the digits on both tables, whether or not a ring is drawn on
+   it.** `display: block` alone leaves the badge as wide as its cell, which is
+   invisible until something is drawn *round* it — a ring on a full-width block
+   would be a rectangle across the column rather than a mark on a number. Both
+   cells are right-aligned (`.summary-table .sum-num`, `.glog-table .glog-num`),
+   so `fit-content` plus an auto start margin lands the box on the exact edge
+   the text already sat on: measured, not a pixel moves in either table with
+   this on and no ring anywhere. It is declared for **every** badge rather than
+   for the ringed ones, which is `reserve the box, don't move the page` — a
+   column where some rows qualify and some don't must not jitter by which. It is
+   the same shape `.league-table td .col-rank` gives its own pill. */
+.research-table td .col-rank,
+.stats-table td .col-rank {
+  width: fit-content;
+  margin-left: auto;
+}
+/* **He is not in the population this badge ranks him against** — the scale is
+   built from the players who clear Savant's bar for the span (2.1 PA per team
+   game, 1.25 batters faced), and a man short of it is still placed on it rather
+   than dropped or blanked.
+
+   **This is not a second meaning for a broken border.** The app's ladder is
+   solid = measured, broken = ours, and the percentile card one tab over already
+   rings **exactly these men** — Savant publishes no `percent_rank_` under its
+   bar, so the card ranks them itself and marks the bar as ours
+   (`.pct-bubble--est`). Same players, same sentence, so the same clothes. What
+   differs is the ink and only the ink: that ring is `--text` because it sits on
+   a colored bubble, this one is `--faint` because a badge here *is* `--faint`
+   and a ring louder than the number it encloses would invert the one hierarchy
+   this cell has (a full-size value over a quiet second line).
+
+   **An `outline`, not a `border`** — the reason `.pct-bubble--est` gives, and
+   the reason `.sched-vs-estimated` paints its line rather than laying one out:
+   a border is part of the box, so a ring that comes and goes down a column
+   would change a row's height and a table's width by which players qualify.
+   Measured with the ring on and off: row height 58.00px and table width to the
+   hundredth, identical on both boards.
+
+   Scoped to the two tables' own cells so it cannot reach `.league-table`'s
+   `.col-rank`, which is a rank of *teams* and has no population to be outside
+   of. */
+.research-table td .col-rank--outside,
+.stats-table td .col-rank--outside {
+  outline: 1px dashed var(--faint);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
 
 /* ---- Fantasy lineup slot ----------------------------------------------------
    The chip beside a player's name while the views are reading a fantasy roster.
