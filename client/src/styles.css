@@ -16295,9 +16295,22 @@ html[data-theme='light'] .league-table thead th {
   }
   /* `.view-bar` holds one full-width strip and nothing that wraps, so it has
      no gap and no bottom margin to tighten — the tab row *is* the bottom of the
-     chrome. What takes the phone's step is the row under it. */
+     chrome. What takes the phone's step is the row under it.
+
+     **And the bottom margin carries the same condition it does up there**,
+     which is this file's oldest trap and was walked straight into: *a media
+     query adds no specificity*, so this block — sitting at the end of the file
+     — beat `.view-tools:not(:has(+ .date-bar))` and put the margin back at
+     every width under 640. Outside the painted band, that margin shows the
+     ground of whatever box the row is in, which on the Roster's table reading
+     is the pane's darker `--bg`: measured at 390 and 640, **12px of dead band
+     between the buttons and the dates** against 0 from 641 up. Reported as
+     exactly that, off a phone. The condition has to be restated because the
+     value is; a rule that overrides a scoped one has to be scoped the same. */
   .view-tools {
     gap: var(--stack-gap);
+  }
+  .view-tools:not(:has(+ .date-bar)) {
     margin-bottom: var(--stack-gap);
   }
   .player-list {

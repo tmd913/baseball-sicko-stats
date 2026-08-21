@@ -179,6 +179,22 @@ own bottom edge (measured, both flush at y=198 and y=152). Padding is band and
 margin is the space between two different things, which is exactly the
 distinction the two rules turn on.
 
+**And the phone block has to carry that condition too**, which is this file's
+oldest trap walked straight into: *a media query adds no specificity*, so the
+`@media (max-width: 640px)` block at the end of the file — where this row takes
+`--stack-gap` with the rest of the phone rhythm — beat the scoped rule above and
+put the margin back at every width under 640. Outside the paint, that margin
+shows the ground of whatever box the row is in, which on the table reading is
+the pane's darker `--bg`: measured, **12px of dead band between the buttons and
+the dates at 320, 375, 390, 480 and 640**, against 0 from 641 up. It was
+reported off a phone, twice, while every desktop width measured clean. A rule
+that overrides a scoped one has to be scoped the same way — so the narrow block
+is two rules now, the gap unconditional and the margin under the same
+`:not(:has(+ .date-bar))`. Re-measured at **320 / 375 / 390 / 480 / 640 / 641 /
+900 / 1200 / 1920: 14px above the buttons, 0 of band below them and 9px to an
+arrow at every one**, on the Roster's two readings and a matchup team page's
+two; research and League keep their 12px phone gap.
+
 **And `.app-chrome:has(+ .view-tools)` (and `.mup-chrome`'s) drop their bottom
 margin**, or the 14px *above* the band would be the same strip of container one
 row up. `:has()` rather than a class, because nothing about the chrome changes —
