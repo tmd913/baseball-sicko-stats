@@ -35,7 +35,10 @@ there; the column headings hold directly under the head. Measured at 1200×900,
 the chrome above the first row goes **237px → 102px** at rest and **237 → 143**
 once the reader has scrolled — the app's own pinned bar, the head, and rows. At
 390×844 it goes **283 → 100** and **283 → 172**, which is three more rows of a
-phone screen at every offset past the first.
+phone screen at every offset past the first. *(The scrolled figures are **164**
+and **193** since the head became two lines — the badges over the count. The
+saving stands; it is 21px smaller than it was. See the bullet on the head's
+shape, below.)*
 
   - **The head is the count and a badge per setting, and it is one box on both
     surfaces now.** The badges were the full-page mode's `.expanded-chrome` row,
@@ -50,6 +53,50 @@ phone screen at every offset past the first.
       last 30 days* is one sentence — and a line each costs the table 31px to
       say nothing more. Measured at 390 with three badges: **41px as one
       wrapping row against 72px as two.**
+      - ***Superseded, and the measurement it was decided on turned out to be
+        the wrong pair of shapes.*** The head is **two lines now — the badges,
+        then the count** (`.research-badges` inside `.research-head`), which is
+        the shape that paragraph rejected, arrived at from the other end: the
+        count is a fact about the *table*, and the table begins one pixel under
+        this box, so the count is the last thing read before the first row and
+        the badges are the qualification standing above it. The sentence is
+        still one sentence; what the layout had wrong is which half of it the
+        rows are about.
+
+        The 31px it was rejected on was **the price of two boxes**, and this is
+        one box with a column direction on it: the badge run keeps its own wrap
+        and `align-items`, the count is a bare 15px line, and the head's 6/10
+        padding is paid once. And because the count was *in* the wrapping run,
+        taking it out sometimes takes a whole row of the run with it, so at some
+        widths the head comes back **shorter**. Swept at 320 / 375 / 390 / 480 /
+        640 / 900 / 1200 / 1920, before → after:
+
+        | width | 320 | 375 | 390 | 480 | 640 | 900 | 1200 | 1920 |
+        | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+        | player | 103→93 | 72→93 | 72→93 | 72→62 | 41→62 | 41→62 | 41→62 | 41→62 |
+        | teams | 72→93 | 72→62 | 72→62 | 41→62 | 41→62 | 41→62 | 41→62 | 41→62 |
+
+        **+21 where the badge run does not change shape, −10 where a row of it
+        goes**, against a flat 31 for the two-box version. No horizontal
+        overflow of the page body at any of the sixteen readings.
+
+        **Nothing else had to be told**, and that is the measured-height rule
+        paying for itself: the column headings' resting `top` went **143 → 164
+        at 1200 and 172 → 193 at 390** off `--research-head-h` alone, the sorted
+        column's own header held at the same number as the rest of the row
+        (it reads `--pane-bar-h`), and the new-signature scroll target stayed at
+        **110 and 158** — the table's offset in the content and the head's
+        height both grew by 21, and the target is their difference. Checked
+        after: a sort from `scrollTop` 2,384 lands at 110 with the table's top
+        on the head's bottom edge to the pixel (164), a sort pressed at 0 leaves
+        it at 0, and at `scrollLeft` 1,431 the head is still at left 0 with the
+        badges and the count both on the 22px gutter.
+
+        The rule the old paragraph invoked against a moving box is untouched and
+        is why this is safe: nothing in this head is pressable, so there is no
+        control changing size under the finger that pressed it, and the box it
+        *does* move — the header row — reads its offset from a measurement
+        rather than from a number written down.
     - **Drawn at rest as well as scrolled, and that duplication is the point of
       the rule it obeys.** At the top of the board the badges restate five
       buttons that are two rows above them, which is redundant — and the
@@ -119,7 +166,10 @@ phone screen at every offset past the first.
     is the offset at which the head is exactly where it sticks — the table's own
     offset in the content, less the head's height — measured as **110 at 1200
     and 158 at 390**, with the table's top landing on the head's bottom edge
-    (143 and 172) either way. `Math.min` against the current offset is the other
+    (143 and 172, **164 and 193** since the head became two lines) either way.
+    The *target* is unchanged at 110 and 158, the table's offset and the head's
+    height having both grown by the same 21. `Math.min` against the current
+    offset is the other
     half: every control that can change the signature is up in that row, so a
     reader who can *see* the control they just pressed is by definition above
     the target and scrolling to it would take that control off the screen from
@@ -464,6 +514,17 @@ the club and not the arm.
   - **The team reading keeps its own search, sort and filters**, so `BoardState` has four slots rather than two (`BoardStateKey`, `team-batter` / `team-pitcher`). It is the argument the two kinds already keep theirs by: "a batter's `PA ≥ 300` is not a condition the pitching board can even express", and it is not one thirty clubs can express either — every one of them has 4,800. Checked in a browser: sort the batting board by HR, type a search, cross to the clubs, sort them by OPS, cross back — the search and the sort are as they were, and crossing forward again finds the clubs still on OPS.
   - **One sort bug the reading exposed, and it was not new.** `defaultSortKey` opened on `Ros%` whenever `hasRosterPct` was true and the key was in `visibleKeys` — and `visibleKeys` is the reader's *saved list*, which keeps a key it cannot draw. On a connected reader's team board that named a column no row has: the thirty came out in the server's own order with no header lit. It reads `columnsByKey` now, which is the vocabulary *this reading* has, and schedule mode is untouched (its default is still the board's, `visibleKeys` being days ∪ vocabulary there).
 
+  - **And the same fault had a second door, which is why the team board now opens on the club's name.** Reading `columnsByKey` fixed the *absent* column; it does nothing about an *unticked* one. `Ros%` is not in a club's vocabulary at all, so the team board falls to `DEFAULT_SORT[kind]` — `PA` — and a reader who has taken PA off his column list gets a board ordered by a column that is not on it. Measured on a checked board at 1200: **no header lit anywhere in the 28-column header row**, no cell carrying `research-sorted`, and the thirty in an order (Cubs, Pirates, Nationals, Brewers, Cardinals, Dodgers, Athletics, Twins) that nothing on screen accounts for. It is the same sentence the paragraph above ends on, reached a different way.
+
+    The answer is not another fallback but **a default that is legible from the table**: `defaultSortKey` is `NAME_KEY` on this reading, and the name column is on every team board by construction and cannot be unticked. Measured after: **Arizona Diamondbacks, Athletics, Atlanta Braves, Baltimore Orioles, Boston Red Sox, Chicago Cubs, Chicago White Sox, Cincinnati Reds … Toronto Blue Jays, Washington Nationals**, 30 rows, the `TEAM` header lit with a ▲ and `aria-sort="ascending"`.
+
+    - **Why the alphabet here and not on the player board.** `DEFAULT_SORT`'s own comment says the board opens on the players with the most work behind them so that it lands on “names worth reading rather than the alphabet”, and that is right for six hundred rows you *scan*. Thirty clubs is a list you *look a row up in* — the reader has a club in mind — and A-to-Z is the only order that answers that question. So `Team` is a sort control and `Player` stays a word, which is the asymmetry the include buttons and the position pills already carry: **a control is drawn where it has a subject.**
+    - **`NAME_COLUMN` is a `Column` that is in neither vocabulary.** It is a `Column` because that is what the comparator, the header and the direction rule all speak; it is kept out of `BATTER_COLUMNS` and `PITCHER_COLUMNS` because both of that array's consumers would be wrong about it — the picker would offer a column already on the table that cannot be taken off it, and the filter builder would offer a threshold on a club's name. Its `text` routes it down the alphabetical path the opponent column already uses, nulls to the bottom in both directions included.
+    - **The direction had to be resolved the way the key is** (`activeSortAsc`). `sortAsc` is the direction the reader last *pressed*, and on a fresh board there has been no press — it reads `false`, which was right for as long as every possible default (`Ros%`, `PA`, `IP`) opened descending. A name does not: left on the stored flag the team board opened at Washington and ended at Arizona. It now falls back to the default column's own `ascFirst`, which is already the field deciding which way a header opens and which end a rank counts from; the player boards are untouched, every one of their defaults having no `ascFirst` and so still resolving to `false`. `toggleSort` flips from the direction **on screen** for the same reason — a press on the lit header used to read as “descending, please” while the ▲ under the reader's finger said ascending — and writes the key as well, which is what takes the board off its default now that the reader has chosen the column.
+    - **`research-sort` for the button, and deliberately not `active`.** The header takes the sort button's whole shape — the hit target, the 10px line, the gutter off `--sort-gutter`, which on this table *is* `--research-gutter`, so the label stays on the gutter the thirty club names are set on (measured: label left 81 and the name links' left 81, before and after). What it does not take is `.active`, whose rule pins the sorted column to whichever edge it is passing: this is the leftmost column and is already `position: sticky; left:` above 820px, so a second `left` would park it past its own right edge. `is-sorted` is the lit state alone. And `text-transform` goes back to `uppercase`, which `.research-sort button` turns off for `xwOBA` and `Brl%`'s sake — left alone the header came back as `Team` beside a `PLAYER` on the reading next door.
+    - **Nothing moved.** Measured at 1200 before → after: name header 164.75px wide either way, header row **51.00px**, club rows **58.00px**, `--research-pin-left` **233px**, the name label's left edge **81** — every one unchanged. The arrow **trails** the label here where every other header leads with it, which is the same rule at the opposite alignment: the reservation is paid on the side away from the edge the label is set against, and leading it pushed `TEAM` 11px inside the gutter its own column is set on.
+    - **The default is reachable again**, which the old one was not: press `HR`, press `TEAM`, and the thirty are back at Arizona. Checked in a browser — open (ascending) → press (descending, Washington first) → press (ascending) → `HR` (name header unlit, `aria-sort="none"`) → `TEAM` (ascending). Expanded, the head still carries it: tools row `display: none`, head 62px, badges and count on the full-page box's own 12px bleed.
+
 **The columns a club has not got are dropped rather than dashed** (`TEAM_HIDDEN`), the rule `Ros%` follows without a league and a trend window follows with no baseline. Three reasons, and none of them is taste:
 
   - **A fact about a player, and a club is not one.** `Ros%` and its five trend windows are how many fantasy leagues have rostered *him*. `Opp` is drawn from `/api/statuses`, which is keyed by player id and has no club entry — and today's opponent is a fact every one of that club's players already carries on the player reading.
@@ -492,4 +553,4 @@ A key here is still kept in the reader's saved column list, so crossing back put
 
 **The empty state governs before the six below it**, which is the rule that family already follows — the causes are tested in the order they govern. None of the six can be reached here: the buttons that define every one of them are off the bar and `boardRows` is the whole population. So an empty board on this reading has exactly one cause and it is not a control the reader touched — the thirty rows did not arrive — and the message names that rather than blaming a filter, with `Players` as the way back. The *filter* empty state above it is untouched and says `No clubs match these filters`; checked with `HR ≥ 900`.
 
-**Checked in a browser at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920**, both readings, dark and Powder Blue: rows **58.00px** everywhere, no horizontal overflow of the page body anywhere, the head measured at 41 / 72 / 103 exactly as before, the pinned name column and the sorted column's double edge unchanged, and the full-page box's `--table-bleed` still the 12px that box declares. Thirty rows is under `PAGE_SIZE`, so the board is one page and the paging strip is never reserved.
+**Checked in a browser at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920**, both readings, dark and Powder Blue: rows **58.00px** everywhere, no horizontal overflow of the page body anywhere, the head measured at 41 / 72 / 103 exactly as before (**62 / 93 now** — the head is two lines since; the sweep is in the sort bullet above), the pinned name column and the sorted column's double edge unchanged, and the full-page box's `--table-bleed` still the 12px that box declares. Thirty rows is under `PAGE_SIZE`, so the board is one page and the paging strip is never reserved.
