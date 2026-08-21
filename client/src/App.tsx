@@ -2680,6 +2680,26 @@ export default function App() {
   }, [espnConnected, ownership]);
 
   /**
+   * **The men whose roster % came off ESPN's id rather than off the shared
+   * map** — the league's prospects, and anyone else MLB's season list has
+   * stopped carrying.
+   *
+   * They have a percentage and an eligibility like anybody else (the server
+   * reaches them through `byEspnId`, an identity rather than a name match), and
+   * they have **no trend and cannot have one**: the trend is a diff of two days
+   * of the *global* map, and a man only one league's roster can name is in
+   * neither day of it. Left alone, `rosterPct.has(id)` would have read as "he
+   * is in the map, so an absent delta is a flat one" and drawn him five spans
+   * of `0.0` — a claim that he has not moved, where the truth is that nothing
+   * here knows. See **Roster % for a player MLB's season list has never
+   * carried** in `docs/claude/espn.md`.
+   */
+  const beyondIds = useMemo(() => {
+    const beyond = espnConnected ? ownership?.beyondMlb : null;
+    return new Set((beyond ?? []).map((p) => p.id));
+  }, [espnConnected, ownership]);
+
+  /**
    * The positions ESPN has each player eligible at, or null with no league —
    * which is also what makes the board's position pills mean ESPN eligibility
    * rather than MLB's single listed position.
@@ -6537,7 +6557,7 @@ export default function App() {
           rosterPct={rosterPct ? rosterPct.get(detailsPlayer.id) ?? null : undefined}
           eligible={eligibility ? eligibility.get(detailsPlayer.id) ?? null : undefined}
           rosterTrends={
-            rosterTrend && rosterPct?.has(detailsPlayer.id)
+            rosterTrend && rosterPct?.has(detailsPlayer.id) && !beyondIds.has(detailsPlayer.id)
               ? rosterTrend.map((w) => ({
                   window: w.window,
                   days: w.days,

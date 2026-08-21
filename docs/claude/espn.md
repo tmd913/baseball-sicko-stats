@@ -151,6 +151,189 @@ dashes with no sort value, and the marks on it — the padlock, the roster
 baseball, the `Other Rosters` cut — mark rows. What he gets instead is the thing
 those marks point *at*: a page, reachable by name.
 
+**Two thirds of that paragraph still stand and the first sentence does not** —
+see **Roster % for a player MLB's season list has never carried** below, which
+keeps `getPlayerPool`'s join exactly as described and reaches these men by a
+different key entirely. The board still gains no row and the trend is still out;
+what was wrong was the assumption that the *name* join is the only way to a
+player, when ESPN has been naming him by his ESPN id on both payloads all along.
+
+### Two ESPN rows, one MLB player — where Will Smith's roster % went
+
+**Reported as: "Will Smith has no roster percentage."** He had one. It read
+`0.0%`, with an `RP` pill over the Dodgers' catcher, and the cause is the
+mirror image of the ambiguity this file spends a paragraph refusing to guess
+at.
+
+**`matchMlbPlayer` declines an ambiguity among the *answers*. Nothing was
+looking for one among the *askers*.** The season's major-league list holds
+exactly **one** Will Smith — 669257, the Los Angeles catcher — so `byName` has
+one candidate under `will smith` and the function returns it on its first line,
+before the club test is reached at all. ESPN's list holds **two**: the catcher
+(id 38309, `proTeamId` 19, eligible at C, 64.25% owned) and a free-agent
+left-hander of the same name (id 31549, `proTeamId` 0, eligible at RP, 0.02%).
+Both rows ask the index the same question, both are handed the catcher, and
+`getPlayerPool`'s loop writes `pct`, `eligible` and `slots` under 669257 twice.
+**The later row in ESPN's array wins**, and it is the pitcher.
+
+So the catcher's board cell was the pitcher's 0.02% — which `toFixed(1)`
+renders `0.0%` — his position pill was `RP`, and `slots[669257]` was
+`[13,15,16,17]`, which is the array `projection.ts` fills a lineup against. Three
+facts about one man, all of them somebody else's.
+
+**It is not one player.** Measured over the 3,927-row pool against the 2026
+index: **8 MLB ids are claimed by two ESPN rows each**, and **4 of the 8 answer
+with the wrong man** — the four whose right row happens not to be last:
+
+| MLB id | who | ESPN said | the truth |
+| --- | --- | --- | --- |
+| 669257 Will Smith | LAD catcher | `0.02%`, `RP` | `64.25%`, `C` |
+| 518585 Fernando Cruz | NYY reliever | `0.01%`, `2B/SS` | `4.32%`, `RP` |
+| 683748 Victor Mesa Jr. | TB outfielder | `0%` | `0.26%` |
+| 628708 Yunior Marte | CIN reliever | `SP` | `RP` |
+
+The Fernando Cruz row is the one this doc set had already *noticed and
+misdiagnosed*: `espn-players.md` records "the Yankees' Fernando Cruz comes back
+eligible at `2B` and `SS`, the name-and-club join having found the wrong man of
+a duplicate name". The name-and-club join found the **right** man. A second row
+overwrote him afterwards.
+
+**So the contest is decided on evidence, in the order this file already decides
+everything, and the tests are the ones it already has.** `claimant` in
+`espn.ts`:
+
+- **The club.** The row whose `proTeamId` maps through `ESPN_TO_MLB_TEAM` to the
+  club MLB has him on. It resolves **all 8** on the live pool — 38309 is ESPN's
+  team 19, which is MLB's 119, which is where MLB has 669257, and the
+  left-hander's `proTeamId` is 0, which is deliberately absent from that table
+  and can therefore match nobody.
+- **What he plays.** `slotKinds` reads the row's own `eligibleSlots` as a
+  `PlayerKind` — `P`/`SP`/`RP` (13–15) is a pitcher, `C` through `UTIL` (0–12)
+  and the middle-infield group (19) is a batter — and compares it with
+  `IndexEntry.kinds`. Driven with the club test disabled it resolves **4 of the
+  8 on its own** (Will Smith, Edwin Díaz, Fernando Cruz, Carlos Rodriguez — the
+  pairs that are a batter against a pitcher) and picks the **same row the club
+  test picks in all four**, 0 disagreements. It is not decoration: two rows both
+  off-club is exactly the morning-after-a-trade shape the name-only fallback at
+  the head of this file exists for, and a catcher is still not a reliever.
+- **Then null**, which is the rule unweakened. Two rows on the same club playing
+  the same side of the ball is an ambiguity neither test resolves, and such a
+  man is left unmatched rather than guessed at — no roster %, no eligibility, no
+  slots, and a dash where the figure would be. **0 of the 8 reach it today.**
+  Measured across all 3,927 rows: **not one carries no kind at all**, so the
+  second test always has something to read.
+
+**The losing row is struck out of the join entirely, not merely outvoted.** It
+must not keep the winner's `mlbId` on `byEspnId` either, or the league's
+activity feed — which names a player by ESPN's id and by nothing else — draws
+the catcher's cap logo and links to the catcher's page beside a transaction
+about the pitcher.
+
+**Nothing about `matchMlbPlayer` moved**, which was the thing to protect:
+`rotowire.ts` runs the identical join and the league read runs it 316 times a
+league. This is one pass over rows the pool had already joined, added after the
+join rather than inside it, so a name only one source asks about — which is
+3,911 of the 3,927 — takes exactly the path it always did.
+
+**Measured through `/api/espn/ownership` on the live 12-team league,
+before → after.** All 8 contested ids now answer with the right man; the four
+above change and the other four are byte-identical. Driven in a browser at
+1400×950: Will Smith's page went from `RP · Rostered 0.0%` to **`C · Rostered
+64.2%`**, and on the research board sorted by `▼Ros%` he went from **not on the
+first page at all** to **the top row of it**, reading `64.2%` with a `C` pill.
+The payload is 128,416 → 128,720 bytes and a cold read 472/507ms → 446/450ms,
+i.e. unchanged; `rosterPct` holds 1,397 keys either way, since the losing row
+was overwriting rather than adding.
+
+**And the trend baselines had to be versioned, because a correction subtracts
+like a move.** `espn-ownership-{date}.json` is a stored map of MLB id to
+percentage and eight of its entries were the wrong player's; the trend
+subtracts a baseline from today's map, so the fixed value against an unfixed
+baseline reads as a *rise*. Driven before the bump: Will Smith's page showed
+`Rostered 64.2%` — right — over **`1d ▲64.2 · 3d ▲64.2 · 7d ▲64.2`**, a man who
+had not moved reported as the largest riser in baseball, and he would have gone
+on being one on the 30D column for a month. Three ids do it (Will Smith
++64.22, Fernando Cruz +4.31, Victor Mesa Jr. +0.26; Yunior Marte's two rows
+both read 0, so his correction is invisible).
+
+The alternative — leave it, on the grounds that a bump **deletes 1,376 players'
+history to hide three rows** — was rejected because those three rows do not sit
+quietly: the trend columns sort, and one tap puts a fabricated ▲64.2 at the top
+of every one of them. So the key is `espn-ownership-{date}-v2.json`, and the
+cost is the shape this file already describes and already handles — with no
+baseline at all `getRosterTrend` returns null, the columns are simply not there
+rather than there and full of zeroes, and they come back one at a time as the
+history rebuilds: 1D tomorrow, 3D in three days, 30D in a month. Checked
+immediately after: `trend: null` on the wire, no `Δ` headers on the board, and
+Will Smith's page carrying his percentage and no trend row. Nothing prunes the
+v1 blobs; the cache bucket's 400-day lifecycle is the only expiry.
+
+### Roster % for a player MLB's season list has never carried
+
+**The paragraph above ends on a loss and this is that loss paid**, in the same
+shape as the two before it. It read: *`getPlayerPool` still joins against the
+base index alone, so a prospect has no roster %, no ESPN eligibility and no
+trend. Extending the fallback to it would mean asking MLB about three thousand
+names to answer for five.* Every clause of that is still true. It is just not
+the only way to reach a player.
+
+**The name join is one key. ESPN's own id is another, and both payloads carry
+it.** `getPlayerPool`'s two maps are keyed by **MLB id**, filled by the
+name-and-club join against the base index — so Kade Anderson has no key in
+either and cannot be given one, the join being precisely what failed for him.
+But `players?view=players_wl` files him under `id: 5198748`, and the `mRoster`
+entry that found him on a fantasy roster carries the **same 5198748**. Joining
+on that is an *identity*, not a match: no name to normalize, no club to
+compare, no tie that could need breaking. `EspnPlayerPool.byEspnId` already
+walks every row of the pool for the transactions tab's names, so carrying the
+percentage and the eligibility on it is one more field per row on a map already
+built.
+
+**It costs no request at all.** `getOwnership` already awaits `getPlayerPool()`
+in the same `Promise.all` as the league read; what is added is two object
+spreads and one `Map` lookup per beyond-index player. Measured on the live
+league, alternating process-cold reads of `/api/espn/ownership` on the two
+builds: **472 / 507ms before, 446 / 450ms after**, and warm 2.2–2.9ms before
+against 2.1–3.2ms after — inside ESPN's own spread, which is the same reading
+`extendIndex` itself got. The payload grows by **304 bytes**: `rosterPct` and
+`eligibility` go from 1,397 keys to 1,403.
+
+**Probed before it was built on, which is the half that could have failed.**
+ESPN's cookie-free list carries all six of the league's beyond-index men with a
+real figure, not a zero and not an absence: Kade Anderson **29.39%**, Spencer
+Schwellenbach 9.46%, Jesús Made 2.26%, Josue De Paula 1.03%, Franklin Arias
+1.35%, Ryan Sloan 0.76% — and an `eligibleSlots` each, which is where the `SP`
+and `SS` chips come from.
+
+**Only the men `extendIndex` found take this path.** A player the base index
+named already has an answer under his MLB id, and the contested-claim rule above
+is what makes that answer right; reaching for ESPN's id there as well would put
+a fact about **one league's roster** into a map every league shares. For the
+same reason the additions are copied onto a fresh object rather than written
+through: `getPlayerPool`'s maps are a six-hour global cache, and these keys
+belong to one league.
+
+**The trend stays out, and now says so rather than lying about it.** It is a
+diff of two days of the *global* map, and a man only one league's roster can
+name is in neither day of it — his baseline does not exist and cannot be made to.
+The client's rule is that a player who is in `rosterPct` but absent from a
+window's deltas is **flat**, which is right for the shared map (the server drops
+zeroes from the wire) and wrong for him: it drew Kade Anderson five spans of
+`0.0`, a claim that he has not moved where the truth is that nothing here knows.
+So `App.tsx::beyondIds` — one `Set` off `ownership.beyondMlb`, which the client
+already reads to merge these men into `/api/players` — takes them out of the
+trend gate. They keep the percentage and lose the five deltas, which is the
+honest pair.
+
+**Driven in a browser at 1400×950 against the live league, before → after.**
+Kade Anderson's page: **`P · Rostered —`** → **`SP · Rostered 29.4%`**, his
+padlock still reading `Kade Anderson is on Baldy's Bozos in your ESPN league`
+and no trend row on either side. The other five move with him. **The research
+board gains no row and was never going to**: none of the six has a major-league
+stat line, so the board's universe does not contain them — this is a fact for
+the page, the search result and the roster views, which is where they became
+visible in the first place.
+
 ### The ownership read asks for tomorrow, because a move lands on the next period
 
 **"Kevin Gausman was added today but the board still shows him as a free
