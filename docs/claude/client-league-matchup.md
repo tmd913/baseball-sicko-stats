@@ -1696,40 +1696,56 @@ afternoon.
 `Aug 10 – Aug 20`, every counting category ESPN scores plus the two the table
 prints beside them:
 
-| | | R | HR | RBI | SB | AB | H | BB | K | W | SV+HLD | ERA | WHIP |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| team 6 | before | 56 | 23 | 69 | 7 | 400 | 102 | 46 | 86 | 7 | 11 | 2.87 | 1.02 |
-| | **after** | **55** | **22** | **67** | **7** | **384** | **99** | **41** | **86** | **7** | **11** | **2.87** | **1.02** |
-| | *ESPN* | *55* | *22* | *67* | *7* | *384* | *99* | *41* | *86* | *7* | *11* | *2.8723* | *1.0213* |
-| team 5 | before | 38 | 5 | 37 | 5 | 372 | 68 | 35 | 92 | 9 | 11 | 5.67 | 1.41 |
-| | **after** | **36** | **5** | **35** | **5** | **358** | **64** | **35** | **92** | **9** | **11** | **5.67** | **1.41** |
-| | *ESPN* | *36* | *5* | *35* | *5* | *358* | *64* | *35* | *92* | *9* | *12* | *5.669* | *1.4093* |
-| team 12 | before | 49 | 17 | 48 | 8 | 380 | 87 | 55 | 109 | 9 | 9 | 3.19 | 1.08 |
-| | **after** | **49** | **17** | **48** | **8** | **380** | **87** | **55** | **109** | **9** | **9** | **3.19** | **1.08** |
-| | *ESPN* | *49* | *17* | *48* | *8* | *380* | *87* | *55* | *109* | *9* | *9* | *3.1875* | *1.0833* |
+| | | R | HR | RBI | SB | AB | H | BB | OPS | K | W | SV+HLD | ERA | WHIP |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| team 6 | before | 56 | 23 | 69 | 7 | 400 | 102 | 46 | .8213 | 86 | 7 | 11 | 2.87 | 1.02 |
+| | **after** | **55** | **22** | **67** | **7** | **384** | **99** | **41** | **.8221** | **86** | **7** | **11** | **2.8723** | **1.0213** |
+| | *ESPN* | *55* | *22* | *67* | *7* | *384* | *99* | *41* | *.8221* | *86* | *7* | *11* | *2.8723* | *1.0213* |
+| team 5 | before | 38 | 5 | 37 | 5 | 372 | 68 | 35 | .5022 | 92 | 9 | 11 | 5.67 | 1.41 |
+| | **after** | **36** | **5** | **35** | **5** | **358** | **64** | **35** | **.4999** | **92** | **9** | **12** | **5.669** | **1.4093** |
+| | *ESPN* | *36* | *5* | *35* | *5* | *358* | *64* | *35* | *.4999* | *92* | *9* | *12* | *5.669* | *1.4093* |
+| team 12 | before | 49 | 17 | 48 | 8 | 380 | 87 | 55 | .7258 | 109 | 9 | 9 | 3.19 | 1.08 |
+| | **after** | **49** | **17** | **48** | **8** | **380** | **87** | **55** | **.7198** | **109** | **9** | **9** | **3.1875** | **1.0833** |
+| | *ESPN* | *49* | *17* | *48* | *8* | *380* | *87* | *55* | *.7198* | *109* | *9* | *9* | *3.1875* | *1.0833* |
 
-**Team 12's totals did not move**, because that manager started everybody every
-day of the week — which is what makes the other two a fix rather than a
-coincidence, and is the same reasoning the scoreboard's own day-summation
-records about the team that had a quiet afternoon.
+The `before` row is this page's own arithmetic before the lineup cut; the `OPS`
+and `SV+HLD` columns then moved again for two reasons that are not this page's,
+and both are two paragraphs down.
+
+**Team 12's counting totals did not move**, because that manager started
+everybody every day of the week — which is what makes the other two a fix rather
+than a coincidence, and is the same reasoning the scoreboard's own day-summation
+records about the team that had a quiet afternoon. Its `OPS` moved anyway, the
+sacrifice fly being a fault in the arithmetic rather than in who was counted.
 
 And on a **settled** week (`?mp=18&mup=104`, `Aug 3 – Aug 9`) team 9 reads
-`73/266 · 49 R · 11 HR · 37 RBI · 7 SB · 22 BB` and `61 K · 6 W · 7 SV · 5 HLD ·
-0.96 ERA · 0.80 WHIP` against ESPN's `266/73/49/11/37/7/22` and
-`61/6/12/0.9586/0.7988`; team 5 reads `68/248 · 36 · 15 · 43 · 3 · 17` and
-`56 K · 2 W · 2 SV · 6 HLD` against the same figures. **Twenty-two of
-twenty-two cells across four teams and two periods**, rate categories included.
+`73/266 · 49 R · 11 HR · 37 RBI · 7 SB · 22 BB · .7885` and `61 K · 6 W · 7 SV ·
+5 HLD · 0.9586 ERA · 0.7988 WHIP` against ESPN's `266/73/49/11/37/7/22/.7885`
+and `61/6/12/0.9586/0.7988`; team 5 reads `68/248 · 36 · 15 · 43 · 3 · 17 ·
+.8513` and `56 K · 2 W · 2 SV · 6 HLD · 3.1224 · 1.2245` against the same
+figures. **Seventy-five of seventy-five cells across five team-weeks and two
+periods** — fifteen categories each, rate categories to four decimal places.
 
-**Two residuals, both older than this and neither on the counting side.** `OPS`
-reads `.824` against ESPN's `.8221` on team 6, and the whole of the difference
-is the **sacrifice fly**: a `PlayerGame` line does not carry one and ESPN's
-on-base denominator does, so the figure is 143/428 here against 143/430 there —
-add ESPN's own `SF: 2` back to our denominator and the two agree to four places
-(`0.8221`). And team 5's live-week `SV+HLD` reads 11 against ESPN's 12, a hold
-ESPN had posted and MLB's feed had not: the same team's *settled* week matches
-exactly (8 against 8), which is what places the difference on the day in
-progress rather than in the sum. Both figures are identical before and after
-this change.
+**Two residuals were left standing by the lineup fix, and both turned out to be
+server faults rather than differences of provenance.** They are recorded in
+full in **Data sources** — *The sacrifice fly, and the one denominator in
+baseball that is not obvious* and *The last out is not the last word: a game
+MLB is still writing* — because neither is about this page. In short:
+
+- **`OPS` read `.824` against ESPN's `.8221`** on team 6, and the whole of it
+  was the **sacrifice fly**: a `PlayerGame` line carried none and on-base
+  percentage divides by `AB + BB + HBP + SF`, so the figure was 143/428 here
+  against 143/430 there. `sf` is on the line now and the two agree to four
+  places.
+- **Team 5's `SV+HLD` read 11 against ESPN's 12.** The first guess was upstream
+  lag — that ESPN had posted a hold MLB had not — and it was wrong. MLB had
+  posted it; *we* had frozen the game feed at the final out, minutes before MLB
+  finished writing the box score, and a frozen game is never re-read. One blob
+  of 622 on disk was cached that early. `isSettledFeed` is the fix.
+
+**Both were found from this table and neither could have been**, which is the
+argument for the reading: a total that is supposed to equal somebody else's
+total is the only thing in this app that can catch an error of one.
 
 **The bench is out of the table, not moved below a line.** The divider stays
 wired to `starterKeys` rather than being switched off, because `splitStarters`

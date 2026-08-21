@@ -2140,6 +2140,15 @@ function battingOf(b: Bucket): BattingLine {
     bb: round1(b[BAT.bb] ?? 0),
     so: round1(b[BAT.k] ?? 0),
     hbp: round1(b[BAT.hbp] ?? 0),
+    // **The sacrifice residue, not sacrifice flies alone**, and that is what
+    // makes a projected OPS honest rather than a lie of a thousandth: this
+    // function's own `projectBatter` splits `1 − AB% − BB%` into `hbp` and this,
+    // so `AB + BB + HBP + SF` here comes back to **PA** — the denominator the
+    // blended OBP was pinned to two hundred lines up. The client divides by it
+    // (`lib.ts::lineOps`), so a projected slash line now recomputes to the OBP
+    // it was built from instead of running a hair high the way a measured one
+    // used to.
+    sf: round1(b[BAT.sf] ?? 0),
     runs: round1(b[BAT.r] ?? 0),
     rbi: round1(b[BAT.rbi] ?? 0),
     sb: round1(b[BAT.sb] ?? 0),

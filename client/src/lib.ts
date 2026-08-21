@@ -319,13 +319,23 @@ export function eventLabel(event: string | null): string {
 
 /** A compact box-score style line, e.g. "2-4, HR, BB". */
 /**
- * OPS for a batting line (a single game or an aggregated range). Sacrifice
- * flies aren't tracked on the line, so the OBP denominator is AB+BB+HBP (a hair
- * high when SFs occurred). Returns null when there's no on-base opportunity to
- * divide by (e.g. a line of only sacrifices).
+ * OPS for a batting line (a single game or an aggregated range).
+ *
+ * **The denominator is `AB + BB + HBP + SF`**, which is on-base percentage's
+ * real one and not the one this function used to divide by. The line carried no
+ * sacrifice fly, so it divided by `AB + BB + HBP` and every OPS in the app ran
+ * a hair high — measured against the live fantasy league's own scoreboard, a
+ * manager's eleven-day lineup read `.824` against ESPN's `.8221`, and the whole
+ * of the gap was two sacrifice flies (143/428 against 143/430). `sf` is on the
+ * line now; see `types.ts::BattingLine`.
+ *
+ * Returns null when there's no on-base opportunity to divide by — which after
+ * this change means a line of nothing *but* sacrifices no longer qualifies:
+ * a sacrifice is an on-base opportunity that was not taken, and `0/1` is the
+ * honest OBP for it rather than a dash.
  */
 export function lineOps(line: BattingLine): number | null {
-  const obpDen = line.ab + line.bb + line.hbp;
+  const obpDen = line.ab + line.bb + line.hbp + line.sf;
   if (obpDen === 0) return null;
   const obp = (line.hits + line.bb + line.hbp) / obpDen;
   const slg = line.ab > 0 ? line.totalBases / line.ab : 0;
@@ -399,6 +409,7 @@ export function combineLines(lines: BattingLine[]): BattingLine {
     bb: sum((l) => l.bb),
     so: sum((l) => l.so),
     hbp: sum((l) => l.hbp),
+    sf: sum((l) => l.sf),
     runs: sum((l) => l.runs),
     rbi: sum((l) => l.rbi),
     sb: sum((l) => l.sb),
@@ -1318,9 +1329,10 @@ export function rangeBattingSummary(line: BattingLine, games: number): string {
   // A range of nothing but walks has no at-bat to divide by, and the plate
   // appearances are then the whole of what happened.
   if (line.ab === 0) return `${g} · ${line.pa} PA`;
-  // The OBP denominator is lineOps's — sacrifice flies aren't on the line, so
-  // it runs a hair high when one happened.
-  const obpDen = line.ab + line.bb + line.hbp;
+  // The OBP denominator is lineOps's, sacrifice fly and all — one definition of
+  // that denominator, so the slash line printed here and the OPS printed beside
+  // it cannot come to disagree about a fly ball.
+  const obpDen = line.ab + line.bb + line.hbp + line.sf;
   const obp = obpDen ? (line.hits + line.bb + line.hbp) / obpDen : 0;
   return `${g} · ${formatRate(line.hits / line.ab)}/${formatRate(obp)}/${formatRate(
     line.totalBases / line.ab,
