@@ -1533,6 +1533,19 @@ components the Roster page draws (`FeedToggle` was extracted from `App.tsx` into
 `Schedule` or `Projected` from the stream or from `Summary` returns to the table
 they are a reading *of*, which is the same one-deep rule the Roster page keeps.
 
+**And `Summary`'s glyph is a report card.** It was three bare rows over a
+heavier rule — a column of days added up — and it is the same statement drawn as
+the thing the reading *produces*: two lines of subjects with the grade under
+them, on a portrait card. `rect` 15×18 at `rx 2.5`, rows at y9 and y13, the
+grade at y17 keeping the outgoing glyph's heavier **2.8** stroke for the reason
+it had one, all of it at the run's own 2.2 in the app's 24 viewBox, drawn at 19
+to match `ProjectedGlyph` beside it. **Portrait is the load-bearing part of
+that**: `ScheduleGlyph` sits two buttons away and is a *landscape* box with a
+grid in it, so a 15×18 card and a 19×16 calendar are told apart by their
+silhouette before either one's contents are legible — which at 19px is most of
+the reading, and a landscape card drawn first read as a second calendar. Checked
+rendered at 19 and at 15, on the light theme and on the dark.
+
 **The row is `.view-tools`, folded rather than resembled**, so it takes the
 app's spacing, the app's 640px squaring rule and the container query the order
 toggle's word threshold is measured against. `.mup-tools`' `--card-column` cap

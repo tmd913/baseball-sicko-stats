@@ -6026,8 +6026,16 @@ export default function App() {
         <LoadingBlock>Reading your roster&rsquo;s games</LoadingBlock>
       )}
 
+      {/* **`float-badge` is what makes "the cards stay exactly as they are"
+          true of their *position* as well as of their content.** The badge is
+          a child of `.app` and sat in the flow between the pinned bar and the
+          pane, so every re-read pushed the whole page down and let it back up
+          again — measured at 1200 and 390, the Roster view's pane went 102 →
+          160 and the Feed's first section 272 → 316. It is a fixed pill in the
+          bottom-left corner now and the page under it does not move; see
+          `.float-badge` in the stylesheet for why that corner. */}
       {showLoading && reports.length > 0 && isRosterView(view) && (
-        <LoadingLine className="refreshing">Updating</LoadingLine>
+        <LoadingLine className="refreshing float-badge">Updating</LoadingLine>
       )}
 
       {/* Everyone the active view would show is on the IL and the toggle is

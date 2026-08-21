@@ -216,7 +216,7 @@ export function LeagueOnboarding({
             would be a second vocabulary on one screen.
 
             A press applies immediately and saves itself — the page changing
-            colour under the reader is the whole confirmation, and there is
+            color under the reader is the whole confirmation, and there is
             nothing here for the button below to commit. */}
         {phase === 'ready' && (
           <div className="espn-field onboard-field onboard-scheme">

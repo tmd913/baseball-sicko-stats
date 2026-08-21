@@ -1337,46 +1337,59 @@ body {
 .app > .loading-block {
   margin-top: 54px;
 }
-/* And the *other* wait that sits directly under the pinned bar — the `Updating`
-   badge, which is what a re-read looks like once there are rows to protect. The
-   rule above fixed the block wait and left this one where it was, which is why
-   the gap was reported a second time: on the Roster view the badge was flush
-   against the bar at **0px**, and stretched the full width of the page besides.
+/* **The `Updating` badge does not sit under the pinned bar at all any more**, and
+   the rule that used to set it there (`.app.summary-mode > .refreshing`, an
+   `align-self` and a 14px top margin) has gone with the position it was tuning.
+   That rule was right about everything except the one thing a reader notices:
+   the badge is a **child of `.app` in the flow**, between the bar and the pane,
+   so every quiet re-read pushed the whole page down and let it back up again a
+   second later. Measured with `/api/report` slowed to a 4s round trip, first
+   content element with the badge absent → present: the Roster view's
+   `.summary-view` **102 → 160px** at 1200 and **100 → 158** at 390 (its 30px
+   pill plus 14 above and 14 below), the Feed's first `.feed-section`
+   **272 → 316** at 1200 and **310 → 354** at 320. Two flavors of one fault, and
+   the fault is being in the flow.
 
-   Both halves are the one cause, and it is the same rule that took the block
-   wait's cushion: `.app.summary-mode` is a **flex column** (so the table can
-   scroll on its own) whose chrome is then given `margin-bottom: 0` (so the table
-   can meet the bar). A flex item is blockified and stretched, so this pill —
-   `inline-flex` everywhere else in the app — became a **full-width bar** with
-   nothing above it. Measured on the live roster at 1200 and 390: 1156px and
-   346px wide, 0px under the chrome, against the 106px pill sitting 14px down on
-   the Feed, which is ordinary block flow and keeps the chrome's own margin.
+   **So it floats, in the corner the app already floats things in.** `back-to-top`
+   is a fixed `.float-btn` in the bottom right and `.back-nav` is a fixed pill in
+   the bottom left at the same 24px inset; this takes the second of those, which
+   nothing occupies, and is the same object it always was — `.refreshing`'s pill
+   with a shadow under it and a ground that is `--panel-2` rather than `--panel`,
+   because a box that floats over rows has to be opaque against them and to read
+   as *above* the page rather than *in* it.
 
-   So `align-self` puts the pill back to its content width and the margin gives
-   back the 14 the chrome was told not to spend, landing both views on **14px**.
-   Fourteen rather than the block wait's 54, and the two are different numbers
-   for a reason: that one is a *page* with nothing behind it and takes a reading
-   block's generous 40 on top of the bar's 14, where this sits over rows somebody
-   is reading and must not shove them a third of an inch down the page every time
-   a preset changes. 14 is also exactly what it already gives *below* itself, so
-   the badge is evenly set between the bar and the table.
+   **The corner rather than the seam under the bar**, which was the other
+   candidate: out of flow, *something* is covered, and at the top of the pane
+   that something is the roster table's sticky header — column names, the one
+   strip a reader mid-scroll navigates by — where the bottom corner covers a
+   sliver of whatever has scrolled past. It also lands identically on both views
+   and at every width, where a slot in the chrome would have to be found twice
+   (the Roster's toggle row and date bar are inside its scroller, the Feed's are
+   children of `.app`) and would run out of room at 320.
 
-   Scoped to summary mode rather than written onto `.refreshing`, which is the
-   one place this parts from the rule above and does so because the mechanism
-   there is unavailable here. That one lands on one number for both views by
-   **margin collapsing** — a block's 54 swallows the chrome's 14 on the Feed and
-   adds to the zeroed 0 on the Roster — and an inline-level box does not collapse,
-   so a bare `margin-top: 14px` would read 14 on the Roster and **28** on the
-   Feed, i.e. the very inconsistency that rule was written to avoid. This is
-   instead the counterpart of `.app.summary-mode .app-chrome { margin-bottom: 0 }`
-   — it hands back to the badge what that rule takes from everything under the
-   bar for the table's sake — and sits beside `.summary-view … { border-top: none }`
-   as the second consequence of that decision. And scoped to the *wait* rather
-   than given back to the chrome, for the reason stated above: a margin on the bar
-   would push the table down and undo the 0px the pane is measured at. */
-.app.summary-mode > .refreshing {
-  align-self: flex-start;
-  margin-top: 14px;
+   `pointer-events: none` because it is a statement rather than a control, and
+   `margin-bottom: 0` because the 14 `.refreshing` carries is flow spacing and
+   there is no flow here to spend it in. It fades rather than appearing: 180ms of
+   opacity alone, which is the transition `.float-btn` keeps under reduced motion
+   and the one kind of motion the ball itself keeps there. */
+.float-badge {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 20;
+  margin-bottom: 0;
+  background: var(--panel-2);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: float-badge-in 0.18s ease-out;
+}
+@keyframes float-badge-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 /* And the *third* thing directly under the pinned bar that the same rule caught:
    the `.empty-state` box — "Your roster is empty", "Your fantasy team is empty",
@@ -4107,7 +4120,7 @@ body {
 
    So the cap goes to the **reading blocks** — the day, Projected Starts and
    News, which are cards and prose (it sat on `.player-day` alone at first, one
-   box inside the day's section, which centred the day's items and left that
+   box inside the day's section, which centered the day's items and left that
    section's heading at the tab's left edge; see the shared rule below) — and the
    tables span the tab and bleed back out through the overlay's own 16px the way
    the three wide tables bleed through `.app`'s 22. `--table-bleed` is inherited
@@ -4166,12 +4179,12 @@ body {
    The head row travels with its block, which is the rule those three already
    had and is what keeps it coherent — `News →` still sits over the right edge of
    the rows it opens, and `Stats →` over its own table's. So the two left edges
-   differ by design and every block on the tab is centred on the same line.
+   differ by design and every block on the tab is centered on the same line.
 
    It is a **no-op below `--card-column`**: a block narrower than its cap has no
    free space for an auto margin to split, so a phone is unmoved to the pixel.
    The Today block needs a class of its own to be reached — its section carried
-   no modifier, the cap having sat on `.player-day` inside it, which centred the
+   no modifier, the cap having sat on `.player-day` inside it, which centered the
    content and left the heading behind. */
 .ovw-day,
 .ovw-starts,
@@ -10404,6 +10417,9 @@ button.start-line:focus-visible {
   gap: 26px;
 }
 .feed-section {
+  /* The containing block for `.feed-film-wait`, which sits on the heading's line
+     rather than in the column — see that rule for the measurement. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -11101,12 +11117,23 @@ button.start-line:focus-visible {
   border-radius: 4px;
 }
 /* **Still looking for today's highlight reels** — the `Video` lens's own wait,
-   under the section heading and above whatever it has already confirmed. A line
-   rather than a block: the settled days on screen are answered, so this says the
-   list is filling in rather than standing in front of one. Centered because that
-   is where the red button and the empty state below it sit. */
+   on the section heading's own line and out of the flow. A line rather than a
+   block: the settled days on screen are answered, so this says the list is
+   filling in rather than standing in front of one.
+
+   **It was centered under the heading, in the flow, and that is what moved the
+   page**: the section is a flex column with a 12px gap, so the line arriving
+   pushed every play in the list down its own 18px plus the gap — measured with
+   `/api/game-clips` held out, the first `.feed-items` went **340 → 370px**. It
+   is `absolute` on the heading's line now (the heading is one short uppercase
+   phrase and the rest of that line is empty at every width this app draws — 105
+   and 125px of the 276 available at 320), so the wait costs the list nothing and
+   still sits at the head of the list it is about. Its parent takes
+   `position: relative` for it. */
 .feed-film-wait {
-  align-self: center;
+  position: absolute;
+  top: 0;
+  right: 0;
   color: var(--muted);
   font-size: 13px;
 }

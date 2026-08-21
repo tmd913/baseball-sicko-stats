@@ -1698,7 +1698,10 @@ export function LiveFeed({
               rather than a block wait: the days already settled are on screen
               and answered, so this says the list is still filling rather than
               standing in front of one. It takes the app's own 250ms floor, so a
-              warm reel (a cached map) draws nothing at all. */}
+              warm reel (a cached map) draws nothing at all. Drawn here, at the
+              head of the list it is about, but laid out **out of the flow** on
+              the heading's own line (`.feed-film-wait`) — in the column it
+              pushed every play in the list down as it arrived. */}
           {showFilmWait && <LoadingLine className="feed-film-wait">Finding the clips</LoadingLine>}
           {recent.length > 0 ? (
             <>

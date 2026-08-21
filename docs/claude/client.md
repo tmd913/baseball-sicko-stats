@@ -673,6 +673,85 @@ It is **nine keyframes of `transform` and `opacity` on four paths, and no JavaSc
 2. **A block wait only when there is nothing to show yet**, and only after **`WAIT_DELAY` (250ms)**. That floor has guarded the report since it was written and is now `hooks.ts::useDelayedFlag`, which every block wait in the app takes — the five player-page tabs above all, where a warm percentile card comes back in tens of milliseconds and a wait that appears and vanishes inside a tenth of a second reads as the page breaking rather than as an answer. The *content* stays gated on the real flag, not the delayed one, or a fast tab would show a blank pane instead of a wait.
 3. **A press-triggered mark holds `MIN_SPIN` (450ms)**, unchanged and now stated as the other end of the same argument: `MIN_SPIN` is a floor on how long a mark stays up once a press put it there, `WAIT_DELAY` is a delay before a mark goes up at all for the waits nobody pressed. The two are deliberately different numbers because they answer different questions. Its one caller is the fantasy popover's Refresh from ESPN, which the ESPN page's own Refresh inherits through `onRefresh`, that being `refreshFantasy`; the sign-in submit and the Connect league button take neither, a Cognito or ESPN round trip having no fast answer to leave a press without a trace.
 
+### Rule 1 has a fifth clause: never over data, and never *above* it either
+
+**Never over data** is a rule about curtains — a wait must not stand in front
+of rows somebody is already reading — and it was silent about a mark that lands
+*beside* them and shoves them down the page. Two marks did exactly that, and
+they were reported as one complaint: the loading indicator appears and shifts
+all the content down.
+
+**Measured rather than argued about.** `/api/report` and `/api/game-clips` on a
+4s round trip, the report's read triggered by a step of the date bar and the
+reel's by the `Video` lens; the number is the top of the first content element
+under the mark, with the mark **absent → present**:
+
+| surface | the mark | before | after |
+| --- | --- | --- | --- |
+| Roster, 1200 | `Updating` | `.summary-view` **102 → 160px** | **102 → 102** |
+| Roster, 390 | `Updating` | 100 → 158 | 100 → 100 |
+| Feed, 1200 | `Updating` | `.feed-section` **272 → 316** | **272 → 272** |
+| Feed, 320 | `Updating` | 310 → 354 | 310 → 310 |
+| Feed, 390 | `Finding the clips` | `.feed-items` **290 → 318** | **290 → 290** |
+| Feed, 320 | `Finding the clips` | 338 → 366 | 338 → 338 |
+
+Two flavors of one fault. The badge is a child of `.app` between the pinned bar
+and the pane, so it moved *everything*: on the Roster its own 30px pill plus 14
+above and 14 below, on the Feed 30 and 14 with the chrome's own margin collapsed
+into it. The film line is a flex item in the `Recent plays` section, so it moved
+that list by its 16px line and the section's 12px gap.
+
+**They are answered differently because they are about different things, and the
+difference is the app's own.** The badge is about *the page* — a foreground
+re-read nobody pressed — so it leaves the page's layout entirely and becomes a
+fixed pill in the **bottom-left corner** (`.float-badge`), which is where this
+app already floats things: `back-to-top` has the bottom right and `.back-nav`
+the bottom left at the same 24px inset. The film line is about *one list*, so it
+stays at the head of that list and is laid out `absolute` on the section
+heading's own line — the heading is one short uppercase phrase and the rest of
+that line is empty at every width the app draws (105px of the 276 available at
+320, against the line's 121).
+
+**The seam under the pinned bar was the other candidate for the badge and was
+rejected.** Out of the flow, *something* is covered; under the bar that
+something is the roster table's sticky header, the one strip a reader mid-scroll
+navigates by, where the bottom corner covers a sliver of what has already
+scrolled past. The corner also lands identically on both views and at every
+width, where a slot in the chrome would have to be found twice — the Roster's
+toggle row and date bar are inside its own scroller, the Feed's are children of
+`.app` — and would run out of room at 320.
+
+**Reserving the box was rejected in both places, and that is worth stating
+because it is this app's usual answer** (`.stats-updating` lays its badge out
+`visibility: hidden`, and `PageMore` reserves its strip from the moment there is
+a next page). Both of those sit *inside a row that is already on the page*. A
+reserved box at the **top** of a page is not that: it is a permanent empty strip
+where the intermittent one used to be, and on the Roster view it would undo
+`.app.summary-mode .app-chrome { margin-bottom: 0 }`, the rule that puts the
+table flush against the bar. **Reserve where the box is inside something that is
+already there; take it out of the flow where the box would otherwise be a hole
+in the page.**
+
+**Every other wait in the app was checked against this and left alone**, which
+is the other half of the finding:
+
+- **The block waits** — the report's first read, the research board's ESPN read,
+  the six lazily-fetched player-page tabs, the reel, the league's Scoreboard,
+  Rankings and Transactions, the opponent's line, the outing, the news, the
+  schedule, the onboarding read — are each a pane with **nothing in it**, and
+  each one's content is gated on the same flag, so the ball stands in the slot
+  the answer is about to fill. There is nothing above them to move.
+- **The research board's count line** is the caption the count itself lands in,
+  which is why it was written as a `LoadingLine` in the first place.
+- **`PlayerOverview`'s five lines**, the matchup's `Reading the week a day at a
+  time` inside its chart dialog and `PlayerDay`'s block are each in the slot
+  their own answer takes, and cannot be on screen beside it.
+- **`.stats-updating` and `PageMore`** already reserve their boxes, for the
+  reasons above.
+
+A mark that appears **over nothing** is not this fault. A mark that appears
+**beside something** is.
+
 ### Rule 1 has a fourth clause: a stale answer must not land on a fresh one
 
 **Never over data** is written above as a rule about *waits*, and it turns out
