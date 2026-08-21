@@ -2640,6 +2640,34 @@ export default function App() {
   }, [espnConnected, ownership]);
 
   /**
+   * **Every player the app can name** — the season's major leaguers, plus the
+   * men a connected league rosters who are not among them.
+   *
+   * `/api/players` is `sports/1/players`: the 1,401 players on a major-league
+   * roster this season. A prospect is not one, so a fantasy team holding Kade
+   * Anderson held somebody this app could not name, could not search for and
+   * could not open a page on — the ESPN join gave him no MLB id, and the four
+   * surfaces below all key on one. `EspnOwnership.beyondMlb` is exactly that
+   * gap, resolved server-side against MLB's own player search, and merging it
+   * here is what closes it in one place rather than four.
+   *
+   * **The season list wins a collision**, and its rows are the ones already on
+   * screen — a man who has since been called up is on both lists, and his
+   * major-league row is the one carrying his club rather than his affiliate.
+   *
+   * **Identical by reference when there is nothing to add**, which is every
+   * session with no league connected: the memo returns `seasonPlayers` itself,
+   * so nothing downstream of it recomputes.
+   */
+  const knownPlayers = useMemo(() => {
+    const beyond = espnConnected ? ownership?.beyondMlb : null;
+    if (!beyond || beyond.length === 0) return seasonPlayers;
+    const have = new Set(seasonPlayers.map(playerKey));
+    const extra = beyond.filter((p) => !have.has(playerKey(p)));
+    return extra.length > 0 ? [...seasonPlayers, ...extra] : seasonPlayers;
+  }, [seasonPlayers, espnConnected, ownership]);
+
+  /**
    * Read the ownership map, which by now four surfaces want: the research
    * board's roster %, trend and position pills, the player page's copy of the
    * first two, the free-agent include buttons that asked for it first — and the
@@ -3697,10 +3725,10 @@ export default function App() {
    */
   const openLeaguePlayer = useCallback(
     (mlbId: number) => {
-      const hit = seasonPlayers.find((p) => p.id === mlbId);
+      const hit = knownPlayers.find((p) => p.id === mlbId);
       setDetailsKey(playerKey({ id: mlbId, kind: hit?.kind ?? 'batter' }));
     },
-    [seasonPlayers],
+    [knownPlayers],
   );
 
   const refreshFantasy = useCallback(() => {
@@ -3945,8 +3973,8 @@ export default function App() {
    */
   // Positions come from the season roster; look them up by id for each report.
   const positionById = useMemo(
-    () => new Map(seasonPlayers.map((p) => [p.id, p.position])),
-    [seasonPlayers],
+    () => new Map(knownPlayers.map((p) => [p.id, p.position])),
+    [knownPlayers],
   );
   /* Handedness off the same list and by the same trick — two more leaves on a
      request this app already makes at boot, which is what lets a fact about
@@ -3954,8 +3982,8 @@ export default function App() {
      per person carrying both facts (a two-way player is two rows of that list
      under one id, and they agree), with the reader picking the half it draws. */
   const handById = useMemo(
-    () => new Map(seasonPlayers.map((p) => [p.id, { bats: p.bats, throws: p.throws }])),
-    [seasonPlayers],
+    () => new Map(knownPlayers.map((p) => [p.id, { bats: p.bats, throws: p.throws }])),
+    [knownPlayers],
   );
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
@@ -3967,7 +3995,7 @@ export default function App() {
     // carries the id/name/savantName needed to add the player to the watchlist.
     const src =
       reports.find((r) => playerKey(r) === detailsKey) ??
-      seasonPlayers.find((p) => playerKey(p) === detailsKey);
+      knownPlayers.find((p) => playerKey(p) === detailsKey);
     if (!src) return null;
     return {
       id: src.id,
@@ -3976,7 +4004,7 @@ export default function App() {
       kind: src.kind,
       position: positionById.get(src.id),
     };
-  }, [detailsKey, reports, seasonPlayers, positionById]);
+  }, [detailsKey, reports, knownPlayers, positionById]);
   /**
    * Whether the player whose page is open is on the roster **the views are
    * reporting on** — which in fantasy mode is the ESPN team rather than the
@@ -4673,7 +4701,7 @@ export default function App() {
           keeps its own query; only one is ever on screen. */}
       <div className="header-search">
         <PlayerAdder
-          players={seasonPlayers}
+          players={knownPlayers}
           watchlist={roster}
           recent={recentPlayers}
           canAdd={!usingFantasy}
@@ -5185,7 +5213,7 @@ export default function App() {
   const searchBar = searchOpen ? (
     <div className="search-bar">
       <PlayerAdder
-        players={seasonPlayers}
+        players={knownPlayers}
         watchlist={roster}
         recent={recentPlayers}
         canAdd={!usingFantasy}
@@ -6181,7 +6209,7 @@ export default function App() {
              two wide tables do, so they want the same three things: the season
              roster (for a player's kind and MLB's listed position) and the two
              maps the ownership read already puts in hand. No read of its own. */
-          players={seasonPlayers}
+          players={knownPlayers}
           rosterPct={rosterPct}
           /* And the deltas beside it — the same object the board's trend
              columns and the player page's own header read, handed over whole

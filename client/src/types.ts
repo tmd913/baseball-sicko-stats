@@ -1479,10 +1479,25 @@ export interface EspnOwnership {
    *  all; a window with no baseline of its own is simply absent from the list,
    *  and its column is dropped rather than shown full of zeroes. */
   trend: RosterTrendWindow[] | null;
-  /** Roster entries read, and how many found an MLB player. The gap is
-   *  prospects who have never played a major-league game; it is carried so a
-   *  match that has silently stopped working is visible rather than showing up
-   *  as a league where everyone is a free agent. */
+  /**
+   * The league's rostered players **that `/api/players` does not carry** — the
+   * prospects, resolved against MLB's own player search. Mirrors
+   * `EspnOwnership.beyondMlb` in the server's `espn.ts`.
+   *
+   * `/api/players` is `sports/1/players`, the season's *major leaguers*, so a
+   * man who has never appeared in a major-league game is in neither it nor the
+   * name index built from it. App merges these rows into that list, which is
+   * the whole of what makes a prospect findable in the header search and
+   * openable as a player page. His `team` is where he actually is — `Arkansas
+   * Travelers`, not a major-league club he has never played for.
+   */
+  beyondMlb: SeasonPlayer[];
+  /** Roster entries read, and how many found an MLB player. The gap was
+   *  prospects who have never played a major-league game and is now almost
+   *  nothing, the prospect fallback having closed it (316 of 316 on the live
+   *  league, against 311 before it); it is carried so a match that has silently
+   *  stopped working is visible rather than showing up as a league where
+   *  everyone is a free agent. */
   rosterCount: number;
   matched: number;
   fetchedAt: number;
@@ -1493,7 +1508,12 @@ export interface EspnOwnership {
 export interface EspnRosterPlayer {
   espnId: number;
   name: string;
-  /** Null when the name matched no major leaguer — a prospect, usually. */
+  /** Null when the name matched nobody at all. It used to be null for every
+   *  prospect; the fallback that resolves them has all but emptied it, and what
+   *  is left is a genuine ambiguity the club could not settle — two men of one
+   *  name, neither on the club ESPN says — which is left **unmatched rather
+   *  than guessed**, because marking the wrong Wilmer Flores as owned is worse
+   *  than marking neither. Such a row keeps his name and loses his links. */
   mlbId: number | null;
   savantName: string | null;
   /** One kind, or two for a two-way player. */

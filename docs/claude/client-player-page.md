@@ -392,6 +392,61 @@ So `.details-overview` loses its cap and inherits the overlay's own 16px bleed, 
 
 **Measured at 1200 and 390, on a batter, a starting pitcher and a reliever**: no horizontal overflow of the page or the overlay at either width (0 and 0 on every one), the season strip fits its column without scrolling at both (800 and 358), and the preview table scrolls inside its box exactly as the tab's does (1209 and 730 inside 800 and 358). The links work: `Stats →` lands on the Stats tab with the view scrolled back to the top, `Game Log →` on a 25-row log with its season foot, and a press on a preview row opens that game at `z-index: 51` — the layer `DialogLayerContext` gives a box opened inside the overlay, untouched by any of this; it was `PlayerDayModal` for both kinds and is that for a batter and the outing page for a pitcher. **Bundle: 436.13 → 440.52 KB of JS** (129.23 → 130.31 gzipped) and **96.75 → 97.97 KB of CSS** (17.33 → 17.52), which is 4.4KB and 1.2KB raw — 1.1KB and 0.2KB over the wire — for two new blocks, a route and a component that replaced a copy that was never written.
 
+#### A player with no major-league season says so, once, at the top
+
+**The page opens on anybody, and "anybody" now genuinely includes a man who has
+never played.** A prospect reaches it off a fantasy roster — see
+`docs/claude/espn.md`, *A prospect is a player MLB's season roster has never
+listed* — and every reading on this page is built on major-league play. So what
+he drew was a Season block saying `No innings this season.`, a five-game preview
+saying `No games played this season.`, a percentile card of dashes and a Splits
+tab of nothing: **four true sentences, none of which is distinguishable from a
+page whose reads all failed.**
+
+**The app's rule is that an empty state names its own cause, and here one fact
+is the cause of every empty block at once** — so it is said once, at the top,
+rather than five times down the page:
+
+> Kade Anderson has not appeared in a major-league game this season, so there
+> are no stats to show.
+
+**It is measured off the page's own reads rather than declared by a flag**,
+which is what keeps it from becoming a claim about a player that a dead upstream
+could make. Three conditions, all of them already in `OverviewTab`'s props: no
+season line of **either** kind, and a game log that came back **successfully and
+empty** (`gameLog !== null && gameLog.games.length === 0` — a log that failed to
+read is null and draws its own `Couldn't read the game log.`), with both loading
+flags settled. The conjunction is deliberately the strictest of the three
+readings available, because an unmet condition costs the note and the page then
+reads exactly as it did before this existed — which is the safe direction for a
+sentence that states a fact about a person.
+
+**It says *this season*, which is what was measured.** Spencer Schwellenbach
+reaches this page by the same route with a major-league career behind him and no
+2026 innings, and the sentence is true of him too — driven, and it is the line
+his page carries.
+
+**`.ovw-note` is folded onto `.ovw-none`'s voice and onto the reading column's
+cap**, because it is the same kind of sentence one level up: prose *about* the
+page rather than a block of it. Which cost one shipped mistake worth recording —
+`.ovw-none`'s `margin: 0` is a **shorthand** and takes `margin-inline: auto`
+back off, a later rule of equal specificity winning, so the note first drew flush
+at x=16 above a column of blocks at x=200. The fix is to restate the auto margin
+*after* the fold (`margin: 0 auto 14px`), which is the stylesheet's standing
+order rule in its plainest form.
+
+**Measured on Kade Anderson (807739), driven in a browser.** At **1200**: note
+at **x=200, 800 wide, 15px tall**, on the same axis as `Next game@200`,
+`Next 5 games@200` and `News@200`, with `Season@16` and `Recent games@16` still
+taking the window; page and overlay overflow **0**. At **390**: x=16, 358 wide,
+30px (two lines), overflow 0. The News block underneath is not empty and should
+not be — his Arkansas Travelers transactions are real news about him, and the
+note claims nothing about them, only about stats.
+
+**The regression that had to be checked is that nobody else gets it.** Logan
+Webb (a starter mid-season) and Mookie Betts (a batter) both draw `note: null`
+with their five blocks unmoved.
+
 #### The day, which is the block that did not change
 
 **`PlayerDetails` still leads with his day**, before the percentile card and the season readings beside it — `PlayerDay.tsx`, drawn from the feed's own items and fed by `/api/players/:id/day`.

@@ -4188,7 +4188,8 @@ body {
    content and left the heading behind. */
 .ovw-day,
 .ovw-starts,
-.ovw-news {
+.ovw-news,
+.ovw-note {
   max-width: var(--card-column);
   margin-inline: auto;
 }
@@ -4237,11 +4238,26 @@ body {
    the list, so the only thing it ever needed of its own was a top margin it no
    longer has. */
 .ovw-none,
+.ovw-note,
 .start-note {
   margin: 0;
   color: var(--faint);
   font-size: 12px;
   font-weight: 600;
+}
+/* The line a player with no major-league season leads with. It is prose *about*
+   the page rather than a block of it, so it shares the reading column set above
+   and the `.ovw-none` voice it is folded onto here — the same kind of sentence
+   one level up: what every empty block under it has in common. All it wants of
+   its own is the gap between it and the first heading.
+
+   **It restates the auto margin, and that is not a duplicate.** `margin: 0` in
+   the fold above is a *shorthand* and takes `margin-inline: auto` back off — a
+   later rule of equal specificity winning — which shipped once as a note flush
+   at x=16 above a column of blocks at x=200. Measured at 1200 after: the note
+   and the `Today` heading both at x=200, 800 wide. */
+.ovw-note {
+  margin: 0 auto 14px;
 }
 /* The season strip **is** `.glog-table`, class and all, rather than a second
    plain stat table styled to resemble one — the app has one of those and this

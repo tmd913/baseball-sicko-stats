@@ -32,6 +32,54 @@ What remains is three pages that really are three questions, and they read as si
 
 **Three dead names are still read, and all of them mean the feed.** `view=games` was the card-per-player page and `view=players` its own older name; both became the feed's grouping, and the grouping is now the player page's Overview tab. The **feed** is where they still land, and that is the right answer rather than a lazy one: it is the same players over the same days, which is the closest thing to what those links asked for, where the page they *became* needs a player named and a bare `view=games` names none. **`group=player` and `expanded=` are read only in the sense that they are ignored** — the first URL sync drops both, the cards they named existing nowhere now. That is the courtesy `readKeys` extends to pre-two-way ids, and the safe direction for an old link to be read in: it opens on something, rather than on a default that says nothing about what was asked for.
 
+### `knownPlayers`: `/api/players` plus the men a league rosters and it doesn't
+
+**`/api/players` is `sports/1/players` — the season's 1,401 *major leaguers* —
+and four things in `App.tsx` treat it as "everybody".** The header search and the
+player adder match against it; `detailsPlayer` resolves a `player=` key off it
+when no report carries one; `openLeaguePlayer` resolves a transaction row's bare
+MLB id to a kind against it; and `positionById` / `handById` read a stranger's
+position and handedness off it, which is what lets a research-board row carry
+either.
+
+**A player a fantasy league rosters and MLB's season list has never carried is
+in none of it.** He is not merely missing a stat line: he cannot be typed into
+the search, and `?player=<his key>` renders nothing at all, `detailsPlayer`
+returning null for a key neither source resolves. That was the client half of
+`docs/claude/espn.md`'s *A prospect is a player MLB's season roster has never
+listed* — the server half being that the ESPN join gave him no MLB id to be
+looked up by in the first place.
+
+**So the four read `knownPlayers`, which is that list plus
+`EspnOwnership.beyondMlb`** — the league's rostered players the season list does
+not hold, resolved server-side against MLB's own player search and riding on the
+ownership payload for the same reason `rosterPct` and `eligibility` do: it is a
+call a connected client already makes, and the gate on all three is having a
+league. Five rows on the live 12-team league, ~600 bytes.
+
+**The season list wins a collision**, and the rows it wins are the ones already
+on screen: a prospect who has since been called up is on both lists, and his
+major-league row carries his club where the other carries his affiliate.
+
+**It is `seasonPlayers` by reference when there is nothing to add**, which is
+every session with no league connected — the memo returns the very array, so
+nothing downstream of it recomputes and a reader with no ESPN league is
+untouched to the identity.
+
+**`pitcherLookup` deliberately stays on `seasonPlayers`.** It names the *other
+club's announced starter* in a schedule cell, and a man with no major-league club
+is never one; leaving it alone also keeps it above `ownership` in hook order,
+where it has always been.
+
+**Driven against the live league at 1200.** Typing `kade` into the header search
+returns three rows — `Kade Morris · Athletics · P`, `Kade Strowd · Arizona
+Diamondbacks · P` and **`Kade Anderson · Arkansas Travelers · P`**; `jesus made`
+returns **`Jesús Made · Biloxi Shuckers · SS`**. The club printed is **where he
+actually is**, in MLB's own words, rather than the major-league organization that
+owns him — `Arkansas Travelers`, not `Seattle Mariners`, because he has never
+played for the latter and the meta line is the one place the row could quietly
+say he had.
+
 ### Four tabs, and the Feed became a reading of the Roster
 
 **The row above is the record of how this got to three pages and one row, and

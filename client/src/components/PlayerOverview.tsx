@@ -159,8 +159,45 @@ export function OverviewTab({
   // always the day — the next turn is the block *under* it now — so the third
   // wording, `Next start`, has gone with the sentence it used to head.
   const dayHead = hasGames || wantStart ? 'Today' : 'Next game';
+  /**
+   * **He has not appeared in a major-league game this season, and the page has
+   * to say so.**
+   *
+   * A prospect reaches this page off a fantasy roster — a league can roster
+   * anybody in its own universe, and every reading in this app is built on
+   * major-league play. So what he draws is a Season block with no line, a game
+   * log with no rows and a column of dashes, none of which is distinguishable
+   * from a page whose reads failed. The app's rule is that an empty state names
+   * its own cause, and here **one** fact is the cause of every empty block
+   * under it at once, so it is said once at the top rather than five times.
+   *
+   * **It is measured off the page's own reads, not declared by a flag.** No
+   * season line of either kind, and a game log that came back **successfully
+   * and empty** — a log that failed to read is null and draws its own message,
+   * which is what stops a dead upstream being reported as a fact about the
+   * player. Both conditions together, because the strictest test is the one
+   * that fails in the safe direction: an unmet condition costs the note, and
+   * the page then reads exactly as it did before this existed.
+   *
+   * Deliberately says **this season**, which is what was measured — Spencer
+   * Schwellenbach reaches this page by the same route with 78 major-league
+   * starts behind him and none in 2026, and the sentence is true of him too.
+   */
+  const noMajorLeagueSeason =
+    !seasonLoading &&
+    !gameLogLoading &&
+    season === null &&
+    pitcherSeason === null &&
+    gameLog !== null &&
+    gameLog.games.length === 0;
   return (
     <div className="details-overview">
+      {noMajorLeagueSeason && (
+        <p className="ovw-note">
+          {name} has not appeared in a major-league game this season, so there are no stats to
+          show.
+        </p>
+      )}
       {/* **The day leads.** Whichever of its three states it is in — a game in
           progress, a game already played, or none at all — this block is the
           answer to what a player page is opened with, and it is never empty:
