@@ -581,6 +581,7 @@ export function RanksButton({
   onToggle,
   population,
   asRank = false,
+  disabled = false,
 }: {
   on: boolean;
   onToggle: () => void;
@@ -590,12 +591,24 @@ export function RanksButton({
    *  reading. The sentence changes with the badge, since 1-is-best and
    *  100-is-best are opposite instructions. */
   asRank?: boolean;
+  /**
+   * There is no population to rank against right now.
+   *
+   * The player page's Stats tab is the one caller: a **cut** of a span has no
+   * board behind it — Savant ranks whole spans, not spans against left-handers
+   * — so the toggle would be a control offering something the table cannot
+   * draw. Off and inert rather than absent, because a control that vanishes
+   * takes its own explanation with it; the caller wraps it in the element that
+   * carries the reason, a disabled button showing no `title` of its own.
+   */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`research-toggle${on ? ' on' : ''}`}
-      aria-pressed={on}
+      className={`research-toggle${on && !disabled ? ' on' : ''}`}
+      aria-pressed={on && !disabled}
+      disabled={disabled}
       onClick={onToggle}
       title={
         asRank

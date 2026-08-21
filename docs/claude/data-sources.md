@@ -548,3 +548,93 @@ for a 7-day one, milliseconds off the blob. `warmer.ts` builds all ten nightly,
 in the same sequential-by-window loop the player boards use and immediately
 after it — by which point every window but the season's is a handful of `Map`
 additions, the day blobs having just been written.
+
+### One player's spans, cut four ways — and why it has to be his own pitches
+
+`playerSplits.ts`, behind `GET /api/players/:playerId/windows?cut=vsr|vsl|home|away`
+— the **same route** the uncut Stats tab reads, because it is the same table:
+five spans, `row: null` for a span he has nothing in, and the board's own
+`ResearchRow` shape. A second route would be a second shape for the client to
+hold and a second place for the two to drift. An unrecognized `cut` falls back to
+the uncut board rather than 400ing, which is the client's own rule for a
+parameter it does not know arriving in a link.
+
+**MLB publishes exactly these four splits and will not date-range them, and the
+probe is recorded so nobody repeats it.** `statSplits` with
+`sitCodes=[vr,vl,h,a]` is exact, populated and league-wide (623 batters carry a
+`vl` row), and it accepts `startDate`/`endDate` in either spelling, returns
+**200**, and ignores them: Juan Soto's `vl` line reads `120 PA / .276` for
+`2026-07-20 → 2026-08-20` exactly as it does for the season, because it *is* the
+season. `stats=byDateRange&sitCodes=…` is the same dead end from the other side
+— it honors the dates and drops the split, handing back the overall line once
+per code with an empty `split` object. This is the `pull_air_rate` failure
+wearing a date, and it is the same shape as the one **Team hitting** above
+records: MLB will give you the cut or the window, never both.
+
+**And there is no board to read it off.** The research board is a league-wide
+season of pitch rows per window; four cuts of five windows is twenty of them,
+which is not a route, it is a nightly job three times the size of the one this
+app already runs.
+
+**So a cut is his own season of pitches.** `statcast_search/csv` filtered to one
+player (`batters_lookup[]` / `pitchers_lookup[]`) takes the whole season in a
+single request, and every row of it carries `game_date`, `p_throws`, `stand`,
+`inning_topbot` and `events` — so all four cuts of all five spans fall out of one
+fetch by filtering. Measured: **1,472 rows / 985KB in 3.8s** for a batter (Soto)
+and **2,077 / 1.4MB in 4.4s** for a starter (Sale), both far under the
+**25,000-row cap** that rules this export out league-wide and is why
+`statcastWindow.ts` builds a window a day at a time instead. Twenty rows are
+cached per player for six hours — the same TTL the boards settle on — and all
+four cuts come out of the one fetch, because the fetch is the cost and a cut is a
+filter over it.
+
+**The Statcast half is `statcastWindow.ts`'s own arithmetic, imported.** `tally`
+and `empty` are exported for this one caller, so a cut of a span and the span
+itself count a barrel the same way by construction rather than by care. Two
+things stay null that a day export would have filled: `pullAirRate`, which needs
+Savant's separate `hfPull` file keyed by date and has no per-player counterpart,
+and `sprintSpeed`/`xERA`, which are absent on a window already.
+
+**The counting half is computed here, so it is checked against the source that
+publishes it — and it reconciles byte for byte.** Against MLB's `statSplits` for
+2026: Soto vs L `120 PA / .276 / .809 OPS`, vs R `239 / .287 / 1.021`, home
+`169 / .331 / 1.077`, away `190 / .242 / .833`, all four identical and
+`vsL + vsR = home + away = 359`; Sale home `11 G / 262 BF / 52 H / 74 K`, away
+`11 / 255 / 51 / 86`, vs L `127 BF / .248`, vs R `390 / .206`, all four
+identical. **`truncated_pa` was the single discrepancy in the whole exercise** —
+a plate appearance ended by the third out on the bases, exactly one in Sale's
+season, which Statcast files as an event and MLB does not count as a batter
+faced. It heads `NON_PA_EVENTS`, a **denylist** rather than an allowlist for the
+reason `QUIET_ACTIONS` is one: an outcome MLB adds next season should show up as
+the plate appearance it almost certainly is rather than vanish out of the
+denominator.
+
+**Home and away are `inning_topbot`, not the club abbreviations.** The top of an
+inning is the visiting side batting, so a batter is at home in the bottom and a
+pitcher in the top. Reading it off `home_team` would need the player's own club,
+which changes at a trade deadline and is precisely the join this does not have
+to make.
+
+**Innings were probed and rejected, and the negative result is the point.**
+Mapping `events` to outs gets Sale to **384 outs / 128.0 IP** against MLB's
+**129.0** across the season — home 65.0 against 65.1, away 63.0 against 63.2 —
+three outs a season short, every one of them a runner caught on the bases during
+a plate appearance, which the export records in `des` and nowhere a parser can
+trust. Three outs is 0.8% and it is still a wrong number, and a wrong ERA is
+worse than no ERA. So `inningsPitched` is null on a cut row and every rate built
+on it goes with it (ERA, WHIP, FIP, xFIP, K/9, BB/9), along with the things a
+pitch row cannot know at all: runs, RBI, stolen bases, earned runs, decisions.
+The client dashes them exactly as it dashes `sprintSpeed` on a window — see
+**Client — the player page's other tabs** for what that looks like and for the
+one column the table adds under a cut to keep the sample size on screen.
+
+**`player-cuts-{kind}-{id}-{SEASON}-v1.json`**, and the version guards the
+meaning as much as the shape: bump it whenever a field a cut row carries is
+added *or begins to be filled*, this blob being read straight back out as the
+answer.
+
+**Identity comes off the season board and a failure costs only the names.** The
+row needs a name, a club and a position that a cut has no opinion about;
+`getResearch(kind, 'season')` already has them cached, and it is fetched in its
+own `try` so a dead board leaves the numbers standing.
+

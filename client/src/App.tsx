@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton } from './auth';
-import { playerKey, RESEARCH_WINDOWS } from './types';
+import { playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
 import type {
   EspnOwnership,
   EspnRankings,
@@ -22,6 +22,7 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
+  SplitCut,
   TrendWindow,
   WatchPlayer,
 } from './types';
@@ -1128,6 +1129,45 @@ export default function App() {
    * two tables reading one param; the open player-page tab is in no URL either.
    */
   const [statsCols, setStatsCols] = useState<Partial<Record<PlayerKind, string[]>>>({});
+
+  /**
+   * **Which cut of his spans the Stats tab is showing** — `cut=vsr|vsl|home|away`,
+   * absent for all of them.
+   *
+   * In the URL where `cols=` is deliberately not, and the difference is the one
+   * the rule actually draws: `cols=` is *how* a table is read, and this is
+   * **which data it shows** — five rows of one man against left-handers are not
+   * the same five rows. It is its own param name and means one thing: the
+   * Splits tab beside it is a different reading with no parameter at all, and
+   * `mup`/`mt`/`proj` are the precedent for keeping two lenses from sharing a
+   * key.
+   *
+   * Held here rather than in `PlayerDetails` for the reason `statsCols` is: that
+   * component is unmounted the moment the overlay closes, and a param the URL
+   * carries has to outlive it — a link with `cut=vsl` seeds this, and the page
+   * opens on the cut it names when the reader reaches the Stats tab.
+   *
+   * An unrecognized value falls back to the uncut table rather than emptying it,
+   * on the client and on the server both.
+   */
+  const [statsCut, setStatsCut] = useState<SplitCut | null>(
+    () => SPLIT_CUTS.find((c) => c === initialParams.get('cut')) ?? null,
+  );
+  /**
+   * **And it is put away when the page it was made on leaves the screen**, which
+   * is the app's standing rule for a lens: a cut is a question about *this* man,
+   * so the next page opens on his whole season unless a link says otherwise.
+   *
+   * Closing the player page is a leaving; opening another player **over** it is
+   * not (`player=` is the precedent this rule states outright), so a reader who
+   * walks from one man's left-handed line to the next keeps the question they
+   * are asking. It watches `detailsKey`, which is navigation seeded from the
+   * URL and never fetched data, so an inbound `?player=…&cut=vsl` is already on
+   * its own surface before this runs.
+   */
+  useEffect(() => {
+    if (!detailsKey) setStatsCut(null);
+  }, [detailsKey]);
 
   /**
    * Which sets of players the board includes, and whether the watchlist is on
@@ -2980,6 +3020,10 @@ export default function App() {
       p.set('end', end);
     }
     if (detailsKey) p.set('player', detailsKey);
+    // Scoped to `player=`, which is the page that draws it — a cut with no
+    // player to be a cut *of* would name a lens that is not in force, which is
+    // the rule `proj=` and `mt=` already follow.
+    if (detailsKey && statsCut) p.set('cut', statsCut);
     if (view !== 'summary') p.set('view', view);
     // Only meaningful on the research view, and 'batters' is its default.
     if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
@@ -3104,6 +3148,7 @@ export default function App() {
     end,
     activePreset,
     detailsKey,
+    statsCut,
     view,
     researchPos,
     researchWindow,
@@ -6419,6 +6464,9 @@ export default function App() {
           onRemove={() => onRemove(detailsPlayer)}
           statsColumns={statsCols[detailsPlayer.kind] ?? null}
           onStatsColumnsChange={(keys) => setStatsColumns(detailsPlayer.kind, keys)}
+          /* Which cut of the spans the Stats tab is on, out of the URL. */
+          statsCut={statsCut}
+          onStatsCutChange={setStatsCut}
           showRanks={showRanks}
           onShowRanksChange={setShowRanks}
           /* The Stats tab's percentile population — the same board rows the
