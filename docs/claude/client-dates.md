@@ -739,3 +739,16 @@ gzipped — down on both, two entries and a wider `DateScope` costing less than
 the `beforeProjection` ref, its two restores and the span strip they landed
 with — and **CSS 160.79 → 161.09 KB** raw and **28.76 → 28.87** gzipped, all of
 it the bar's five-track grid and none of it this half.
+
+#### The matchup page had the same fault and now has the same shape
+
+**This section covers `App.tsx` and the matchup page's date bar is not App's**
+— it is the same component with `LeagueMatchup`'s own state in it — so the fault
+this section fixed survived one file over, `beforeProjection` and all, and was
+reported separately: press `Projected` on a team page and its days were the
+page's days on every reading, because the three other readings clear the lens
+with a bare `setTeamProjected(false)` and orphan the ref, which is word for word
+the mechanism above. It has `MatchupSpanScope` now — three entries rather than
+four, `summary` being a span that page *holds* and the Schedule view having a
+run of days rather than a pair. See `client-league-matchup.md`, *The lens's
+days leaked into every other reading*.

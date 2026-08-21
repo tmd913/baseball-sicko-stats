@@ -313,8 +313,40 @@ export default function LeagueTeam({
    * below the line" with the row at the bottom over everybody, which is exactly
    * what this reading wants and is one rule rather than two. A second flag
    * saying "and don't split" would be a second way to describe the same table.
+   *
+   * **And on the `Summary` reading it is the whole roster with the lineup's
+   * arithmetic on it**, which is where this used to draw `starterCards` alone
+   * and quietly lose a man.
+   *
+   * `projectStarters` drops a player who held an accruing slot on **none** of the
+   * days in view — its own rule, and the right one for the days it cuts, since
+   * such a man contributed nothing to the categories this reading adds up. Drawn
+   * straight, that dropped him off the page: measured on team 6 over
+   * `Aug 10 – Aug 21`, `Summary` listed 29 of the 34 men `/api/report` answered
+   * with, and the five missing were **Kyle Stowers, Shea Langeliers, Garrett
+   * Crochet, Nick Pivetta and Hunter Greene** — every one of them on the roster
+   * for days of that range, three of them on it *now*, and nothing on screen
+   * saying they had been left out. It read as a table that had forgotten a
+   * player, which is what was reported.
+   *
+   * So a man the filter dropped is kept with **no games** rather than removed —
+   * `projectStarters`' own distinction, stated in as many words there: *a player
+   * kept with no games left is not the same as one dropped*. He is not in
+   * `starterKeys`, so `splitStarters` puts him under the `Total` line and the
+   * figure on that line is unchanged — the reading still adds up to ESPN's
+   * scoreboard, which is the whole of what it is for. What changes is that the
+   * label reads `Total · 13 of 15` instead of `Total · 13`, which is the app's
+   * own `n of m` and says how many it left out.
+   *
+   * The order is `teamCards`' — the roster's own — rather than the starters
+   * first and the rest after, since `splitStarters` does the splitting and a
+   * second ordering here would be a second opinion about it.
    */
-  const shownCards = startersOnly ? starterCards : teamCards;
+  const summaryCards = useMemo(() => {
+    const cut = new Map(starterCards.map((r) => [playerKey(r), r]));
+    return teamCards.map((r) => cut.get(playerKey(r)) ?? (r.games.length === 0 ? r : { ...r, games: [] }));
+  }, [teamCards, starterCards]);
+  const shownCards = startersOnly ? summaryCards : teamCards;
 
   // Never over data: the block wait is behind the app's own delay, so a warm
   // answer never flashes one, and a span change re-reads with the old rows
@@ -357,8 +389,16 @@ export default function LeagueTeam({
      which of the two emptied the page rather than claiming a fact about the
      days: a manager who left every slot on the bench has a team and no lineup.
      It names `Summary` because that is the control in force — the rule every
-     empty state in this app follows. */
-  if (shownCards.length === 0) {
+     empty state in this app follows.
+
+     **The test is `starterCards` rather than `shownCards`**, and it moved with
+     the reading: `shownCards` is the whole roster now (see `summaryCards`), so
+     it empties only when the team does — which the branch above already answers
+     for. What this one is about is the lineup, so it asks about the lineup. A
+     manager who started nobody gets the sentence rather than twenty-eight rows
+     of noughts under a `Total · 0 of 28`, which states the same fact and states
+     it as a table. */
+  if (startersOnly && starterCards.length === 0) {
     return (
       <>
         {chrome}

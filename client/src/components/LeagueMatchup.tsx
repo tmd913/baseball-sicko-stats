@@ -118,6 +118,36 @@ type MatchupSideTab = 'away' | 'summary' | 'home';
  */
 export type MatchupReading = 'roster' | 'summary' | 'feed';
 
+/** A range as this page holds one: the two days, and the preset label they were
+ *  derived from — null for a range picked by hand, which has none. The shape
+ *  App's `DateRange` is, and for the same reason: a preset is a rule rather than
+ *  a pair of dates, so the label is what the bar's face prints. */
+interface MatchupRange {
+  start: string;
+  end: string;
+  preset: string | null;
+}
+
+/**
+ * **A reading of a team page keeps its own days**, which is the arrangement the
+ * app's own roster views have (`App.tsx::DateScope`) and which this page did not
+ * until the projected lens was found leaking its span into every other reading.
+ *
+ * Three entries rather than App's four, and the difference is which readings
+ * here let a reader *pick* days: the plain table (`roster`), the stream
+ * (`feed`) and the projected lens. `summary` is the matchup's own span held
+ * rather than picked, and the Schedule view has `scheduleSpan`, which is a run
+ * of days rather than a pair — so neither owns an entry, and neither can have
+ * one moved out from under it.
+ *
+ * The lens is the reason the split earns its keep and also the one entry that
+ * remembers nothing: it is re-derived on every press (see
+ * `toggleTeamProjected`), because *the days there are still games in* is a
+ * question whose answer goes stale, where the other two are the reader's own
+ * pick and are theirs until they move them.
+ */
+type MatchupSpanScope = 'roster' | 'feed' | 'projected';
+
 /** The winner of one category, from the two figures. `outcome`'s twin in
  *  `LeagueView.tsx` and deliberately the same arithmetic: ESPN fills its own
  *  `result` only once a matchup is over, so a live week would say nothing. */
@@ -699,13 +729,21 @@ export default function LeagueMatchupView({
     p: RosterProjection;
   } | null>(null);
   const [teamProjLoading, setTeamProjLoading] = useState(false);
-  /** The span the reader was on when they turned the lens on, so turning it off
-   *  puts them back rather than stranding them in a week with no stats in it —
-   *  the preset with it, so `Matchup` goes back to *being* Matchup rather than
-   *  to the two dates it happened to mean. */
-  const beforeProjection = useRef<{ start: string; end: string; preset: string | null } | null>(
-    null,
-  );
+  /* **`beforeProjection` is gone**, and with it the excursion it was the return
+     ticket for. It held the span the reader was on when they pressed the lens,
+     so that pressing it again could put them back rather than strand them in a
+     week with no stats in it — the right answer while every reading of this page
+     shared one span, and one that only ever worked when the lens was put away by
+     *its own* toggle. It was not: `Feed`, `Schedule` and `Summary` each clear the
+     lens with a bare `setTeamProjected(false)`, so the ref was never consumed and
+     the projected days simply became the page's days. Measured on team 6 on
+     2026-08-21 — `Today · Fri, Aug 21` on the roster, press `Projected` and the
+     bar reads `Projected · Aug 21 – Aug 23`, cross to `Feed` and it reads
+     `Custom range · Aug 21 – Aug 23`, a stream over two days nobody has played;
+     come back to the table and it is still `Custom range · Aug 21 – Aug 23` with
+     the lens off. Each reading keeps its own days now (`MatchupSpanScope`, the
+     shape App's own `DateScope` takes on the roster views), so the lens borrows
+     nothing and there is nothing to give back. */
   /**
    * **The matchup's own days**, or null where the period has no dates to name —
    * an anchor the schedule could not be read for, where a span with no days in
@@ -759,12 +797,47 @@ export default function LeagueMatchupView({
    * costs nothing in reach: closing the page unmounts it, and stepping the
    * period on the Scoreboard clears `mup=`, so every other matchup is a fresh
    * mount and a fresh default.
+   *
+   * **And it seeds every entry, because a reading is a set of days of its own.**
+   * See `MatchupSpanScope` below: the three readings that let a reader pick days
+   * part from one seed rather than sharing one range, which is the arrangement
+   * App's roster views already have.
    */
-  const [span, setSpan] = useState<{ start: string; end: string; preset: string | null }>(() =>
-    !board.live && matchupSpan
-      ? { ...matchupSpan, preset: 'Matchup' }
-      : { start: today, end: today, preset: 'Today' },
-  );
+  const [spans, setSpans] = useState<Record<MatchupSpanScope, MatchupRange>>(() => {
+    const seed: MatchupRange =
+      !board.live && matchupSpan
+        ? { ...matchupSpan, preset: 'Matchup' }
+        : { start: today, end: today, preset: 'Today' };
+    return { roster: seed, feed: seed, projected: seed };
+  });
+  /**
+   * **Which reading's days are on screen**, and so which entry a control in the
+   * date bar writes.
+   *
+   * Derived rather than stored, and idempotent, so any re-render (StrictMode's
+   * double pass included) recomputes the same answer — App's own `dateScopeRef`
+   * rule, arrived at from the other side. **The order of the tests is the order
+   * the readings exclude each other in**: the stream is a `reading` and the lens
+   * is a toggle that exists only on the table, and every one of the other three
+   * readings clears the lens on press, so the test never has to ask what happens
+   * if both are set.
+   *
+   * `summary` and the Schedule view are absent because neither is a range the
+   * reader picks: `summary` **is** the matchup's own days (see `summarySpan`,
+   * and the bar is drawn `fixed` over it) and the Schedule view has
+   * `scheduleSpan`, a run of days rather than a pair of them. Mapping `summary`
+   * onto `roster` is what makes the fallback in `summarySpan` the days the
+   * reader left the table on.
+   */
+  const spanScope: MatchupSpanScope =
+    reading === 'feed' ? 'feed' : teamProjected ? 'projected' : 'roster';
+  const span = spans[spanScope];
+  /** Move the days **of the reading on screen**, which is the only one a control
+   *  in the bar can have been pressed from. The one caller that must not go
+   *  through it is the lens's own seed, which runs on the commit before the
+   *  scope has moved and writes `projected` by name — see
+   *  `toggleTeamProjected`. */
+  const setSpan = (to: MatchupRange) => setSpans((prev) => ({ ...prev, [spanScope]: to }));
 
   /**
    * The app's presets plus **this matchup's own span**, which is the one named
@@ -931,27 +1004,43 @@ export default function LeagueMatchupView({
    * would be projecting to yesterday. With no window at all it is the week
    * ahead, which is what a reader with no league gets on the roster view.
    *
-   * The date control is untouched, so the reader is free to move off it, and
-   * turning the lens **off** puts the span back where it was. **The Schedule
-   * view goes off with it** — that mode replaces the stat *columns* with days
-   * and this replaces the *figures* in them, so they are two readings of one
-   * set of cells and cannot both be in force.
+   * The date control is untouched, so the reader is free to move off it —
+   * narrowing to a single future day is a projection of that day's games — and
+   * **those days are the lens's own** (`MatchupSpanScope`), so moving them costs
+   * the plain table and the stream nothing and turning the lens off has nothing
+   * to put back.
+   *
+   * **What the lens's entry remembers, and for how long: nothing, and no time at
+   * all.** It is re-derived on every press, which is the one place this page's
+   * own "each reading keeps its own days" is deliberately not carried through,
+   * and the reason is the rule the toggle states in its own tooltip: *open on the
+   * days there are games in*. A remembered projected range would be a stale
+   * answer — "the rest of this period" derived on Tuesday is three played days by
+   * Friday — and that is precisely the reading the lens is not for. What the
+   * entry buys is the other half: while the lens **is** on, the days are its own.
+   *
+   * **Seeded by name rather than through `setSpan`.** The scope moves on the
+   * commit this press causes, so at the moment the callback runs `spanScope`
+   * still says `roster` — and `setSpan` writes whatever it says. This is App's
+   * `toggleRosterProjected`, one file over, for the same reason.
+   *
+   * **The Schedule view goes off with it** — that mode replaces the stat
+   * *columns* with days and this replaces the *figures* in them, so they are two
+   * readings of one set of cells and cannot both be in force. Its own days stay
+   * where they are: an entry is put away, not thrown away.
    */
   const toggleTeamProjected = useCallback(() => {
     setTeamProjected((on) => {
-      if (on) {
-        const back = beforeProjection.current;
-        beforeProjection.current = null;
-        if (back) setSpan(back);
-        return false;
-      }
-      beforeProjection.current = span;
+      if (on) return false;
       const to = matchupWindow?.end ?? addDays(today, 6);
-      setSpan({ start: today, end: to < today ? today : to, preset: null });
+      setSpans((prev) => ({
+        ...prev,
+        projected: { start: today, end: to < today ? today : to, preset: null },
+      }));
       setScheduleSpan(null);
       return true;
     });
-  }, [span, matchupWindow, today]);
+  }, [matchupWindow, today]);
 
   // The Schedule view's index, or null while the mode is off or either of its
   // two reads is still out — "the mode is the presence of an index rather than
@@ -1710,9 +1799,13 @@ export default function LeagueMatchupView({
           setScheduleSpan((s) => {
             if (s !== null) return null;
             // **The projected lens goes off with it**, which is the same
-            // exclusivity `toggleTeamProjected` states from the other side.
-            // The range it moved the reader to stays, the days ahead being
-            // exactly what a schedule is for.
+            // exclusivity `toggleTeamProjected` states from the other side. A
+            // bare clear is all it takes now: the lens has an entry of its own
+            // (`MatchupSpanScope`), so putting it away moves nobody's days and
+            // this reading has a span run rather than a range in any case. It
+            // used to be the bug — this clear bypassed `toggleTeamProjected`,
+            // so the ref that was supposed to put the reader's range back was
+            // never consumed and the projected days simply stayed.
             setTeamProjected(false);
             return defaultScheduleSpan(matchupWindow);
           });
