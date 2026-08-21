@@ -155,6 +155,13 @@ interface ParsedDay {
   reports: Map<string, PlayerReport>;
   games: DayGame[];
   fetchedAt: number;
+  /** Whether every game of the day is one **MLB has finished writing** — see
+   *  `mlbStats.ts::isSettledFeed`. A day whose last game is over but whose box
+   *  score is still being closed out looks final and is not: freezing it there
+   *  is how a hold that was credited half an hour later never arrived. Only a
+   *  settled day is snapshotted, and only a settled day is held in memory past
+   *  its TTL. */
+  settled: boolean;
 }
 
 /**
@@ -220,11 +227,37 @@ export { downloadCsv as downloadDayCsv };
 export const downloadPullCsv = (date: string): Promise<string> =>
   downloadCsv(date, 'Pull');
 
+/**
+ * MLB's four sacrifice event codes, and **all four are sacrifices**.
+ *
+ * The list had two of them. `sac_fly_double_play` and `sac_bunt_double_play`
+ * are the same sacrifice with a runner thrown out behind it, and MLB scores
+ * them the same way — the batter is credited the sacrifice and charged no
+ * at-bat — but they fell through to the default below and were counted as
+ * at-bats. Checked against MLB's own boxscore rather than reasoned from the
+ * rulebook: Ceddanne Rafaela's `sac_fly_double_play` on 2026-08-10 (gamePk
+ * 822780) reads `PA 4 · AB 3 · H 2 · SF 1`, and Chandler Simpson's (824970)
+ * `PA 5 · AB 4 · H 2 · SF 1` — both an at-bat short of what this function was
+ * giving them.
+ *
+ * **Rare, and that is the argument for the constant rather than against the
+ * fix**: across the 1,442 game blobs on disk, `sac_fly` appears in 627 and
+ * `sac_bunt` in 365, against **3** for `sac_fly_double_play` and **0** for
+ * `sac_bunt_double_play`. A miss that shows up twice a season is a miss nobody
+ * will ever chase from a slash line, which is exactly the kind this file
+ * should not be leaving in.
+ */
+const SAC_FLY = new Set(['sac_fly', 'sac_fly_double_play']);
+const SAC_BUNT = new Set(['sac_bunt', 'sac_bunt_double_play']);
+
 function classifyHit(event: string | null): {
   isAb: boolean;
   isHit: boolean;
   bases: number;
 } {
+  if (event !== null && (SAC_FLY.has(event) || SAC_BUNT.has(event))) {
+    return { isAb: false, isHit: false, bases: 0 };
+  }
   switch (event) {
     case 'single':
       return { isAb: true, isHit: true, bases: 1 };
@@ -237,8 +270,6 @@ function classifyHit(event: string | null): {
     case 'walk':
     case 'intent_walk':
     case 'hit_by_pitch':
-    case 'sac_fly':
-    case 'sac_bunt':
     case 'catcher_interf':
       return { isAb: false, isHit: false, bases: 0 };
     default:
@@ -260,6 +291,7 @@ function buildLine(pas: PlateAppearance[]): BattingLine {
     bb: 0,
     so: 0,
     hbp: 0,
+    sf: 0,
     runs: 0,
     rbi: 0,
     sb: 0,
@@ -288,6 +320,9 @@ function buildLine(pas: PlateAppearance[]): BattingLine {
     if (pa.event === 'walk' || pa.event === 'intent_walk') line.bb++;
     if (pa.event === 'strikeout' || pa.event === 'strikeout_double_play') line.so++;
     if (pa.event === 'hit_by_pitch') line.hbp++;
+    // The OBP denominator's fourth term, and the only thing on this line that
+    // is here for a denominator rather than for a column — see `BattingLine.sf`.
+    if (pa.event !== null && SAC_FLY.has(pa.event)) line.sf++;
     line.rbi += pa.rbi;
     if (pa.launchSpeed !== null) {
       evs.push(pa.launchSpeed);
@@ -777,6 +812,10 @@ async function buildStatsApiDay(date: string): Promise<{
   byBatter: Map<number, { name: string; games: PlayerGame[] }>;
   byPitcher: Map<number, { name: string; games: PlayerGame[] }>;
   dayGames: DayGame[];
+  /** Every game of the day settled — carried out of here rather than derived
+   *  from `dayGames`, because settledness is a fact about the *feed* and not
+   *  one of the fields a `DayGame` keeps. */
+  allSettled: boolean;
 }> {
   const scheduled = await getGamesForDate(date);
   const games = await mapLimit(scheduled, GAME_CONCURRENCY, async (s) => {
@@ -791,10 +830,12 @@ async function buildStatsApiDay(date: string): Promise<{
   const byBatter = new Map<number, { name: string; games: PlayerGame[] }>();
   const byPitcher = new Map<number, { name: string; games: PlayerGame[] }>();
   const dayGames: DayGame[] = [];
+  let allSettled = true;
 
   for (const entry of games) {
     if (!entry) continue;
     const { game: g, sched } = entry;
+    if (!g.settled) allSettled = false;
     // A postponed game's own feed/live has rolled forward to its makeup date
     // (reading "Scheduled"); only the queried date's schedule still calls it
     // postponed, so that verdict overrides the feed-derived status here.
@@ -957,7 +998,7 @@ async function buildStatsApiDay(date: string): Promise<{
     }
   }
 
-  return { byBatter, byPitcher, dayGames };
+  return { byBatter, byPitcher, dayGames, allSettled };
 }
 
 /** How long a current/future-day fetch stays fresh before we re-download (ms).
@@ -1024,8 +1065,16 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  only the meaning of what is stored having changed — a v6 snapshot has those
  *  rows baked into its reports and would go on drawing an `OTHER OUT` card in
  *  the stream and counting it as an at-bat, which is the arsenal blob's own
- *  reason for going to `-v5`. */
-const DAY_SNAPSHOT_VERSION = 7;
+ *  reason for going to `-v5`; v8 puts the **sacrifice fly** on every batting
+ *  line, which is a field a stored day is read straight back out of — a v7
+ *  snapshot deserializes with `line.sf` undefined and `lineOps` divides by
+ *  `NaN`, so this is the version rule at its most literal. It is the one blob
+ *  that needed the bump: the raw game feed a line is *derived* from already
+ *  carried the `sac_fly` events (`game-<pk>-v8`, untouched), `HitCounts` in
+ *  `teamHitting.ts` has counted `sacFlies` from the start, the research board
+ *  takes OBP off Savant's own leaderboard rather than computing one, and
+ *  `StatcastCounts` holds no batting line at all. */
+const DAY_SNAPSHOT_VERSION = 8;
 
 /**
  * The on-the-wire form of a day.
@@ -1083,6 +1132,9 @@ async function readDaySnapshot(date: string, filter: DayFilter): Promise<ParsedD
       reports,
       games: (stored.games ?? []).map(loadGame),
       fetchedAt: Date.now(),
+      // A snapshot only exists for a settled day — that is the condition it is
+      // written under, one screen down.
+      settled: true,
     };
   } catch (err) {
     console.error(`day snapshot unreadable for ${date}:`, err);
@@ -1150,23 +1202,29 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
   }
 
   const cached = memCache.get(date);
-  if (cached && !isMutable) return filter ? projectDay(cached, filter) : cached;
+  // A past day held from before the rollover is frozen — **unless it was held
+  // unsettled**, in which case it falls through to the TTL below and is rebuilt.
+  if (cached && !isMutable && cached.settled) return filter ? projectDay(cached, filter) : cached;
   if (cached) {
     const states = cached.games.map((g) => g.status.state);
-    // Once every game that day is final, nothing will change until the date
-    // rolls over (final games are cached permanently), so freeze like a past
-    // day. Empty schedules still honor the TTL in case games post late.
-    const allFinal = states.length > 0 && states.every((s) => s === 'final');
+    // Once every game that day is final **and MLB has finished writing every
+    // one of them**, nothing will change until the date rolls over (a settled
+    // game is cached permanently), so freeze like a past day. Empty schedules
+    // still honor the TTL in case games post late. `settled` is the half that
+    // was missing: the last out is not the last word, and a day frozen between
+    // the two keeps whatever the box score had not been given yet.
+    const allFinal = states.length > 0 && states.every((s) => s === 'final') && cached.settled;
     if (allFinal) return filter ? projectDay(cached, filter) : cached;
-    // Any in-progress game shortens the TTL so reloads track live scores;
-    // otherwise a scheduled day polls for first pitch / lineups.
-    const ttl = states.some((s) => s === 'live') ? LIVE_DAY_TTL : TODAY_TTL;
+    // Any in-progress game shortens the TTL so reloads track live scores; a day
+    // that is over but not yet written takes the same short TTL, being a day
+    // still changing. Otherwise a scheduled day polls for first pitch / lineups.
+    const ttl = states.some((s) => s === 'live') || !cached.settled ? LIVE_DAY_TTL : TODAY_TTL;
     if (Date.now() - cached.fetchedAt < ttl) {
       return filter ? projectDay(cached, filter) : cached;
     }
   }
 
-  const { byBatter, byPitcher, dayGames } = await buildStatsApiDay(date);
+  const { byBatter, byPitcher, dayGames, allSettled } = await buildStatsApiDay(date);
 
   let enrichment = EMPTY_ENRICHMENT;
   try {
@@ -1245,13 +1303,24 @@ export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDa
     });
   }
 
-  const parsed: ParsedDay = { date, reports, games: dayGames, fetchedAt: Date.now() };
+  const parsed: ParsedDay = {
+    date,
+    reports,
+    games: dayGames,
+    fetchedAt: Date.now(),
+    settled: allSettled,
+  };
 
   // Snapshot a day that will never change again, so the next cold read is one
   // object instead of a schedule fetch plus a read per game. An empty schedule
   // is deliberately not snapshotted — games can post late.
+  // **And settled**, which is the other half of "will never change again": a
+  // day whose games are all over but whose box scores MLB is still closing out
+  // would otherwise be frozen with the blanks in it, and a day snapshot is
+  // never re-read. Measured cause — one game in 622 was cached that early, and
+  // it is short the hold MLB credited afterwards.
   const allFinal =
-    dayGames.length > 0 && dayGames.every((g) => g.status.state === 'final');
+    dayGames.length > 0 && dayGames.every((g) => g.status.state === 'final') && allSettled;
   if (allFinal) await writeDaySnapshot(parsed);
 
   if (!filter) {
