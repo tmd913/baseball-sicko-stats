@@ -4860,6 +4860,30 @@ button.start-line:focus-visible {
   justify-content: flex-end;
   margin: 0 0 8px;
 }
+/* The cut pills, at the head of that row.
+   `.split-switch` is the pitcher card's own switch and is folded on rather than
+   copied — the same object, a segmented row picking one cut of one player's
+   line. Two things are this row's alone: the `auto` margin that pushes the two
+   disclosures to the far end (there the switch sits over its section and has
+   nothing to push against), and killing the 9px it carries below itself, which
+   is that section's rhythm and reads here as a switch sitting a pixel or two
+   above the buttons beside it in a row that centers its items. */
+.stats-cuts {
+  margin: 0 auto 0 0;
+}
+/* And the `Updating` badge, which is **laid out whether or not it is showing**.
+   This row wraps on a phone, so a badge that arrived with the read would
+   re-flow the two buttons under the finger that had just pressed a pill —
+   *reserve the box, don't move the page*. `visibility` is what reserves it: the
+   width is the badge's own, measured by the browser off a font this app does
+   not choose, rather than a number guessed at here. The pill's own bottom
+   margin goes for the reason the switch's does, this being a centered row. */
+.stats-updating .refreshing {
+  margin-bottom: 0;
+}
+.stats-updating.is-idle {
+  visibility: hidden;
+}
 /* The span column's header parts from the numeric ones twice, and both follow
    from its holding words rather than a number.
 
@@ -5075,43 +5099,58 @@ button.start-line:focus-visible {
   min-height: 0;
   overflow: auto;
 }
-.glog-more {
-  flex: none;
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-  padding: 10px 14px;
-  min-height: var(--control-h);
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.glog-more:hover {
-  background: var(--panel-2);
-  color: var(--text);
-}
+/* The `Load more · 125 earlier games` button that used to sit here is gone: the
+   log grows as the reader reaches the foot of the pane now, on the research
+   board's own mechanism, and what is under the pane is that mechanism's strip
+   (`.page-more`, below). Its rules went with it — a full-width button, a
+   `min-height: var(--control-h)` and a hover — rather than being left behind
+   for the next reader to wonder which table wore them. */
 
-/* Tabs switching the details view between percentile rankings and splits. */
+/* Tabs switching the details view between percentile rankings and splits.
+
+   **The box and the strip are two elements now** (`TabStrip.tsx`): the wrapper
+   below owns the column width and the centering, and this owns the scrolling.
+   The reason is the arrows — they are laid out beside the strip rather than
+   over it, so that the one with nothing behind it can keep its box and the tabs
+   never shift under a finger — and a scroller cannot hold a child that is meant
+   to stay put. */
+.details-tabstrip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* **The column, or the tabs' own width, whichever is larger** — and the
+     second half of that is measured at runtime and published as
+     `--tabstrip-grow` by `TabStrip`. 680 is the reading column the cards under
+     this strip sit in, and it is right for a *card*; nine tab labels come to
+     781px in the font this app happens to be rendered in, so capping a control
+     at a card's width made the strip a scroller on a 1,920px monitor with 1,100
+     of empty page either side. Nothing here declares a breakpoint, because
+     whether the tabs fit depends on the viewport, on which tabs a kind of
+     player has, and on a font this app does not choose. Where the parent is
+     narrower than the content the parent still wins, which is what makes the
+     strip scroll — and what raises the arrows. */
+  max-width: max(680px, var(--tabstrip-grow, 0px));
+  margin: 0 auto;
+}
 .details-tabs {
   display: flex;
   gap: 6px;
-  max-width: 680px;
+  /* It takes the wrapper's width and gives its overflow up to it: `min-width:
+     0` is what lets a flex item be narrower than its content, without which the
+     strip would push the wrapper past the page instead of scrolling. */
+  flex: 1 1 auto;
+  min-width: 0;
   /* No bottom margin and no rule of its own: both belong to `.details-chrome`,
-     which this is the last child of. The rule has to be the wider box's or it
-     would stop at this 680px column (see there), and the gap to the content
-     below has to be outside the sticky box or it would ride down the page with
-     it. The reasoning for an inset shadow over a `border-bottom` is unchanged
-     and now lives up there: a border would have to be overlapped by each tab's
-     own 2px underline, and that 1px of overflow is enough to make the strip
-     scrollable on the block axis too — one axis being non-`visible` computes
-     the other to `auto`, so iOS gave the row a pixel of vertical
+     which the wrapper above is the last child of. The rule has to be the wider
+     box's or it would stop at this column (see there), and the gap to the
+     content below has to be outside the sticky box or it would ride down the
+     page with it. The reasoning for an inset shadow over a `border-bottom` is
+     unchanged and now lives up there: a border would have to be overlapped by
+     each tab's own 2px underline, and that 1px of overflow is enough to make
+     the strip scrollable on the block axis too — one axis being non-`visible`
+     computes the other to `auto`, so iOS gave the row a pixel of vertical
      rubber-banding. */
-  margin: 0 auto;
-  /* Five tabs overflow a phone. They scroll sideways as one strip rather than
+  /* Nine tabs overflow a phone. They scroll sideways as one strip rather than
      wrapping, which would leave the first row's underline floating clear of the
      rule the active tab is supposed to sit on. */
   overflow-x: auto;
@@ -5145,6 +5184,38 @@ button.start-line:focus-visible {
 .details-tab.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+/* The two arrows, which exist only while the strip overflows and are hidden —
+   never removed — at the end they point past. Removing one would move every tab
+   28px sideways at the exact moment a reader has reached the end of the strip
+   and is aiming at the tab there, which is *reserve the box, don't move the
+   page* stated as a control.
+
+   They are **small aimed targets**, so they keep their `:hover` outright: the
+   `(hover: hover)` scoping in this stylesheet is for full-width rows and cards
+   in a scrolling list, where a sticky tint reads as a selection, and a 28px
+   square you have to aim at is the opposite case. `flex: none` because they are
+   the two things in this wrapper that must not be squeezed by the strip. */
+.tabstrip-arrow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  align-self: stretch;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabstrip-arrow:hover {
+  color: var(--text);
+}
+.tabstrip-arrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--control-radius-inner);
 }
 
 /* The percentile card: a fixed label column, a flexible plot, a value column. */
@@ -8835,9 +8906,16 @@ button.start-line:focus-visible {
    active tab's underline would stop short of the table it names. `.details-head`
    is otherwise unchanged — a wrapping flex row, centered by its own auto
    margins — and all this adds is the wrap and the two-line identity stack. */
-.outing-head,
-.outing-view .details-tabs {
+.outing-head {
   max-width: 860px;
+}
+/* The strip's column is the wrapper's now, and it is written the same way the
+   player page's is: the body's 860 **or the tabs' own width**, whichever is
+   larger. Four labels have never come near 860, so this page is unmoved by the
+   change — which was the point of measuring it rather than declaring a
+   breakpoint. */
+.outing-view .details-tabstrip {
+  max-width: max(860px, var(--tabstrip-grow, 0px));
 }
 .outing-head {
   flex-wrap: wrap;
@@ -9623,18 +9701,28 @@ button.start-line:focus-visible {
   color: var(--muted);
 }
 
-/* The foot of the board while there are rows still to come — the strip that
-   holds the spinning ball for `PAGE_BEAT` each time a page is asked for. Its
-   height is reserved from the moment there is a next page rather than arriving
-   with the mark, since it lives *inside* the scroller and a box that came and
-   went would take its own height out of `scrollHeight` under a reader sitting
-   at the bottom of it.
+/* The foot of a paged table while there are rows still to come — the strip that
+   holds the spinning ball for `PAGE_BEAT` each time a page is asked for. **One
+   rule for both tables that page**, the research board and the player page's
+   Game Log, which draw it from one component (`paging.tsx`): it was
+   `.research-more` while the board was the only table that grew on scroll, and
+   the log's own `Load more` button has since given way to the same mechanism.
+
+   Its height is reserved from the moment there is a next page rather than
+   arriving with the mark. On the board that is because it lives *inside* the
+   scroller, where a box that came and went would take its own height out of
+   `scrollHeight` under a reader sitting at the bottom of it; on the log it sits
+   under the pane in a flex column, where the same appearance would resize the
+   pane instead. Same rule, same answer, and `flex: none` is what keeps the
+   second of those from being squeezed (inert on the first, which is not a flex
+   item at all).
 
    `position: sticky; left: 0` for the reason the name column and the sorted
-   column are sticky: a block child of this scroller is only as wide as the
-   pane, so on a table that is twice that it would sit off the left of the
-   screen exactly when the reader is out at the far columns. */
-.research-more {
+   column are sticky: a block child of a scroller is only as wide as the pane,
+   so on a table that is twice that it would sit off the left of the screen
+   exactly when the reader is out at the far columns. */
+.page-more {
+  flex: none;
   position: sticky;
   left: 0;
   display: flex;

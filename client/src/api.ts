@@ -27,6 +27,7 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
+  SplitCut,
   SeasonStats,
   UserPrefs,
   WatchPlayer,
@@ -590,8 +591,16 @@ export const api = {
    * more than the request it saves. In practice it is five cache hits: the ten
    * boards are pulled warm nightly.
    */
-  async playerWindows(playerId: number, kind: PlayerKind): Promise<PlayerWindows> {
-    return request(`/api/players/${playerId}/windows?type=${kind}`);
+  async playerWindows(
+    playerId: number,
+    kind: PlayerKind,
+    /** Which cut of the spans, or null for all of them. A cut is the same five
+     *  rows off the same route — see `playerSplits.ts` for why it cannot be
+     *  read off the board, and what a cut row can and cannot carry. */
+    cut: SplitCut | null = null,
+  ): Promise<PlayerWindows> {
+    const q = cut ? `&cut=${cut}` : '';
+    return request(`/api/players/${playerId}/windows?type=${kind}${q}`);
   },
   /** One team's nine hitting cuts over a window — the opponent table on a
    *  pitcher's game. The season is already on the report, so this is only ever

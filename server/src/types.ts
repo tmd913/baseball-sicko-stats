@@ -1223,7 +1223,31 @@ export interface PlayerWindows {
   season: number;
   kind: PlayerKind;
   windows: PlayerWindowRow[];
+  /**
+   * Which cut of the spans these rows are, or null for all of them.
+   *
+   * On the wire so the answer says what it is an answer to: the table is
+   * re-read when the reader picks a cut, and a stale reply landing on a fresh
+   * one would otherwise be four rows of the wrong split with nothing to say so.
+   * The client sequence-numbers the read as well — this is the belt to that
+   * pair of braces, and the one a cache could get wrong.
+   */
+  cut?: SplitCut | null;
 }
+
+/**
+ * The four ways the Stats tab will cut a span.
+ *
+ * **The handedness pair names the *other* man's hand**, which is what a platoon
+ * split means on both boards: `vsr` reads as *vs RHP* on a batter's page and
+ * *vs RHB* on a pitcher's. One value rather than four, because the axis is the
+ * same one and the label is a fact about whose page it is — the same economy
+ * `PlatoonSplits` already makes.
+ */
+export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
+
+/** In the order the control offers them: the hands, then the ballpark. */
+export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
 
 export interface ResearchRow {
   id: number;

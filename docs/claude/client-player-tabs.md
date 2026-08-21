@@ -750,6 +750,177 @@ no entry at all.
 0.1KB over the wire, for a sort, a saved preference, a route and a picker
 *extraction* that left the board with less code than it had.
 
+### The Stats tab cuts every span four ways
+
+**The five spans are one axis and this is the second.** The tab has always
+answered "how has he been going lately, against his season"; it now answers "and
+is he a different player against left-handers, or on the road" over the same
+five spans, from a row of pills at the head of the caption row —
+`All · vs RHP · vs LHP · Home · Away`, and `vs RHB · vs LHB` on a pitcher, the
+cut being **the other man's hand** as a platoon split always is. One value on
+the wire and in the URL (`vsr`, `vsl`), two labels, so a link means the same
+thing whichever page it was made on.
+
+**`cut=` is in the URL, where `cols=` deliberately is not**, and the line
+between them is the one `RULES.md` draws: `cols=` is *how* a table is read and
+this is **which data it shows** — five rows of one man against left-handers are
+not the same five rows. It is scoped to `player=`, the page that draws it, for
+the reason `mt=` is scoped to `mup=`; it is put away when the player page
+closes, a cut being a question about *this* man, and kept when another player's
+page opens **over** it, which is the rule that paragraph already states about
+`player=`. Held in App rather than in `PlayerDetails`, which is unmounted every
+time the overlay closes.
+
+#### None of the cheap routes work, and the dead ends are worth recording
+
+**MLB publishes exactly these four splits and will not date-range them.**
+`statSplits` with `sitCodes=[vr,vl,h,a]` is exact, populated and league-wide
+(checked: 623 batters carry a `vl` row), and it takes `startDate`/`endDate` in
+either spelling, returns **200**, and ignores them — Soto's `vl` line reads
+`120 PA / .276` for `2026-07-20 → 2026-08-20` exactly as it does for the season,
+because it *is* the season. `stats=byDateRange&sitCodes=…` is the same dead end
+from the other side: it honors the dates and drops the split, handing back the
+overall line once per code with an empty `split` object. This is the
+`pull_air_rate` failure wearing a date, and it is why the tab could not simply
+ask for what it wanted.
+
+**Savant publishes no windowed leaderboard at all** (`statcastWindow.ts` records
+that), and its per-day exports carry no counting stats — they are pitches, where
+`H`, `AB` and `AVG` come off MLB. **And five more boards per cut is not a
+route**: the board is a league-wide season of pitch rows, so four cuts of five
+windows is twenty of them.
+
+#### So a cut is his own season of pitches, and it reconciles exactly
+
+`statcast_search/csv` filtered to **one player** takes the whole season in a
+single request (`batters_lookup[]` / `pitchers_lookup[]`), and every row of it
+carries `game_date`, `p_throws`, `stand`, `inning_topbot` and `events` — so all
+four cuts of all five spans fall out of one fetch by filtering, and the Statcast
+half is `tally` and `toStatcast`, **imported from `statcastWindow.ts` rather
+than rewritten**, so a cut of a span and the span itself are the same arithmetic
+over the same rows. Measured: a batter's season is **1,472 rows / 985KB in
+3.8s** (Soto), a starter's **2,077 / 1.4MB in 4.4s** (Sale) — far under the
+25,000-row cap that rules this export out league-wide. Twenty rows are cached
+per player for six hours, not the megabyte, and all four cuts come from the one
+fetch: pressing `vs LHP` and then `Home` is one request, not two.
+
+**The counting half is computed here, so it owes a check against the source that
+publishes it.** Against MLB's own `statSplits` for 2026, byte for byte: Soto vs
+L `120 PA / .276 / .809`, vs R `239 / .287 / 1.021`, home `169 / .331 / 1.077`,
+away `190 / .242 / .833` — all four identical; Sale home `11 G / 262 BF / 52 H /
+74 K`, away `11 / 255 / 51 / 86`, vs L `127 BF / .248`, vs R `390 / .206` — all
+four identical **once `truncated_pa` is excluded**, which was the single
+discrepancy in the whole exercise: a plate appearance ended by the third out on
+the bases, which Statcast files as an event and MLB does not count as a batter
+faced. And the sums close in the browser on every span, which is the check that
+matters most on a table of five rows: Elly De La Cruz's `vsR + vsL` and
+`home + away` are **487 / 34 / 65 / 125 / 230** — his season, 7-, 15-, 30- and
+60-day PA off the uncut table — on both axes, with hits `73 + 38 = 111` and home
+runs `12 + 8 = 20`. The split is a real one: `.330 / 1.040` against left-handers
+against `.233 / .726` against right.
+
+#### What a cut cannot carry, and what an empty cell draws
+
+A pitch row knows what happened *in the plate appearance*. It does not know who
+scored, who stole, or which runs were earned, so **R, RBI, SB and pull-air on a
+batter, and IP, ER, ERA, W, L, SVHD, FIP, xFIP, WHIP, K/9 and BB/9 on a
+pitcher, are null on a cut row** — and the client dashes them exactly as it
+dashes `sprintSpeed` and `xERA` on a window row, which is the precedent this
+follows rather than a new rule. Measured on Sale's `vs LHB`: **14 of 28 columns
+dash**, which is the honest shape of the answer and not a fault; the reader can
+hide them with the picker that is already there.
+
+**Innings were probed and rejected, and the negative result is the point.**
+Mapping `events` to outs gets Sale to **384 outs / 128.0 IP** against MLB's
+**129.0** across the season (home 65.0 against 65.1, away 63.0 against 63.2):
+three outs a season short, every one of them a runner caught on the bases during
+a plate appearance, which the export records in `des` and nowhere a parser can
+trust. Three outs is 0.8% and it is still a wrong number, and a wrong ERA is
+worse than no ERA.
+
+**A cut row always carries the count it was cut from**, whatever the reader's
+saved columns say — `PA` on a batter, `BF` on a pitcher, inserted after `G` and
+gone again with the cut. This is the one place this table adds a column of its
+own and the sample size is what earns it: a week cut by hand is a handful of
+plate appearances, and on a pitcher the column that normally says how much of a
+season a row is — `IP` — is one a cut cannot carry at all. Without it Sale's
+7-day `vs LHB` row reads `1 G · 2 H · 1 K` and a `.405 xwOBA` with nothing
+anywhere to say it is **three batters**; with it, the 127 / 3 / 13 / 20 / 44 down
+the `BF` column is the first thing the eye lands on. The saved selection is
+untouched, which is why the picker still reads the reader's own list.
+
+**And a span he has nothing in draws its sentence with the cut in it** —
+`No away games in this span`, not `No games in this span`, because an empty
+state names its own cause and the lit pill directly above it is the control that
+caused it. This case is uncommon on the uncut table and **common here**: checked
+on Elly at 390×844, `Away` empties his 7-day row outright, and on Soto — out
+since 24 July — a `vs LHP` cut leaves four of the five spans empty and the
+season row reading in full.
+
+#### The percentile badges go off, and say why
+
+`Ranks` is **off and inert under a cut**, with the reason on the control:
+*"No percentiles under a cut — the badges are the research board's own, and
+there is no board of everybody's line vs LHP. Press All to bring them back."*
+The badges here have always been the board's own scale over the board's own
+qualified population, which is what makes the number on this tab and the number
+on the board the same number; there is no board of everybody's line against
+left-handers, and the three ways of pretending otherwise are all worse than
+saying so. Ranking a cut against the **uncut** board is a wrong answer wearing a
+right one's clothes — a .380 against lefties would read as a 96th percentile it
+was never measured for. Ranking against a population of one is not a rank. And
+leaving the badges the uncut table last drew would be yesterday's answer under
+today's numbers.
+
+`ResearchRow.qualified` is `false` on every cut row for the same reason and
+**nothing reads it**: Savant's bar is 2.1 plate appearances per team game over a
+whole span, which is a statement about the span and not about a quarter of it.
+The dashed qualification ring therefore cannot misfire under a cut — there are no
+badges for it to be drawn on — and it comes back correct the moment `All` is
+pressed. Measured at 1200×900 on Elly: **125 badges** with `All` and ranks on,
+**0** under `vs LHP` with the button disabled, and **125** again on returning to
+`All`, the saved preference never having been written to.
+
+#### What the row costs, measured
+
+The pills go in `.stats-tools`, at the head of the row the two disclosures end —
+they change *which numbers* are in the table where those two change how it is
+read, so they lead and the pair follows, which is the order the board reads its
+own run of controls in. `.split-switch` / `.split-tab` are the pitcher card's
+own pills, **folded on rather than restyled**: a segmented row picking one cut
+of one player's line is the same object in both places. What the row adds under
+its own name is the `auto` margin that pushes the pair to the far end and the
+9px bottom margin killed, this being a row that centers its items.
+
+Measured before → after at three widths, with the same player on the same
+afternoon. At **1200** the row is **36.00px** either way — the pills fit beside
+the two buttons, and the tab is still **one screen** (content height 900 in a
+900px overlay). At **390** it goes **36 → 74**, the pills wrapping to a line of
+their own, and at **320** **36 → 88**; the tab is still one screen at both
+(content 844 in 844). The table's invariants are untouched at every width: rows
+**44.55px** (**58.55** with ranks on), the span column pinned at **0** with the
+pane scrolled to its far right, and the page body overflowing by **0**.
+
+**The `Updating` badge is laid out whether or not it is showing**, which is
+*reserve the box, don't move the page* on a row that wraps: a badge arriving with
+the read would re-flow the two buttons under the finger that had just pressed a
+pill. `visibility` rather than a conditional render, so the box reserved is the
+badge's own width off a font this app does not choose and not a number written
+down. Measured: the Columns button's box is **byte-identical** across a cut
+change at 1200 (left 957.05), at 390 (255.19, 254) and at 320 (185.19, 322), and
+the badge's own reserved width is **106.16px**.
+
+**Never a wait over data.** The first open of the tab has no rows and gets the
+block wait behind `WAIT_DELAY`; a *cut* is a re-read of a table already on
+screen, so the rows stand while the next answer is in flight and the badge is
+the only mark. The read carries **two guards that answer different questions**:
+the ref that every lazy read on this page has, keyed to what was asked for
+(`kind-id-cut`) so a different question re-asks and the same one does not — and
+a **sequence number**, because a cut is a control a reader presses twice in three
+seconds and a slow `vs LHP` returning after a fast `Home` would otherwise write
+the wrong five rows under a lit pill. Neither is a cleanup flag, which is the
+hang recorded one tab over.
+
 ### A game still being played reads `Live`, and has no W to show
 
 **The result chip claimed a win for a game in the second inning, and the branch that should have caught it had never once been drawn.** `Opponent` printed `W`/`L` on `g.win !== null`, and the comment above it already described the right behavior — *"a game with no result yet (in progress, suspended) still shows the score it's reached, uncolored — there's no W or L to claim"* — so nothing in the client needed inventing. The field it tested was simply never null: MLB fills the game-log split's `isWin` **while the game is being played**, where it means *whose side is ahead right now*. Measured on 2026-08-19 with the page open at 1200×900: Kyle Schwarber's top row read a green **`W 1-0`**, title *"His team won 1-0"*, while Philadelphia were batting in the **second inning** of gamePk 823424; the same row now reads **`Live 1-0`**, title *"In Progress — 1-0 so far"*. The gate is on the server (see **Server**, the gamelog route) because that is where the postponed-is-`Final` trap is already read; the client's job is only to say which state it has.
@@ -763,6 +934,67 @@ no entry at all.
 **Verified against real games and, for the two states MLB had none of, against forced ones.** Live: Schwarber (batter, `Live 1-0`) and the Diamondbacks' starter in gamePk 824722 (pitcher, `Live 5-5`), both on the Game Log tab and on the Overview tab's five-game preview, which draws the same `GameLogTable` and so took the fix without being touched. Suspended and delayed have no live example to point a browser at — **0 games carry either status across the 2022, 2024, 2025 and 2026 regular seasons as MLB serves them today**, a suspension being resolved to `Final` or `Completed Early` once it resumes — so those two were driven by forcing the state on two of Jarren Duran's rows in the running server: `Susp 9-4` in amber and `Delayed 3-8` in green, rendered and read back, and the forcing reverted. Light theme checked with the same read: the chip's green is `rgb(24, 97, 22)` there against `rgb(134, 207, 134)` in dark, both off `--hit`, since nothing here writes a color that is not a token.
 
 **Bundle: 583.27 → 583.56 KB of JS** (173.94 → 174.04 gzipped) and **156.57 → 156.90 KB of CSS** (28.03 → 28.07 gzipped) — 0.29KB and 0.33KB raw, 0.1KB and 0.04KB over the wire.
+
+### The Game Log grows on scroll, and its `Load more` button is gone
+
+**It had a button and the board had a mechanism, and they are the same
+mechanism now.** The log drew 25 rows under a `Load more · 125 earlier games`;
+it draws **20** and grows as the reader reaches the foot of the pane, on the
+research board's own paging — extracted to `components/paging.tsx` and read by
+both, so there is one implementation rather than two that agree today. That is
+the rule `researchColumns.tsx` and `ColumnPicker.tsx` already apply to this
+tab's vocabulary and its picker, applied to the third thing the two tables
+share. What each caller keeps is the **page size**, which is genuinely theirs.
+
+**The board's own paragraph drew a contrast that has not survived it.** It said
+a leaderboard has no end worth stopping at where the feed and the game log are
+*lists* whose end is a real place, so a button that says how many are left hands
+the reader a choice. The first half stands. The second turned out to be false of
+a season: nobody reading down a log stops at row 25 to consider whether they
+would like row 26, and the button was a control asking permission to carry on
+doing the one thing the tab is for. (The **feed** keeps its button, and keeps
+the argument with it — its items are cards with clips in them, an item is read
+rather than scanned, and the count on the button is a real number about a real
+end.)
+
+**Twenty rather than the board's fifty**, and the difference is what a row
+costs. A board row is a headshot, an identity block, three marks and up to 44
+cells; a log row is fourteen numbers and a date. The constraint fifty answers on
+the board — one page must overfill the pane, or growing chains — is met here at
+twenty: **20 × 44.55px = 891px** against the **674** a 900px window gives this
+pane and the **564** a phone does. It is also the number this app already uses
+for a list read down rather than scanned.
+
+**The strip goes under the pane, not inside it**, which is the one thing this
+drawing does differently from the board's. The log closes with a sticky
+`<tfoot>` — the season totals, pinned to the bottom of the box — so a strip
+inside the scroller would sit *behind* that row at every offset but the last:
+a mark about the foot of the list that cannot be seen until the reader has
+already reached it. Out here it is visible from the moment it exists. The
+reservation rule is unchanged and is why it is laid out at all rather than
+appearing with the mark: inside a scroller a box that came and went would take
+its height out of `scrollHeight`, and out here it would resize the pane. It goes
+for good on the last page. `.research-more` is `.page-more` now, one rule for
+both tables, and `.glog-more`'s button rules went with the button.
+
+**Measured at 1200×900 and 390×844 on a 109-game batter.** The tab opens on
+**20** rows and grows **20 → 40 → 60 → 80 → 100 → 109**, one page per touch of
+the foot, with `Loading more games` up for the beat each time. `scrollLeft` is
+**untouched at 219 (1200) and 506 (390)** across every page, which is the wide
+table's own rule — down is which games, across is which stat. The strip is
+**44px** and sits directly under the pane (top 836 in a 900px window, 780 in an
+844px one, so it is on screen), and it is **absent once all 109 are drawn**, the
+pane growing back into its 44px. There are **0** `Load more` buttons anywhere on
+the page, and the page body overflows by **0** at both widths.
+
+**The count is this component's own, where the board keeps its in App**, and the
+mirror of the board's reason is why. App restores a scroll offset per *view* and
+this pane is not a view: the player page puts the overlay back to the top on
+every tab change and unmounts the tab it left, so there is no remembered offset
+for a remembered count to disagree with — which is the one way an auto-loader
+can fight a scroll restore. Measured both ways: grown to **60** rows at
+`scrollTop` 1,206, out to the Overview tab and back gives **20** rows at
+`scrollTop` **0**, which is what an unmounted tab reopened is.
 
 ### The Game Log's rows open the game
 

@@ -18,11 +18,12 @@ import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js'
 import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
+import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
-import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, TEAM_HITTING_WINDOWS } from './types.js';
+import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, SPLIT_CUTS, TEAM_HITTING_WINDOWS } from './types.js';
 import type {
   PlayerKind,
   ResearchIncludeKey,
@@ -1665,7 +1666,16 @@ app.get(
       return;
     }
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
-    res.json(await getPlayerWindows(playerId, kind));
+    // **And the same five spans cut four ways**, on the same route because it is
+    // the same table — five rows, the same columns, `row: null` for a span he
+    // has nothing in. A second route would be a second shape for the client to
+    // hold and a second place for the two to drift.
+    //
+    // An unrecognized `cut` falls back to the uncut board rather than 400ing,
+    // which is the client's own rule for a parameter it does not know arriving
+    // in a link: fall back rather than empty the view.
+    const cut = SPLIT_CUTS.find((c) => c === req.query.cut);
+    res.json(cut ? await getPlayerCutWindows(playerId, kind, cut) : await getPlayerWindows(playerId, kind));
   }),
 );
 

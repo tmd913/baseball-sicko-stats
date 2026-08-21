@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import { useRef, useState } from 'react';
+import type { KeyboardEvent, ReactNode, RefObject } from 'react';
 import type { BatterGameLog, PitcherGameLog, PlayerKind } from '../types';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
 import { OutingPageForGame } from './OutingPage';
 import { PlayerDayModal } from './PlayerDay';
+import { PageMore, usePagedRows } from './paging';
 
 /**
  * A row of the log is a press, and this is what makes it one.
@@ -36,11 +37,29 @@ function pressProps(onOpen: () => void, label: string) {
 }
 
 /**
- * How many games render before the Load more button. A batter's season is 150
- * rows and this table sits inside an overlay that already scrolls, so it pages
- * the way the feed does rather than dropping the whole season on the page.
+ * How many games are drawn before the log grows, and how many each page adds.
+ *
+ * A batter's season is 150 rows inside an overlay that already scrolls, so the
+ * log has always been paged. What changed is *how*: it had a `Load more · 125
+ * earlier games` button and it now **grows as the reader reaches the foot of
+ * the pane**, on the research board's own mechanism (`paging.tsx`) rather than
+ * on a second one written beside it. The board's paragraph about a leaderboard
+ * having no end worth stopping at turns out to be true of a season too — nobody
+ * reading down a log stops at row 25 to consider whether they would like row
+ * 26, and the button was a control asking permission to carry on doing the one
+ * thing the tab is for.
+ *
+ * **Twenty rather than the board's fifty**, and the difference is what a row
+ * costs. A board row is a headshot, an identity block, three marks and up to 44
+ * cells; a log row is fourteen numbers and a date, so the argument that made
+ * fifty right there — one page must overfill the pane, or growing chains — is
+ * satisfied here at twenty: 20 × 44.55px is **891px** against the 700-odd a
+ * 900px window gives this pane and the 650 a phone does. It is also the number
+ * this app already uses for a list read down rather than scanned (the feed's
+ * Recent section), and one screen of games is what a reader opening the tab is
+ * looking at.
  */
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 /**
  * What the chip calls a game that is not over, and null for one that is.
@@ -493,6 +512,8 @@ function GameLogTable({
   totals,
   corner,
   onOpen,
+  scrollRef,
+  onScroll,
 }: {
   log: Log;
   /** How many rows to draw, newest first. */
@@ -503,10 +524,15 @@ function GameLogTable({
    *  pinned on both axes: the expand button on the tab, nothing on the preview. */
   corner?: ReactNode;
   onOpen: (g: BatterGameLog | PitcherGameLog) => void;
+  /** The pane, for the tab's paging to read its scroll position off. The
+   *  Overview's five-row preview passes neither: it draws a fixed five and has
+   *  nothing to grow into. */
+  scrollRef?: RefObject<HTMLDivElement | null>;
+  onScroll?: () => void;
 }) {
   const pitching = log.kind === 'pitcher';
   return (
-    <div className="glog-scroll">
+    <div className="glog-scroll" ref={scrollRef} onScroll={onScroll}>
       <table className="glog-table">
         <thead>
           <tr>
@@ -672,15 +698,37 @@ export function GameLog(
     chrome?: ReactNode;
   },
 ) {
+  /**
+   * How many rows are drawn, and it is this component's own — where the board
+   * keeps the same number in App.
+   *
+   * The board's reason for lifting it does not arise here: App restores a
+   * scroll offset per *view*, and this pane is not a view. The player page puts
+   * the overlay back to the top on every tab change and unmounts the tab it
+   * left, so there is no remembered offset for a remembered count to disagree
+   * with — which is the fault the board's arrangement exists to avoid, and the
+   * one thing an auto-loader must not do is fight a scroll restore. Checked
+   * both ways: leaving the tab and coming back gives 20 rows at the top, which
+   * is what an unmounted tab reopened *is*.
+   */
   const [shown, setShown] = useState(PAGE_SIZE);
   // Both above the early return: hooks are unconditional, and a player with no
   // games takes that branch.
   const { openGame, opened } = useGameOpen(log.playerId, log.kind, log.name);
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // The research board's mechanism, whole — the scroll handler, the beat, and
+  // the guard for a pane taller than a page. See `paging.tsx`.
+  const { onScroll, loadingMore, hasMore } = usePagedRows({
+    scrollRef,
+    total: log.games.length,
+    shown,
+    pageSize: PAGE_SIZE,
+    onShown: setShown,
+  });
   if (log.games.length === 0) {
     return <div className="details-status">No games played this season.</div>;
   }
-  const more = log.games.length - shown;
   return (
     <div ref={fullRef} className={`details-gamelog${isFull ? ' is-expanded' : ''}`}>
       {isFull && log.chrome && <div className="expanded-chrome">{log.chrome}</div>}
@@ -690,12 +738,19 @@ export function GameLog(
         totals
         corner={<ExpandButton isFull={isFull} onToggle={toggle} what="log" />}
         onOpen={openGame}
+        scrollRef={scrollRef}
+        onScroll={onScroll}
       />
-      {more > 0 && (
-        <button type="button" className="glog-more" onClick={() => setShown(shown + PAGE_SIZE)}>
-          Load more · {more} earlier {more === 1 ? 'game' : 'games'}
-        </button>
-      )}
+      {/* **Under the pane rather than inside it**, which is the one thing this
+          strip does differently from the board's. The log closes with a sticky
+          `<tfoot>` — the season totals, pinned to the bottom of the box — so a
+          strip inside the scroller would sit *behind* that row at every offset
+          but the last, which is a mark about the foot of the list that cannot
+          be seen until the reader has already reached it. Out here it is
+          visible from the moment it exists, and the reservation rule is
+          unchanged: laid out whenever there is another page, gone for good on
+          the last one. */}
+      {hasMore && <PageMore loading={loadingMore} what="games" />}
       {opened}
     </div>
   );
