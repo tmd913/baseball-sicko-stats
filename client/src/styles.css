@@ -9786,7 +9786,11 @@ button.start-line:focus-visible {
    before → after:
 
      player reading  103→93  72→93  72→93  72→62  41→62  41→62  41→62  41→62
-     team reading     72→93  72→62  72→62  41→62  41→62  41→62  41→62  41→62
+     team reading     72→93  72→62  72→62  41→62  41→62   —→62  41→62  41→62
+
+   — the one dash is a cell whose *before* was not captured (the API went down
+   mid-sweep and the reading was not retaken); it is not an inference written
+   down as a measurement.
 
    — **+21 where the run does not change shape, −10 where a row of it goes**,
    against the flat 31 the count-on-its-own-box version cost. Every one of those

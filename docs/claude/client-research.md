@@ -74,7 +74,11 @@ shape, below.)*
         | width | 320 | 375 | 390 | 480 | 640 | 900 | 1200 | 1920 |
         | --- | --- | --- | --- | --- | --- | --- | --- | --- |
         | player | 103→93 | 72→93 | 72→93 | 72→62 | 41→62 | 41→62 | 41→62 | 41→62 |
-        | teams | 72→93 | 72→62 | 72→62 | 41→62 | 41→62 | 41→62 | 41→62 | 41→62 |
+        | teams | 72→93 | 72→62 | 72→62 | 41→62 | 41→62 | —→62 | 41→62 | 41→62 |
+
+        The one dash is a cell whose *before* was not captured — the API went
+        down mid-sweep and the reading was not retaken. It is left as a dash
+        rather than filled in from its neighbors, which both read 41.
 
         **+21 where the badge run does not change shape, −10 where a row of it
         goes**, against a flat 31 for the two-box version. No horizontal
