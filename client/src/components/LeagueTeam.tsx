@@ -69,6 +69,7 @@ export default function LeagueTeam({
   start,
   end,
   reading,
+  startersOnly = false,
   lens,
   onLens,
   schedule,
@@ -85,6 +86,30 @@ export default function LeagueTeam({
   end: string;
   /** The table or the stream: the app's own two roster views, as two tabs. */
   reading: 'roster' | 'feed';
+  /**
+   * **Draw this manager's lineup rather than his roster** — the `Summary`
+   * reading's own flag, and the one thing that makes that reading add up.
+   *
+   * The table is the same table either way; what changes is what is in it.
+   * `Roster` is *who is on this team over these days* and counts every game
+   * every man played, which is the honest answer to that question. `Summary` is
+   * *what this manager has actually banked in the matchup*, and ESPN's answer
+   * to that counts a man only on the scoring periods he held a lineup spot for
+   * — bench and IL accrue nothing (`espn.ts::NON_ACCRUING_SLOTS`). Drawn over
+   * the roster, the table was reading over its own totals: measured against the
+   * live league on 2026-08-20 over `Aug 10 – Aug 20`, team 6's foot read
+   * **56 R / 23 HR / 69 RBI** where ESPN's scoreboard read **55 / 22 / 67**,
+   * and team 5's read **38 / 5 / 37** against ESPN's **36 / 5 / 35**.
+   *
+   * **It is `projectStarters` rather than a filter on the rows**, which is what
+   * makes the difference land: that function cuts *days* — a man started on
+   * Monday and benched on Wednesday keeps Monday's line and loses Wednesday's —
+   * and it is the same one function the `Starters` filter and the divider above
+   * the `Total` already run, so the three cannot come to disagree about an
+   * afternoon. There was already a `starterCards` here, built for the divider's
+   * key set and then thrown away; this draws it.
+   */
+  startersOnly?: boolean;
   /** **Which kind of play the feed reading draws** — the app's own single-select
    *  lens, `all` being the whole stream. The overlay owns it for the reason it
    *  owns the reading, the kind and the dates; what this page owns is *where
@@ -279,6 +304,17 @@ export default function LeagueTeam({
    * roster in the same two lines.
    */
   const starterKeys = useMemo(() => new Set(starterCards.map(playerKey)), [starterCards]);
+  /**
+   * **What the table draws** — the roster, or the lineup out of it. See
+   * `startersOnly`.
+   *
+   * The `Total` divider is left reading `starterKeys` rather than being turned
+   * off here, and that is deliberate: `splitStarters` already answers "nothing
+   * below the line" with the row at the bottom over everybody, which is exactly
+   * what this reading wants and is one rule rather than two. A second flag
+   * saying "and don't split" would be a second way to describe the same table.
+   */
+  const shownCards = startersOnly ? starterCards : teamCards;
 
   // Never over data: the block wait is behind the app's own delay, so a warm
   // answer never flashes one, and a span change re-reads with the old rows
@@ -317,12 +353,31 @@ export default function LeagueTeam({
       </>
     );
   }
+  /* **The lineup can be empty where the roster is not**, and the message says
+     which of the two emptied the page rather than claiming a fact about the
+     days: a manager who left every slot on the bench has a team and no lineup.
+     It names `Summary` because that is the control in force — the rule every
+     empty state in this app follows. */
+  if (shownCards.length === 0) {
+    return (
+      <>
+        {chrome}
+        <div className="empty-state">
+          <h3>Nobody in this lineup over these days</h3>
+          <p>
+            {who} started nobody over the days in view, so there is nothing for this matchup to
+            have counted. <strong>Roster</strong> above has the whole team, bench included.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <FantasyRosterContext.Provider value={slots}>
       {reading === 'roster' ? (
         <SummaryTable
-          reports={teamCards}
+          reports={shownCards}
           onOpenDetails={onOpenDetails}
           schedule={schedule}
           projection={projection}

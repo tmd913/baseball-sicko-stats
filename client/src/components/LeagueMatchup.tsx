@@ -27,7 +27,7 @@ import {
   spanLabel,
   stepSpan,
 } from './schedule';
-import type { ScheduleSpan } from './schedule';
+import type { PitcherLookup, ScheduleSpan } from './schedule';
 import {
   asProjected,
   catScore,
@@ -450,6 +450,7 @@ export default function LeagueMatchupView({
   scheduleLoading,
   matchupWindow,
   onNeedSchedule,
+  pitcherLookup,
 }: {
   board: EspnScoreboard;
   matchupId: number;
@@ -542,6 +543,21 @@ export default function LeagueMatchupView({
    *  for the week being played (see `espn.ts::getMatchupWindow`). */
   matchupWindow: MatchupWindow | null;
   onNeedSchedule: () => void;
+  /**
+   * **The season roster reduced to what naming a pitcher takes** — the same
+   * `PitcherLookup` App builds for its own Schedule view, handed down rather
+   * than rebuilt, so a day read on a team page and the same day read on the
+   * roster table cannot come to name two different men.
+   *
+   * **Null means the names are not in hand yet**, and the index is not built
+   * until they are — App collapses its own `playersLoading` into this prop for
+   * that reason. It is the same wait the roster view takes and for the same
+   * measured reason: a cell naming the opposing starter is a line taller than
+   * one that cannot, so an index built before the list lands would grow the
+   * grid under the reader a beat later. Rule 1 is intact meanwhile — with the
+   * index null the table goes on drawing its stat columns.
+   */
+  pitcherLookup: PitcherLookup | null;
 }) {
   // Both off in the standalone reading — see `standalone`. A page does not pin
   // the document it is part of, and there is no background outside a tab.
@@ -924,15 +940,20 @@ export default function LeagueMatchupView({
     });
   }, [span, matchupWindow, today]);
 
-  // The Schedule view's index, or null while the mode is off or its one read is
-  // still out — "the mode is the presence of an index rather than a flag beside
-  // one", which is what makes "on but still reading" impossible to draw.
+  // The Schedule view's index, or null while the mode is off or either of its
+  // two reads is still out — "the mode is the presence of an index rather than
+  // a flag beside one", which is what makes "on but still reading" impossible
+  // to draw. **`pitcherLookup` is the second of those reads**: the index names
+  // the opposing starter in every cell, and a grid built before the season
+  // roster lands would draw those cells a line short and grow under the reader
+  // when it arrives — App's own Schedule view waits on the same list for the
+  // same measured reason, and hands this down already gated on it.
   const scheduleIndex = useMemo(
     () =>
-      scheduleSpan !== null && scheduleWindow
-        ? buildScheduleIndex(scheduleWindow, scheduleSpan, matchupWindow)
+      scheduleSpan !== null && scheduleWindow && pitcherLookup
+        ? buildScheduleIndex(scheduleWindow, scheduleSpan, matchupWindow, pitcherLookup)
         : null,
-    [scheduleSpan, scheduleWindow, matchupWindow],
+    [scheduleSpan, scheduleWindow, matchupWindow, pitcherLookup],
   );
 
   /**
@@ -1800,6 +1821,11 @@ export default function LeagueMatchupView({
                  there would be a second definition of what a table of a team
                  is. */
               reading={reading === 'feed' ? 'feed' : 'roster'}
+              /* **`Summary` is the manager's lineup, not his roster** — the
+                 whole of what that reading is for is that it adds up to the
+                 category card two presses away, and a bench is not in that
+                 arithmetic. See `LeagueTeam`'s `startersOnly`. */
+              startersOnly={reading === 'summary'}
               /* The pills are drawn *inside* that page rather than beside it
                  here, which is the Feed view's own rule: a row of pills over an
                  empty page would be a control over nothing, and the two empty

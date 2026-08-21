@@ -1669,6 +1669,92 @@ already follows for a half with no matchup period in it.
 
 **`Summary` is the second thing on this page to wear the word**, the strip above having a `Summary` tab, which is the *comparison page* rather than a reading of a team. They are one press apart and both are `.view-switch` pills. What tells them apart is that the strip is *whose page* and this is *what about him*, and their titles say so; the alternative was a second word for one idea, which is worse — a manager reading his own week wants the summary of it, and a synonym invented to protect a layout is the app lying about what a control is. Flagged here rather than hidden, because it is the one part of this that a reader could trip on.
 
+#### It is the lineup, not the roster — which is what makes it add up
+
+**The reading's whole claim is that it is the arithmetic behind the category
+card two presses away, and it was reading over its own totals.** The table drew
+`teamCards` — everyone who was on the team on any day of the range, every game
+they played — where ESPN counts a man only on the scoring periods he held a
+**lineup spot** for: bench and IL accrue nothing, which is the same
+`NON_ACCRUING_SLOTS` the scoreboard's own day-summation already skips (see
+**ESPN — the league's own numbers**, *One scoring period's production per
+team*). Two different errors rode on that, and the second is the one a filter on
+the *rows* would not have caught: a man wholly benched all week was counted at
+all, and a man started Monday and benched Wednesday was counted **for Wednesday
+too**.
+
+So `startersOnly` draws `starterCards` instead, which is `projectStarters` — the
+one function in this app that answers *was he in a lineup on this day*, and it
+cuts **days** rather than rows. It was already being computed on this page and
+thrown away once `starterKeys` had been taken off it for the `Total` divider;
+this draws the thing itself. One test, three readers — the divider, the slot
+chips' `startedDays`, and now the table — so the line above the total, the count
+in a chip's title and the figures between them cannot come to disagree about an
+afternoon.
+
+**Measured against the live league's own scoreboard**, driven on 2026-08-20 over
+`Aug 10 – Aug 20`, every counting category ESPN scores plus the two the table
+prints beside them:
+
+| | | R | HR | RBI | SB | AB | H | BB | K | W | SV+HLD | ERA | WHIP |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| team 6 | before | 56 | 23 | 69 | 7 | 400 | 102 | 46 | 86 | 7 | 11 | 2.87 | 1.02 |
+| | **after** | **55** | **22** | **67** | **7** | **384** | **99** | **41** | **86** | **7** | **11** | **2.87** | **1.02** |
+| | *ESPN* | *55* | *22* | *67* | *7* | *384* | *99* | *41* | *86* | *7* | *11* | *2.8723* | *1.0213* |
+| team 5 | before | 38 | 5 | 37 | 5 | 372 | 68 | 35 | 92 | 9 | 11 | 5.67 | 1.41 |
+| | **after** | **36** | **5** | **35** | **5** | **358** | **64** | **35** | **92** | **9** | **11** | **5.67** | **1.41** |
+| | *ESPN* | *36* | *5* | *35* | *5* | *358* | *64* | *35* | *92* | *9* | *12* | *5.669* | *1.4093* |
+| team 12 | before | 49 | 17 | 48 | 8 | 380 | 87 | 55 | 109 | 9 | 9 | 3.19 | 1.08 |
+| | **after** | **49** | **17** | **48** | **8** | **380** | **87** | **55** | **109** | **9** | **9** | **3.19** | **1.08** |
+| | *ESPN* | *49* | *17* | *48* | *8* | *380* | *87* | *55* | *109* | *9* | *9* | *3.1875* | *1.0833* |
+
+**Team 12's totals did not move**, because that manager started everybody every
+day of the week — which is what makes the other two a fix rather than a
+coincidence, and is the same reasoning the scoreboard's own day-summation
+records about the team that had a quiet afternoon.
+
+And on a **settled** week (`?mp=18&mup=104`, `Aug 3 – Aug 9`) team 9 reads
+`73/266 · 49 R · 11 HR · 37 RBI · 7 SB · 22 BB` and `61 K · 6 W · 7 SV · 5 HLD ·
+0.96 ERA · 0.80 WHIP` against ESPN's `266/73/49/11/37/7/22` and
+`61/6/12/0.9586/0.7988`; team 5 reads `68/248 · 36 · 15 · 43 · 3 · 17` and
+`56 K · 2 W · 2 SV · 6 HLD` against the same figures. **Twenty-two of
+twenty-two cells across four teams and two periods**, rate categories included.
+
+**Two residuals, both older than this and neither on the counting side.** `OPS`
+reads `.824` against ESPN's `.8221` on team 6, and the whole of the difference
+is the **sacrifice fly**: a `PlayerGame` line does not carry one and ESPN's
+on-base denominator does, so the figure is 143/428 here against 143/430 there —
+add ESPN's own `SF: 2` back to our denominator and the two agree to four places
+(`0.8221`). And team 5's live-week `SV+HLD` reads 11 against ESPN's 12, a hold
+ESPN had posted and MLB's feed had not: the same team's *settled* week matches
+exactly (8 against 8), which is what places the difference on the day in
+progress rather than in the sum. Both figures are identical before and after
+this change.
+
+**The bench is out of the table, not moved below a line.** The divider stays
+wired to `starterKeys` rather than being switched off, because `splitStarters`
+already answers "nothing below the line" by putting the row at the bottom over
+everybody — so the `Total · 13` at the foot is the whole of what is drawn, and
+there is one rule for the divider rather than one plus an exception. `Roster`
+beside it is untouched and still draws the whole team with its bench under the
+line (14 rows and `Total · 11` on team 6 over `Today`), which is the honest
+answer to the question *that* reading asks.
+
+**A row can wear a `BE` or an `IL` chip and still belong**, and it is not a
+contradiction: the chip is the slot on the **last day of the range** and the row
+is the days he started. Team 6's page carries four of them — Chris Sale `BE`
+with 6.0 innings in the week, Tyler Soderstrom `IL10` with `3/13` beside him —
+and the chip's own title already carries the reconciliation, *in Brian&Tom's
+Excellent Adventure's lineup on 5 of the 11 days in view* and *on 7 of the 11*
+respectively. `rangeTitle` writes that sentence and it was put there for exactly
+this; nothing new was needed.
+
+**The empty state is the lineup's, not the day's.** A team with nobody *started*
+over the range is a different fact from a team with nobody *on* it, so it gets
+its own message and names `Roster` as the control that has the rest — the rule
+every empty state in this app follows, and the one thing it must not do is claim
+a fact about the days.
+
 #### The dates bar is the band's next line, not the content after it
 
 **The bar was folded onto the roster's rules and still read as too much
@@ -1931,6 +2017,43 @@ exactly as the schedule window beside it is. Deliberately **not** derived from
 for the week being played — the same two dates this page prints in its head and
 the wrong two to draw a forward-looking grid from (see **ESPN fantasy league**,
 *The matchup window*).
+
+#### And it names the opposing starter, which it had not
+
+**One argument was missing and the whole feature with it.**
+`buildScheduleIndex` takes a fourth parameter, `pitchers`, and this page passed
+three: with no `PitcherLookup` the index's `starters` map is built empty, every
+cell falls back to naming the club alone, and nothing anywhere says so — the
+grid compiles, fetches, joins and draws `@ KC` where the roster view next door
+draws `@ KC / LHP Cameron`. Measured on the live league at `?view=league&mup=110&mt=5`
+with the Schedule view on: **0** `.sched-vs` spans in the batter table before,
+**48** after; on team 6's page, **39** in the batter table and **42** in the
+pitcher table, whose own `SP` boxes (**6** of them) go on marking a starter's
+turn beside the man he is opposed by.
+
+**Nothing was written for it**, which is the point: the cell, the tier grading,
+the italic that separates an announced probable from a projected one and the
+title that explains which is which all live in `schedule.tsx` and were already
+being drawn from this page's index. What arrived is the *lookup* — the season
+roster reduced to a name and a throwing hand — which App has held from boot for
+the header search since long before either grid existed. It costs no request.
+
+**It is handed down already gated on `playersLoading`**, collapsed into the one
+prop: App passes `playersLoading ? null : pitcherLookup`, and a null lookup
+stops the index being built at all. That is the roster view's own rule and its
+measured reason — a day naming the opposing starter is a line taller than one
+that cannot, so an index built before the names land grows the grid under the
+reader when they do (6px a start day on a pitcher's row). Rule 1 is intact
+meanwhile: with the index null the table goes on drawing its stat columns, and
+the only mark the press leaves is the ball inside the toggle it started from.
+Two states rather than three — "not asked for", "asked for and not ready" and
+"ready" collapse to *have I a lookup* — which is the same "the mode is the
+presence of the answer" rule `schedule` and `projection` already follow one
+prop apart.
+
+**Measured — the grid**: row height **58.00px** at 1400 and at 390, page-body
+overflow and view overflow **0** at both, which are the numbers this section's
+own table already put on record.
 
 **A team page carried the `Starters` filter too, and it is gone with the roster
 row's.** *(Superseded at the button, and kept whole for the machinery, which

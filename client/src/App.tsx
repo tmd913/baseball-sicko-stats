@@ -5896,6 +5896,11 @@ export default function App() {
             scheduleLoading={scheduleLoading}
             matchupWindow={matchupWindow}
             onNeedSchedule={needSchedule}
+            /* The same lookup the Roster view's Schedule mode names its
+               opposing starters from, and gated on the same wait: null until
+               the season roster has settled, so the grid in there is built
+               once with the names in it rather than twice. */
+            pitcherLookup={playersLoading ? null : pitcherLookup}
             transactions={transactions}
             onOpenPlayer={openLeaguePlayer}
           />
@@ -6181,6 +6186,9 @@ export default function App() {
           scheduleLoading={scheduleLoading}
           matchupWindow={matchupWindow}
           onNeedSchedule={needSchedule}
+          /* The same lookup the Roster view's Schedule mode names its opposing
+             starters from — see the standalone reading above. */
+          pitcherLookup={playersLoading ? null : pitcherLookup}
           /* The League view's own feed, already in hand: this page is opened
              from that view, which reads it on entry and keeps it, so the Moves
              section names the week's pickups with no read of its own. */
