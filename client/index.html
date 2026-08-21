@@ -39,6 +39,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- What makes an added home-screen icon open the app rather than a plain
+         Safari tab, and so what the invite page's home-screen tip is promising
+         (`LeagueOnboarding.tsx`). Comments in this file ship, so the long form
+         — including why `viewport-fit` and the status-bar style are
+         deliberately left alone — is in docs/claude/espn-connection.md. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Statcast Sicko" />
     <!-- Paint the base color on the very first frame so a reload doesn't flash
          before the stylesheet loads — and paint the *reader's own* base color,
          which is why this is a script rather than the one rule it used to be.
