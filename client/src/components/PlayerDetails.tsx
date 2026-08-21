@@ -739,8 +739,18 @@ export function PlayerDetails({
     const overLeft = left - row.scrollLeft;
     const overRight = left + el.offsetWidth - (row.scrollLeft + row.clientWidth);
     // Land it clear of the edge rather than flush against it, which reads as
-    // cut off and hides that there is more strip to swipe to.
-    const PEEK = 24;
+    // cut off and hides that there is more strip to swipe to — and clear of the
+    // *arrow*, which since the strip went edge to edge is drawn over that end
+    // rather than beside it, so a 24px peek left the tab it just chose half
+    // under a chevron. The width is read off the wrapper's own
+    // `--tabstrip-arrow-w` rather than copied here as a second 44 that would
+    // have to agree with the stylesheet's. It costs nothing at the two ends: an
+    // arrow there is hidden because there is nothing left to scroll, and the
+    // larger peek clamps against the same 0 or maximum it always did.
+    const arrowW = parseFloat(
+      getComputedStyle(row).getPropertyValue('--tabstrip-arrow-w'),
+    );
+    const PEEK = Number.isFinite(arrowW) && arrowW > 0 ? arrowW : 24;
     if (overLeft < 0) row.scrollLeft += overLeft - PEEK;
     else if (overRight > 0) row.scrollLeft += overRight + PEEK;
   }, [tab]);

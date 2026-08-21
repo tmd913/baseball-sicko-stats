@@ -3802,13 +3802,22 @@ body {
      (45), which is a fixed sheet over the whole view and covers this as it
      covers the rest. Nothing else in here is positioned. */
   z-index: 5;
-  /* The side margins bleed it to the overlay's own 16px gutters while the head
-     and the tabs inside keep their 680px reading column; the 20px of padding is
-     the top padding the view gave up so that `top: 0` could mean the top (see
-     there). The 16px below is the gap to the content, outside the sticky box so
-     it doesn't ride down the page with it. */
-  margin: 0 -16px 16px;
-  padding: 20px 16px 0;
+  /* The side margins bleed it to the overlay's own gutters while the head
+     inside keeps its 680px reading column; the 20px of padding is the top
+     padding the view gave up so that `top: 0` could mean the top (see there).
+     The 16px below is the gap to the content, outside the sticky box so it
+     doesn't ride down the page with it.
+
+     **The side pair is `--table-bleed` rather than the 16 it resolves to**,
+     which is the same number written the same way it is written everywhere else
+     in this file: the token is the container's own gutter, and this box gives
+     it up and hands it back in one breath. Not cosmetic — `.details-tabstrip`
+     spends exactly this padding to reach the glass, and two hard-coded 16s that
+     have to agree is how a bleed comes to overshoot its box by a pixel nobody
+     can find. Rendering is unchanged: measured at 390 and 1200, the chrome's
+     own rect and its content edges are identical to the pixel. */
+  margin: 0 calc(-1 * var(--table-bleed, 0px)) 16px;
+  padding: 20px var(--table-bleed, 0px) 0;
   /* Flat `--bg`, with `.app-chrome`: one background color for the whole app.
      The ombré and the accent radial that stood here are gone with that one. */
   background: var(--bg);
@@ -5150,20 +5159,57 @@ button.start-line:focus-visible {
 .details-tabstrip {
   display: flex;
   align-items: center;
-  gap: 2px;
-  /* **The column, or the tabs' own width, whichever is larger** — and the
-     second half of that is measured at runtime and published as
-     `--tabstrip-grow` by `TabStrip`. 680 is the reading column the cards under
-     this strip sit in, and it is right for a *card*; nine tab labels come to
-     781px in the font this app happens to be rendered in, so capping a control
-     at a card's width made the strip a scroller on a 1,920px monitor with 1,100
-     of empty page either side. Nothing here declares a breakpoint, because
-     whether the tabs fit depends on the viewport, on which tabs a kind of
-     player has, and on a font this app does not choose. Where the parent is
-     narrower than the content the parent still wins, which is what makes the
-     strip scroll — and what raises the arrows. */
-  max-width: max(680px, var(--tabstrip-grow, 0px));
-  margin: 0 auto;
+  /* The arrows are drawn *over* the strip's two ends rather than beside them,
+     so this box is their containing block — see `.tabstrip-arrow`, where the
+     width below is spent and where that move is argued. */
+  position: relative;
+  --tabstrip-arrow-w: 44px;
+  /* **The column, or the tabs' own width, whichever is larger — and never more
+     than the container plus the gutters it has to give.** The middle term is
+     measured at runtime and published as `--tabstrip-grow` by `TabStrip`. 680
+     is the reading column the cards under this strip sit in, and it is right
+     for a *card*; nine tab labels come to 781px in the font this app happens to
+     be rendered in, so capping a control at a card's width made the strip a
+     scroller on a 1,920px monitor with 1,100 of empty page either side. Nothing
+     here declares a breakpoint, because whether the tabs fit depends on the
+     viewport, on which tabs a kind of player has, and on a font this app does
+     not choose. Where the parent is narrower than the content the parent still
+     wins, which is what makes the strip scroll — and what raises the arrows.
+
+     **The last term is the bleed, and it is why the strip reaches the glass.**
+     `.details-chrome` spans the overlay and pads its contents back in by
+     `--table-bleed`, which is right for the head — a name, a portrait and a
+     Rostered line are a reading column — and wrong for the strip: a *scroller*
+     stopped short of the edge leaves the tab at that end clipped against a
+     gutter of bare ground, and, at the end the reader has already scrolled to,
+     a strip of nothing where a tab should be. So the box takes its container's
+     gutters back exactly as the three wide tables do, and by exactly the token
+     that says how much there is to take — `--table-bleed` is the container's
+     own padding and never a hard-coded 16, which is that rule stated for a
+     control instead of a table. Measured on a batter at 390×844, before →
+     after: the control 16 → 0 from each edge and the scroll pane 46 → 0, the
+     tabs' own 14px padding being what keeps `Overview` off the glass.
+
+     **`margin-inline: auto` cannot express it and was tried first.** A box
+     whose used width exceeds its containing block gets auto margins of *zero*,
+     not the negative pair centering would imply — measured, the wrapper came
+     out at 16 → 406 on a 390px phone, bled 32px to the right alone, with the
+     overlay overflowing by 16. So the centering is written out: the same width
+     expression divided out of the container. Both `100%` resolve against the
+     same containing-block width, a margin percentage and a width percentage
+     having the one reference, and the pair is free to go negative. Where the
+     tabs fit, the width term wins and the strip is centered exactly as it was —
+     measured at 1200 on a batter, 747px wide at 226.5 from each edge, before
+     and after — so the bleed is spent only where the strip would have to
+     scroll. */
+  --tabstrip-col: 680px;
+  --tabstrip-w: min(
+    100% + 2 * var(--table-bleed, 0px),
+    max(var(--tabstrip-col), var(--tabstrip-grow, 0px))
+  );
+  width: var(--tabstrip-w);
+  margin-block: 0;
+  margin-inline: calc((100% - var(--tabstrip-w)) / 2);
 }
 .details-tabs {
   display: flex;
@@ -5219,28 +5265,59 @@ button.start-line:focus-visible {
   border-bottom-color: var(--accent);
 }
 /* The two arrows, which exist only while the strip overflows and are hidden —
-   never removed — at the end they point past. Removing one would move every tab
-   28px sideways at the exact moment a reader has reached the end of the strip
-   and is aiming at the tab there, which is *reserve the box, don't move the
-   page* stated as a control.
+   never removed — at the end they point past.
+
+   **They are drawn over the strip's ends rather than beside them.** Beside them
+   was the first shape, and it cost the tabs 60px of a 390px phone: 28px of
+   button and 2 of gap at each end, taken from the width where the strip is most
+   truncated to begin with. Measured at 390×844 on a batter, the scroll pane was
+   46 → 344 of a 390px glass, and the left arrow being `hidden` at rest meant
+   the page opened with 46px of nothing before `Overview`. Out of the flow the
+   pane is 0 → 390 in every state, and the 28px square is unchanged.
+
+   **That does not drop *reserve the box, don't move the page*, it satisfies it
+   more cheaply.** The rule is why the arrow with nothing behind it is
+   `visibility: hidden` rather than absent: a reader who has scrolled to the
+   last tab must not have the strip jump sideways under the finger aiming at it.
+   Positioned out of the flow, nothing either arrow does can move the strip at
+   all — measured through `hidden/visible`, `visible/visible` and
+   `visible/hidden`, the pane is 0 / 390 in each. And a `visibility: hidden` box
+   does not hit-test, so at the end the reader has already reached, the full
+   width is tab and not a dead band.
+
+   **The fade is what makes a chevron over a tab readable**, and it says what
+   the arrow says one step earlier: `--bg` solid under the icon and out to
+   nothing by the far edge, so a label sliding under it dims rather than
+   colliding with it. `--bg` is `.details-chrome`'s own background on both pages
+   that draw this strip — a player page's chrome and an outing's are the one box
+   — so the solid half is invisible and only the tab passing under it moves.
 
    They are **small aimed targets**, so they keep their `:hover` outright: the
    `(hover: hover)` scoping in this stylesheet is for full-width rows and cards
    in a scrolling list, where a sticky tint reads as a selection, and a 28px
-   square you have to aim at is the opposite case. `flex: none` because they are
-   the two things in this wrapper that must not be squeezed by the strip. */
+   square you have to aim at is the opposite case. */
 .tabstrip-arrow {
-  flex: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--tabstrip-arrow-w);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  align-self: stretch;
   padding: 0;
   border: none;
-  background: none;
   color: var(--muted);
   cursor: pointer;
+}
+/* 30px of solid ground is the 16px icon centered in the 44 plus its own margin,
+   so the chevron never sits on a gradient; the remaining 14 is the fade. */
+.tabstrip-arrow-l {
+  left: 0;
+  background: linear-gradient(to right, var(--bg) 0 30px, transparent);
+}
+.tabstrip-arrow-r {
+  right: 0;
+  background: linear-gradient(to left, var(--bg) 0 30px, transparent);
 }
 .tabstrip-arrow:hover {
   color: var(--text);
@@ -9093,9 +9170,16 @@ button.start-line:focus-visible {
    player page's is: the body's 860 **or the tabs' own width**, whichever is
    larger. Four labels have never come near 860, so this page is unmoved by the
    change — which was the point of measuring it rather than declaring a
-   breakpoint. */
+   breakpoint.
+
+   **It sets the column and nothing else.** The whole expression — the column,
+   the measured width and the bleed that lets the strip reach the glass — is one
+   place, `.details-tabstrip`, and this page differs from the player page's in
+   one term of it. Overriding the finished `width` here would have been the same
+   arithmetic written twice, and a bleed this page would then have had to
+   remember to keep. */
 .outing-view .details-tabstrip {
-  max-width: max(860px, var(--tabstrip-grow, 0px));
+  --tabstrip-col: 860px;
 }
 .outing-head {
   flex-wrap: wrap;
