@@ -201,6 +201,18 @@ owns the column width and the centering; `.details-tabs` owns the scrolling and
 takes `flex: 1 1 auto; min-width: 0`, without which it would push the wrapper
 past the page instead of scrolling.
 
+**And the measuring is now shared with the app's tools row.** `TabStrip` keeps
+its own markup and its `--tabstrip-grow` sum (see below for why that is not
+`scrollWidth`), but the three questions — does it overflow, is there anything
+left, is there anything right — are `useOverflowArrows`, and the two chevrons
+are a `ScrollArrow` both callers draw. The second caller is `.view-tools`,
+which had been *hiding its buttons' labels* below 640px to fit them on a line;
+it scrolls now instead (**Client — the shell**, *The readings scroll sideways
+rather than dropping their words*). Checked after the extraction, on a batter:
+`--tabstrip-grow` is **747px**, the pane is **0 → 390** at a 390px phone and
+**226.5 → 973.5** at 1200, arrows raised at the first and absent at the second
+— the same figures this section was written with.
+
 **It is one component and the outing page draws it too**, which is the fold this
 page already makes for its head — and it is what gives the *no-arrows* half of
 the rule a place to be exercised at a desktop width on four tabs rather than

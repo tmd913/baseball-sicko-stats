@@ -40,6 +40,7 @@ import { takeInvite } from './invite';
 import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, toThemeId } from './theme';
 import type { ThemeId } from './theme';
 import { BaseballMark } from './components/BaseballMark';
+import { ScrollRow } from './components/TabStrip';
 import { PlayerAdder } from './components/PlayerAdder';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { LiveFeed, FEED_PAGE_SIZE, newPlays } from './components/LiveFeed';
@@ -5024,18 +5025,31 @@ export default function App() {
             is the full-width box and the strip inside it is centered at its own
             content width. */}
         {leagueTabs && <div className="lg-tabs-line">{leagueTabs}</div>}
-        {/* And whether it is drawn to the end of the week. */}
-        {leagueRankProjected}
-        {rosterTools && (
-          <>
-            {/* The day as it happened, in place of the table — see `feedToggle`. */}
-            {feedToggle}
-            {/* The days ahead, in place of the stat columns — see `scheduleControl`. */}
-            {scheduleControl}
-            {/* And what those days are worth — see `projectedToggle`. */}
-            {projectedToggle}
-          </>
-        )}
+        {/* **The readings scroll rather than shedding their words.** This run
+            used to be laid out straight into the wrapping row, and below 640px
+            the stylesheet visually hid `Feed`, `Schedule` and `Projected` so
+            three glyphs would fit — which left the buttons naming themselves
+            only through a `title`, i.e. only to a pointer, on the one class of
+            device that has none. `ScrollRow` keeps the words at every width
+            and gives up what is off the end instead, with two arrows saying so.
+
+            The League tabs stay *outside* it, on their own line: they are which
+            page of the league, and a line that scrolls away is the wrong shape
+            for the control a reader looks for first. */}
+        <ScrollRow label="the view controls" className="view-tools-scroll">
+          {/* And whether it is drawn to the end of the week. */}
+          {leagueRankProjected}
+          {rosterTools && (
+            <>
+              {/* The day as it happened, in place of the table — see `feedToggle`. */}
+              {feedToggle}
+              {/* The days ahead, in place of the stat columns — see `scheduleControl`. */}
+              {scheduleControl}
+              {/* And what those days are worth — see `projectedToggle`. */}
+              {projectedToggle}
+            </>
+          )}
+        </ScrollRow>
       </div>
     ) : null;
   /* **The research board draws this row itself**, which is why the view is not

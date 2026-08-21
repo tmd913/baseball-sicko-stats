@@ -6246,6 +6246,62 @@ button.start-line:focus-visible {
   flex: none;
 }
 
+/* **The readings run, as a scroller with two arrows over its ends.**
+
+   `ScrollRow` in `TabStrip.tsx`, and the arrows are `.tabstrip-arrow` outright
+   — the same object the player page's tab strip raises, folded onto rather
+   than restyled, down to the 30px of solid ground and 14 of fade that keeps a
+   chevron off a gradient. `.view-tools` is `background: var(--bg)`, which is
+   the value that fade is written against, so the fold costs nothing.
+
+   **A line of its own**, like `.lg-tabs-line` above and by the same mechanism:
+   `.view-tools > *` is `flex: none`, so a child that is a whole line has to
+   say so. `min-width: 0` with it — a flex item's automatic minimum is its
+   `min-content`, and without this the row would simply grow to the run's
+   natural width and push the page sideways instead of scrolling.
+
+   This replaced *hiding the buttons' labels below 640px*. The trade that made
+   is argued where that rule now sits, narrowed to the research board. */
+.tool-scroll {
+  flex: 1 1 100%;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  --tabstrip-arrow-w: 44px;
+}
+.tool-scroll-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  /* The axis this box genuinely scrolls, and only that one — the app's
+     standing rule, and `none` rather than `contain` because `contain` keeps
+     the element's own iOS bounce, which is the thing being complained about. */
+  overscroll-behavior-x: none;
+  /* Hidden, which is *why* the arrows exist: with no scrollbar the only hint
+     that the run continued was a half-button at the edge, and that is only
+     there when the row happens to be scrolled to where one straddles it. */
+  scrollbar-width: none;
+}
+.tool-scroll-box::-webkit-scrollbar {
+  display: none;
+}
+/* **`width: max-content` with an auto margin, not `justify-content: center`.**
+   Centering a scroller's content is the standard way to lose the start of it:
+   the overflow goes both ways and `scrollLeft` cannot go negative, so the
+   first control becomes unreachable. An auto margin centers the run while it
+   fits — which is what `.view-tools` does with every other line it holds — and
+   collapses to zero the moment it does not, leaving a start that scrolls back.
+   The gap is the row's own, so a run that scrolls and a run that does not are
+   spaced identically. */
+.tool-scroll-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px 12px;
+  width: max-content;
+  margin: 0 auto;
+}
+
 /* The header's icon cluster — the roster search and the refresh button. Edit
    was the third of them and is an entry in the settings menu now, which on a
    desktop buys the header back the ~66px its labeled pill cost and on a phone
@@ -9508,29 +9564,31 @@ button.start-line:focus-visible {
 
    Its own narrow-screen block, next to the component rather than in the rhythm
    block at the end of the file, but still after every base rule it overrides. */
-@media (max-width: 640px) {
-  .research-toggle-label,
-  .schedule-toggle-label,
-  .projected-toggle-label,
-  .feed-toggle-label,
-  .summary-toggle-label,
-  /* **The Rankings copy of the League page's own toggle**, and only that copy —
-     scoped to the row it is in rather than to `.lg-proj-label`, because the
-     matchup card's is centered on a row of its own with the width for a word.
-     It named `.lg-span-detail` while this button stood in the table's caption
-     (a row that is a date bar now and holds no buttons at all);
-     the button is in the tab row now and the scope followed it, which puts it
-     beside `.projected-toggle-label` above — the Roster view's own copy of this
-     control, in this same row, losing its word at this same width.
+/* **Only the research board's row still does this, and only because its labels
+   are the case it was written for.**
 
-     Measured on the Rankings tab at 320 and 640, which is where it pays: with
-     the label the group is 145px and the tab row takes a **third** line at both
-     (132 → 180 and 84 → 132, i.e. 48px of *pinned* chrome off the one tab that
-     is a table); at 77px it packs onto the line the span dropdown is on and the
-     row is 132 and 84, which is exactly what it was before this control joined
-     it. Visually hidden rather than removed, the rule the three above it
-     follow: the button still names itself rather than being a lone glyph. */
-  .view-tools .lg-proj-label {
+   Four other classes stood in this list — `.schedule-toggle-label`,
+   `.projected-toggle-label`, `.feed-toggle-label`, `.summary-toggle-label` —
+   together with `.view-tools .lg-proj-label`, so that below 640px the Roster's
+   readings, the matchup's four and the Rankings tab's lens all became lone
+   glyphs. The measurement that bought it was real: with its label the League
+   lens is a 145px group and the row took a **third** line at 320 and 640
+   (132 → 180 and 84 → 132, i.e. 48px of *pinned* chrome off the one tab that
+   is a table).
+
+   **What it cost was the buttons' names on the only device that cannot read a
+   `title`.** These buttons were visually hidden rather than removed precisely
+   so they would still name themselves — to a screen reader. A sighted phone
+   reader got a glyph and a tooltip that never fires. So the row scrolls
+   instead (`ScrollRow`, `.tool-scroll` below): the same line count, the words
+   kept, and what does not fit reachable behind an arrow that says it is there.
+
+   The board's own row keeps the rule. Its labels are `Columns`, `Ranks`,
+   `Teams`, `Search`, `Filters` against a row that also carries the position
+   pills and the count badges, and its head height is measured and load-bearing
+   (`--research-head-h`) — a different row, a different answer. */
+@media (max-width: 640px) {
+  .research-toggle-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -9544,39 +9602,37 @@ button.start-line:focus-visible {
 }
 
 /* ---- The roster row's mode toggles on a phone --------------------------------
-   Feed, Schedule and Projected go to their glyphs under 640px, which is what
-   keeps the reading run on one line — three squares and their gaps against
+   **This block squared these four to 36px under 640px and no longer does.**
+
+   Feed, Schedule, Projected and Summary went to their glyphs there, which is
+   what kept the reading run on one line — three squares and their gaps against
    three labeled pills. (It was two of them and the measurement was the pair's:
-   84px of squares where two labels alone were 174.) The rules live *here*, below the whole `.research-toggle`
-   family, and not up beside the buttons' own base rules where they were first
-   written: a media query adds no specificity, so `padding: 0` there lost to
+   84px of squares where two labels alone were 174.) The visually-hidden labels
+   that went with it are argued where that rule now sits, narrowed to the
+   research board; the short of it is that the run bought its line by taking
+   the buttons' words away on the one class of device that cannot hover to read
+   a `title`.
+
+   **The run scrolls now instead** — `.tool-scroll`, up beside `.view-tools` —
+   so it keeps its line *and* its words, and what does not fit is behind an
+   arrow that says it is there. Squaring the buttons would defeat that: a 36px
+   square has nowhere to put `Schedule`.
+
+   The trap this block was moved here to avoid is still real and is why the
+   comment survives its own rule: a media query adds no specificity, so
+   `padding: 0` written up beside the buttons' base rules lost to
    `.research-toggle, .schedule-toggle { padding: 0 12px }` five hundred lines
-   further down, and the 20px glyph was overflowing a 12px content box —
-   centered, so it *looked* right, and shrinking to fit it before the glyph was
-   given `flex: none`. That is the same trap `.date-row .date-presets` and the
-   `.research-bar` dropdowns were each written two classes deep to avoid (the
-   first of those has since gone with the preset row itself, and is left named
-   here as the record of the trap); the honest fix for a whole block is to put
-   it after what it overrides.
+   further down, and a 20px glyph overflowed a 12px content box — centered, so
+   it *looked* right. The honest fix for a whole block is to put it after what
+   it overrides, which is what `.date-row .date-presets` and the
+   `.research-bar` dropdowns each went two classes deep for instead.
 
    **The calendar used to be the second of the pair**, with its range on a
    bubble because it was the one button in the row that could not lose its
    wording. It is a full-width bar under the row now and states its days in
    full at every width, so the bubble, the visually-hidden label and the square
-   are all gone with it. */
-@media (max-width: 640px) {
-  /* Each becomes the app's own 36px square — the shape every icon button in
-     the header already takes — rather than whatever its padding leaves around a
-     15px glyph, so the run reads as a set. */
-  .schedule-toggle,
-  .projected-toggle,
-  .feed-toggle,
-  .summary-toggle {
-    width: var(--control-h);
-    padding: 0;
-    justify-content: center;
-  }
-}
+   are all gone with it — which is the same move this block has now made for
+   the other four. */
 
 /* On a phone the board's two tab groups give way to dropdowns (styled with the
    header's preset dropdown, up at the top of the file). Rows of pills — whose
