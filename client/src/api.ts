@@ -199,11 +199,13 @@ export const api = {
     source?: RosterSource;
     teamName?: string | null;
     /** Which of this team's players were in its lineup on each day of the
-     *  range, keyed by date — what the `Starters` filter reads on a matchup's
-     *  team pages. Present only with `source=fantasy`, and absent where the
-     *  per-day read failed, which is the old behavior: one lineup applied to
-     *  the whole range. */
-    lineups?: Record<string, number[]> | null;
+     *  range, as **player keys**, keyed by date — what the `Starters` filter
+     *  reads on a matchup's team pages. Keys rather than MLB ids because a seat
+     *  has a side of the ball and a two-way player is two rows under one id;
+     *  see `espn.ts::startedKeys`. Present only with `source=fantasy`, and
+     *  absent where the per-day read failed, which is the old behavior: one
+     *  lineup applied to the whole range. */
+    lineups?: Record<string, string[]> | null;
   }> {
     const src = source === 'fantasy' ? '&source=fantasy' : '';
     const fresh = refresh && source === 'fantasy' ? '&refresh=1' : '';

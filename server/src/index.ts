@@ -379,8 +379,12 @@ app.get(
      * this response describes, which is a stronger guarantee than two reads a
      * moment apart can make. Null where the per-day read failed, which is the
      * old behavior: one lineup applied to the whole range.
+     *
+     * **The values are player keys, not MLB ids** — a seat has a side of the
+     * ball, and a two-way player is two rows under one id. See
+     * `espn.ts::startedKeys`.
      */
-    let lineups: Record<string, number[]> | null = null;
+    let lineups: Record<string, string[]> | null = null;
     if (fantasy) {
       try {
         // The **range**, not just its end: a fantasy team is a range of rosters
@@ -808,7 +812,8 @@ async function fantasyWatchlist(
   teamName: string | null;
   roster: EspnRosterPlayer[];
   endRoster: EspnRosterPlayer[] | null;
-  lineups: Record<string, number[]> | null;
+  /** Player keys, not MLB ids — see `espn.ts::startedKeys`. */
+  lineups: Record<string, string[]> | null;
   held: HeldDays | null;
 }> {
   const espn = await getEspnLeague(user);
@@ -959,7 +964,9 @@ app.get(
 // days rather than applying one day's to all of them. Omitted (an older tab, or
 // a caller that only wants the chips) the field is simply absent and nothing
 // downstream changes. The span is capped like the report's, since it is the
-// same span and the fan-out is one ESPN read per day of it.
+// same span and the fan-out is one ESPN read per day of it. Each day is a list
+// of **player keys** — `batter-660271` — because a seat has a side of the ball
+// and a two-way player is two rows under one id; see `espn.ts::startedKeys`.
 //
 // It opts the response into **`endRoster`** as well — the roster as it stood at
 // the end of that span, when that is a past day the per-day read could answer

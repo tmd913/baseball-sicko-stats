@@ -35,6 +35,19 @@ export function useMuted(): boolean {
  *  the IL. */
 export interface FantasySlot {
   slot: string;
+  /**
+   * Whether that slot is a lineup spot **for this row** — the map is keyed by
+   * `${kind}-${id}` and a two-way player is two rows under one id, where ESPN
+   * seats him once. So a man at `UTIL` is `starting` on his batting row and not
+   * on his pitching one: the seat is a batting spot, and his arm is accruing
+   * nobody anything that day. `lib.ts::seatKinds` is the rule, applied where the
+   * map is built (`App.tsx`'s `fantasySlots`, and `LeagueTeam`'s for a
+   * leaguemate's team).
+   *
+   * `slot` beside it is still the seat's own name on both rows — he *is* at
+   * UTIL — so the pair reads *at UTIL, not accruing here*, which is a thing the
+   * chip can draw and a bench chip could not say.
+   */
   starting: boolean;
   /**
    * Which day the slot above is a fact about, or **null when that day is

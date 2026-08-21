@@ -77,6 +77,7 @@ import { getTeamHitting } from './teamHitting.js';
 import {
   DERIVED,
   LINEUP_SLOTS as LINEUP_SLOT_NAMES,
+  PITCHING_SLOTS,
   getMatchupWindow,
   getOwnership,
   getPlayerPool,
@@ -1253,11 +1254,13 @@ function projectOnePitcher(
 const BENCH_SLOT = 16;
 const IL_SLOT = 17;
 
-/** ESPN's three pitching slots: `P`, `SP`, `RP`. Everything else a league
- *  starts is a batting slot, which is the same fail-safe direction
- *  `NON_ACCRUING_SLOTS` takes — an undocumented slot reads as a place a hitter
- *  can stand rather than as nothing. */
-const PITCHING_SLOTS = new Set([13, 14, 15]);
+/* `PITCHING_SLOTS` — ESPN's `P`, `SP` and `RP` — was declared here and is now
+   `espn.ts`'s, imported above. It gained a second reader when the per-day
+   lineup map began saying which *side of the ball* a seat is (`seatKinds`), and
+   the same three numbers written down in two files is two lists that can come
+   to disagree about a slot ESPN adds. Nothing about the rule moved: everything
+   else a league starts is a batting slot, the fail-safe direction
+   `NON_ACCRUING_SLOTS` also takes. */
 
 /**
  * One rostered player as the lineup planner sees him: which seats he may sit

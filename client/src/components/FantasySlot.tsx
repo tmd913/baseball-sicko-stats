@@ -31,16 +31,35 @@ import type { ProjectedPlayerLine } from '../types';
  * reach it at all. `spot.day` is null exactly when the slot really did come off
  * today's roster, failed reads included, so the word and the fact cannot part.
  */
+/** ESPN's pitching slots by the names it prints them under — the same three
+ *  ids `lib.ts::seatKinds` tests, read here as words because a `FantasySlot`
+ *  carries the name and not the id. Only the sentence below reads it. */
+const PITCHING_SLOT_NAMES = new Set(['P', 'SP', 'RP']);
+
 function dayTitle(spot: FantasySlot): string {
   const when = spot.day === null ? 'today' : `on ${prettyGameDate(spot.day)}`;
   // Whose lineup, possessive — `your` unless the table is drawing somebody
   // else's team, which only the League page's Matchup tab does.
   const who = spot.owner ?? 'your';
-  return spot.starting
-    ? `In ${who} fantasy lineup ${when} at ${spot.slot}`
-    : spot.slot === 'IL'
-      ? `On ${who} fantasy injured list ${when}`
-      : `On ${who} fantasy bench ${when}`;
+  if (spot.starting) return `In ${who} fantasy lineup ${when} at ${spot.slot}`;
+  if (spot.slot === 'IL') return `On ${who} fantasy injured list ${when}`;
+  if (spot.slot !== 'BE') {
+    /* **Not starting, and not on a bench either** — the one state that can only
+       be a two-way player, and the wording has to say so rather than call a man
+       standing at UTIL benched. `starting` is per *row* now (`App.tsx`'s
+       `fantasySlots`, `lib.ts::seatKinds`), and it goes false for a seat on the
+       other side of the ball; a seat is BE or IL in every other case where it
+       goes false, so the test needs no field of its own and cannot come to
+       disagree with one. The chip keeps the slot's own letters — he really is at
+       UTIL — and takes the muted shape, which is what this column means by *not
+       accruing on this row*. */
+    const side = PITCHING_SLOT_NAMES.has(spot.slot) ? 'pitching' : 'batting';
+    // Deliberately **not** "in your fantasy lineup": the sentence `rangeTitle`
+    // adds behind this one counts the days *this row* was started, which for an
+    // off-side seat is none of them, and the two would read as a contradiction.
+    return `At ${spot.slot} on ${who} fantasy team ${when} — a ${side} spot, so it is his ${side} that accrues there and not this`;
+  }
+  return `On ${who} fantasy bench ${when}`;
 }
 
 /**

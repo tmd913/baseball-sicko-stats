@@ -506,6 +506,78 @@ Filtering happens in `App.tsx` (`filteredCards`, which is what both roster views
 
 **Emptied, it says so in its own words** — on whichever of the three views it emptied, and in whichever of the *three* readings emptied it. The hide-injured message names the gear; this one names the toggle in the row above and adds the thing a reader needs at 9am: lineups post a couple of hours before first pitch, so an empty page in the morning may only mean they aren't out yet. **That excuse is wrong in fantasy mode and is not offered there** — your lineup is set the moment you set it, so an empty table means the kind on screen really is all bench and IL, and pointing at lineups still to post would send someone off to wait for something that has already happened. It says that instead, naming what the toggle is hiding. **And over a range it says *days* rather than today** (`nobody here was in your lineup on any of these days`), because the filter is no longer a statement about one afternoon there — a message reading "today" over a table showing last July would be naming a day nothing on screen is about. The toggle's own tooltip splits the same three ways for the same reason. The two messages can't both fire, the injured one requiring the kind's list to be empty before this one is applied. **Expanded, the toggle comes with the kind tabs and the date control** into `.expanded-chrome` rather than being reduced to a `.research-badge` the way the board's settings are: it is what the rows *are*, a table narrowed to nine names with nothing on screen saying why is the one state this must never be in, and being the live control it is also the way back out without leaving the page.
 
+#### A two-way player is two rows, and the seat he is in is only one of them
+
+**Shohei Ohtani drew above the pitching table's `Lineup` divider on every
+afternoon he was seated as a hitter.** He is on the reader's live team, and the
+whole of the fault is in the two sentences either side of it: the app's currency
+is `${kind}-${id}` and a two-way player is **two rows under one id** — a line on
+the batting table and a line on the pitching one, with a player page each —
+where **ESPN's roster is one entry** standing in exactly one chair. In the live
+league he is a single row, eligible `DH, SP`, slot `UTIL`, `starting: true`.
+So *who is starting* was answered for the man and applied to both his rows.
+
+**A seat has a side of the ball, and that is the fact the answer was missing.**
+Seated at `UTIL` he is accruing hits and nothing else; his pitching row that day
+is a row you have not started, and ESPN's own summary scores it exactly that
+way. So the rule is one line — `espn.ts::seatKinds`, mirrored into
+`lib.ts::seatKinds` because the workspaces cannot import from each other — and
+it reads: a one-kind player is himself in whatever chair he is in, and a two-way
+player belongs to `pitcher` in slots 13/14/15 and to `batter` in every other,
+which is the same fail-safe direction `BENCH_SLOT`/`IL_SLOT` take. That set of
+three ids was written down twice, here and in the projection engine's seat
+split; it is `espn.ts`'s now and `projection.ts` imports it.
+
+**The per-day lineup map ships player keys, not MLB ids** (`espn.ts::
+startedKeys`, `lineupsFrom`, and so `/api/espn/roster`'s and `/api/report`'s
+`lineups`). An id cannot carry the answer — it names the man — and the map is
+already **derived from each day's own roster**, so reading the slot off it costs
+nothing and makes the answer per *day* rather than per range: a man at `P` on
+the Monday and `UTIL` on the Tuesday is two different rows' start. Downstream it
+made `startedOn` and `projectStarters` simpler rather than harder, both of them
+having been handed `r.id` off a row whose kind they then had no way to consult;
+they take `playerKey(r)`, which every caller was already holding.
+
+**`FantasySlot.starting` becomes a fact about the row and `slot` stays a fact
+about the seat**, which is what keeps the chip honest and is what the reader
+asked for: *still with the UTIL position though*. His pitching row keeps the
+`UTIL` letters and loses the accent — the muted outlined shape this column has
+always used for *not accruing here* — and the title says why rather than calling
+him benched, `On your fantasy bench` being a plain untruth about a man standing
+at UTIL. The test needs no field of its own: `starting` goes false for a `BE` or
+an `IL` seat and, now, for a seat on the other side of the ball, so *not
+starting and not BE and not IL* is exactly and only the two-way case.
+
+**Measured on the live league over 2026-08-15…21, before → after**, the whole
+diff of the rendered page is three lines: the `UTIL Shohei Ohtani SP RHP` row
+moves out of the pitching table's lineup `<tbody>` and into its bench one, and
+the divider reads **`Total · 11 of 15` → `Total · 10 of 15`**. **Every totals
+cell is byte-identical** — `37.2 | 31 | 12 | 12 | 13 | 38 | 3 | 6 | 3 | 3 |
+2.87 | 1.17` on the pitching foot and `55/208 | 33 | 16 | 44 | 3 | .898 | 28 |
+50` on the batting one — which is what the bench not contributing means, and it
+is true here because he has not pitched an inning in the range (checked against
+the report: **0 pitching games in all of August**). It would not be true of a
+range he pitched in, and that is the point rather than a caveat: the `Lineup`
+foot is what your lineup got, and a hitter's afternoon at UTIL got you no
+innings.
+
+On `Today` the same move reads **`Total · 10 of 14` → `Total · 9 of 14`**, the
+batting table untouched at `Total · 11 of 14` in both. **Under the `Projected`
+lens nothing moves at all** — `Lineup · 11 of 14` and `Lineup · 9 of 15` before
+and after, his pitching row already below the line — because the projection
+engine has filled batting and pitching seats from separate pools of candidates
+since it was written, and `splitStarters` reads the plan there. That is the
+measurement that says which half of the app was wrong: the estimate had it right
+and the measurement did not.
+
+**And a matchup's team page takes the same correction**, that page running the
+same `projectStarters` over a leaguemate's lineup. Its `Summary` reading —
+which is *what this manager has actually banked*, and was measured against
+ESPN's own scoreboard when it was written — goes **`Total · 16` → `Total · 15`**
+on the pitching side with every figure unchanged (`78.1 | 58 | 25 | 25 | 22 |
+86 | 6 | 7 | 4 | 7 | 2.87 | 1.02`): the row it drops is the one ESPN was never
+counting.
+
 #### The tools row and the dates are inside the pane
 
 **`paneChrome` — the app's own `.view-tools` and `.date-bar`, rendered as

@@ -513,6 +513,7 @@ export function PlayerDetails({
   name,
   position,
   isPitcher = false,
+  twoWay = false,
   isOnRoster,
   ownedBy,
   rosterEditable = true,
@@ -542,6 +543,21 @@ export function PlayerDetails({
   name: string;
   position?: string;
   isPitcher?: boolean;
+  /**
+   * **Whether this man has a page on the other side of the ball too**, which is
+   * the whole of what the Batting/Pitching switch is gated on.
+   *
+   * A two-way player is **two rows under one id** everywhere else in the app —
+   * two lines on the roster's two tables, two research-board rows, two
+   * watchlist entries — and so, since this page opens on a `${kind}-${id}` key,
+   * two pages. That was reachable only from two different rows on two different
+   * tables until the switch: a reader who had arrived at Ohtani's bat had no way
+   * to his arm but to close the page and go find the other row.
+   *
+   * False for everybody else, and it must be: a control offering `Pitching` on
+   * a man with no pitching page is a control that navigates to nothing.
+   */
+  twoWay?: boolean;
   /** Whether he is on the **roster the app is reporting on** — the saved list,
    *  or the user's ESPN team while `rosterSource` says so. The same key set the
    *  research board's `My Roster` button selects on, so the baseball beside a
@@ -1004,6 +1020,25 @@ export function PlayerDetails({
   // below being gated on an `arsenal` this very effect has just cleared.
   // Overview is where the page opens on everybody, and a new player is a new
   // page.
+  //
+  // **And the kind is part of "a new page", which the Batting/Pitching switch
+  // made true.** It watched `playerId` alone, and every route into this page
+  // changed both together until that switch existed — crossing it changes only
+  // the kind, and none of the eleven things below would have been cleared. What
+  // that leaves on screen is the *other half* of the man: `arsenal` and
+  // `starts` and `news` are keyed on `playerId` alone and would not even
+  // re-read, so Ohtani's pitch mix would sit under his batting page for as long
+  // as it stayed open, and `day`, `windows` and `gameLog` would draw one kind's
+  // answer while the next was in flight — which is not the "never over data"
+  // rule but the opposite of it, an old answer to a question nobody asked.
+  //
+  // **Measured, by taking `kind` back out again**: open Ohtani's batting page,
+  // press `Charts`, wait for the rolling xwOBA to draw, and cross to
+  // `Pitching`. With `[playerId]` alone the page stays on `Charts` and goes on
+  // drawing the **batting** series — read back seven seconds later, unchanged,
+  // with no request made, `xwobaReq` being keyed on the id alone. With
+  // `[playerId, kind]` the same press lands on `Overview` with the pitching
+  // day under it and the `Arsenal` tab in the strip.
   useEffect(() => {
     setTab('overview');
     xwobaReq.current = null;
@@ -1030,7 +1065,7 @@ export function PlayerDetails({
     startsReq.current = null;
     setStarts(null);
     setStartsFailed(false);
-  }, [playerId]);
+  }, [playerId, kind]);
 
   // The Overview tab's day, lazily on first open (which for this tab is the
   // page opening). No date is sent: the server's own baseball day is the one
@@ -1501,6 +1536,67 @@ export function PlayerDetails({
           ) : null}
           </div>
         </div>
+
+        {/**
+          * **Which half of a two-way player is being read** — a tier above the
+          * tabs, and drawn only for the men who have two.
+          *
+          * It sits **between the head and the tab strip** because that is what
+          * it is: the head says *who*, this says *which of him*, and the strip
+          * under it says *which reading of that*. Put on the identity line
+          * beside the position chip it would have read as a fact about him
+          * rather than a control, and put in the cluster on the right it would
+          * have joined the two things you *do to* him — where this is
+          * navigation, like the Back button at the other end of the head.
+          *
+          * It is `.view-switch`/`.view-tab` rather than a shape of its own,
+          * which is the app's rule for a segmented control: the League page's
+          * three tabs and the Schedule spans are the same two classes, so a
+          * reader who knows one knows this. Only the row around it is new, and
+          * all it does is put the switch in the head's own 680px column.
+          *
+          * **It changes the URL, and it has to.** The page is opened on
+          * `player=${kind}-${id}` and the two halves are two keys, so a switch
+          * that left the parameter alone would leave a link describing the page
+          * the reader started on rather than the one in front of them — the
+          * rule every other view in this app follows. So it goes through the
+          * same `onOpenDetails` the Overview's scheduled game uses to open the
+          * opposing starter: one door into a player page, however it is
+          * reached, and the Back button behaves afterwards exactly as it does
+          * on any other page opened over this one.
+          */}
+        {twoWay && (
+          <div className="details-kind-row">
+            {/* `role="tablist"` with `aria-selected`, which is what every other
+                `.view-switch` in the app declares — the matchup's two sides, the
+                opponent table's spans and venues, the Schedule control's runs —
+                and three of those change a URL parameter exactly as this does.
+                A `group` of `aria-pressed` toggles was the alternative and would
+                have made this the one segmented control announcing itself
+                differently from the rest. */}
+            <div className="view-switch" role="tablist" aria-label="Which half of this player">
+              {(['batter', 'pitcher'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  className={`view-tab${kind === k ? ' active' : ''}`}
+                  aria-selected={kind === k}
+                  onClick={() => {
+                    if (kind !== k) onOpenDetails(`${k}-${playerId}`);
+                  }}
+                  title={
+                    k === 'batter'
+                      ? `${name} at the plate — his batting page`
+                      : `${name} on the mound — his pitching page`
+                  }
+                >
+                  {k === 'batter' ? 'Batting' : 'Pitching'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <TabStrip label="Player sections" paneRef={tabsRef}>
           {/* First and default: what he is doing today, which is the question

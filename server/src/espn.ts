@@ -208,6 +208,43 @@ const BENCH_SLOT = 16;
 const IL_SLOT = 17;
 
 /**
+ * **ESPN's three pitching slots: `P`, `SP`, `RP`.** Everything else a league
+ * starts is a batting slot, which is the same fail-safe direction the two
+ * constants above take — an undocumented slot reads as a place a hitter can
+ * stand rather than as nothing.
+ *
+ * Exported because it is the fact behind *which side of the ball a seat is*,
+ * and two files ask it: the projection engine fills batting and pitching seats
+ * from separate pools of candidates (`projection.ts::planLineups`), and
+ * `seatKinds` below decides which of a two-way player's two rows one seat is
+ * about. It was declared in both until the second reader arrived; one table of
+ * three numbers is one table.
+ */
+export const PITCHING_SLOTS = new Set([13, 14, 15]);
+
+/**
+ * **A seat belongs to one side of the ball, and a two-way player fills one seat
+ * at a time.**
+ *
+ * The app's currency is `${kind}-${id}` and a two-way player is **two rows
+ * under one id** — Ohtani is a batter row on the batting table and a pitcher
+ * row on the pitching one, with a player page each. ESPN's roster is not: in
+ * the live league he is *one* entry, eligible at `DH` and `SP`, standing in
+ * exactly one slot on any given day. So "he is in the lineup" is a fact about a
+ * seat, and the seat says which of his two rows it is a fact about: seated at
+ * `UTIL` he is accruing you hits and nothing else, and his pitching row that
+ * day is a row you have **not** started.
+ *
+ * Everybody else is untouched — one kind in, the same one kind out — which is
+ * what makes this safe to run over a whole roster rather than only over the
+ * two-way men.
+ */
+export function seatKinds(kinds: PlayerKind[], slotId: number): PlayerKind[] {
+  if (kinds.length < 2) return kinds;
+  return [PITCHING_SLOTS.has(slotId) ? 'pitcher' : 'batter'];
+}
+
+/**
  * The same slot ids again, reduced to the vocabulary the research board's
  * position pills are written in — which is what `eligibleSlots` has to be
  * translated into to be any use as a filter.
@@ -1937,7 +1974,7 @@ const lineupInFlight = new Map<string, Promise<EspnRosterPlayer[]>>();
  * **It used to return the started ids alone** and now returns the roster they
  * are a subset of, because a range turned out to be a range of *rosters* as
  * well as a range of lineups — see **A range is a range of rosters** in
- * `docs/claude/espn.md`. `startedIds` derives the old answer from the new one.
+ * `docs/claude/espn.md`. `startedKeys` derives the old answer from the new one.
  *
  * **Read `forTeamId`, not the whole league.** The consumer is always one team on
  * one day, and ESPN honors the filter: measured, `view=mRoster` for a single
@@ -2050,15 +2087,34 @@ export async function getRosterOn(
   return getTeamRoster(creds, teamId, period, date < baseballToday());
 }
 
-/** Which MLB ids a roster read already in hand has in its lineup — the seed
- *  below, and the one place the per-day map and the slot chips are guaranteed
- *  to agree because they are the same read. */
-export function startedIds(roster: EspnRosterPlayer[]): number[] {
-  return roster.flatMap((p) => (p.starting && p.mlbId !== null ? [p.mlbId] : []));
+/**
+ * Which **player keys** a roster read already in hand has in its lineup — the
+ * seed below, and the one place the per-day map and the slot chips are
+ * guaranteed to agree because they are the same read.
+ *
+ * **Keys rather than MLB ids, and that is the whole of the two-way fix.** An id
+ * names a man and the app's rows name a man *and a side of the ball*, so a
+ * lineup shipped as ids put Ohtani's one `UTIL` seat on both of his rows: the
+ * pitching table drew him above its `Lineup` divider on a day he was seated as
+ * a hitter, and no arithmetic downstream could tell, an id having nothing in it
+ * to tell with. `seatKinds` reads the slot the same read already carries, so
+ * the answer is per-day rather than per-range — a man at `P` on the Monday and
+ * `UTIL` on the Tuesday is two different rows' start.
+ *
+ * A key is also what every client-side reader of this map already holds
+ * (`playerKey(r)`), which is the second reason: `startedOn` used to be handed
+ * `r.id` off a row whose kind it then had no way to consult.
+ */
+export function startedKeys(roster: EspnRosterPlayer[]): string[] {
+  return roster.flatMap((p) =>
+    p.starting && p.mlbId !== null
+      ? seatKinds(p.kinds, p.slotId).map((kind) => `${kind}-${p.mlbId}`)
+      : [],
+  );
 }
 
 /**
- * Your lineup for every day of `start`…`end`, as MLB ids, keyed by date.
+ * Your lineup for every day of `start`…`end`, as player keys, keyed by date.
  *
  * **A missing date is "we couldn't tell", not "nobody started".** A day whose
  * read fails is left out of the record entirely rather than sent empty, so the
@@ -2112,15 +2168,17 @@ export async function getTeamRosters(
   return out;
 }
 
-/** Which MLB ids a day's roster had in its lineup — the `lineups` map
+/** Which **player keys** a day's roster had in its lineup — the `lineups` map
  *  `/api/espn/roster` ships and the `Starters` filter reads, **derived** from
  *  the same per-day read rather than fetched again, so the chips, the filter
- *  and the days a report counts cannot come to disagree about an afternoon. */
+ *  and the days a report counts cannot come to disagree about an afternoon.
+ *  Keys rather than ids because a seat has a side of the ball; see
+ *  `startedKeys`. */
 export function lineupsFrom(
   byDate: Record<string, EspnRosterPlayer[]>,
-): Record<string, number[]> {
+): Record<string, string[]> {
   return Object.fromEntries(
-    Object.entries(byDate).map(([date, roster]) => [date, startedIds(roster)]),
+    Object.entries(byDate).map(([date, roster]) => [date, startedKeys(roster)]),
   );
 }
 
