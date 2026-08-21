@@ -168,11 +168,32 @@ export type DateBarReading =
    * preset is a rule the reader picks and can step off, and this one is what
    * the page is. See `fixed` on `DateBar`.
    */
-  | { kind: 'matchup' };
+  | { kind: 'matchup' }
+  /**
+   * **Days this bar is handed rather than derives** — the League view's two
+   * bars, which state a *week* and a *span of weeks* rather than a range of
+   * calendar days.
+   *
+   * The other four readings turn `start`/`end` into their two lines here, which
+   * is what stops the roster and a team page wording one state two ways. A
+   * league week is not that shape: which days `Week 12` covers is ESPN's
+   * answer and arrives on the wire already dated, and the lead carries a *state*
+   * beside the name (`Week 19 · Live`) that no range can be read off. So this
+   * reading hands both lines over whole and the bar prints them — one bar on
+   * every surface, and the one surface whose days are somebody else's arithmetic
+   * says so rather than pretending to derive them.
+   *
+   * `lead` is a node rather than a string for exactly one reason and it is worth
+   * naming: the state word is colored (`Live` green, `Projected` accent), which
+   * is the app's rule that color is spent on state, and a string cannot carry
+   * half a line of it.
+   */
+  | { kind: 'label'; lead: ReactNode; range: string };
 
 export interface DateBarFace {
-  /** The upper line: what kind of days these are. */
-  lead: string;
+  /** The upper line: what kind of days these are. A node rather than a string
+   *  because the `label` reading colors part of it — see there. */
+  lead: ReactNode;
   /** The lower line: which days they are. */
   range: string;
 }
@@ -193,6 +214,11 @@ export function dateBarFace(
   start: string,
   end: string,
 ): DateBarFace {
+  /* Handed over whole — see the `label` reading. Ahead of everything below
+     because it is the one reading that does not derive its lines from the two
+     dates, and the two dates it is passed are its own span's ends rather than a
+     range the arrows step. */
+  if (reading.kind === 'label') return { lead: reading.lead, range: reading.range };
   const lead =
     reading.kind === 'schedule'
       ? `Schedule · ${reading.span}`

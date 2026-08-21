@@ -694,6 +694,97 @@ unchanged, no `mup=`), and a second press on the same spot opened it
 (`&mup=109&mt=6`) — which is what a first press dismissing means and what every
 platform does.
 
+### The week is a full-width bar, and it is the app's own
+
+**The two sections above describe a control that no longer exists as a control
+of its own, and they are left as written**: the argument for what the week
+*says* — the qualifier over the days, the list of weeks behind a press, newest
+first, the dismissal rules — is unchanged and is exactly what the bar now says.
+What changed is the box it says it in.
+
+It was a **shrink-to-fit cluster**: two 36px icon squares either side of a 172px
+face, in a row capped at `--card-column` and centered, with the `Live`/`Final`
+pill at the far end. So the one control that says which week the *whole page* is
+of was the smallest thing above it, and it sat wherever the cards' column
+happened to start. Measured before: **800 × 39 at x=200** at a 1200 window, its
+face centered at **326** against the window's own 600; **346 × 39 at x=22** at
+390, face centered at 148 against 195; and at **320 it wrapped to two lines and
+72px**, the pill dropping under the arrows.
+
+**It is `DateBar` now** — the app's own date bar, folded in the JSX rather than
+restyled — so it is the same object as the dates on the Roster and the Feed and
+as the span bar on the Rankings tab. Measured after: **320 × 54 at x=0** at 320,
+**390 × 54** at 390 and **1200 × 54** at 1200, face centered on the window's own
+center line at every one (160 / 195 / 600) and **0 page-body overflow** at 320 /
+390 / 768 / 1024 / 1200 / 1920. One height at every width, where the old head
+was 39 or 72 depending on whether the pill fitted.
+
+**Four rules were deleted rather than folded** — `.lg-head`, `.lg-period`,
+`.lg-nav`, `.lg-period-face` — because every declaration in them was a
+restatement of something `.date-bar` already says: the arrows were `.date-step`
+written again, the face's `min-width: 172px` was `.date-face`'s own floor
+written again for a row that shrink-wraps, and the popover's `left: 0` against
+`.lg-head` was `.date-bar-anchored`'s centering done by hand. `.lg-week-pop` went
+with them, the list now opening as the bar's own popover — which is where
+`useDismissable`, `usePopoverFit`'s measured cap and the spent dismissing press
+all come from, none of them stated twice.
+
+**The `Live`/`Final` tag rides on the face's lead line**, as a word rather than
+a pill: `WEEK 19 · LIVE` over `Aug 10 – Aug 21`. A three-column grid has no
+fourth cell, and reserving one at each end to keep the face centered would have
+cost a 320px phone about a third of its middle column, where the days already
+want 130px. The lead line is where the roster's own face already carries a
+qualifier of exactly this kind (`SCHEDULE · WEEK 19`), it costs the bar no height
+and no width, and **it keeps its color** — the word takes `.lg-state-live`'s own
+green rather than a second definition of it, which is this app's rule that color
+is spent on state. The pill is unchanged and still draws on the **matchup
+page's** head, which has a row to hold it.
+
+**Driven at 1200, 390 and 320.** The list opens centered on the bar (260 × 604 at
+x=470 in a 1200 window; 260 × 525 at x=30 in a 320 one, capped by
+`--popover-max-h` and scrolling inside itself), carries the league's **19**
+weeks newest first with the one being shown marked, and picking `Week 3` writes
+`mp=3` and redraws the face as `WEEK 3 · FINAL` over `Apr 13 – Apr 19` with 6
+cards. A single press on a matchup card behind the open list **closed the list
+and did not open the matchup** (`?view=league` unchanged); a second press on the
+same spot opened it (`&mup=110`) — which is what a dismissal spending the
+gesture means.
+
+### The three tabs take a centered line of the tools row
+
+**They shared a line with everything else in that row, and on the Rankings tab
+that was four groups.** `Scoreboard / Rankings / Transactions` say *which page
+of this league*; the span strip, the two ⓘs and the `Projected` lens say *which
+reading of that page*, which is the next question rather than a peer of it — and
+with all four on one wrapping line, where the row broke was the window's
+decision. Measured at 1200 the row's content came to **1237px against the 1156**
+a 1200px window leaves (289 + 297 + 470 + 145 with 12px gaps), so it wrapped
+anyway; what it did not do was wrap in the same place twice.
+
+So the strip takes a line of its own and is **centered on it**, and the rest of
+the row breaks beneath. Measured, the strip's center is the window's center at
+every width — **160 / 196 / 385 / 513 / 601 / 961** at 320 / 390 / 768 / 1024 /
+1200 / 1920 — on all three tabs, with 0 page-body overflow at each.
+
+**A wrapper (`.lg-tabs-line`) rather than `flex: 1 1 100%` on the strip
+itself**, which this stylesheet already records measuring: that basis stretches
+the *shell* of a segmented control across the row with its three pills bunched
+at the left end, a 596px band standing in for a control 295 wide. The line is
+the full-width flex item and the strip inside it is centered at its own content
+width — the same arrangement `.date-bar-panel`'s `align-self: center` makes for
+the span run one box down. Below 640 the strip keeps its own `flex: 0 1 auto`
+and its sideways scroll, which is why the line also carries `min-width: 0`.
+
+**What it costs is one line on two tabs and nothing on the third.** The tools
+row is **50px** on the Scoreboard and Transactions tabs at every width (the
+strip is all that is in it, so the line it takes is the line it had) and goes
+**50 → 96** on Rankings at 1024 and up. At 768 and below that row was already
+wrapped and is **96–98 either way**, so the widths with the least room pay
+nothing. The band under it is unbroken: `.view-tools` paints its own ground and
+the second line is inside it, so `.app.league-rank-mode .app-chrome`'s
+shadowless seam and the pane's missing top hairline are untouched — measured, no
+new rule anywhere between the chrome and the first row of the table.
+
 ### The period arrows live inside the Scoreboard tab
 
 **A control above the strip is a control over the page, and this one governs

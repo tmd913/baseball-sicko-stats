@@ -515,7 +515,14 @@ body {
    child combinator is load-bearing: the bar is *also* rendered inside
    `.summary-scroll`, which has already bled through these gutters itself, and a
    second helping there would put the bar 22px off each edge of the window. */
-.app > .date-bar {
+/* **And the League view's two bars**, which are the same object in a third and
+   fourth box: the Scoreboard's week, drawn in the page, and the Rankings tab's
+   span, drawn inside its table's own pane. The child combinator is load-bearing
+   on both for the reason it is above — a bar inside a pane that has already
+   bled through these gutters must not take a second helping — and
+   `.league-scroll` is that pane, so it is deliberately **not** in this list. */
+.app > .date-bar,
+.league-view > .date-bar {
   --bar-bleed: var(--app-gutter);
 }
 
@@ -6304,7 +6311,11 @@ button.start-line:focus-visible {
    answer differently. */
 .app > .date-bar,
 .mup-view > .date-bar,
-.summary-scroll > .date-bar {
+.summary-scroll > .date-bar,
+/* And the Rankings tab's span bar, which is this same band in this same
+   arrangement one view over: a viewport-tall column with one scroller in it,
+   the tools row scrolling away and the bar holding the top of the pane. */
+.league-scroll > .date-bar {
   /* The same ground as the row above it, and for its reason — see
      `.view-tools`. The two are one band and neither may be a rectangle. */
   background: var(--bg);
@@ -6341,7 +6352,8 @@ button.start-line:focus-visible {
    than `clip-path` on the bar itself, which would take the popover with it. */
 .app > .date-bar::after,
 .mup-view > .date-bar::after,
-.summary-scroll > .date-bar::after {
+.summary-scroll > .date-bar::after,
+.league-scroll > .date-bar::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -6394,7 +6406,7 @@ button.start-line:focus-visible {
 .summary-scroll > .view-tools,
 .summary-scroll > .date-bar,
 .league-scroll > .view-tools,
-.league-scroll > .lg-span-detail,
+.league-scroll > .date-bar,
 .research-scroll > .view-tools,
 .research-scroll > .research-head,
 .research-scroll > .error-banner,
@@ -6428,7 +6440,6 @@ button.start-line:focus-visible {
 }
 .summary-scroll > .view-tools,
 .league-scroll > .view-tools,
-.league-scroll > .lg-span-detail,
 .research-scroll > .view-tools {
   /* **`--table-bleed`, not `--app-gutter`** — the number is exactly how far
      this pane has already bled back out through the box that holds it, and
@@ -6444,14 +6455,34 @@ button.start-line:focus-visible {
      would put the row past the window's edge. */
   padding-inline: var(--table-bleed, 0px);
 }
-/* The 10px that used to be `.lg-rankings`'s own `gap` between the caption and
-   the pane under it. The caption is *in* the pane now, so there is no gap left
-   to give it and the header row would otherwise sit on the sentence's baseline.
-   Padding rather than a margin, for the reason the tools row's ground is
-   painted rather than left to the container: what is above the header row here
-   is chrome, and the space belongs to the chrome. */
-.league-scroll > .lg-span-detail {
-  padding-bottom: 10px;
+/* **The Rankings pane's second row of chrome is a date bar**, where it was a
+   caption (`.lg-span-detail`, gone with it). It sticks against the same
+   scrollport the tools row above it and the header row below it do — the rule
+   above — and it takes the ground, the seam and the shadow of every other
+   pinned bar in the app, which is the fold the row on `.summary-scroll` already
+   makes one box over: content passes under this bar, so it needs an opaque
+   ground and a shadow to say so.
+
+   The 10px the caption carried under it is gone with the caption: the bar
+   closes itself with a hairline and its own shadow, exactly as the Roster's
+   does above its own header row, and 10px of band between the two would be the
+   strip that shadow is drawn to make unnecessary. */
+/* **What the header row under it sticks below**, off the bar's own measured
+   height. A descendant selector rather than a class, and `:not(.is-expanded)`
+   rather than `:has(> .date-bar)`, because the question is *whose* bar it is
+   rather than whether one is present: the expanded box draws its own **above**
+   the pane, and a header row held 54px down under nothing there would be a band
+   of rows showing through the gap. That is `.summary-scroll.has-pane-chrome`'s
+   own reasoning, answered here with the class this box already carries. */
+.lg-rankings:not(.is-expanded) .league-scroll {
+  --pane-bar-h: var(--date-bar-h, 0px);
+}
+.league-scroll > .date-bar {
+  top: 0;
+  /* Above the header row (2) and its own top-left corner cell (3) — the rows
+     and the headings both pass under this. `.summary-scroll`'s own bar takes
+     the identical layer for the identical reason; folded onto it below. */
+  z-index: 4;
 }
 /* **The two boxes in the pane that are not chrome put the page's gutter back as
    a margin**, where the tools row and the head put it back as padding. The
@@ -6972,7 +7003,13 @@ button.start-line:focus-visible {
    bar take a line of its own underneath (`.date-bar` claims `flex: 1 1 100%`
    for every box it renders in — it was `.app.date-open .date-control` that
    claimed it here, back when the dates were a button and a hidden row). */
-.lg-rankings.is-expanded > .lg-span-detail {
+/* **And `flex: none` is load-bearing on it rather than a tidying**, which is
+   the trap the app's own bar records one box out: `.date-bar` carries
+   `flex: 1 1 100%` — "its own line", written for the wrapping rows it sits in —
+   and this box is a *column* flex container, where that basis is 100% of the
+   **height**. Left alone a 54px bar becomes the whole of the viewport and
+   pushes the table off the bottom of it. */
+.lg-rankings.is-expanded > .date-bar {
   flex: none;
 }
 .expanded-chrome {
@@ -7065,12 +7102,18 @@ button.start-line:focus-visible {
   display: none;
 }
 /* The Rankings table's own version of the two rules above, and it needs no
-   `.expanded-chrome` row of its own: the caption it already carries **is** the
-   chrome — `Weeks 1–9 · Mar 25 – May 31` plus the ⓘ that explains OVR/BAT/PIT,
-   which is exactly the context the span strip up in the tab row can no longer
-   give once this box covers it. Everything else here is an empty state, which
-   has no more business in a full-page table than the board's has. */
-.lg-rankings.is-expanded > :not(.league-scroll):not(.lg-span-detail) {
+   `.expanded-chrome` row of its own: the bar it already carries **is** the
+   chrome — `FIRST HALF · WEEKS 1–9` over `Mar 25 – May 31`, which is exactly
+   the context the span strip up in the tools row can no longer give once this
+   box covers it. Everything else here is an empty state, which has no more
+   business in a full-page table than the board's has.
+
+   **And in this mode the statement is also the control**, where the caption
+   could only state: an expanded table says what its settings are, and this one
+   now lets the reader change the one setting it says without leaving the mode
+   to do it. That is a widening of the rule rather than a breach of it — what
+   the rule forbids is a table whose settings are off-screen. */
+.lg-rankings.is-expanded > :not(.league-scroll):not(.date-bar) {
   display: none;
 }
 
@@ -9154,7 +9197,8 @@ button.start-line:focus-visible {
   /* **The Rankings copy of the League page's own toggle**, and only that copy —
      scoped to the row it is in rather than to `.lg-proj-label`, because the
      matchup card's is centered on a row of its own with the width for a word.
-     It named `.lg-span-detail` while this button stood in the table's caption;
+     It named `.lg-span-detail` while this button stood in the table's caption
+     (a row that is a date bar now and holds no buttons at all);
      the button is in the tab row now and the scope followed it, which puts it
      beside `.projected-toggle-label` above — the Roster view's own copy of this
      control, in this same row, losing its word at this same width.
@@ -12958,123 +13002,87 @@ button.start-line:focus-visible {
   overflow: auto;
 }
 /* The caption's `flex: none` used to live here, back when it was a child of
-   `.lg-rankings` on this view. It is inside the pane now (see
-   `.league-scroll > .lg-span-detail`), where it is an ordinary block and the
+   `.lg-rankings` on this view. It is a date bar inside the pane now (see
+   `.league-scroll > .date-bar`), where it is an ordinary block, and the
    expanded box has its own rule for the one render that still puts it above the
-   pane. */
+   pane — where `flex: none` is genuinely needed, for a different reason. */
 .league-view {
   padding-bottom: 8px;
 }
-.lg-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  max-width: var(--card-column);
-  margin: 0 auto 14px;
-}
-.lg-period {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-/* The two arrows are the app's icon square, so they read as chrome rather than
-   as text: the same `--control-h` box every button on the header's control line
-   takes. Disabled rather than hidden at the ends of the season — a control that
-   comes and goes is harder to aim at than one that dims, and ESPN materialises
-   no future matchup period at all, so the forward arrow is disabled on the
-   week being played and stays that way until ESPN opens the next. */
-.lg-nav {
-  width: var(--control-h);
-  height: var(--control-h);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
-  background: var(--panel);
-  color: var(--text);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-.lg-nav:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-@media (hover: hover) {
-  .lg-nav:not(:disabled):hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-}
-.lg-nav:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-/* **The week, folded onto the app's own date face.** `.lg-period-label` was
-   this: `Week 19` at 15px bold over the days at 12px muted — the qualifier
-   large and the days small, which is the *reverse* of the way the date bar four
-   lines above states the same kind of fact. Two faces for one object, so there
-   is one now: `.date-face` outright, in the JSX rather than restyled here, and
-   the three rules it replaced (`.lg-period-label`, `.lg-period-n`,
-   `.lg-period-dates`) are gone with it.
+/* ---- The Scoreboard's week, as the app's own date bar --------------------
+   **`.lg-head`, `.lg-period`, `.lg-nav` and `.lg-period-face` are all gone**,
+   and with them the last place on this view that had a control of its own shape
+   for a job the app already has one for.
 
-   All this declares is what a *press* needs and `.date-face` cannot know: an
-   anchor for the list, and a width. The date bar's face is centered in a grid
-   column that is already the middle of a full-width bar, so it may be
-   `max-content` with a floor; here it sits between two arrows in a shrink-to-fit
-   inline row, where a percentage floor resolves against an indefinite width and
-   a `max-content` box shrugs to the width of `Aug 10 – Aug 19`. The pair below
-   is the same intent stated in the terms this row is in — measured, it holds the
-   face at 172px at 1400 and 320 alike, against the 108 the old label reserved,
-   so the week and the dates sit on one line at every width. */
-/* **Static, so the list hangs off the head row rather than off this group** —
-   `.lg-proj-key`'s measured trick, one edge over. The group sits behind the ‹
-   arrow, so its own left edge is 62px in at 320; a 260px panel from there runs
-   62 → 322 against a 320 window, which was measured at **2px of page-body
-   overflow** before this. Against `.lg-head`, which is the content width at
-   every size, `left: 0` is the app's own left gutter and the panel is on screen
-   at 320 (22 → 282) as at 1400. */
-.lg-period-face {
-  position: static;
-}
-.lg-period-face .date-face {
-  min-width: 172px;
-  width: auto;
-}
-/* The league's own weeks, as a list. Folded onto nothing — no popover in this
-   app is a list of rows of its own — so it states the surface once: the panel
-   fill, the border, the radius and the lift `.drp-popover` states, and a cap
-   that is measured rather than declared because the list is as long as the
-   season (19 rows on the live league, 21 at the end of one).
+   What they were: a shrink-to-fit row capped at `--card-column` and centered,
+   holding two 36px icon squares either side of a 172px face, with the
+   `Live`/`Final` pill at its far end. Every one of those declarations was a
+   restatement of `.date-bar` — the arrows were `.date-step` written again, the
+   `min-width: 172px` was `.date-face`'s own `min-width` floor written again for
+   a row that shrink-wraps, and the popover's `left: 0` against `.lg-head` was
+   `.date-bar-anchored`'s centering done by hand.
 
-   `left: 0` against the **head row**, not against the face — see the note on
-   `.lg-period-face`. Measured, the panel runs 340 → 600 at 1400 and 22 → 282 at
-   320, with 0 page-body overflow at both. */
-.lg-week-pop {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 8px);
-  left: 0;
+   The bar is `DateBar` in the JSX now, so all four rules are deleted rather
+   than folded: there is nothing left here that the shared control does not
+   already say. What the week keeps of its own is the list it opens (below) and
+   the state word on its lead line (`.lg-state-live`, reused for its color).
+
+   The bar's own placement in the page: its own line, 14px clear of the cards
+   under it, bleeding to the app's gutters like every other bar (see
+   `.league-view > .date-bar` up at the top of this file). */
+.league-view > .date-bar {
+  margin-bottom: 14px;
+}
+
+/* **The league's own weeks and cuts, as a list.** It was `.lg-week-pop` — a
+   popover surface of its own, restating the panel fill, the border, the radius,
+   the lift and a measured cap that `.drp-popover` and `.date-bar-pop` between
+   them already state. The bar opens it as *its* popover now, so all of that
+   arrives with the box and what is left here is the column the rows sit in.
+
+   The cap, the scroll and `overscroll-behavior-y` went with the surface and are
+   the bar's (`.date-bar-pop`), which is the right place for them: the box that
+   is capped has to be the box that scrolls. */
+.lg-weeks {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  /* The two gutters, so the panel is the width of the content column at 320
-     and its own 260 above that. */
-  width: min(260px, calc(100vw - 44px));
-  padding: 6px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-pop);
-  max-height: var(--popover-max-h, none);
-  overflow-y: auto;
-  /* The axis it genuinely scrolls, and only that one: a flick that runs out of
-     weeks must not carry the board under it. */
-  overscroll-behavior-y: none;
 }
-/* One week. The same two lines the face prints, in the same order and the same
+/* A group of them, where the Rankings bar offers two kinds of thing — the five
+   named cuts of the season and the nineteen weeks it is made of. The Scoreboard
+   passes one group and no heading, a single label over the whole of a list
+   being a row spent saying nothing. */
+.lg-week-group + .lg-week-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+/* **The panel is wider where it holds this list, and capped against the
+   window.** `.drp-popover`'s 260 is a *calendar's* width — seven columns of two
+   digits — and this list's rows are two texts side by side: measured at 1200,
+   `Second half  Weeks 10–18 · Jun 1 – Aug 9` wanted 297px and was **clipped
+   mid-word** at 260, with `Playoffs  Week 19 · Aug 10 – Aug 21 · so far` worse.
+   320 holds every span this league can offer and every week.
+
+   The window cap is the one `.drp-popover` never needed, its 260 being under
+   the 276 a 320px phone leaves; at 320 this panel is that 276 and the rule
+   below is what makes the overflow an ellipsis rather than a clip. */
+.date-bar-pop:has(.lg-weeks) {
+  width: min(320px, calc(100vw - 44px));
+}
+/* And what a group is called. The app's own small-caps qualifier — the same
+   type `.date-face-lead` states a reading in, one box away, which is what keeps
+   the list and the face that opened it reading as one control. */
+.lg-week-head {
+  padding: 2px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* One week. The same two lines the face prints/* One week. The same two lines the face prints, in the same order and the same
    two sizes — a list whose rows read differently from the control that opened
    them is a list you have to translate. */
 .lg-week {
@@ -13120,6 +13128,15 @@ button.start-line:focus-visible {
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
+  /* **It ellipsizes rather than clipping**, which needs both halves: a flex
+     item's automatic minimum is its `min-content`, so without `min-width: 0`
+     the text simply overflowed the row and was cut off by the panel — measured
+     at 320, `Weeks 10–18 · Jun 1 – Aug 9` reading `Weeks 10–18 · Jun 1 – Au`
+     with no mark to say so. The name beside it never shrinks, being what the
+     row is; the days give way, being the qualifier. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* A label rather than a control, so it takes the app's round pill — the shape
    this app reserves for a thing you read. */
@@ -13200,9 +13217,11 @@ button.start-line:focus-visible {
 .lg-proj-key {
   position: static;
 }
-.lg-head {
-  position: relative;
-}
+/* *(`.lg-head { position: relative }` stood here and is gone with the head it
+   named — the Scoreboard's own `Projected` toggle moved to the matchup page
+   long before the head became a date bar, so nothing on that tab has opened
+   this key for a while. The two rows that do open one declare their own anchor:
+   `.mup-bar` on a matchup and `.view-tools` in the app's own band.)* */
 .lg-proj-key .info-key-panel {
   right: 0;
   left: auto;
@@ -14880,7 +14899,21 @@ span.mup-move-name:hover {
    and their own scoped hover further down this block. */
 .league-table thead th {
   position: sticky;
-  top: 0;
+  /* **What it sticks below is the pane's own bar**, where it was a literal `0`
+     and the note under this rule said "the head is one row again, so it pins at
+     the top of the pane with no offset to declare". That was true while the
+     only thing above it in the pane was a caption, which does not stick
+     vertically at all; the row is a **date bar** now and does, so a `0` here put
+     the headings *behind* it — measured at 1200 scrolled 400 down, the bar held
+     at y=102 and the header row at **99**, a whole row of labels reading through
+     the strip that names the span.
+
+     `--pane-bar-h` is the app's own name for this and is published from the
+     bar's measured height, which is the same arrangement the summary table and
+     the research board each keep one view over. It is 0 in the expanded box,
+     where the bar is above the pane rather than inside it — see
+     `.lg-rankings:not(.is-expanded) .league-scroll`. */
+  top: var(--pane-bar-h, 0px);
   z-index: 2;
   /* Two under the body's, as everywhere else in the app: a header is one short
      line where a body row is two. */
@@ -15083,14 +15116,40 @@ span.mup-move-name:hover {
    The one thing each adds is the row it sits in: the League strip leads the
    view and the span strip leads its table, both left-aligned rather than
    centered, because the page under them starts at the left edge. */
-/* The strip hugs its own pills and sits at the left edge of the reading column
-   the header under it uses, which needs a block row of its own: the shell is
-   `inline-flex` (it is `.view-switch`), and an auto margin does not center an
-   inline-level box — left to itself it would sit at the far left of the window
-   while the scoreboard's own header sat 200px in. */
-.lg-tabs-row {
-  max-width: var(--card-column);
-  margin: 0 auto 14px;
+/* **The three tabs take a line of the tools row to themselves, centered**, and
+   everything else in that row breaks to the line under them.
+
+   They are *which page of this league* — one tier down from the main tabs and
+   the same kind of statement — where the span strip, the two keys and the lens
+   are *which reading of that page*, which is the next question rather than a
+   peer of it. On the Rankings tab all four groups shared a line: measured at
+   1200 the row's content came to **1237px against the 1156** the window leaves,
+   so it wrapped anyway and *where* it wrapped was the window's decision, which
+   put the control a reader looks for first at a different place on the row at
+   every width.
+
+   **A wrapper rather than `flex: 1 1 100%` on the strip itself**, and this file
+   already records why in as many words: that basis stretches the *shell* of a
+   segmented control across the row with its pills bunched at the left end — a
+   596px band standing in for a control 295 wide. The line is the full-width
+   flex item and the strip inside it is centered at its own content width, which
+   is the same arrangement `.date-bar-panel`'s own `align-self: center` makes
+   for the span run one box down.
+
+   `.lg-tabs-row` — a `--card-column` cap and an auto margin, from when this
+   strip rendered on the page above the scoreboard — is gone with the box it
+   named. */
+.lg-tabs-line {
+  /* Its own line. `.view-tools > *` sets `flex: none` and this rule follows it
+     in the file, which is the whole of how a row of atomic groups is given one
+     that is not. */
+  flex: 1 1 100%;
+  display: flex;
+  justify-content: center;
+  /* A flex item's automatic minimum is its `min-content`, and the strip inside
+     scrolls sideways below 640: without this the line's own box grows to the
+     strip's content and takes the page with it. */
+  min-width: 0;
 }
 /* The span strip breaks **between** two pills rather than inside one, which is
    the rule `.view-tools` states one tier up. Without it `Current matchup`
@@ -15157,48 +15216,40 @@ span.mup-move-name:hover {
 .lg-span-tab {
   white-space: nowrap;
 }
-/* What the span covers, **as the table's caption**. It sat beside the strip
-   that picks the span, on the reasoning that it was a caption on the control;
-   the strip is in the app's tab row now, a tier away from the numbers, so the
-   sentence would have been stranded up there among the buttons describing
-   something two boxes below it. Against the table it is the research board's
-   count line — the one thing between the controls and the rows, describing
-   what is under it. */
-.lg-span-detail {
-  /* **No margin of its own, which is the research board's own answer.** It
-     carried `10px 0 6px` on the reasoning that the first thing under a pinned
-     bar needs air — true, and the air was already there: the chrome's own
-     `margin-bottom` is 14px, so its 10 sat on top of that and the caption
-     landed **24px** down where the board's count line lands at 14. The two are
-     the same object (the one line between the controls and the rows, saying
-     what is under them) and now measure the same: 14px above and 10 below, the
-     10 being the pane's own margin exactly as it is over there. */
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  /* The caption and the ⓘ beside it are one row, and **the row is the anchor**
-     — see the panel rule below. `flex-start` rather than `center` because the
-     button is 30px against a 15px line and centring it would push the sentence
-     off the top of the row on a narrow screen where the caption wraps. */
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  position: relative;
-}
+/* ---- The Rankings tab's span, as the app's own date bar ------------------
+   **`.lg-span-detail` is gone.** It was the table's caption — one muted line
+   saying `Week 19 · Aug 10 – Aug 16 · so far`, with the ⓘ that explains
+   OVR/BAT/PIT beside it — and the row is a `DateBar` now, because a caption is
+   a thing you read and this row had to become a thing you press: the five named
+   cuts of the season were a strip a tier up, and between them they could not
+   answer *what did week 12 look like*.
+
+   Nothing replaces the rule, which is the point of the fold: the bar's ground,
+   its seam, its shadow, its three-column grid, its two lines and its popover
+   are all `.date-bar`'s, stated once at the top of this file and now true in
+   four boxes rather than three. Where this one sits and what it sticks to is
+   `.league-scroll > .date-bar`, up beside the other three placements.
+
+   The ⓘ went up to `.view-tools` with the other buttons (see `.lg-rank-key`
+   below, whose anchor rule changed with it). */
+
 /* This caller's own half of `InfoKey`, which is one anchor rule per caller by
-   that component's own design. `static` hands the containing block back to the
-   caption row, so `left: 0` on the panel means the row's left edge rather than
-   the 30px button's — the trick `.roll-key` already uses and for the same
-   measured reason: the button sits partway along a line (after a caption that
-   is 200px of dates), and a 320px panel opening leftward from there would run
-   off the screen at 390. Opening from the row's own edge it lands inside the
-   viewport at every width. */
-.lg-rank-key {
-  position: static;
-  display: inline-flex;
-}
+   that component's own design, and **the box it hands the panel to has changed
+   with the button**: the ⓘ stood in the table's caption row and stands in the
+   app's tools row, beside the projection's own key.
+
+   `static` is unchanged and is the whole trick — the panel's containing block
+   becomes the nearest positioned ancestor, which is `.view-tools` (it declares
+   `position: relative` for exactly this, as `.lg-head` and `.mup-bar` do one
+   view over) rather than the 30px button. That matters more up here than it did
+   down there: the button now sits *after* two tab strips, so at 390 it starts
+   about 250px along the row, and a 320px panel opening from it would put half
+   of itself off the screen. Against a row that is the full content width at
+   every size, `left: 0` is the app's own left gutter.
+
+   `.lg-proj-key` beside it opens the other way (`right: 0`) for the mirrored
+   reason, and the two are deliberately not the same: two 320px panels opening
+   from the same edge would be one panel's worth of screen shared by two. */
 .lg-rank-key .info-key-panel {
   left: 0;
   right: auto;

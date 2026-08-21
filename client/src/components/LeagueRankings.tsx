@@ -23,6 +23,7 @@ import type { ReactNode } from 'react';
 import type {
   EspnCategory,
   EspnCategorySide,
+  EspnPeriodSpan,
   EspnRankRow,
   EspnRankSpan,
   EspnRankSpanInfo,
@@ -33,7 +34,17 @@ import { wideRange } from '../lib';
 import { ExpandButton } from './ExpandButton';
 import { InfoKey } from './InfoKey';
 import { LoadingBlock } from './Loading';
-import { TeamLogo, categoryGroups, fmtValue, prettyDate, record } from './LeagueView';
+import {
+  PeriodPicker,
+  TeamLogo,
+  categoryGroups,
+  fmtValue,
+  periodDays,
+  prettyDate,
+  record,
+  stateWord,
+} from './LeagueView';
+import { DateBar } from './DateControls';
 
 /**
  * What the overall column is called in a header of two- and three-letter
@@ -150,33 +161,71 @@ export function spanDetail(info: EspnRankSpanInfo | undefined): string {
   return parts.join(' · ');
 }
 
+/* **`projectedDetail` is gone with the caption it wrote.** It made one line of
+   the projected reading — `Week 19 · projected to Aug 23 · 5 days still to
+   play` — and every word of its argument survives one function down, in
+   `rankFace`, where the same sentence is split across a bar's two lines. A
+   function with no caller is a function nobody misses; the reasoning it carried
+   is the paragraph on `rankFace` below. */
+
 /**
- * The same line, of a table whose figures are the projection.
+ * **The bar's two lines, from whichever cut is in force.**
  *
- * **The week keeps its name and `so far` gives way to what replaced it.** A
- * projected table under `Week 19 · Aug 10 – Aug 16 · so far` would be a plain
- * lie — those are the days ESPN's own figures cover, and the ones on screen
- * reach the end of the period — so the caption says which week, which day it
- * runs to, and how much of it is still a guess. That last figure is the one a
- * reader needs most: a table projected over five days is a different thing from
- * one projected over one, and nothing else on the page says so.
+ * This is `spanDetail` split in two rather than a second wording of it: the
+ * caption said `Week 19 · Aug 10 – Aug 16 · so far` on one line, and a date bar
+ * states the *kind* of days above and the days themselves below — which is the
+ * shape every other statement of a span in this app takes, and the reason this
+ * row stopped being a caption. So the weeks go up (`Current matchup · Week 19`,
+ * `First half · Weeks 1–9`) and the days come down (`Aug 10 – Aug 16 · so far`),
+ * and nothing is lost in the move.
  *
- * The days come off the response rather than being counted here, exactly as the
- * key's own first paragraph takes its figure from the projection: one number,
- * so the sentence and the table cannot come to disagree about how far ahead
- * they are looking.
+ * **`so far` is not decoration.** A span reaching into the week being played is
+ * a total to date, and `Season` over a figure that stops on Tuesday would be a
+ * claim. It rides on the days, being a fact about them.
+ *
+ * **Projected replaces both halves**, because both were true of ESPN's figures
+ * and neither is true of these: the lens reaches the end of the period, so the
+ * lead carries the state word the app spends its accent on and the days say
+ * what is being projected to and how much of it is still a guess. That last
+ * figure is the one a reader needs most and nothing else on the page carries
+ * it — a table projected over five days is a different thing from one projected
+ * over one. It comes off the response (`projectedDaysLeft`) rather than being
+ * counted here, so the bar, the key and the table cannot come to disagree about
+ * how far ahead they are looking.
  */
-export function projectedDetail(info: EspnRankSpanInfo | undefined, rankings: EspnRankings): string {
+export function rankFace(
+  info: EspnRankSpanInfo | undefined,
+  rankings: EspnRankings,
+): { lead: ReactNode; range: string } {
   const weeks =
     info?.periods == null
       ? null
       : info.periods[0] === info.periods[1]
         ? `Week ${info.periods[0]}`
         : `Weeks ${info.periods[0]}–${info.periods[1]}`;
-  const to = rankings.projectedEnd ? `projected to ${prettyDate(rankings.projectedEnd)}` : 'projected';
-  const d = rankings.projectedDaysLeft;
-  const left = d > 0 ? `${d} ${d === 1 ? 'day' : 'days'} still to play` : null;
-  return [weeks, to, left].filter(Boolean).join(' · ');
+  /* `Week 12` on its own rather than `Week 12 · Week 12`: a picked week's label
+     *is* its week number, so the two halves would be the same words twice. */
+  const name = info ? (weeks && weeks !== info.label ? `${info.label} · ${weeks}` : info.label) : '';
+  if (rankings.projected) {
+    const to = rankings.projectedEnd ? `to ${prettyDate(rankings.projectedEnd)}` : 'to the end';
+    const d = rankings.projectedDaysLeft;
+    const left = d > 0 ? `${d} ${d === 1 ? 'day' : 'days'} still to play` : null;
+    return {
+      lead: (
+        <>
+          {weeks ?? name}
+          {stateWord('projected')}
+        </>
+      ),
+      range: [to, left].filter(Boolean).join(' · '),
+    };
+  }
+  const days = info?.start && info?.end ? wideRange(info.start, info.end) : null;
+  /* ESPN's own season line has no dates of its own — it is a running total
+     rather than a span — so the lower line says what it is instead of going
+     blank, both lines being always filled being what keeps this bar one height. */
+  const base = days ?? (info?.span === 'season' ? "ESPN's own season line" : '—');
+  return { lead: name, range: info?.live ? `${base} · so far` : base };
 }
 
 type SortKey =
@@ -624,7 +673,7 @@ function RankTable({
  * is `BAT` plus `PIT`. A derived figure a reader can check by adding the two
  * columns beside it is a figure they can trust, and saying so costs six words.
  */
-function RankKey({ rankings }: { rankings: EspnRankings }) {
+export function RankKey({ rankings }: { rankings: EspnRankings }) {
   const n = rankings.rows.length;
   const groups = categoryGroups(rankings.categories);
   const bat = groups.find((g) => g.side === 'batting')?.categories.length ?? 0;
@@ -668,6 +717,9 @@ function RankKey({ rankings }: { rankings: EspnRankings }) {
 export default function LeagueRankings({
   rankings,
   span,
+  weeks,
+  onSpan,
+  onWeek,
   loading,
   error,
   matchupTeams,
@@ -676,6 +728,32 @@ export default function LeagueRankings({
 }: {
   rankings: EspnRankings | null;
   span: EspnRankSpan;
+  /**
+   * **The league's own matchup weeks, in the schedule's order** — what the bar
+   * below offers in place of a calendar, and it is the league's calendar rather
+   * than a run of sevens: a period covers 12 scoring days at the start of the
+   * season and 10 in a playoff round, and dating one from the other would be a
+   * week that is right in June and wrong in April.
+   *
+   * Threaded from App off the **scoreboard**, which this tab already reads (its
+   * rows are doors into that board — see *A Rankings row opens that team's
+   * matchup*), so the picker costs no request of its own. Empty until the board
+   * lands, which costs the bar its weeks group and nothing else: the five named
+   * spans are on the rankings response and are in the list from the first frame.
+   */
+  weeks: EspnPeriodSpan[];
+  /**
+   * Which cut to read, and which week — two callbacks rather than one, because
+   * they are two params in the URL and one of them clears the other.
+   *
+   * **Which week is in force is read off the response, not off a prop**, which
+   * is rule 1 of the loading discipline stated for a control: the table on
+   * screen stands while the next one is in flight, so a bar that jumped to
+   * `Week 12` on the press would be describing a table that is not there yet.
+   * `rankings.week` is the server's own answer and swaps with the figures.
+   */
+  onSpan: (span: EspnRankSpan) => void;
+  onWeek: (period: number | null) => void;
   loading: boolean;
   error: string | null;
   /** Threaded from App, which holds the board this tab does not read. Null
@@ -712,6 +790,9 @@ export default function LeagueRankings({
    * there is no button, so the mode cannot be entered.
    */
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
+  /* The bar's own list. Called before the early returns for the reason above:
+     hooks must be, and it costs nothing on a render that draws a message. */
+  const [barOpen, setBarOpen] = useState(false);
   if (error && !rankings) {
     return (
       <>
@@ -735,41 +816,148 @@ export default function LeagueRankings({
     );
   }
 
-  const shown = rankings.spans.some((s) => s.span === span) ? span : rankings.span;
-  const info = rankings.spans.find((s) => s.span === shown);
+  /* **The server's answer wins over the request**, which is what `rankings.week`
+     being an object rather than a flag buys: a week it could not serve comes
+     back null with the span's figures under it, so the bar states the table
+     that is actually on screen rather than the one that was asked for. */
+  const shown: EspnRankSpan = rankings.week
+    ? 'week'
+    : rankings.spans.some((s) => s.span === span)
+      ? span
+      : rankings.span;
+  const info = rankings.week ?? rankings.spans.find((s) => s.span === shown);
+  /* Which period is the one being played. Off the `matchup` span's own periods
+     rather than a second field: that span *is* "the week being played", so the
+     two cannot come apart. */
+  const livePeriod = rankings.spans.find((s) => s.span === 'matchup')?.periods?.[0] ?? null;
+  /* The single week in force, if the table is of one — a picked one, or the
+     live one under `Current matchup`. Null over a span of several, which is
+     what turns the arrows off. */
+  const onePeriod = rankings.week?.periods?.[0] ?? (shown === 'matchup' ? livePeriod : null);
+  /* **Picking the week being played selects `Current matchup`, not that week.**
+     The five spans are rules and the weeks are ranges, and the live week is the
+     one period that is both: as a rule it is still true tomorrow, as a range it
+     is frozen the moment the link is shared. It is the same normalization the
+     scoreboard's `mp=` makes by being absent on the current period. */
+  const pickPeriod = (period: number) => {
+    if (period === livePeriod) {
+      onWeek(null);
+      onSpan('matchup');
+    } else {
+      onWeek(period);
+    }
+    setBarOpen(false);
+  };
+  const at = onePeriod == null ? -1 : weeks.findIndex((w) => w.period === onePeriod);
+  const stepTo = (delta: -1 | 1) => {
+    const next = at < 0 ? undefined : weeks[at + delta];
+    return next ? () => pickPeriod(next.period) : null;
+  };
+  const face = rankFace(info, rankings);
 
-  /* What the span covers, **directly above the table** rather than beside
-     the strip that picks it. The strip is in the app's tab row now (see
-     `App`), and this is not a control: it is the table's caption, which is
-     where the research board keeps its own count line and for the same
-     reason — the sentence describes what is under it, so it belongs
-     against it rather than an inch away among the buttons.
-
-     **The `Projected` toggle has gone up there with the strip** and this
-     row is a caption again: what is left is the sentence and the one ⓘ
-     that explains a column of it. The sentence still names the lens
-     (`projected to Aug 23 · 5 days still to play`) whether or not the
-     button is beside it, which is what lets the control sit with the
-     other filters — and is what the full-page box keeps, the tab row
-     being covered there.
-
-     **It goes into the pane with the tools row** where there is a table, for
-     `paneChrome`'s reason: it is the last thing above the rows, so it is the
-     last thing that should still be on screen thirty rows down. Above the pane
-     where there is no table to caption, and above it in the expanded box, where
-     it *is* the chrome — see `.lg-rankings.is-expanded`. */
-  const caption = (
-    <div className="lg-span-detail">
-      {rankings.projected ? projectedDetail(info, rankings) : spanDetail(info)}
-      {/* **The one thing on this table a reader cannot work out by looking.**
-          Every other column is a figure and its standing, which explain
-          themselves; `BAT` and `PIT` are a figure this app *made up* out of
-          the ranks beside them, and a number nobody can derive from the page
-          is a number that needs a key. It is the app's own ⓘ rather than a
-          paragraph under the strip, for `InfoKey`'s stated reason: a key is
-          read once and then in the way. */}
-      <RankKey rankings={rankings} />
-    </div>
+  /**
+   * **Which weeks these numbers are, as the app's own date bar.**
+   *
+   * It was a caption — one muted line reading `Week 19 · Aug 10 – Aug 16 · so
+   * far`, with an ⓘ beside it — and a caption is a thing you read and cannot
+   * act on. The five named cuts of the season were a strip a tier above it, and
+   * between them they could not answer the commonest question a league table
+   * gets asked: *what did week 12 look like.* Nineteen weeks is not a strip, and
+   * a caption is not a control.
+   *
+   * So the row is `DateBar` outright — the same object the Roster's dates are
+   * and the same one the Scoreboard's week is now, folded in the JSX rather than
+   * restyled: two arrows that step a week, the two lines in the middle, and the
+   * league's own calendar behind a press of them. Everything a popover in this
+   * app owes — Escape undoing exactly this, an outside press spent on the
+   * closing, a measured cap on a list as long as the season — arrives with the
+   * component rather than being stated again here.
+   *
+   * **The list holds both kinds of thing**, because the bar has to be a whole
+   * control rather than half of one: the five spans first (they are the cuts a
+   * reader reaches for) and every week under them. The strip up in the tools row
+   * is the fast path to the five and lights whichever is in force — and lights
+   * nothing while a week is, which is honest rather than broken: the bar under
+   * it says what the table is of, in bigger type than the strip does.
+   *
+   * **The arrows step weeks and go off where there is no week to step from.**
+   * A span of several has no next one — `First half` is not a position in a run
+   * — so they dim rather than vanish, which is the rule the scoreboard's forward
+   * arrow already follows and for the same reason: a control that comes and goes
+   * is harder to aim at than one that dims, and its absence would say nothing
+   * about why.
+   */
+  const bar = (
+    <DateBar
+      reading={{ kind: 'label', lead: face.lead, range: face.range }}
+      /* Handed the span's own ends, which is what the face prints: these days
+         are ESPN's arithmetic over the league's calendar rather than a range
+         these arrows step through a day at a time. */
+      start={info?.start ?? ''}
+      end={info?.end ?? ''}
+      open={barOpen}
+      onToggle={() => setBarOpen((o) => !o)}
+      onClose={() => setBarOpen(false)}
+      onPrev={stepTo(-1)}
+      onNext={stepTo(1)}
+      prevTitle={onePeriod == null ? 'Pick a week to step through them' : 'The week before'}
+      nextTitle={onePeriod == null ? 'Pick a week to step through them' : 'The week after'}
+      popoverLabel="Pick a span or a week"
+      /**
+       * **Publish this bar's height**, which is what holds the table's header
+       * row directly under it rather than behind it.
+       *
+       * `DateBar`'s own rule for `measure` is that the app's bar passes it and
+       * nobody else does, because the property is the `top` a sticky header row
+       * is held at and there is one such table on screen at a time under one
+       * such bar. That is exactly this bar: the app's own is not drawn on the
+       * League view at all, and this one is the pane's chrome over the one wide
+       * table on it. Measured rather than declared for that rule's reason — the
+       * bar is a control height plus a line of text in a font this app does not
+       * choose, and 54 is not a number a stylesheet can know.
+       *
+       * The expanded box draws this bar *above* the pane, where the header row
+       * has nothing to clear — `.lg-rankings:not(.is-expanded) .league-scroll`
+       * is where that is answered, in one selector rather than a prop, exactly
+       * as `.summary-scroll.has-pane-chrome` answers it one view over.
+       */
+      measure
+      popover={
+        <PeriodPicker
+          groups={[
+            {
+              key: 'spans',
+              heading: 'Spans',
+              rows: rankings.spans.map((sp) => ({
+                key: sp.span,
+                label: sp.label,
+                detail: spanDetail(sp) || sp.label,
+                on: !rankings.week && sp.span === shown,
+                pick: () => {
+                  onWeek(null);
+                  onSpan(sp.span);
+                  setBarOpen(false);
+                },
+              })),
+            },
+            {
+              key: 'weeks',
+              heading: 'Weeks',
+              /* Newest first — the weeks a manager looks back at are the ones
+                 just behind the one being played, so ascending would put the
+                 common errand at the bottom of a scrolling list. */
+              rows: [...weeks].reverse().map((w) => ({
+                key: String(w.period),
+                label: `Week ${w.period}`,
+                detail: periodDays(w),
+                on: w.period === onePeriod,
+                pick: () => pickPeriod(w.period),
+              })),
+            },
+          ]}
+        />
+      }
+    />
   );
 
   const empty =
@@ -794,7 +982,7 @@ export default function LeagueRankings({
       <>
         {paneChrome}
         <div ref={fullRef} className="lg-rankings">
-          {caption}
+          {bar}
           {empty}
         </div>
       </>
@@ -803,12 +991,17 @@ export default function LeagueRankings({
 
   return (
     <div ref={fullRef} className={`lg-rankings${isFull ? ' is-expanded' : ''}`}>
-      {/* Expanded, the caption stands above the pane as it always has: that box
-          covers the app's chrome, so the sentence and its ⓘ are the whole of
-          what the table is read with, and a caption that scrolled away with the
-          rows would take the reader's only statement of what the span is with
-          it. The tools row is not drawn there at all — the box covers it. */}
-      {isFull && caption}
+      {/* Expanded, the bar stands above the pane as the caption always did:
+          that box covers the app's chrome, so this row is the whole of what the
+          table is read with, and one that scrolled away with the rows would
+          take the reader's only statement of which weeks these are with it. The
+          tools row is not drawn there at all — the box covers it.
+
+          **And in that mode the statement is also the control**, which the
+          caption could not be: an expanded table states its settings, and this
+          one now lets the reader change the one setting it states without
+          leaving the mode to do it. */}
+      {isFull && bar}
       <RankTable
         rankings={rankings}
         categories={rankings.categories}
@@ -819,7 +1012,7 @@ export default function LeagueRankings({
           isFull ? null : (
             <>
               {paneChrome}
-              {caption}
+              {bar}
             </>
           )
         }

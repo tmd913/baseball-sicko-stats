@@ -508,11 +508,16 @@ export const api = {
     span?: EspnRankSpan | null,
     refresh = false,
     projected = false,
+    /** One matchup week off the league's calendar, in place of the five named
+     *  spans — the tab's own bar. It wins over `span` on the server where it
+     *  names a period the schedule carries. */
+    period?: number | null,
   ): Promise<EspnRankings> {
     const q = new URLSearchParams();
-    if (span) q.set('span', span);
+    if (span && span !== 'week') q.set('span', span);
     if (refresh) q.set('refresh', '1');
     if (projected) q.set('projected', '1');
+    if (period != null) q.set('period', String(period));
     const qs = q.toString();
     return request(`/api/espn/rankings${qs ? `?${qs}` : ''}`);
   },

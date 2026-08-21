@@ -37,7 +37,7 @@
  * the page is on screen, quietly and only for what can still change
  * (`App.tsx::LEAGUE_POLL_MS`). See `docs/claude/client-league.md`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   EspnCategory,
@@ -56,7 +56,7 @@ import type {
   SeasonPlayer,
 } from '../types';
 import { LoadingBlock, SpinningBaseball } from './Loading';
-import { useDismissable, usePopoverFit } from '../hooks';
+import { DateBar } from './DateControls';
 import { prettyDate, wideRange } from '../lib';
 
 /** Re-exported: this view's own two neighbors import it from here, and the
@@ -633,12 +633,36 @@ export function ProjectedTools({
         {loading ? <SpinningBaseball size="sm" /> : <ProjectedGlyph />}
         <span className="lg-proj-label">Projected</span>
       </button>
-      <ProjectionKey
-        days={days ?? projection?.daysLeft ?? 0}
-        categories={categories}
-        className="lg-proj-key"
-        drop={drop}
-      />
+      {/* **The key is drawn while the lens is on and not otherwise**, which is
+          what `showing` is already the honest test for: it says the figures on
+          screen *are* the projection, rather than that the reader asked for one.
+
+          It was drawn whenever the button was, which put a second ⓘ in the row
+          permanently — on the Rankings tab, beside the one that explains
+          OVR/BAT/PIT, so a tab whose lens was off carried two keys and one of
+          them was four paragraphs about an arithmetic that was not being done.
+          A key is read once and then in the way (`InfoKey`'s own rule), and a
+          key for something that is not happening is in the way from the start.
+
+          **What a reader loses is nothing they had**: the button's own tooltip
+          says what pressing it will do (`Project every total to the end of the
+          week`), which is the question before the press, and the key answers the
+          question after it — *what is this made of* — where it now appears. On a
+          touch device there is no hover and so no tooltip at all, which is the
+          same for every button in this app and is why the label beside the glyph
+          keeps its word above 640px; the key arrives on the press either way.
+
+          `showing` rather than `projected` deliberately: a period the engine
+          declines comes back live with the button un-lit, and a key beside an
+          un-lit button would be the one thing on the row still claiming a lens. */}
+      {showing && (
+        <ProjectionKey
+          days={days ?? projection?.daysLeft ?? 0}
+          categories={categories}
+          className="lg-proj-key"
+          drop={drop}
+        />
+      )}
     </div>
   );
 }
@@ -651,117 +675,143 @@ function fmtPoints(p: number | null): string {
 
 
 /**
- * **The week the board is on, and the league's other weeks behind a press.**
+ * **One row of the picker a League date bar opens** — a week of the league's
+ * own calendar, or one of the Rankings tab's named cuts.
  *
- * Two things came together here, and they are one control because they are one
- * question.
- *
- * **It reads the way the roster's date face reads.** It printed `Week 19` in
- * 15px bold over `Aug 10 – Aug 19` in 12px muted — the qualifier large and the
- * days small — where the app's own date bar, four lines of chrome away on the
- * Roster and the Feed, prints the qualifier as small caps *above* days at 15px
- * bold. Two faces stating the same kind of fact in opposite orders. They are
- * the same object now: `.date-face` outright, with `.date-face-lead` carrying
- * `Week 19` and `.date-face-range` the days, and the days themselves through
- * `wideRange` rather than a second `prettyDate` pair — which is what buys the
- * weekday on a one-day span (`Mon, Aug 17`), the roster face's own rule and the
- * shape the first day of a live period takes here.
- *
- * **And the arrows are no longer the only way through the season.** ‹ and › step
- * one period, so week 3 from week 19 is sixteen presses and a reader who wants
- * *the week of the trade deadline* has no way to ask for it. The face opens the
- * league's own weeks as a list, each named and dated, and picking one calls the
- * very same `onPeriod` the arrows call — one door, not two mechanisms.
- *
- * **Newest first, deliberately.** The board opens on the week being played, and
- * the weeks a manager looks back at are the ones just behind it; ascending, the
- * live week is nineteen rows down a scrolling list and the common errand is the
- * expensive one. The selected week is scrolled into view on open regardless, so
- * a reader who has arrowed back to week 3 opens the list on week 3.
- *
- * **It dismisses like every other popover in this app** — `useDismissable`, so
- * Escape undoes exactly this and an outside press is spent on the closing
- * rather than also pressing what was behind it — and `usePopoverFit` caps it to
- * the room below, this being a list as long as the season.
+ * Both are the same object because both answer the same question: *which weeks
+ * are these numbers of.* A row states its name and the days it covers, in the
+ * two sizes the bar's own face states them in — a list whose rows read
+ * differently from the control that opened it is a list you have to translate.
  */
-function WeekFace({
-  board,
-  onPeriod,
+export interface PickRow {
+  key: string;
+  /** The upper, bolder half — `Week 12`, `First half`. */
+  label: string;
+  /** The days, or whatever stands in for them (`ESPN's own season line`). */
+  detail: string;
+  /** Whether this is what the bar is showing. Exactly one row across every
+   *  group is on, which is what the scroll below looks for. */
+  on: boolean;
+  pick: () => void;
+}
+
+/**
+ * **The list a League date bar opens**, in groups.
+ *
+ * The arrows step one period, so week 3 from week 19 is sixteen presses — and a
+ * reader who wants *the week of the trade deadline* cannot ask for it at all.
+ * This is the other door, and it is deliberately the same door: a row calls the
+ * very callback the arrow beside it calls, so there are two ways in and one
+ * mechanism.
+ *
+ * **Newest first**, which the caller orders rather than this: a board opens on
+ * the week being played and the weeks a manager looks back at are the ones just
+ * behind it, so ascending puts the live week nineteen rows down and makes the
+ * common errand the expensive one.
+ *
+ * **Groups, because the Rankings bar offers two kinds of thing** — the five
+ * named cuts of the season and the nineteen weeks it is made of. A caller with
+ * one kind (the Scoreboard, which offers weeks and nothing else) passes no
+ * heading at all: a single label over the whole of a list is a row spent saying
+ * nothing, which is the rule the Rankings table's own column groups already
+ * follow.
+ */
+export function PeriodPicker({
+  groups,
 }: {
-  board: EspnScoreboard;
-  onPeriod: (period: number) => void;
+  groups: { key: string; heading?: string; rows: PickRow[] }[];
 }) {
-  const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useDismissable(open, rootRef, close);
-  usePopoverFit(open, popRef);
 
-  /* Newest first — see the note above. Reversed here rather than on the wire:
-     the server publishes the schedule's own order, which is what `prevPeriod`
-     and `nextPeriod` are indexes into, and a list that arrived backwards would
-     be two orders for one fact. */
-  const weeks = useMemo(() => [...board.periods].reverse(), [board.periods]);
-
-  /* The week the reader is on, brought into view. Written as a `scrollTop`
-     rather than `scrollIntoView`, which scrolls *every* scrollable ancestor —
-     including the page — and would carry the board out from under a popover
-     that has only just opened. */
+  /* The row the bar is on, brought into view. Written as a `scrollTop` on the
+     popover itself rather than with `scrollIntoView`, which scrolls *every*
+     scrollable ancestor — including the page — and would carry the board out
+     from under a popover that has only just opened. It asks for
+     `.date-bar-pop` by name because that is the box `usePopoverFit` caps and so
+     the box that actually scrolls, rather than for a parent that happens to be
+     one today. */
   useEffect(() => {
-    if (!open) return;
-    const list = popRef.current;
-    const here = list?.querySelector<HTMLElement>('[aria-current="true"]');
+    const list = rootRef.current?.closest<HTMLElement>('.date-bar-pop');
+    const here = rootRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!list || !here) return;
     list.scrollTop = Math.max(0, here.offsetTop - list.clientHeight / 2 + here.offsetHeight / 2);
-  }, [open]);
-
-  /* Both lines are always filled, which is the rule that keeps the face one
-     height under the press that changes it. The days can genuinely be absent —
-     the period anchor is a read that can fail, and it costs the header its
-     dates and nothing else — so they fall back to the app's own no-value mark
-     rather than to an empty line. */
-  const dates = board.start && board.end ? wideRange(board.start, board.end) : '—';
+  }, []);
 
   return (
-    <div className="lg-period-face" ref={rootRef}>
-      <button
-        type="button"
-        className={`date-face${open ? ' active' : ''}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        disabled={board.periods.length === 0}
-        title={open ? 'Close the weeks' : 'Pick a week'}
-      >
-        <span className="date-face-lead">Week {board.matchupPeriod}</span>
-        <span className="date-face-range">{dates}</span>
-      </button>
-      {open && (
-        <div className="lg-week-pop" role="dialog" aria-label="Matchup weeks" ref={popRef}>
-          {weeks.map((w: EspnPeriodSpan) => (
-            <button
-              key={w.period}
-              type="button"
-              className={`lg-week${w.period === board.matchupPeriod ? ' on' : ''}`}
-              aria-current={w.period === board.matchupPeriod ? 'true' : undefined}
-              onClick={() => {
-                /* Exactly what the arrows do, through the same callback: the
-                   page lets go of the matchup it had open and reads the board
-                   for the period named. */
-                onPeriod(w.period);
-                setOpen(false);
-              }}
-            >
-              <span className="lg-week-n">Week {w.period}</span>
-              <span className="lg-week-dates">
-                {w.start && w.end ? wideRange(w.start, w.end) : '—'}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="lg-weeks" ref={rootRef}>
+      {groups
+        .filter((g) => g.rows.length > 0)
+        .map((g) => (
+          <div className="lg-week-group" key={g.key}>
+            {g.heading && <div className="lg-week-head">{g.heading}</div>}
+            {g.rows.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                className={`lg-week${r.on ? ' on' : ''}`}
+                aria-current={r.on ? 'true' : undefined}
+                /* The two halves in full, because the second one can
+                   ellipsize: `Playoffs — Week 19 · Aug 10 – Aug 21 · so far` is
+                   the longest a league can produce and wants 297px against the
+                   320 this panel has, so one row in twenty-four gives way at
+                   every width and four do at 320. An ellipsis with nothing
+                   behind it is a fact withheld. */
+                title={`${r.label} · ${r.detail}`}
+                onClick={r.pick}
+              >
+                <span className="lg-week-n">{r.label}</span>
+                <span className="lg-week-dates">{r.detail}</span>
+              </button>
+            ))}
+          </div>
+        ))}
     </div>
+  );
+}
+
+/**
+ * The days a period covers, in the words the bar's own face uses.
+ *
+ * `wideRange` rather than a second `prettyDate` pair, which is what buys the
+ * weekday on a one-day span (`Mon, Aug 17`) — the roster face's own rule and
+ * the shape the first day of a live period takes here. The dates can genuinely
+ * be absent: the period anchor is a read that can fail, and it costs a row its
+ * days and nothing else, so they fall back to the app's no-value mark rather
+ * than to an empty line.
+ */
+export function periodDays(p: { start: string | null; end: string | null }): string {
+  return p.start && p.end ? wideRange(p.start, p.end) : '—';
+}
+
+/**
+ * **The state tag, as a word on the bar's own lead line.**
+ *
+ * It was a pill at the right end of the period head (`.lg-state`), and the head
+ * is a full-width date bar now — three columns, an arrow at each end and the
+ * face centered on the bar, which is the shape every other statement of "which
+ * days these numbers are" in this app takes. There is no fourth cell for a
+ * pill, and reserving one either side to keep the face centered would have cost
+ * a 320px phone about a third of the middle column, where the days already run
+ * to 175px.
+ *
+ * So the tag rides where the roster's own face already carries a qualifier of
+ * exactly this kind — `SCHEDULE · WEEK 19` up there, `WEEK 19 · LIVE` here.
+ * It costs the bar no height and no width, and **it keeps its color**, which is
+ * the half that mattered: `Live` is a state and this app spends color on state,
+ * so the word takes `.lg-state-live`'s own green (and the matchup page's
+ * projected tag its accent) rather than a second definition of either. The pill
+ * itself is unchanged and still draws on the matchup page's head, which has a
+ * row to hold it.
+ */
+export function stateWord(kind: 'live' | 'final' | 'projected'): ReactNode {
+  if (kind === 'final') return ' · Final';
+  return (
+    <>
+      {' · '}
+      <span className={kind === 'live' ? 'lg-state-live' : 'lg-state-proj'}>
+        {kind === 'live' ? 'Live' : 'Projected'}
+      </span>
+    </>
   );
 }
 
@@ -782,6 +832,12 @@ function Scoreboard({
   onOpenMatchup: (id: number) => void;
 }) {
   const teamMap = useMemo(() => new Map(board.teams.map((t) => [t.id, t])), [board.teams]);
+  const [weeksOpen, setWeeksOpen] = useState(false);
+  /* Newest first — see `PeriodPicker`. Reversed here rather than on the wire:
+     the server publishes the schedule's own order, which is what `prevPeriod`
+     and `nextPeriod` are indexes into, and a list that arrived backwards would
+     be two orders for one fact. */
+  const weeks = useMemo(() => [...board.periods].reverse(), [board.periods]);
 
   /**
    * **The board draws the figures so far, and only those**, which is a
@@ -821,40 +877,76 @@ function Scoreboard({
    * week's total that stops on Tuesday is a total to date, and the header has to
    * say which days it is of.
    */
+  /* **The week reads as a full-width bar, which is what every other statement
+     of "which days these numbers are" in this app is.** It was a shrink-to-fit
+     cluster — two icon squares and a 172px face — sitting at the left end of an
+     800px card column with the `Live` tag beside it, so the one control that
+     says *which week the whole page is of* was the smallest thing above it.
+
+     It is `DateBar` outright now, in the JSX rather than restyled here, which
+     is the same fold `.date-face` already was one level down: the arrows are
+     the roster bar's own `.date-step`, the middle is its `.date-face`, and the
+     week list opens as its popover — so `useDismissable`, `usePopoverFit`, the
+     spent dismissing press and the measured cap all arrive with the component
+     rather than being stated a second time here. The `Live`/`Final` tag rides
+     on the face's lead line (see `stateWord`), there being no fourth column in
+     a three-column grid and no room for one on a phone. */
+  const dates = periodDays(board);
   return (
     <>
-      <div className="lg-head">
-        <div className="lg-period">
-          <button
-            type="button"
-            className="lg-nav"
-            disabled={board.prevPeriod == null}
-            onClick={() => board.prevPeriod != null && onPeriod(board.prevPeriod)}
-            aria-label="Previous matchup period"
-            title="Previous matchup period"
-          >
-            ‹
-          </button>
-          <WeekFace board={board} onPeriod={onPeriod} />
-          <button
-            type="button"
-            className="lg-nav"
-            disabled={board.nextPeriod == null}
-            onClick={() => board.nextPeriod != null && onPeriod(board.nextPeriod)}
-            aria-label="Next matchup period"
-            title="Next matchup period"
-          >
-            ›
-          </button>
-        </div>
-        {/* Live or Final, and nothing else: these figures are always the days
-            played so far, which is what the dates beside them are printed for.
-            `Projected` used to be a third value here and is the matchup page's
-            now — see the note above the board. */}
-        <span className={`lg-state${board.live ? ' lg-state-live' : ''}`}>
-          {board.live ? 'Live' : 'Final'}
-        </span>
-      </div>
+      <DateBar
+        reading={{
+          kind: 'label',
+          lead: (
+            <>
+              Week {board.matchupPeriod}
+              {stateWord(board.live ? 'live' : 'final')}
+            </>
+          ),
+          range: dates,
+        }}
+        /* The observed span, which is what the face prints — handed over rather
+           than derived, these days being ESPN's arithmetic and not a range this
+           bar's arrows step. */
+        start={board.start ?? ''}
+        end={board.end ?? ''}
+        open={weeksOpen}
+        onToggle={() => setWeeksOpen((o) => !o)}
+        onClose={() => setWeeksOpen(false)}
+        /* Disabled rather than hidden at the ends of the season — a control
+           that comes and goes is harder to aim at than one that dims, and ESPN
+           materialises no future matchup period at all, so the forward arrow is
+           off on the week being played and stays off until ESPN opens the next. */
+        onPrev={board.prevPeriod != null ? () => onPeriod(board.prevPeriod!) : null}
+        onNext={board.nextPeriod != null ? () => onPeriod(board.nextPeriod!) : null}
+        prevTitle="Previous matchup period"
+        nextTitle="Next matchup period"
+        popoverLabel="Pick a week"
+        popover={
+          <PeriodPicker
+            groups={[
+              {
+                key: 'weeks',
+                /* One group, so no heading: a single label over the whole of a
+                   list is a row spent saying nothing. */
+                rows: weeks.map((w) => ({
+                  key: String(w.period),
+                  label: `Week ${w.period}`,
+                  detail: periodDays(w),
+                  on: w.period === board.matchupPeriod,
+                  pick: () => {
+                    /* Exactly what the arrows do, through the same callback:
+                       the page lets go of the matchup it had open and reads the
+                       board for the period named. */
+                    onPeriod(w.period);
+                    setWeeksOpen(false);
+                  },
+                })),
+              },
+            ]}
+          />
+        }
+      />
 
       {board.format === 'unknown' ? (
         <div className="empty-state">
@@ -901,6 +993,10 @@ function Scoreboard({
   );
 }
 
+/** One stable empty list, so a board that has not landed does not hand the
+ *  Rankings tab a new array on every render. */
+const EMPTY_PERIODS: EspnPeriodSpan[] = [];
+
 /** Which of the three pages of this view is on screen. */
 export type LeagueTab = 'scoreboard' | 'rankings' | 'transactions';
 
@@ -938,6 +1034,8 @@ export default function LeagueView({
   onPeriod,
   rankings,
   rankSpan,
+  onRankSpan,
+  onRankWeek,
   rankingsLoading,
   rankingsError,
   transactions,
@@ -971,6 +1069,11 @@ export default function LeagueView({
   onPeriod: (period: number) => void;
   rankings: EspnRankings | null;
   rankSpan: EspnRankSpan;
+  /** The Rankings bar's two writes — which of the five cuts, and which week of
+   *  the league's own calendar. Threaded rather than held here: both are in the
+   *  URL, which is App's business. */
+  onRankSpan: (span: EspnRankSpan) => void;
+  onRankWeek: (period: number | null) => void;
   rankingsLoading: boolean;
   rankingsError: string | null;
   transactions: EspnTransactions | null;
@@ -1020,6 +1123,12 @@ export default function LeagueView({
         <LeagueRankings
           rankings={rankings}
           span={rankSpan}
+          /* The league's own weeks, off the board this tab already reads — see
+             `LeagueRankings`'s own note. Empty rather than null until it lands,
+             which costs the bar its weeks group and nothing else. */
+          weeks={board?.periods ?? EMPTY_PERIODS}
+          onSpan={onRankSpan}
+          onWeek={onRankWeek}
           loading={rankingsLoading}
           error={rankingsError}
           matchupTeams={matchupTeams}
