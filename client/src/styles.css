@@ -3685,14 +3685,35 @@ body {
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
+  /* **`visibility` as well as `pointer-events`**, and the second is not a belt
+     on the first's brace: `pointer-events: none` declines the finger and leaves
+     the button in the **tab order**, where `opacity: 0` hides it from the eye
+     and from nothing else. Driven on the how-to page, which renders two of these
+     and is a page a keyboard reader goes through in order — `focus()` on an
+     away float, then `document.activeElement === it`: **true** without this
+     line, at `opacity: 0`, and false with it. `visibility` is the one property
+     that takes a box out of the sequential focus order without unmounting it,
+     and not unmounting is the whole point of a fade.
+
+     The `0s linear 0.18s` delay is what makes it survivable: it holds the box
+     visible for the length of the fade out and then takes it in one step. The
+     way *in* has to be immediate instead, or the button spends its whole fade
+     invisible and pops in at the end of it — measured, 50ms after the class
+     lands: `opacity: 0.26` with `visibility: hidden`. `.visible` zeroes the
+     delay rather than restating the list, every other property in it having a
+     delay of 0 already. */
+  visibility: hidden;
   transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease,
-    color 0.18s ease, bottom 0.18s ease;
+    color 0.18s ease, bottom 0.18s ease, visibility 0s linear 0.18s;
   z-index: 20;
 }
 .float-btn.visible {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+  visibility: visible;
+  /* See the note above: this is `visibility`'s delay and nothing else's. */
+  transition-delay: 0s;
 }
 .float-btn:hover {
   border-color: var(--accent);
@@ -3703,7 +3724,14 @@ body {
   font-size: 20px;
   line-height: 1;
 }
-/* The back button is a pill in the bottom-left, not a circle in the right stack. */
+/* The back button is a pill in the bottom-left, not a circle in the right stack.
+   **And it has a user again.** It was written for the jump-back button the
+   how-to page's rewrite removed and stood here with none at all; the page that
+   removed it is the page that wanted it back, nine chapters being a long way
+   from the `Back` in its head. See `Tutorial.tsx::FloatControls`. The `Updating`
+   badge (`.float-badge`) claims the same corner out in the app, and the two
+   never meet: the how-to page is a fixed opaque box at z-index 60 over
+   everything the badge can float above. */
 .back-nav {
   left: 24px;
   right: auto;
@@ -3726,7 +3754,9 @@ body {
    over back-to-top, which is why that button's `bottom` is plain again. */
 @media (prefers-reduced-motion: reduce) {
   .float-btn {
-    transition: opacity 0.18s ease;
+    /* `visibility` keeps its delay here too — without it the box would vanish
+       on the first frame of a fade it is still in the middle of. */
+    transition: opacity 0.18s ease, visibility 0s linear 0.18s;
     transform: none;
   }
 }
@@ -12330,7 +12360,19 @@ button.start-line:focus-visible {
    rows, because the chapter strip is sticky and has to span the full width
    rather than sit inside a padded column. */
 .tutorial-view {
-  padding: 0 0 64px;
+  /* **Room at the foot for the two floating buttons** — the `↑` in the right
+     corner and the `Back` pill in the left — rather than letting them sit on
+     the last thing there is to read, which at the bottom of the scroll is the
+     `Got it` button. Both figures are written on this element at runtime by
+     `Tutorial.tsx::useFloatHeight`, read off the pill itself rather than
+     repeated from `.float-btn` above: its height, plus its inset twice, once
+     for the gap under it and once for the gap over it. Measured at 390, 46 + 48
+     = 94 against the flat 64px that was here before — 30px short, which left
+     the pill overlapping the `Got it` button by 6.08 and the two overlapping
+     sideways as well (24 → 113.47 against 81.75 → 308.23). The fallbacks are
+     what that measurement returns, and are here only for the frame before it
+     runs. */
+  padding: 0 0 calc(var(--tut-float-h, 46px) + var(--tut-float-inset, 24px) * 2);
   /* Above the player page: a `?help=1` link can land on top of an open details
      view, and closing the guide should reveal it rather than the other way
      round. */
