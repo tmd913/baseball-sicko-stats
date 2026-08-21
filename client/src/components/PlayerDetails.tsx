@@ -586,7 +586,7 @@ export function PlayerDetails({
    *  the same set the research board draws columns from, and in the same
    *  ascending order. Absent with no league or no history at all; a `change` of
    *  0 is a real answer and is drawn as a flat 0.0 rather than dropped. */
-  rosterTrends?: { window: number; days: number; change: number }[];
+  rosterTrends?: { window: number; days: number; change: number | null }[];
   /** Every position ESPN has him eligible at — `['2B', 'SS', 'OF']`, and here
    *  including `SP`/`RP`, which the research board's pills deliberately don't
    *  read (see `espnPositions` there). `undefined` with no league; `null` when
@@ -1425,14 +1425,30 @@ export function PlayerDetails({
                         <span
                           key={t.window}
                           className={`details-trend${
-                            t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
+                            t.change === null
+                              ? ''
+                              : t.change > 0
+                                ? ' up'
+                                : t.change < 0
+                                  ? ' down'
+                                  : ''
                           }`}
-                          title={`Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`}
+                          title={
+                            t.change === null
+                              ? `No reading over the last ${t.days} day${t.days === 1 ? '' : 's'} — two ESPN players share this name, so the figure stored that far back is the other one's`
+                              : `Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`
+                          }
                         >
                           <span className="details-trend-span">{t.days}d</span>
-                          {t.change === 0
-                            ? '0.0'
-                            : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
+                          {/* A dash, not a zero: this window has no reading for
+                              him at all, and `0.0` is a claim that he has not
+                              moved. Same vocabulary the board's own trend
+                              columns use for the same absence. */}
+                          {t.change === null
+                            ? '—'
+                            : t.change === 0
+                              ? '0.0'
+                              : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
                         </span>
                       ))}
                     </span>

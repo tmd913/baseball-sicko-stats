@@ -2904,7 +2904,7 @@ export default function App() {
     return ownership.trend.map((w) => ({
       window: w.window,
       days: w.days,
-      delta: new Map<number, number>(
+      delta: new Map<number, number | null>(
         Object.entries(w.delta).map(([id, d]) => [Number(id), d]),
       ),
     }));
@@ -2925,9 +2925,18 @@ export default function App() {
       // entry really is flat. A player with no roster % at all gets a null,
       // which the column dashes. Built key by key rather than with
       // `Object.fromEntries` so the window keys stay typed as windows.
+      //
+      // **`has` rather than `?? 0`**, because the map now carries a third
+      // answer: an id stored as `null` is one the server withheld, its baseline
+      // being another player's, and `?? 0` would have flattened that into the
+      // one claim it is not — that he has not moved. Absent is still flat.
       const rosterTrends: Partial<Record<TrendWindow, number | null>> = {};
       for (const w of rosterTrend ?? []) {
-        rosterTrends[w.window] = rosterPct?.has(r.id) ? w.delta.get(r.id) ?? 0 : null;
+        rosterTrends[w.window] = !rosterPct?.has(r.id)
+          ? null
+          : w.delta.has(r.id)
+            ? w.delta.get(r.id) ?? null
+            : 0;
       }
       return {
         ...r,
@@ -6612,7 +6621,12 @@ export default function App() {
               ? rosterTrend.map((w) => ({
                   window: w.window,
                   days: w.days,
-                  change: w.delta.get(detailsPlayer.id) ?? 0,
+                  // Absent is flat, an explicit `null` is withheld — the same
+                  // three-way reading the board's merge above makes, and for
+                  // the same reason.
+                  change: w.delta.has(detailsPlayer.id)
+                    ? w.delta.get(detailsPlayer.id) ?? null
+                    : 0,
                 }))
               : undefined
           }
