@@ -5,6 +5,7 @@ import type { PlayerGame, PlayerReport } from '../types';
 import { gameStatusView, prettyGameDate } from '../lib';
 import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { BackButton } from './BackButton';
+import { TabStrip } from './TabStrip';
 import { LoadingBlock } from './Loading';
 import { DialogLayerContext, DIALOG_LAYER } from './Modal';
 import { InningsList } from './Innings';
@@ -242,7 +243,14 @@ export function OutingPage({
               its own height, so an empty one draws a band around nothing and
               puts an empty `role="tablist"` in the accessibility tree. */}
           {tabs.length > 0 && (
-            <div className="details-tabs" role="tablist">
+            /* `TabStrip` rather than a bare `.details-tabs`, which is the same
+               fold this page already makes for its head: the strip is one
+               control and the player page draws it too, so the arrows and the
+               measured width arrive here without a line of their own. Four
+               labels fit the 860 column at every desktop width, so this page is
+               where the *no-arrows* half of that rule is exercised — and at
+               320px, where they do not, it is where the other half is. */
+            <TabStrip label="Outing sections">
               {tabs.map((t) => (
                 <button
                   key={t.key}
@@ -255,7 +263,7 @@ export function OutingPage({
                   {t.label}
                 </button>
               ))}
-            </div>
+            </TabStrip>
           )}
         </div>
 

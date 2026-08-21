@@ -23,11 +23,13 @@ import type {
   ScheduleWindow,
   SeasonArsenal,
   SeasonStats,
+  SplitCut,
   XwobaSeries,
 } from '../types';
 import { handCell, headshotUrl, isRotationStarter, savantPlayerUrl, statusCorner } from '../lib';
 import { MovementChart, PitchUsageChart } from './ArsenalCharts';
 import { RemoveButton } from './RemoveButton';
+import { TabStrip } from './TabStrip';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { LockMark } from './LockMark';
@@ -525,6 +527,8 @@ export function PlayerDetails({
   onStatsColumnsChange,
   showRanks,
   onShowRanksChange,
+  statsCut,
+  onStatsCutChange,
   rankPopulations,
   onNeedRankPopulations,
   onOpenDetails,
@@ -589,6 +593,12 @@ export function PlayerDetails({
    *  vocabulary. Held by App for the reason `statsColumns` is. */
   showRanks: boolean;
   onShowRanksChange: (on: boolean) => void;
+  /** **Which cut of the spans the Stats tab is showing**, or null for all of
+   *  them — `cut=` in the URL, since it is which data the table shows rather
+   *  than how it is read. Held by App for the reason `statsColumns` is, and
+   *  because a URL parameter has to outlive the overlay that draws it. */
+  statsCut: SplitCut | null;
+  onStatsCutChange: (cut: SplitCut | null) => void;
   /** The research board's rows per window for this kind, as far as App has
    *  them — the population those percentiles are ranked within. Passed through
    *  rather than fetched here, since App is where the board's own cache lives
@@ -793,6 +803,9 @@ export function PlayerDetails({
   const [windowsError, setWindowsError] = useState<string | null>(null);
   const [windowsLoading, setWindowsLoading] = useState(false);
   const windowsReq = useRef<string | null>(null);
+  /** Which read is the newest. A cut is a control that gets pressed again
+   *  before its answer is back, and only the newest may write these rows. */
+  const windowsSeq = useRef(0);
   // His news. Lazy on first open like the tabs below it — and, like the game
   // log, lazy for the **Overview** too, which previews the top three of the
   // same list. One read serves both, which is what stops the preview and the
@@ -1108,29 +1121,39 @@ export function PlayerDetails({
     );
   }, [wantStarts, tab, playerId]);
 
-  // The Stats tab's five window rows, lazily on first open.
+  // The Stats tab's five window rows, lazily on first open — and **again each
+  // time the reader picks a cut**, the cut being part of what was asked for.
+  //
+  // Two guards, and they answer different questions. The **ref** is the one
+  // every lazy read on this page carries: it is what stops the request being
+  // sent twice, and it is set to what was asked for rather than to a bare "yes"
+  // so that a *different* question re-asks. The **sequence number** is what
+  // decides whose answer may land — a cut is a control a reader presses twice
+  // in three seconds, and a slow `vs LHP` returning after a fast `Home` would
+  // otherwise write the wrong five rows under a lit pill. Neither is a cleanup
+  // flag: an effect teardown must never unmark a read in flight, which is the
+  // hang the percentile read above records.
   useEffect(() => {
-    const req = `${kind}-${playerId}`;
+    const req = `${kind}-${playerId}-${statsCut ?? 'all'}`;
     if (tab !== 'stats' || windowsReq.current === req) return;
     windowsReq.current = req;
+    const seq = ++windowsSeq.current;
     setWindowsLoading(true);
     setWindowsError(null);
-    // The ref decides whether the answer lands, never a cleanup flag — see the
-    // percentile read above, where the hang that rule is written for is set out.
-    api.playerWindows(playerId, kind).then(
+    api.playerWindows(playerId, kind, statsCut).then(
       (d) => {
-        if (windowsReq.current !== req) return;
+        if (windowsSeq.current !== seq) return;
         setWindows(d);
         setWindowsLoading(false);
       },
       (e: unknown) => {
-        if (windowsReq.current !== req) return;
+        if (windowsSeq.current !== seq) return;
         setWindowsError(e instanceof Error ? e.message : 'Failed to load');
         setWindowsLoading(false);
         windowsReq.current = null; // allow a retry on re-open
       },
     );
-  }, [tab, playerId, kind]);
+  }, [tab, playerId, kind, statsCut]);
 
   // Same lazy load for the Game Log tab — and for the **Overview**, which draws
   // the last five of its rows. One read serves both, which is the point of
@@ -1469,7 +1492,7 @@ export function PlayerDetails({
           </div>
         </div>
 
-        <div className="details-tabs" role="tablist" ref={tabsRef}>
+        <TabStrip label="Player sections" paneRef={tabsRef}>
           {/* First and default: what he is doing today, which is the question
               this page is opened with on a game day. The rest are readings of
               his season, and they run pictures-before-numbers — the percentile
@@ -1606,7 +1629,7 @@ export function PlayerDetails({
           >
             Charts
           </button>
-        </div>
+        </TabStrip>
       </div>
 
       {tab === 'overview' && dayWait && <LoadingBlock>Reading today&rsquo;s game</LoadingBlock>}
@@ -1721,7 +1744,16 @@ export function PlayerDetails({
           under it is the tab beside it now: the same season cut by handedness
           rather than by time, which is a different question and reads as a
           comparison rather than as a table. */}
-      {tab === 'stats' && windowsWait && <LoadingBlock>Reading the stat lines</LoadingBlock>}
+      {/* **A block wait only where there is nothing to show yet.** The first
+          open of this tab has no rows, so it gets the ball; a *cut* is a re-read
+          of a table already on screen, and the app's rule is that a pane with
+          rows in it is read quietly — the last answer stands while the next is
+          in flight, and the only mark is the `Updating` badge inside the control
+          that started it. Gated on `windows` rather than on the delayed flag, so
+          neither state can blank the other. */}
+      {tab === 'stats' && windowsWait && !windows && (
+        <LoadingBlock>Reading the stat lines</LoadingBlock>
+      )}
       {tab === 'stats' && windowsError && !windowsLoading && (
         <div className="details-status details-error">
           Couldn’t load stats: {windowsError}
@@ -1740,7 +1772,7 @@ export function PlayerDetails({
           header. The spans are written out in the first column and the columns
           are the app's own, so the sentence was telling a reader what they were
           already looking at, in the slot the control now uses. */}
-      {tab === 'stats' && windows && !windowsLoading && (
+      {tab === 'stats' && windows && (
         <PlayerWindowTable
           kind={kind}
           windows={windows.windows}
@@ -1750,6 +1782,13 @@ export function PlayerDetails({
           onShowRanksChange={onShowRanksChange}
           populations={rankPopulations}
           onNeedPopulations={onNeedRankPopulations}
+          /* Which cut is *asked for*, not which the rows on screen are: the
+             pressed pill lights at once and the badge beside it says the table
+             is catching up, which is the app's own answer to a control whose
+             answer takes a round trip. */
+          cut={statsCut}
+          onCutChange={onStatsCutChange}
+          updating={windowsLoading}
         />
       )}
 

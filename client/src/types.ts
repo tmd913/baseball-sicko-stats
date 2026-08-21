@@ -1110,7 +1110,32 @@ export interface PlayerWindows {
   season: number;
   kind: PlayerKind;
   windows: PlayerWindowRow[];
+  /**
+   * Which cut of the spans these rows are, or null/absent for all of them.
+   *
+   * On the wire so the answer says what it is an answer to: the table is
+   * re-read when the reader picks a cut, and a stale reply landing on a fresh
+   * one would otherwise be five rows of the wrong split with nothing to say so.
+   * The read is sequence-numbered as well — this is the belt to those braces.
+   */
+  cut?: SplitCut | null;
 }
+
+/**
+ * The four ways the Stats tab will cut a span.
+ *
+ * **The handedness pair names the *other* man's hand**, which is what a platoon
+ * split means on both boards: `vsr` reads as *vs RHP* on a batter's page and
+ * *vs RHB* on a pitcher's. One value rather than four, because the axis is the
+ * same one and the label is a fact about whose page it is — the same economy
+ * `PlatoonSplits` already makes.
+ *
+ * Mirrors `server/src/types.ts` by hand, like everything else in this file.
+ */
+export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
+
+/** In the order the control offers them: the hands, then the ballpark. */
+export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
 
 export interface ResearchRow {
   id: number;

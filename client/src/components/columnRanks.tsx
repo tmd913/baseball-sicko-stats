@@ -434,17 +434,30 @@ export function RanksButton({
   on,
   onToggle,
   population,
+  disabled = false,
 }: {
   on: boolean;
   onToggle: () => void;
   /** What a badge would be ranked against, for the tooltip. */
   population: string;
+  /**
+   * There is no population to rank against right now.
+   *
+   * The player page's Stats tab is the one caller: a **cut** of a span has no
+   * board behind it — Savant ranks whole spans, not spans against left-handers
+   * — so the toggle would be a control offering something the table cannot
+   * draw. Off and inert rather than absent, because a control that vanishes
+   * takes its own explanation with it; the caller wraps it in the element that
+   * carries the reason, a disabled button showing no `title` of its own.
+   */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`research-toggle${on ? ' on' : ''}`}
-      aria-pressed={on}
+      className={`research-toggle${on && !disabled ? ' on' : ''}`}
+      aria-pressed={on && !disabled}
+      disabled={disabled}
       onClick={onToggle}
       title={`Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`}
     >
