@@ -160,8 +160,38 @@ already bled and takes padding alone; the page takes a negative margin and the
 same padding back). A ground that is a fact about the container is what
 `--cell-bg` is this app's standing answer to, one box larger.
 
-**The token is `--bg`, and it was `--bg-2` — which is a dark-palette reading of
-a token that is not a dark-palette token.** On the four near-black schemes
+**And the token is `--page-bg`, which is the page's *gradient* and not a flat
+color at all — the third answer to this one question, and the first that is
+actually right.** `body` paints `radial-gradient(1200px 700px at 80% -10%,
+var(--page-glow) 0%, var(--bg) 55%)`, so **the page is not `--bg` where this
+band sits**: measured at 405 in Midnight, the 12px of page showing under the
+band on Research runs `rgb(13,22,38)` at the left to `rgb(16,26,47)` at the
+right, against `--bg`'s flat `rgb(11,18,32)`. A band painted `var(--bg)` is
+therefore a dark rectangle laid on a lighter page, and it shows exactly where a
+date bar does *not* follow to cover the gap — Research and the League view,
+which is where it was reported.
+
+The gradient is now a token (`--page-bg`) with three users — `body`, this row,
+and the pinned bar — and both chrome boxes take it with
+**`background-attachment: fixed`**, which is what makes it line up: the gradient
+resolves against the viewport rather than against the box, so it paints the
+pixel the body would have. `.app-chrome`'s own note records this technique from
+the other side — its first version did exactly this and was *invisible until
+something scrolled under it*, which is a fault for a bar that should announce
+itself and is the whole point for a band that should not.
+
+**Measured across the boundary rather than at two arbitrary points**, which is
+the test that took two goes to get right: comparing the band at y=120 to the
+page at y=203 measures the gradient's own vertical falloff, not a mismatch. The
+honest test is the last painted row of the band against the first row of page
+under it — at 405 in Midnight, **delta (0,−1,−1) at x=8 and (0,0,0) at x=396**
+on Research, and (−1,0,−1) and (0,0,0) on the League view. (The interior x
+positions read as a mismatch and are not: at those x the "band" row is a
+control's own fill.)
+
+**What it replaced, kept because the reasoning is the trap:** the token was
+`--bg`, and before that `--bg-2` — **a dark-palette reading of a token that is
+not a dark-palette token.** On the four near-black schemes
 `--bg-2` is a shade off the page (`#191a1b` against `#121314` on Dark), which is
 what "the band continues the chrome" was meant to buy. On the two light ones it
 is nothing of the kind: **Light's is `#d7d7dc` and Powder Blue's `#c7dcf1`**,
