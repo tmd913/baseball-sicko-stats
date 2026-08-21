@@ -6715,6 +6715,7 @@ button.start-line:focus-visible {
 .research-scroll > .view-tools,
 .research-scroll > .research-head,
 .research-scroll > .research-condensed-rail,
+.research-scroll > .research-sentinel,
 .research-scroll > .error-banner,
 .research-scroll > .empty-state {
   position: sticky;
@@ -10230,6 +10231,25 @@ button.start-line:focus-visible {
    given straight back, so it is a *position* in the flow and costs the pane
    nothing: `height: 0` is not reliably observable, and anything taller is a
    gap above the head. */
+/* **The mark the head's stickiness is read off**, and it takes `left: 0` from
+   the fold above while taking **no `top`** — which is the whole of what makes
+   it answer the right question.
+
+   `IntersectionObserver` tests *both axes*. Pinned only in flow, this 1px block
+   is 390px wide against a pane whose content is thousands, so scrolling
+   sideways carried it out of the root's box and the observer reported it gone —
+   indistinguishable from having scrolled *down*, and the condensed run appeared
+   at the top of an unscrolled board the moment the reader moved the columns.
+   Reported exactly so.
+
+   Sticky at `left: 0` it never leaves horizontally, and with no `top` it still
+   scrolls away vertically like anything else — so the observer is left with the
+   vertical question, which is the only one it was ever asked. A `rootMargin` of
+   some huge horizontal number would also have worked and is the version with a
+   magic number in it.
+
+   Zero height in effect — a pixel given straight back — so it is a position in
+   the flow and costs the pane nothing. */
 .research-sentinel {
   height: 1px;
   margin-bottom: -1px;

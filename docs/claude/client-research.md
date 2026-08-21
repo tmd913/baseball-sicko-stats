@@ -97,6 +97,22 @@ wide, the same answer the head and the count give. The two boxes held under it t
 token is `0px` whenever the rail is not drawn, so both are `top: 0` at rest by
 construction rather than by a second rule.
 
+**The sentinel is pinned sideways too, and for a subtler reason than the rail.**
+`IntersectionObserver` tests *both axes*. A 1px block 390px wide in a pane whose
+content is thousands leaves the root's box when the reader scrolls the columns —
+indistinguishable, to the observer, from having scrolled *down* — so the
+condensed run appeared at the top of an unscrolled board the moment the columns
+moved. Reported exactly so. It takes `left: 0` from the pane's fold and
+deliberately **no `top`**: pinned horizontally it never leaves that way, and
+with no `top` it still scrolls away vertically, which leaves the observer the
+one question it was ever asked. (A huge horizontal `rootMargin` answers the same
+way and is the version with a magic number in it.)
+
+Measured at 390 with the board at rest and the pane scrolled 200, 600 and 1200
+to the right: no rail, three rows, at every one. Scrolled down: rail. Scrolled
+down *and* across: rail still there. Back to the top with the pane still 800
+across: rail gone. The sentinel's own box reads `left: 0` throughout.
+
 **Measured at 390 and 1200, crossing in both directions:** `scrollTop` is never
 rewritten (set 162 → 162, set 154 → 154), the head is **37px in both states**,
 and the first row moves only the 8px the reader scrolled — 192 → 184 up, 184 →
