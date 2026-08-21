@@ -318,6 +318,14 @@
      `.app`'s own padding, the pinned chrome's negative bleed back out through
      it, and the three wide tables', which do the same. */
   --app-gutter: 22px;
+  /* **The date bar's own side padding**, and a token because two rows read it:
+     the bar re-pads by it after bleeding through its container's gutter, and
+     the tools row above it re-pads by the same number so the two land on one
+     inner edge. It was a bare `10px` in `.date-bar` and the buttons above were
+     inset by the container's gutter instead, which put the readings run 12px
+     narrower than the control stating the days — measured 346 against 370 at
+     390, and 1156 against 1180 at 1200, on all three pages that draw both. */
+  --bar-pad: 10px;
   /* The headshot circle in a table row, and one definition because the research
      board's pinned name column is offset by *this number plus its two gutters*
      — an arithmetic that sat in the stylesheet as a hardcoded `63px` and would
@@ -6265,6 +6273,20 @@ button.start-line:focus-visible {
 .tool-scroll {
   flex: 1 1 100%;
   min-width: 0;
+  /* **The same inner edge as the bar under it.** `.view-tools` bleeds out
+     through its container's gutter and re-pads by the whole of it
+     (`padding-inline: var(--table-bleed)`), where the bar re-pads by its own
+     `--bar-pad` — so the two rows were landing 12px apart and the readings run
+     was narrower than the control stating the days. This takes the difference
+     back: out through the row's re-pad, in by the bar's.
+
+     Written against `--table-bleed` rather than a number because the number
+     differs per box and the bar already tracks it — `.app` at 22, the player
+     overlay at 16, the full-page box at 12 — and in each the arithmetic lands
+     on the bar's own 10: 10−22 = −12 off 22, 10−16 = −6 off 16, 10−12 = −2 off
+     12. One declaration answers all three, which is the whole reason
+     `--table-bleed` is a token. */
+  margin-inline: calc(var(--bar-pad) - var(--table-bleed, 0px));
   position: relative;
   display: flex;
   align-items: center;
@@ -6477,7 +6499,7 @@ button.start-line:focus-visible {
      a centered card column rather than the width of the overlay. Default 0, so
      a box that says nothing gets a bar that respects its padding. */
   margin-inline: calc(-1 * var(--bar-bleed, 0px));
-  padding: 7px 10px;
+  padding: 7px var(--bar-pad);
   /* The seam between the tabs and the dates. The chrome closes itself with a
      hairline of its own below, so this is the only one the bar declares. */
   border-top: 1px solid var(--border);

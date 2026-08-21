@@ -203,6 +203,25 @@ overflow goes both ways and `scrollLeft` cannot go negative, so the first
 control becomes unreachable. An auto margin centers the run while it fits and
 collapses the moment it does not.
 
+**The run lands on the bar's inner edge, not the row's.** `.view-tools` bleeds
+out through its container's gutter and re-pads by the whole of it
+(`padding-inline: var(--table-bleed)`), where `.date-bar` re-pads by its own
+`--bar-pad` — so the readings sat **12px narrower on each side than the control
+stating the days**, which is a band whose two rows do not line up. `.tool-scroll`
+takes the difference back with
+`margin-inline: calc(var(--bar-pad) - var(--table-bleed, 0px))`.
+
+Against `--table-bleed` rather than a number, because the number differs per box
+and the bar already tracks it: `.app` at 22, the player overlay at 16, the
+full-page box at 12, and in each the arithmetic lands on the bar's own 10
+(10−22 = −12, 10−16 = −6, 10−12 = −2). One declaration answers all three, which
+is what the token is for. `--bar-pad` is a token for the same reason — it was a
+bare `10px` in `.date-bar`, and two rows now read it.
+
+Measured after, on all three pages at 320 / 390 / 1200, the readings run and the
+bar's own row are **identical**: x=10 and 300 wide, x=10 and 370, x=10 and 1180.
+Before, the run was 300 → 276, 370 → 346 and 1180 → 1156.
+
 **Measured on the live app, before → after, at 320 and 390:**
 
 | | label widths | row height |
