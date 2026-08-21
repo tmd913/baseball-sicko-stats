@@ -223,6 +223,48 @@ and at 390 and 320 the calendar is 260 × 318 at x=65 and x=30, centered on the 
 
 Nothing else is restated. The face keeps its fill, radius, two lines and `min-width` floor; it loses the hover tint (the `@media (hover: hover)` rule is now `.date-bar:not(.date-bar-fixed) .date-face:hover`, because a `<div>` has no `:disabled` to lean on) and the pointer cursor, and it loses those by being a `<div>` rather than by a rule about what it says.
 
+#### And where the days are somebody else's arithmetic, the bar is handed both lines
+
+**`{ kind: 'label' }` on `DateBarReading`**, and it exists for the **League
+view's two bars** — the Scoreboard's week and the Rankings tab's span, which
+both became this bar rather than keeping controls of their own shape (see
+**Client — the League view** and **Client — the League Rankings tab**).
+
+The other four readings turn `start`/`end` into their two lines inside
+`dateBarFace`, which is the whole reason that function exists: one place, so the
+roster and a team page cannot come to word the same state differently. A league
+week is not that shape. Which days `Week 12` covers is **ESPN's** answer and
+arrives on the wire already dated, off the league's own calendar rather than off
+a run of sevens — a matchup period covers 12 scoring days at the start of the
+season and 10 in a playoff round. And the lead carries a *state* beside the name
+that no range can be read off: `WEEK 19 · LIVE`, `WEEK 19 · PROJECTED`.
+
+So this reading hands both lines over whole, and `dateBarFace` returns them
+untouched ahead of everything else. **`lead` is a `ReactNode` rather than a
+string**, for exactly one reason and it is worth naming: the state word is
+colored — `Live` in `--hit`, `Projected` in `--accent` — which is the app's rule
+that color is spent on state, and a string cannot carry half a line of it. The
+callers still pass `start`/`end` (the span's own ends), which the bar does not
+read in this reading and which keep the prop honest about what the bar is
+about.
+
+**Nothing else changes shape.** Both callers hand over a `popover` — the
+league's own weeks as a list — so they take `useDismissable`, `usePopoverFit`'s
+measured `--popover-max-h`, the centered `.date-bar-pop` anchor and the spent
+dismissing press exactly as the Feed's calendar does. Measured at 1200 the
+Scoreboard's list opens **260 × 604 at x=470** (centered on the bar, as the
+calendar is), and at 320 it is **260 × 525 at x=30** with 324px of scroll inside
+it and 0 page-body overflow.
+
+**And `measure` gained a second caller, which is that flag's own rule rather
+than an exception to it.** `--date-bar-h` is the `top` a sticky header row is
+held at, and the rule is that there is one such table on screen at a time under
+one such bar. The Rankings tab is exactly that — the app's own bar is not drawn
+on the League view at all, and that tab's bar is the pane's chrome over the one
+wide table on it — so it passes `measure` and the table's header row sticks
+below it. Measured, `thead.top − bar.bottom` is **0.00px at 320, 390, 1200 and
+1920**. The Scoreboard's bar does not: nothing sticks under it.
+
 #### What this replaced (kept for the history)
 
 The two paragraphs below are the button's own argument, left as written. The

@@ -1087,6 +1087,258 @@ over the wire, and that figure carries the two spinner fixes below as well as
 this. Through the route, the response goes **12,206 → 12,240 bytes**, which is
 the four new fields.
 
+### The span is a full-width date bar, and it goes to a single week
+
+**The caption could be read and could not be pressed, and between it and the
+strip a tier above there was no way to ask the commonest question a league table
+gets asked: *what did week 12 look like.***
+
+What was there: a muted line directly over the table reading `Week 19 · Aug 10 –
+Aug 16 · so far`, with the ⓘ that explains `OVR`/`BAT`/`PIT` beside it; and, up
+in the tools row, five pills naming five *cuts* of the season. Both are argued
+above and both arguments hold as far as they go. What neither reaches is one
+week of the nineteen — the strip cannot hold nineteen pills, and the caption is
+a sentence.
+
+**The row is `DateBar` now** — the app's own bar, folded in the JSX rather than
+restyled, and the same object the Scoreboard's week became in the same breath
+(see **Client — the League view**, *The week is a full-width bar*). Two arrows
+that step a week, the two lines in the middle, and the league's own calendar
+behind a press of them.
+
+**The two lines are the caption split in two**, not a second wording of it. A
+date bar states the *kind* of days above and the days themselves below, so the
+weeks go up and the days come down:
+
+| span | lead | range |
+| --- | --- | --- |
+| `matchup` | `CURRENT MATCHUP · WEEK 19` | `Aug 10 – Aug 21 · so far` |
+| a picked week | `WEEK 12` | `Jun 15 – Jun 21` |
+| `season` | `SEASON` | `ESPN's own season line` |
+| `first` | `FIRST HALF · WEEKS 1–9` | `Mar 25 – May 31` |
+| projected | `WEEK 19 · PROJECTED` | `to Aug 23 · 3 days still to play` |
+
+`so far` and the projected pair are exactly the caption's, for the caption's own
+reasons — a span reaching into the week being played is a total to date, and a
+table of guesses under `so far` would be a lie. `projectedDetail` is gone with
+the caption it wrote; `rankFace` is where its argument lives now. The
+`PROJECTED` word takes `.lg-state-proj`'s accent, the app's rule that color is
+spent on state, and is the same word the matchup page's own tag carries.
+
+**The list holds two groups**, because the bar has to be a whole control rather
+than half of one: `SPANS` — the five, straight off `rankings.spans`, so a league
+with no halves is offered none — and `WEEKS`, every matchup period the schedule
+carries, newest first. The strip up in the tools row stays as the fast path to
+the five and is not made redundant by it: one door, two ways in, which is the
+rule the Scoreboard's own week list already follows.
+
+**The weeks cost no request.** They come off the **scoreboard**, which this tab
+already reads because its rows are doors into it (*A Rankings row opens that
+team's matchup*), threaded down from App. Empty until the board lands, which
+costs the bar its weeks group and nothing else — the five spans are on the
+rankings response and are in the list from the first frame.
+
+**The arrows step a week and go off where there is no week to step from.**
+`First half` is not a position in a run, so over a multi-week span both dim
+rather than vanish — the rule the scoreboard's forward arrow already follows,
+and for its reason: a control that comes and goes is harder to aim at than one
+that dims, and its absence would say nothing about why. Their tooltip in that
+state names the way out (`Pick a week to step through them`).
+
+### `lwk=`, and why it is a fourth League param
+
+In the URL by the rule `lspan=` follows one line up: it decides what data is on
+screen, so a link that leaves it out describes a different table.
+
+**A fourth param rather than a sixth value of `lspan=`.** That one names one of
+five *cuts*, each of which is a **rule** — `Current matchup` is the week being
+played, on the recipient's own today — where a week is a number. One param
+carrying both would be a strip with a value it cannot draw, and it is the app's
+own trap (two things in one param) read the other way round. None of the others
+can collide: `preset`, `start`, `end`, `player`, `view`, `kind`, `sim`,
+`hideil`, `starters`, `sched`, `plays`, `newplays`, `roster`, `pos`, `cols`,
+`inc`, `scope`, `watch`, `win`, `help`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`,
+`proj`, `rproj`, `rankproj`, `league`.
+
+**A week is a range and is honestly one**, which is where it parts from a date
+preset: `Week 12` is a fact about the league's calendar rather than a rule about
+today, so freezing it in a link is what a link to it *means*. The one period
+that is both — the week being played — **normalizes away**: picking it off the
+list selects `Current matchup` and drops `lwk`, which is the same normalization
+`mp=` makes by being absent on the current period, and it is what keeps a shared
+link from freezing this week. Driven from `?lwk=5`, picking `Week 19` off the
+list gave `?view=league&lt=rankings` with the bar reading `CURRENT MATCHUP ·
+WEEK 19`.
+
+**The two are alternatives and exactly one is ever in a link**: `lspan=` drops
+out while `lwk=` is set, and pressing any of the five pills clears the week
+(`pickRankSpan`, written once so the pills and the phone `<select>` cannot come
+to disagree). Driven at 1200: `Week 12` → `&lwk=12`, `‹` → `&lwk=11`, `›` →
+`&lwk=12`, `Season` → `&lspan=season` with `lwk` gone, `Current matchup` → both
+gone.
+
+**Nothing in the strip is lit while a week is in force**, and that is the honest
+reading rather than a hole: the reader has stepped off the five named cuts, and
+the bar directly under the strip says in 15px type which week they are on.
+Lighting `Current matchup` for `Week 12` would be the strip claiming a table
+that is not on screen. On a phone the strip is a `<select>`, which must have a
+value, so the week takes an option of its own at the head of the list — the same
+statement in the only form that control can make it.
+
+**It is read off the response, not off the request**, and that was found by
+driving it. `?lwk=999` names a period this league's schedule has never carried;
+the server answers with the span beside it (an unrecognized value falls back
+rather than emptying the view, and the URL keeps what it was handed), and a
+strip reading `rankWeek` then lit nothing over a table that was plainly
+`Current matchup`. Both the strip and the bar read `rankings.week`, so what is
+on screen is what they describe — and both lag a press by the read, exactly as
+the figures do, which is rule 1 rather than a cost. Measured: `?lwk=999` opens
+on `CURRENT MATCHUP · WEEK 19` with `Current matchup` lit and `lwk=999` still in
+the URL.
+
+**It is not put away with the tab** the way the two lenses are: which weeks a
+reader is looking at is *data* rather than a lens, and it is remembered exactly
+as `lspan=` is.
+
+**A picked week is never `projectable`** — it is a settled one by construction,
+the live one being `matchup` — so the `Projected` toggle is absent there and
+`rankproj=1` is not written beside `lwk=`. It is not polled either, for the
+reason a settled scoreboard week is not: a request a minute to be told a fact.
+
+### The week's figures are ESPN's own, checked against the board
+
+`getRankings` gained a `period` argument; when it names a matchup period the
+schedule carries and it is not the live one, `asked` becomes the sixth span
+`week` and the values are `getSpanTotals(creds, [period], frozen: true, null)` —
+which is the `matchup` branch with one period substituted and no live day added,
+that day belonging to the week being played. Frozen, so a settled week goes to a
+blob and is read back with no freshness test: stepping back through a season
+costs one read a week and then nothing.
+
+**Checked cell by cell against the scoreboard for the same week.** Every team's
+figure in `/api/espn/rankings?period=12` equals that team's own `scores` entry in
+`/api/espn/scoreboard?period=12`: **120 of 120 cells, 0 mismatches**, 12 rows, 10
+categories.
+
+**And the ranks genuinely move**, which is the reading that matters — measured
+on the live 12-team league, `Brian&Tom's Excellent Adventure`:
+
+| span | R | HR | RBI | SB | `OVR` |
+| --- | --- | --- | --- | --- | --- |
+| Current matchup | 56 (1st) | 14 (4th) | 45 (5th) | 6 (5th) | 78, **3rd** |
+| First half | 359 (2nd) | 94 (4th) | 329 (4th) | 39 (4th) | 69, **7th** |
+| **Week 12** | 29 (9th) | 6 (9th) | 30 (9th) | 3 (9th) | 50, **10th** |
+
+and the table re-sorts under it: the top row over the current matchup is
+`Brian&Tom's Excellent Adventure` and over week 12 is `Baldy's Bozos`.
+
+### The two ⓘs are in the tools row, and the projection's shows only while the lens is on
+
+**Two changes to two keys, and they answer opposite complaints.**
+
+**`RankKey` — the one that explains `OVR`, `BAT` and `PIT` — moved up into the
+tools row.** It stood in the table's caption row, which was the right place for
+a caption's ⓘ; that row is a *control* now, three columns wide with an arrow at
+each end, and a fourth thing in it would either break the centering the grid
+exists for or take a third of the middle column on a 320px phone, where the days
+already want 175px. Up there it sits beside the projection's own key, which is
+where a key belongs: both are read once and then in the way, and both explain a
+*reading* of the table rather than captioning it.
+
+Its anchor moved with it and the trick is unchanged — `.lg-rank-key` is
+`position: static` so the panel hangs off a **row** rather than off a 30px
+button, and the row is now `.view-tools`, which declares `position: relative`
+for exactly this. That matters more up here than it did down there: the button
+sits *after* two tab strips, at x≈235 on a 390px screen, so a 320px panel
+anchored to it would put half of itself off the edge. Measured open: the panel
+is **276 × 259 at x=0** in a 320 window and **320 × 241 at x=0** at 390, on
+screen at both, and `elementFromPoint` 40px into it returns a `<P>` of the panel
+rather than a table cell. `.lg-proj-key` beside it still opens the other way
+(`right: 0`, measured **320 × 572 at x=880** in a 1200 window), deliberately:
+two 320px panels opening from the same edge would be one panel's worth of screen
+shared by two.
+
+**`ProjectionKey` is drawn only while the lens is actually in force.** It was
+drawn whenever the button was, so a tab whose lens was off carried two ⓘs and
+one of them was four paragraphs about an arithmetic that was not being done. A
+key is read once and then in the way — `InfoKey`'s own rule — and a key for
+something that is not happening is in the way from the start.
+
+The test is **`showing`** rather than `projected`, deliberately: a period the
+engine declines comes back live with the button un-lit, and a key beside an
+un-lit button would be the one thing on the row still claiming a lens. What a
+reader loses is nothing they had — the button's own `title` says what pressing
+it will do (`Project every total to the end of the week`), which is the question
+*before* the press, and the key answers the question after it. **On a touch
+device there is no hover and so no `title` at all**, which is true of every
+button in this app and is why the word `Projected` stays beside the glyph above
+640px; the key arrives on the press either way. It is `ProjectedTools`' rule
+rather than this tab's, so the matchup page's copy of the control follows it —
+one control, one behavior, which is the whole reason that component exists.
+
+Measured at 1200: `.lg-proj-key` count is **0** with the lens off and **1** with
+it on, and a press puts the caption to `WEEK 19 · PROJECTED` over `to Aug 23 · 3
+days still to play` with a row's first four cells going `99 1st · 51 1st · 55
+2nd · 22 1st` → **`103 1st · 50 1st · 73 2nd · 28 1st`**.
+
+### What the bar cost the pane, and the seam it opened
+
+The row is inside `.league-scroll` where the caption was, and it **sticks** where
+the caption did not — a caption is a thing you read on the way past, a bar is
+where the reader goes to change the week. Measured at 1200×900, before → after:
+
+| | before | after |
+| --- | --- | --- |
+| `.app-chrome` | 102 | 102 |
+| `.view-tools` | y 102, h **50** | y 102, h **96** |
+| the row | caption, y 166, h **40** | bar, y 198, h **54** |
+| `thead` | y 206 | y 252 |
+| `.league-scroll` | y 102, h 784 | y 102, h 784 |
+| table | 1463px, row 62 | 1463px, row 62 |
+
+At 320 / 390 / 768 the tools row was already wrapped and is **96–98 either way**,
+so the header row moves down by **2px** there against 46 at 1024 and up. Page
+overflow is **0** at every width, at rest and scrolled to both ends.
+
+**And the header row had to be told what it sticks below.** `.league-table thead
+th` carried a literal `top: 0`, with a note above it reading *"the head is one
+row again, so it pins at the top of the pane with no offset to declare"* — true
+while the only thing above it in the pane was a caption, which does not stick
+vertically at all. With a bar there it put the headings **behind** it: measured
+at 1200 scrolled 400 down, the bar held at y=102 and the header row at **99**, a
+whole row of labels reading through the strip that names the span.
+
+`--pane-bar-h`, off the bar's own **measured** height, is the app's name for
+this and is what the summary table and the research board each stick below one
+view over. `measure` on this bar is `DateBar`'s own rule honored rather than
+broken — *the property is the `top` a sticky header row is held at, and there is
+one such table on screen at a time under one such bar* — and this is that bar,
+the app's own not being drawn on the League view at all. It is 0 in the expanded
+box, where the bar is above the pane;
+`.lg-rankings:not(.is-expanded) .league-scroll` is where that is answered, in one
+selector rather than a prop, exactly as `.summary-scroll.has-pane-chrome`
+answers it. Measured after, `thead.top − bar.bottom` is **0.00px at 320, 390,
+1200 and 1920**, at rest and scrolled to the end of both axes.
+
+**Expanded, the statement is also the control.** The full-page box keeps this
+row exactly as it kept the caption (`.lg-rankings.is-expanded > .date-bar`), and
+what it gains is that the one setting an expanded table states can now be
+changed without leaving the mode to change it — a widening of *an expanded table
+states its settings* rather than a breach of it, what that rule forbids being a
+table whose settings are off-screen. `flex: none` on it is load-bearing rather
+than tidy: `.date-bar` carries `flex: 1 1 100%` for the wrapping rows it usually
+sits in, and this box is a **column** flex container where that basis is 100% of
+the *height*. Driven at 1200×900: expanded, the bar is 1176 × 54 at (12, 10) with
+`thead` at 75; the list opens inside the box (260 × 816 at x=470, 24 rows, 0
+overflow); and **Escape unwinds one rung per press** — the list first, the box
+second, `[inert]` back to 0.
+
+**Bundle: 602.01 → 603.62 KB of JS** (179.02 → 179.67 gzipped) and **160.24 →
+159.27 KB of CSS** (28.63 → 28.47) — the JS up 1.6KB raw and 0.65 over the wire
+for a bar, a picker, a span and the paragraphs above, and the **CSS down 0.97KB
+raw and 0.16 over the wire**, four rules of the Scoreboard's own head and the
+whole of `.lg-span-detail` having been deleted rather than folded.
+
 ### The table opens on `OVR`, best first
 
 **It opened on the league standing** — `{ kind: 'team' }`, ESPN's own seed — and
