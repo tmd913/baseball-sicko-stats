@@ -647,6 +647,100 @@ function matchPlayer(
   );
 }
 
+// ---- Two ESPN rows, one MLB player ----------------------------------------
+//
+// **`matchMlbPlayer` declines an ambiguity among the *answers*. It cannot see
+// an ambiguity among the *askers*, and that is where Will Smith was lost.**
+//
+// The season's major-league list holds exactly one Will Smith — the Dodgers'
+// catcher, 669257 — so `byName` has one candidate under `will smith` and the
+// function returns it on its first line, before the club test is ever reached.
+// ESPN's own list holds **two**: the catcher (38309, LAD, eligible at C, 64.25%
+// owned) and a free-agent left-hander of the same name (31549, no club,
+// eligible at RP, 0.02%). Both ask the index the same question, both are handed
+// the catcher, and the pool loop writes `pct`, `eligible` and `slots` under
+// 669257 twice — so the **later row wins** and the catcher's board cell read
+// `0.0%` with an `RP` pill over it.
+//
+// It is not one player. Measured over the 3,927-row pool against the 2026
+// index: **8 MLB ids are claimed by two ESPN rows each**, and **4 of the 8
+// currently answer with the wrong man** — Will Smith (0.02 for 64.25), Fernando
+// Cruz (a Cubs infielder's 0.01 and `2B/SS` for the Yankees' reliever, which is
+// the very row `docs/claude/espn-players.md` records as "the name-and-club join
+// having found the wrong man"), Victor Mesa Jr. (0 for 0.26) and Yunior Marte
+// (`SP` for `RP`). The other four happen to be listed in an order that puts the
+// right man last, which is not a property anybody should be relying on.
+//
+// **So the contest is decided on evidence, in the order this file already
+// decides everything: the club, then what he plays, then null.** Neither test
+// is new and neither is a tie-break — a tie-break would pick a winner where
+// there is no reason to prefer one, and this returns null there instead.
+
+/** ESPN's three pitching slots — `P`, `SP`, `RP`. Everything from `C` (0) to
+ *  `UTIL` (12), plus the middle-infield group (19), is a place a batter
+ *  stands; `BE` (16) and `IL` (17) are where either of them sits and say
+ *  nothing. */
+const PITCHING_SLOTS = new Set([13, 14, 15]);
+
+/**
+ * Which board an ESPN row's own `eligibleSlots` puts him on — the second test,
+ * and the same `PlayerKind` vocabulary `IndexEntry.kinds` is written in so the
+ * two can be compared directly.
+ *
+ * Measured across all 3,927 rows of the pool: **not one carries no kind at
+ * all**, and 8 carry both (the two-way players, whose index entry says
+ * `['batter','pitcher']` and so intersects either way).
+ */
+function slotKinds(slots: number[] | undefined): PlayerKind[] {
+  let pitcher = false;
+  let batter = false;
+  for (const slot of slots ?? []) {
+    if (PITCHING_SLOTS.has(slot)) pitcher = true;
+    else if ((slot >= 0 && slot <= 12) || slot === 19) batter = true;
+  }
+  const kinds: PlayerKind[] = [];
+  if (batter) kinds.push('batter');
+  if (pitcher) kinds.push('pitcher');
+  return kinds;
+}
+
+/**
+ * Which of several ESPN rows claiming one MLB player is actually him, or null
+ * where nothing decides it.
+ *
+ * **The club first**, exactly as `matchMlbPlayer` does it: the row whose
+ * `proTeamId` maps to the club MLB has him on. It resolves **all 8** of the
+ * contested ids on the live pool, Will Smith among them — 38309 is on ESPN's
+ * team 19, which is MLB's 119, which is where MLB has 669257.
+ *
+ * **Then what he plays**, which is a genuinely independent test rather than a
+ * fallback in name only: driven with the club test disabled, it resolves **4 of
+ * the 8** on its own (Will Smith, Edwin Díaz, Fernando Cruz and Carlos
+ * Rodriguez — the pairs that are a batter against a pitcher), and it picks the
+ * **same row the club test does in all 4**, 0 disagreements. It earns its place
+ * on the case the club cannot answer: two rows both off-club is exactly the
+ * morning-after-a-trade shape the name-only fallback above exists for, and a
+ * catcher is still not a reliever.
+ *
+ * **Then null.** Two rows on the same club playing the same side of the ball is
+ * an ambiguity neither test resolves, and this file's rule is that such a man
+ * is left unmatched rather than guessed at. 0 of the 8 reach it today; the
+ * cost when one does is a dash in one column, which is what a dash is for.
+ */
+function claimant<T extends { proTeamId?: number; eligibleSlots?: number[] }>(
+  entry: IndexEntry,
+  rows: T[],
+): T | null {
+  const onClub = rows.filter(
+    (r) => r.proTeamId !== undefined && ESPN_TO_MLB_TEAM[r.proTeamId] === entry.teamId,
+  );
+  if (onClub.length === 1) return onClub[0];
+  const onKind = rows.filter((r) =>
+    slotKinds(r.eligibleSlots).some((k) => entry.kinds.includes(k)),
+  );
+  return onKind.length === 1 ? onKind[0] : null;
+}
+
 // ---- The season-wide player pool: roster % and eligibility ---------------
 
 /**
@@ -686,6 +780,41 @@ function matchPlayer(
  * with no fantasy team a roster percentage is noise and an ESPN position is a
  * second opinion he has no use for.
  */
+/** One row of `players?view=players_wl`, as far as anything here reads it. */
+interface PoolRow {
+  id?: number;
+  fullName?: string;
+  proTeamId?: number;
+  eligibleSlots?: number[];
+  ownership?: { percentOwned?: number };
+}
+
+/**
+ * One row of that list keyed by **ESPN's own player id** — his name, the MLB id
+ * he joined to, the club that join found him on, and the two facts the join is
+ * fetched *for*.
+ *
+ * `pct` and `eligible` are the same numbers `EspnPlayerPool.pct` and
+ * `.eligible` carry, filed under the other key. They are here because the name
+ * join is not the only way to reach a player: a man on a fantasy roster is
+ * named by ESPN's id on both sides of that read, which is an identity rather
+ * than a match, and it is the only way to reach one MLB's season list has never
+ * heard of. See `getOwnership`, where the five prospects on the live league
+ * take exactly that path.
+ *
+ * `pct` is **null rather than absent** where ESPN published no figure, and
+ * `eligible` is an **empty array** rather than absent where he is eligible
+ * nowhere the board has a word for: this map is a row per ESPN player and a row
+ * that exists is not the same claim as a row that does not.
+ */
+interface EspnPoolRow {
+  name: string;
+  mlbId: number | null;
+  teamId: number | null;
+  pct: number | null;
+  eligible: string[];
+}
+
 export interface EspnPlayerPool {
   /** MLB player id → ESPN's global rostered percentage. */
   pct: Record<number, number>;
@@ -717,8 +846,15 @@ export interface EspnPlayerPool {
    *
    * Checked against a whole season of this league's activity: **376 of 376**
    * distinct ESPN player ids named in it are on this list.
+   *
+   * It carries the **roster percentage and the eligibility** as well, which is
+   * the reading that made it more than the transactions tab's name lookup: a
+   * player the MLB season list has never heard of has no key in `pct` or
+   * `eligible` above and cannot get one, because those are keyed by an MLB id
+   * the name join could not find — but a fantasy roster names him by *ESPN's*
+   * id, which is the key here. See `getOwnership`.
    */
-  byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }>;
+  byEspnId: Record<number, EspnPoolRow>;
   /**
    * ESPN's `eligibleSlots` **raw**, by MLB player id — the slot *ids* rather
    * than the names `eligible` above carries.
@@ -754,42 +890,60 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
       headers: { ...UA, 'x-fantasy-filter': JSON.stringify({ filterActive: { value: true } }) },
     });
     if (!res.ok) throw new Error(`ESPN players endpoint returned ${res.status}`);
-    const rows = (await res.json()) as {
-      id?: number;
-      fullName?: string;
-      proTeamId?: number;
-      eligibleSlots?: number[];
-      ownership?: { percentOwned?: number };
-    }[];
+    const rows = (await res.json()) as PoolRow[];
     const index = await getMlbIndex();
     const pct: Record<number, number> = {};
     const eligible: Record<number, string[]> = {};
     const slots: Record<number, number[]> = {};
-    const byEspnId: Record<number, { name: string; mlbId: number | null; teamId: number | null }> =
-      {};
+    const byEspnId: Record<number, EspnPoolRow> = {};
+    // The join first, once per row — `matchPlayer` is the costly part and the
+    // three readings below are the same player either way — and then **who
+    // claimed whom**, because a name the index answers with one player can be
+    // asked by two ESPN rows. See `claimant` above for the measurement.
+    const found = new Map<PoolRow, IndexEntry>();
+    const claims = new Map<number, { entry: IndexEntry; rows: PoolRow[] }>();
     for (const row of rows) {
       if (!row.fullName) continue;
-      // The join first, once, and the three readings of the row after it: they
-      // are the same player either way, and `matchPlayer` is the costly part.
-      const found = matchPlayer(index, row.fullName, row.proTeamId);
+      const hit = matchPlayer(index, row.fullName, row.proTeamId);
+      if (!hit) continue;
+      found.set(row, hit);
+      const at = claims.get(hit.id);
+      if (at) at.rows.push(row);
+      else claims.set(hit.id, { entry: hit, rows: [row] });
+    }
+    // A contested id is decided on the club and then on what he plays, and the
+    // rows that lose are struck out of the join entirely — they must not carry
+    // his `mlbId` on `byEspnId` either, or the transactions tab draws the
+    // wrong man's cap logo beside the right man's name.
+    const rejected = new Set<PoolRow>();
+    for (const { entry, rows: claimed } of claims.values()) {
+      if (claimed.length === 1) continue;
+      const winner = claimant(entry, claimed);
+      for (const row of claimed) if (row !== winner) rejected.add(row);
+    }
+    for (const row of rows) {
+      if (!row.fullName) continue;
+      const hit = rejected.has(row) ? undefined : found.get(row);
       // The name is kept whether or not he joined, which is the one reading
       // that does not need the join: the activity feed names a player by
       // ESPN's id alone, and a transaction is worth printing for a man MLB has
       // never listed. `mlbId` null is what makes his row not a link.
+      const owned = row.ownership?.percentOwned;
+      const positions = eligiblePositions(row.eligibleSlots);
       if (typeof row.id === 'number') {
         byEspnId[row.id] = {
           name: row.fullName,
-          mlbId: found?.id ?? null,
-          teamId: found?.teamId ?? null,
+          mlbId: hit?.id ?? null,
+          teamId: hit?.teamId ?? null,
+          pct: typeof owned === 'number' ? owned : null,
+          eligible: positions,
         };
       }
-      if (!found) continue;
-      const owned = row.ownership?.percentOwned;
-      if (typeof owned === 'number') pct[found.id] = owned;
-      const positions = eligiblePositions(row.eligibleSlots);
-      if (positions.length > 0) eligible[found.id] = positions;
+      if (!hit) continue;
+      if (typeof owned === 'number') pct[hit.id] = owned;
+      if (positions.length > 0) eligible[hit.id] = positions;
       if (Array.isArray(row.eligibleSlots) && row.eligibleSlots.length > 0) {
-        slots[found.id] = row.eligibleSlots;
+        slots[hit.id] = row.eligibleSlots;
       }
     }
     const pool = { pct, eligible, slots, byEspnId };
@@ -870,7 +1024,34 @@ const TREND_DRIFT: Record<TrendWindow, number> = { 1: 0, 3: 1, 7: 2, 15: 3, 30: 
  *  this constant, which used to be 14. */
 export const TREND_MAX_DAYS = 30 + TREND_DRIFT[30];
 
-const snapshotKey = (date: string) => `espn-ownership-${date}.json`;
+/**
+ * **`-v2` because the meaning of eight of these numbers changed, not their
+ * shape.** The blob is still a map of MLB id to percentage; it is that for
+ * eight ids the percentage stored under a v1 key is **the wrong player's** —
+ * see `claimant` above, where two ESPN rows claiming one MLB id used to be
+ * settled by array order.
+ *
+ * A baseline is subtracted from today's map, so a corrected value against an
+ * uncorrected baseline reads as a *move*. Driven on the live league before this
+ * bump: Will Smith's page showed `Rostered 64.2%` — right — over `1d ▲64.2 ·
+ * 3d ▲64.2 · 7d ▲64.2`, a man who had not moved at all reported as the largest
+ * riser in baseball, and he would have gone on being one on the 30D column for
+ * a month. Three ids do this (Will Smith +64.22, Fernando Cruz +4.31, Victor
+ * Mesa Jr. +0.26; Yunior Marte's two rows both read 0, so his correction is
+ * invisible).
+ *
+ * The alternative was to leave it, on the grounds that a bump **deletes 1,376
+ * players' history to hide three rows**. It was rejected because those three
+ * rows do not sit quietly: the trend columns sort, and one tap puts a
+ * fabricated ▲64.2 at the top of every one of them. The cost is the shape this
+ * file already describes and already handles — `getRosterTrend` returns null
+ * with no baseline at all, so the columns simply are not there, and they come
+ * back one at a time as the history rebuilds: 1D tomorrow, 3D in three days,
+ * 30D in a month. Nothing prunes the v1 blobs; the cache bucket's 400-day
+ * lifecycle is the only expiry, which is the rule the rest of this file writes
+ * under.
+ */
+const snapshotKey = (date: string) => `espn-ownership-${date}-v2.json`;
 
 /** Store today's map, once. Not overwritten later in the day: a baseline that
  *  crept toward the current value would shrink every delta measured against it
@@ -1787,7 +1968,11 @@ export async function getOwnership(
       // free-agent filter and the fantasy roster don't depend on either.
       getPlayerPool().catch((err: Error) => {
         console.error('ESPN player pool unavailable:', err.message);
-        return { pct: {}, eligible: {}, slots: {} } as EspnPlayerPool;
+        // Stated in full rather than cast: `byEspnId` is read below, and an
+        // `as` here is how a failed upstream becomes a thrown property access
+        // on the one path this catch exists to keep standing.
+        const empty: EspnPlayerPool = { pct: {}, eligible: {}, slots: {}, byEspnId: {} };
+        return empty;
       }),
       getRosterTrend().catch((err: Error) => {
         console.error('ESPN roster trend unavailable:', err.message);
@@ -1829,11 +2014,54 @@ export async function getOwnership(
       }
       rosters[team.id] = sortRoster(roster);
     }
+    // **The men the MLB index cannot name get their roster % by ESPN's id, not
+    // by their name**, and it costs no request at all.
+    //
+    // `pool.pct` and `pool.eligible` are keyed by MLB id and are filled by the
+    // name-and-club join against the *base* index, so a prospect has no key in
+    // either and could not be given one: the join is what failed for him in the
+    // first place. Extending `getPlayerPool`'s own join with `extendIndex`
+    // would mean asking MLB about 3,900 names to answer for five, and would
+    // make a globally-cached map depend on which league was read last.
+    //
+    // But ESPN names him with **ESPN's own player id** on both payloads — the
+    // roster entry that found him and the pool row that carries his figures —
+    // so the join goes the other way and is an identity rather than a match.
+    // No name, no club, no tie to break: 5198748 is 5198748. `pool.byEspnId`
+    // is a pass over rows already parsed, so this is one `Map` lookup per
+    // beyond-index player and **zero upstream requests**; measured on the live
+    // 12-team league, Kade Anderson comes back **29.4%** and `SP` where the
+    // board and his page both drew a dash.
+    //
+    // Only the men `extendIndex` found are looked up this way. A player the
+    // base index *did* name already has an answer under his MLB id, and the
+    // contested-claim rule above is what makes that answer right; reaching for
+    // ESPN's id there as well would put a per-league fact into a map every
+    // league shares. And the **trend stays out** for the same reason it has to:
+    // it is a diff of two days of the *global* map, and a man who is only
+    // reachable through one league's roster has no baseline in yesterday's.
+    const byId = new Map(Object.values(rosters).flat().map((p) => [p.mlbId, p] as const));
+    const beyondHere = [...full.beyond.keys()].filter((id) => owned[id] !== undefined);
+    let rosterPct = pool.pct;
+    let eligibility = pool.eligible;
+    if (beyondHere.length > 0) {
+      // Copied rather than written through: `pool` is the six-hour global cache
+      // every league shares, and these keys belong to this one.
+      rosterPct = { ...pool.pct };
+      eligibility = { ...pool.eligible };
+      for (const id of beyondHere) {
+        const espnId = byId.get(id)?.espnId;
+        const row = espnId ? pool.byEspnId[espnId] : undefined;
+        if (!row) continue;
+        if (row.pct !== null) rosterPct[id] = row.pct;
+        if (row.eligible.length > 0) eligibility[id] = row.eligible;
+      }
+    }
     const result: EspnOwnership = {
       ...info,
       owned,
-      rosterPct: pool.pct,
-      eligibility: pool.eligible,
+      rosterPct,
+      eligibility,
       trend,
       rosters,
       // Only the men actually on a roster in *this* league: `beyond` is the
