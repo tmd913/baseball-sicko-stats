@@ -26,6 +26,8 @@ outings are their own section — `outings`, everything in `allRecent` of type
 `pitching` — and the plays are `allPlays`, everything else. **Above**, because a
 start is the day's larger fact and because it is what a reader with two pitchers
 on his roster came to check; the plays below it are the long tail he scrolls.
+(**The two have since swapped**, and only the order — the split, its rule and
+everything else in this section stand; see *The outings went below the plays*.)
 
 **The play pills do not reach the outings, and that is why the split is on
 `type` rather than on the filtered list.** A pitching entry has no play kinds at
@@ -1868,3 +1870,56 @@ read verbatim and never overwritten — drives all three states on demand:
 Bundle: JS 583.27 → 583.66 kB raw, 173.94 → 174.05 gzipped. CSS unchanged —
 `.live-rows` is a flex column with a 16px gap and the item is the one the stream
 already draws, so the section needed no rule of its own.
+
+### The outings went below the plays
+
+**The split shipped with the outings on top and that was the wrong half on
+top.** The argument for `Above` is in *One stream of both kinds* — a start is
+the day's larger fact, and it is what a reader with two pitchers came to check.
+Both halves of that are true and neither is what the section costs. The plays
+are what the feed is *opened* for and the only part of it that moves through the
+evening; an outing is settled the moment it appears and never changes again. So
+the order was putting the day's stillest items in front of its most current
+ones, which is the same fault the Live section exists to avoid one level up.
+
+**Measured at 900px on 2026-08-19, the roster's own day.** Before: `Recent
+outings` at y=272 carrying 3 cards, `Recent plays` beginning at y=634. After:
+`Recent plays` at y=272 with its first ten, `Recent outings` at y=5317. Three
+outing cards is **362px** of settled pitching standing between the filter pills
+and the day's first at-bat — under a laptop's fold but over a phone's, and the
+whole of it above the fold on any screen.
+
+**The pills now sit directly above the list they narrow**, which is what the
+`feed-filters` comment always claimed and what the layout had stopped doing:
+measured, pills at y=222 and `Recent plays` at y=272, **50px** apart, where they
+were **412px** and a whole section of untouchable cards away from their first
+effect. The claim in
+*One stream of both kinds* — that the lens must not reach the outings — is
+unchanged and still enforced on `type`: `All` gives **10 plays / 3 outings**, the
+`HR` lens **3 / 3**, the `SB` lens **1 / 3**, the outings unmoved under all
+three, exactly as before with the two numbers read the other way round.
+
+**Nothing else in the section moved.** The order *within* each list is
+untouched, both are still built off the same `allRecent` split on `type`, the
+outings are still unpaged and the plays still page ten at a time. `newPlays`
+still counts plays only, and the red button and its `Clear` still ride at the
+head of the plays — which is now the head of the Recent block, so the news about
+the day is the first thing under the pills rather than the first thing after
+three pitching cards.
+
+**The plays' empty state still names the pills and still points up at them.**
+Emptied by a lens (2026-08-16, `SB`), `Recent plays` draws `No plays of that
+kind today. Change it with the pills above — All is every play of the day.`
+*above* the three outing cards, where before it was a sentence sandwiched under
+them. The section keeps its own heading when a filter empties it for the reason
+`filtered` already gives, and that gate is untouched.
+
+**The Tutorial's sentence was a claim about this order** and moves with it: `On
+the feed a pitcher's outings are their own section below the plays`. It sits two
+lines under `Both show your whole roster — batters first, then pitchers`, which
+the old order contradicted on the very next sentence and the new one does not.
+
+Bundle: JS 600,915 → 600,915 bytes raw, 176,982 → 176,985 gzipped (+3 bytes, the
+moved comment's words). CSS unchanged at 159,369 / 28,510 — the two sections
+were already siblings under `.live-feed` with the same class, so the order is a
+JSX one and no rule anywhere depends on which came first.

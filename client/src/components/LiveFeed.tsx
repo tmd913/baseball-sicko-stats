@@ -1516,16 +1516,22 @@ export function LiveFeed({
    * means.
    */
   /**
-   * **The outings are their own list, above the plays.**
+   * **The outings are their own list, below the plays.**
    *
    * They used to be the *same* list under a different heading — the stream was
    * one kind at a time, so `Recent outings` and `Recent plays` were one section
    * whose word changed with the tab. With both kinds on one feed they cannot
    * be: an outing is a whole game's work in one card and a play is one swing,
    * and interleaving them by clock put a six-inning start between two
-   * groundouts as though the three were the same size of event. Above, because
-   * a start is the day's larger fact and because it is the thing a reader with
-   * two pitchers on his roster came to check.
+   * groundouts as though the three were the same size of event.
+   *
+   * **Below**, which is a reversal: the split shipped with the outings on top,
+   * arguing that a start is the day's larger fact. It reads as the wrong
+   * priority in use — the plays are what the feed is opened for and what
+   * changes minute to minute, and a roster with three starters pushed ten
+   * at-bats below the fold before the reader had seen one. The outings are the
+   * settled tail: a start is done when it appears and does not move again.
+   * Within each list the order is untouched.
    *
    * **The play pills do not reach them**, and that is the whole reason this
    * split is a filter on `type` rather than on the filtered list: a pitching
@@ -1624,28 +1630,12 @@ export function LiveFeed({
         </section>
       )}
 
-      {/* **The outings, above the plays.** Its own section and its own heading,
-          unpaged and unfiltered: a roster carries two or three starters and a
-          day gives each of them at most one card, so there is nothing here for
-          a `Load more` to hold back — where the plays below it are a hundred
-          at-bats and are paged ten at a time. See `outings`. */}
-      {outings.length > 0 && (
-        <section className="feed-section">
-          <h2 className="feed-heading">Recent outings</h2>
-          <div className="feed-items">
-            {outings.map((entry) => (
-              <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
-            ))}
-          </div>
-        </section>
-      )}
-
       {(recent.length > 0 || filtered) && (
         <section className="feed-section">
           {/* The heading says which list this is, and it says one word now
               rather than two. `Recent outings` was this heading's other value
               while the stream was one kind at a time; the outings have a
-              section of their own above, so this one is only ever the plays.
+              section of their own below, so this one is only ever the plays.
               (`New plays` was a third value, and went to the new-plays page's
               own head, where it names a box rather than a state.) */}
           <h2 className="feed-heading">Recent plays</h2>
@@ -1744,6 +1734,22 @@ export function LiveFeed({
               </span>
             </div>
           )}
+        </section>
+      )}
+
+      {/* **The outings, below the plays.** Its own section and its own heading,
+          unpaged and unfiltered: a roster carries two or three starters and a
+          day gives each of them at most one card, so there is nothing here for
+          a `Load more` to hold back — where the plays above it are a hundred
+          at-bats and are paged ten at a time. See `outings`. */}
+      {outings.length > 0 && (
+        <section className="feed-section">
+          <h2 className="feed-heading">Recent outings</h2>
+          <div className="feed-items">
+            {outings.map((entry) => (
+              <FeedItem key={entryKey(entry)} entry={entry} onOpenDetails={onOpenDetails} />
+            ))}
+          </div>
         </section>
       )}
 
