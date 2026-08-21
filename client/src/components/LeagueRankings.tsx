@@ -906,22 +906,38 @@ export default function LeagueRankings({
       nextTitle={onePeriod == null ? 'Pick a week to step through them' : 'The week after'}
       popoverLabel="Pick a span or a week"
       /**
-       * **And the ⓘ that explains `OVR`, `BAT` and `PIT` is at the bar's own
-       * right-hand end**, in the collapsed row rather than in anything a press
-       * of the face opens.
+       * **And the ⓘ that explains `OVR`, `BAT` and `PIT` sits inside the bar's
+       * far arrow**, in the collapsed row rather than in anything a press of
+       * the face opens.
        *
        * It stood in the tools row, beside the projection's key, on the
        * reasoning that a key belongs with the other buttons — and the reason it
        * was put there rather than here is recorded in this file's own comment
        * and in `App.tsx`: a fourth thing in a three-column grid "would either
        * break the centering the bar's own grid exists for or take a third of
-       * the middle column on a 320px phone". `endSlot` is that objection
-       * answered rather than overruled — a mirrored ghost at the left end keeps
-       * the face on the bar's center line, and below 432px the pair collapses
-       * and App's own copy of this key is what is on screen. The argument for
-       * the move is that **the span strip it used to sit beside is gone**: the
-       * five cuts are the first group of the bar's own list, so the tools row
-       * held a key to a table whose one remaining control is this bar.
+       * the middle column on a 320px phone". `endSlot` answers the first half
+       * outright — a mirrored ghost keeps the face on the bar's center line,
+       * measured at 0.00px offset from 320 to 1920.
+       *
+       * **The second half is not answered, it is paid.** It cost the face 68px
+       * of middle column, and for one revision that was bought off with a
+       * breakpoint: below 432 the pair collapsed and App kept a narrow copy of
+       * this key. That is gone. A key is read once, and one that moves between
+       * a phone and a desktop is one the reader has to find twice — so the
+       * five tracks hold at every width and the face truncates instead
+       * (measured at 320: 212 → 152px, the range losing its trailing
+       * `· so far`; nothing clips from 390 up).
+       *
+       * **Beside the two arrows rather than beyond them**, which is the whole
+       * of what `[step][ghost][face][key][step]` buys over
+       * `[ghost][step][face][step][key]`: the arrows are the bar's outer edge
+       * on every other surface in the app, and a control parked outside them
+       * made this one bar end differently from the other three.
+       *
+       * The argument for the move off the tools row is that **the span strip it
+       * used to sit beside is gone**: the five cuts are the first group of the
+       * bar's own list, so the tools row held a key to a table whose one
+       * remaining control is this bar.
        *
        * `rankings` is in hand here — this is below the wait and the two empty
        * states — so the key is drawn only once there is a table to explain,

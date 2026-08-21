@@ -104,7 +104,6 @@ import { ThemeSwatches } from './components/ThemePicker';
 import LeagueView, { LEAGUE_TABS, ProjectedTools } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import type { MatchupReading } from './components/LeagueMatchup';
-import { RankKey } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
@@ -4680,31 +4679,23 @@ export default function App() {
      (`projectable`, the current matchup of a week still being played) — absent
      rather than disabled, and independently of the span strip beside it, which
      needs more than one span to be worth drawing where this needs none. */
-  /* **The key that explains `OVR`, `BAT` and `PIT` — the narrow copy of it.**
+  /* **The key that explains `OVR`, `BAT` and `PIT` is not in this row at all.**
 
-     It has moved into the date bar, at that bar's own right-hand end, where the
-     table it explains is (see `LeagueRankings.tsx`'s `endSlot`). The paragraph
-     that used to stand here said a fourth thing in the bar's row "would either
-     break the centering the bar's own grid exists for or take a third of the
-     middle column on a 320px phone" — and both halves of that were right. The
-     first is answered by a **mirrored ghost** at the bar's left end, which puts
-     the face back on the bar's own center line by construction; the second is
-     not answered at all and cannot be. Measured: the two end slots cost 38px
-     each and the widest face this bar prints is 247.48px, so the fourth thing
-     costs the face nothing only from **432px** up.
+     It lives in the date bar, inside that bar's far arrow, where the table it
+     explains is — `LeagueRankings.tsx`'s `endSlot`. This row held a second,
+     narrow copy of it for one revision: the bar's five tracks were measured to
+     cost the face nothing only from 432px up, so below that the ends collapsed
+     and the tools row's copy was what a phone got.
 
-     So below that the bar's ends collapse and **this is the copy on screen** —
-     one media query in the stylesheet, both rendered, neither chosen in JS,
-     which is the swap every pill row that becomes a `<select>` already makes.
-     It is the same `RankKey` component in both places, so the two cannot come
-     to explain the table differently; what differs is only which row has the
-     width for it.
-
-     Drawn only on the Rankings tab, and only once there is a table to explain. */
-  const leagueRankKey =
-    view === 'league' && leagueTab === 'rankings' && rankings ? (
-      <RankKey rankings={rankings} />
-    ) : null;
+     **That trade was the wrong way round and the breakpoint is gone.** What
+     the narrow copy bought was a face that never gave up a pixel; what it cost
+     was the key being in a different place on a phone than on a desktop, which
+     is the one thing a key must not be — it is read once, and a reader who has
+     learned where it is has learned it for one width. The face gives up the
+     difference instead — measured at 320, **212 → 152px**, both lines
+     truncating rather than wrapping as they already did — and the ⓘ is in the
+     same place at every width. The whole of what that costs is the range
+     line's trailing `· so far` at 320; from 390 up nothing clips at all. */
   const leagueRankProjected =
     view === 'league' && leagueTab === 'rankings' && rankings?.projectable ? (
       <ProjectedTools
@@ -5033,9 +5024,6 @@ export default function App() {
             is the full-width box and the strip inside it is centered at its own
             content width. */}
         {leagueTabs && <div className="lg-tabs-line">{leagueTabs}</div>}
-        {/* What its three summary columns are made of — the narrow copy; above
-            431px the bar's own right-hand end holds it. See `leagueRankKey`. */}
-        {leagueRankKey}
         {/* And whether it is drawn to the end of the week. */}
         {leagueRankProjected}
         {rosterTools && (

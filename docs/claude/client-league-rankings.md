@@ -1552,31 +1552,33 @@ onto `.view-switch` / `.view-tab` and the dropdown a fold onto
 `white-space: nowrap` that were genuinely theirs and the narrow block that hid
 the pill row. `spanDetail` lost its `export` with its second caller.
 
-#### The ⓘ is at the bar's right-hand end, and the bar's left end is held open to match
+#### The ⓘ is inside the bar's far arrow, and the near side is held open to match
 
 **The centering is a ghost, not a number.** The row's two arrows are equal
 width, which is the whole reason the middle column sits on the bar's own center
 line; a control at one end and nothing at the other breaks exactly that. So
-`DateBar` gained an `endSlot`, and with it a **five-track grid** — an empty
-`aria-hidden` span, a step, the face, a step, the slot — where the first and
-last tracks are the same `--bar-end-w`. It is *reserve the box, don't move the
+`DateBar` gained an `endSlot`, and with it a **five-track grid** — a step, an
+empty `aria-hidden` span, the face, the slot, a step — where the second and
+fourth tracks are the same `--bar-end-w` and **the arrows stay the row's outer
+edge**. The slot sits inside them rather than beyond them because the arrows
+are where every other date bar in this app ends: a control parked outside them
+would make the one bar carrying a key end differently from the other three. It is *reserve the box, don't move the
 page* spent sideways: a hidden peer sharing the grid rather than a magic number
 in a stylesheet.
 
 Measured on the live league, `face.center − bar.center`:
 
-| | 320 | 390 | 640 | 1200 | 1920 |
-| --- | --- | --- | --- | --- | --- |
-| before | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
-| after | **0.00** | **0.00** | **0.00** | **0.00** | **0.00** |
+| | 320 | 390 | 431 | 432 | 640 | 1200 | 1920 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| before | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| after | **0.00** | **0.00** | **0.00** | **0.00** | **0.00** | **0.00** | **0.00** |
 
-and the face's own width is **212 / 221.16 / 221.16 / 221.16 / 221.16** before
-and after, with the lead line ellipsized by the same 9px at 320 and by 0
-everywhere else. The bar is 54px at every width, the header row's seam
-(`thead.top − bar.bottom`) is **0.00px** at all five, and page-body overflow is
-**0**.
+The face's own width after is **152 / 200 / 200 / 221.16 / 221.16 / 221.16 /
+221.16**; the step at 432 is the narrow-width block letting go, not a track
+changing. The bar is 54px at every width, the header row's seam
+(`thead.top − bar.bottom`) is **0.00px**, and page-body overflow is **0**.
 
-#### The 320px phone is not answered, so it is a width
+#### The 320px phone is not answered, it is paid
 
 **The other half of the old objection stands and cannot be argued away.** Each
 end slot costs **38px** — a 30px `.info-key-btn` and the row's 8px gap — and the
@@ -1584,25 +1586,37 @@ widest face this bar prints is the projected reading's, measured at **247.48px**
 (`WEEK 19 · PROJECTED` over `to Aug 23 · 3 days still to play`; the live reading
 is 221.16, `Season` 207.09, a picked week 200). Add the two arrows and their
 gaps (44 each) and the bar's own 20px of side padding and the row wants
-**431.48px** before the fourth thing costs the face a pixel. Below that the face
-is clamped, and at 320 it would go **212 → 136** — content 102px against the
-169px the range line alone needs, so `Aug 10 – Aug 21 · so far` would read
-`Aug 10 – Aug 2…`. That is the bar failing at its one job.
+**431.48px** before the fourth thing costs the face a pixel.
 
-So the rule is a measured width. **From 432px up the ⓘ is in the bar; below it
-the ends collapse to three tracks and App's own copy stays in the tools row** —
-one media query, both rendered, neither chosen in JS, which is the swap this
-stylesheet already makes for every pill row that becomes a `<select>`. It is the
-**same `RankKey` component** in both places, so the two cannot come to explain
-the table differently; what differs is only which row has the width for it.
-Driven at 320 / 390 / 431 / 432 / 480 / 640 / 1200 / 1920: the bar's copy is
-drawn at the last five and the tools row's at the first three, never both.
+**That number was a breakpoint for one revision, and is not one now.** Below
+432 the ends collapsed to three tracks and App kept a second copy of the key in
+the tools row — one media query, both rendered, neither chosen in JS. It bought
+a face that never gave up a pixel, and it cost **the key being in a different
+place on a phone than on a desktop**. That is the trade the wrong way round:
+`InfoKey`'s own rule is that a key is read once and then in the way, so a key is
+a thing the reader has to *find* — and finding it in two places for one table is
+worse than a date that truncates. The user's call, and the right one.
+
+So the five tracks hold at every width and the face pays. Measured at 320:
+**212 → 152px**, where the 152 includes a narrow-width block trimming the face's
+16px side padding to 4 and the row's gap from 8 to 4 — the cheapest 40px on the
+row, scoped to `.date-bar-ends` so only a bar carrying a key pays it. Content
+goes **102 → 142px**. What is lost is one line at one width: at 320 the range
+clips its trailing `· so far` (169 wanted against 142) and the lead, already
+clipping at that width before the change, clips further. **From 390 up nothing
+clips at all**, and at 390 the lead now fits whole where the collapsed row gave
+it 172 against the 187 it wants.
+
+App's narrow copy and `.view-tools .lg-rank-key` are both gone with the
+breakpoint; `RankKey` renders in exactly one place now.
 
 **The anchor did not change and that is what made the move cheap.**
 `.lg-rank-key` is `position: static`, so the panel's containing block is
-whichever positioned box it lands in — `.view-tools` in the one place,
-`.date-bar-anchored` in the other, both of which declare `position: relative`
-for their own reasons. `left: 0` is the app's own gutter against either.
+whichever positioned box it lands in — `.view-tools` when it was there,
+`.date-bar-anchored` now, both of which declare `position: relative` for their
+own reasons. `left: 0` is the app's own gutter against either, which is why the
+button could move three times without this rule changing once, and why moving
+it from beyond the far arrow to inside it changed nothing about the panel.
 Measured open at 1200: **320 × 241.3 at x=0**, with `elementFromPoint` 30px in
 and 40px down returning a `<P>` of the panel rather than a table cell.
 
