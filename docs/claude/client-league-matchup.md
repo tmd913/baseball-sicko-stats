@@ -458,31 +458,33 @@ Overall median **37.2%**, every category able to reach a full bar, and **15 of 3
 
 It also retires the two-`Summary` collision the `SummaryToggle` one section down was written around. That collision no longer exists at all; the toggle keeps its own shape for its own reasons.
 
-**And the scale-up above was not enough.** *The card reads a size up* took a scoreboard card's sizes and made them a page's; this takes a page's and makes them this page's. The wide tier, before → after: headline **26 → 32**, category figure **18 → 22** and its label **13 → 15**, the group heading **12 → 14** and its tally **13 → 15**, the head's name **17 → 20** and record **13 → 15**, the badge **44 × 34 → 54 × 42**, the Moves names **15 → 17**. The rhythm again grows with the type — a row's padding **9 → 12** and its gap **10 → 12**, the card's own padding **16 → 20** — and the two bars take the largest proportional step for the third time, a category rail **9 → 12px** and the meter **14 → 18**.
+**And the scale-up above was not enough.** *The card reads a size up* took a scoreboard card's sizes and made them a page's; this takes a page's and makes them this page's. The wide tier, before → after: headline **26 → 29**, category figure **18 → 20** and its label **13 → 14**, the group heading **12 → 13** and its tally **13 → 14**, the head's name **17 → 18** and record **13 → 14**, the badge **44 × 34 → 48 × 38**, the Moves names **15 → 16**. The rhythm again grows with the type — a row's padding **9 → 10** and its gap **10 → 11**, the card's own padding **16 → 18** — and the two bars take the largest proportional step for the third time, a category rail **9 → 11px** and the meter **14 → 16**.
 
-**The rail's ink is held constant while its height grows.** `--border` at 32% was tuned against a 9px track; at 12 the same twenty rails cover a third more of the card, so it is **24%** now (`32 × 9/12`). The rule was always about area rather than opacity and now says so.
+**It was a step larger than this and came back**, which is the one number on the page that a measurement cannot settle. The first pass took the headline to 32, the figure to 22, the name to 20, the badge to 54 × 42, the rail to 12 and the card to 1060 — reported as too large on a laptop, where the card is the whole window. So the tier sits between that and where it started: about half the step in the type, and the bars keeping more of theirs than the rest, since they are what the page is drawn around.
 
-**The card's cap is re-derived, not scaled.** The name column in the wide head is `0.5 × card − 208` — the constant was 176 and grew with the badge and the headline, swept in 20px steps: 242px at a card of 900, 312 at 1040, 322 at 1060. The longest name the live league holds inks **310px at 20px/700**, so **1060** is the width that holds it with 12px in hand. That takes the category tracks from 321 to **367px** at 1200 and up.
+**The rail's ink is held constant while its height grows.** `--border` at 32% was tuned against a 9px track; at 11 the same twenty rails cover a fifth more of the card, so it is **26%** now (`32 × 9/11`). The rule was always about area rather than opacity and now says so.
 
-**The name is the one thing that does not scale below 641**, which is a real cost and was found by measuring rather than reasoned about. The stacked head gives a name half a *card*; at 481 `THE BRONX FLOATERS` inks 217px at 20px against a 199px column and ellipsized — a name that had fitted at every width before. So the `≤640` block holds the name at 17, the record at 13 and the badge at 44 × 34, and everything else on the card still grows. The `≤480` phone tier is untouched: its budget was already spent to the pixel and the phone was never the complaint.
+**The card's cap is re-derived, not scaled.** The name column in the wide head is `0.5 × card − 191` — the constant was 176 and grew with the badge and the headline — swept in 20px steps: 249px at a card of 880, 279 at 940, 289 at 960. The longest name the live league holds inks **283.8px at 18px/700**, so **970** is the width that holds it with 10.2px in hand. That takes the category tracks from 321 to **346px** at 1130 and up.
 
-**What the scale-up costs at the top is a wider ellipsis band, and it is bounded to one name.** With the longest name in the league on the page, all twelve names fit from **923px** before and from **1120px** now; below that exactly one name ellipsizes, and it ellipsized below 923 before. At 900 both builds fit seven of the league's eight distinct names. The `title` is still on the name either way.
+**The name is the one thing that does not scale below 641**, which is a real cost and was found by measuring rather than reasoned about. The stacked head gives a name half a *card*; at 481 `THE BRONX FLOATERS` inked 217px at the first pass's 20px against a 199px column and ellipsized — a name that had fitted at every width before. So the `≤640` block holds the name at 17, the record at 13 and the badge at 44 × 34, and everything else on the card still grows. The pin stays now the wide name is 18 rather than 20: the margin there is four pixels, and four pixels is not a rule. The `≤480` phone tier is untouched: its budget was already spent to the pixel and the phone was never the complaint.
+
+**What the scale-up costs at the top is a wider ellipsis band, and it is bounded to one name.** With the longest name in the league on the page, all twelve names fit from **923px** before and from **1000px** now; below that exactly one name ellipsizes, and it ellipsized below 923 before. (The first pass put that threshold at 1120, which is most of what the dial-back bought.) At 900 both builds fit seven of the league's eight distinct names. The `title` is still on the name either way.
 
 **Measured, before → after**, on matchup 103 of period 18:
 
-| | 320 | 390 | 640 | 1200 |
+| | 320 | 390 | 640 | 1440 |
 | --- | --- | --- | --- | --- |
-| card | 288 → 288 | 358 → 358 | 608 → 608 | 896 → **1060** |
-| category row | 37 → **43** | 37 → **43** | 40 → **51** | 40 → **51** |
-| category track | 46 → 46 | 81 → 81 | 177 → **151** | 321 → **367** |
-| track height | 8 → 8 | 8 → 8 | 9 → **12** | 9 → **12** |
-| meter height | 14 → **18** | 14 → **18** | 14 → **18** | 14 → **18** |
-| figure / label | 16/12 → 16/12 | 16/12 → 16/12 | 18/13 → **22/15** | 18/13 → **22/15** |
-| head name | 14 → 14 | 14 → 14 | 17 → 17 | 17 → **20** |
+| card | 288 → 288 | 358 → 358 | 608 → 608 | 896 → **970** |
+| category row | 37 → **43** | 37 → **43** | 40 → **44** | 40 → **44** |
+| category track | 46 → 46 | 81 → 81 | 177 → **163** | 321 → **346** |
+| track height | 8 → 8 | 8 → 8 | 9 → **11** | 9 → **11** |
+| meter height | 14 → **16** | 14 → **16** | 14 → **16** | 14 → **16** |
+| figure / label | 16/12 → 16/12 | 16/12 → 16/12 | 18/13 → **20/14** | 18/13 → **20/14** |
+| head name | 14 → 14 | 14 → 14 | 17 → 17 | 17 → **18** |
 
-**640 loses 26px of track**, which is the tier's own larger figure and label columns paid for out of the rail — `--mup-val-w` **64 → 78** (five tabular characters at 22px/700) and `--mup-cat-w` **52 → 60** (`SVHD` at 15px/700). At 481 that leaves each track 72px against the 98 it had, which is still half as much again as the 47px the phone tier was accepted at.
+**640 loses track to the figures**, which is the tier's own larger figure and label columns paid for out of the rail — `--mup-val-w` **64 → 70** (five tabular characters at 20px/700) and `--mup-cat-w` **52 → 56** (`SVHD` at 14px/700). That is 14px of rail, where the first pass's 78/60 cost 26.
 
-**Nothing else moved, checked rather than assumed.** `.mup-chrome` is **145px at 320 and 114 above it, before and after**. Page and view overflow are **0 at 320, 390, 481, 640, 900, 1200 and 1920**, and no category row overflows at any of them. The **bye page is byte-identical** — chrome 140 at 320 and 109 above it in both builds, and its head clips `Brian&Tom's Excellent Adventure` at 320 and 390 exactly as it did, that name being longer than any phone can hold. The only clipping on the comparison page is at **320**, where `The Homewreckers` (133 > 126) and `THE BRONX FLOATERS` (158 > 126) clip — **and both clip identically on `main`**, measured on the same matchup rather than inferred from the table above, which was read off a different one.
+**Nothing else moved, checked rather than assumed.** `.mup-chrome` is **145px at 320 and 114 above it, before and after**. Page and view overflow are **0 at 320, 390, 481, 640, 900, 1280, 1440 and 1920**, and no category row overflows at any of them. The **bye page is byte-identical** — chrome 140 at 320 and 109 above it in both builds, and its head clips `Brian&Tom's Excellent Adventure` at 320 and 390 exactly as it did, that name being longer than any phone can hold. The only clipping on the comparison page is at **320**, where `The Homewreckers` (133 > 126) and `THE BRONX FLOATERS` (158 > 126) clip — **and both clip identically on `main`**, measured on the same matchup rather than inferred from the table above, which was read off a different one.
 
 ### The Projected toggle
 
