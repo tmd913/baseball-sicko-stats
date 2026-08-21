@@ -1,18 +1,62 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { BackButton } from './BackButton';
+import { BaseballMark } from './BaseballMark';
 
 /**
  * The how-to page: a full-screen overlay in the same shape as PlayerDetails —
  * fixed, its own scroller, the page behind it pinned, Escape or Back to leave —
  * so it reuses `.details-view` and `.details-back` rather than inventing a
- * second full-screen shell.
+ * second full-screen shell. Reached from the settings menu, from the empty
+ * roster's `How does this work?`, and by `?help=1`.
  *
  * It's one continuous read rather than a set of tabs: a tutorial is written to
- * be gone through in order, and tabs would hide nine of the ten chapters from
- * someone who doesn't yet know what they're looking for. The chapter strip at
- * the top is a jump list, not a switch — it tracks whichever chapter is under
- * the top of the viewport (see `useActiveChapter`).
+ * be gone through in order, and tabs would hide eight of the nine chapters
+ * from someone who doesn't yet know what they're looking for. The chapter strip
+ * at the top is a jump list, not a switch — it tracks whichever chapter is
+ * under the top of the viewport (see `useActiveChapter`).
+ *
+ * ---------------------------------------------------------------------------
+ * One chapter per surface, and the chapter is short
+ * ---------------------------------------------------------------------------
+ *
+ * This was ten chapters written against an older app, and most of what had gone
+ * stale had gone stale *silently* — the prose still read well, it just named
+ * controls that are no longer on screen. A guide that sends a reader looking for
+ * a button that isn't there is worse than a guide half the length, so the
+ * rewrite is a rewrite rather than a patch. What went, and why:
+ *
+ * - **The `Games` tab**, which two chapters were built on ("Inside a card" was
+ *   entirely about it). It is the Feed now, and the per-player grouping it
+ *   carried is the player page's Overview tab.
+ * - **"Two things are clickable and they go to two places."** They go to one:
+ *   the name and the headshot both open the player page (`SummaryTable`'s own
+ *   comment records the change). The bottom-left jump-back button that chapter
+ *   ended on went with the jump.
+ * - **`Collapse all`**, which went with the accordions it collapsed — the feed's
+ *   openable shapes each raise a dialog now, so there is never more than one
+ *   open.
+ * - **Four color schemes**, where `theme.ts` has held six since `Dark` and
+ *   `Light` were added.
+ * - **The watchlist narrowing the board.** It widens it now, which is the
+ *   opposite instruction.
+ *
+ * And what the page had never covered at all, each now a chapter or a run of a
+ * chapter: the `Schedule` and `Projected` readings, the research board's
+ * `Teams`, `Ranks` and `Schedule`, the outing page, the League and Matchup
+ * tabs, and connecting an ESPN league in the first place.
+ *
+ * The test applied to every sentence below is whether it was read off the
+ * component that draws the thing — not off this file's own previous draft.
+ *
+ * **And it is shorter while covering more.** Measured in the running app off
+ * `.tut-body`'s own `innerText`: **3,564 words → 2,229**, and the rendered page
+ * at 390px **14,206px → 9,698** (at 1440: 10,094 → 7,291). Four surfaces
+ * that had no coverage at all gained a chapter each in that space, which is the
+ * whole argument for cutting the enumerations: a reader does not need the
+ * twelve pitcher column headings listed to know the pitchers are a second block
+ * with headings of their own, and every word spent listing them was a word not
+ * spent on the outing page.
  */
 
 /** A control the reader will find on screen, named the way the app names it. */
@@ -73,8 +117,7 @@ const SearchIcon = () => (
   </svg>
 );
 
-/** The date bar's own step, at the size the bar draws it — the calendar glyph
- *  this replaced went with the button that carried it. */
+/** The date bar's own step, at the size the bar draws it. */
 const ChevronIcon = ({ back }: { back?: boolean }) => (
   <svg
     viewBox="0 0 24 24"
@@ -127,23 +170,6 @@ const RefreshIcon = () => (
   </svg>
 );
 
-const CollapseIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="15"
-    height="15"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    className="tut-inline-icon"
-  >
-    <path d="M7 6 12 10 17 6M7 18 12 14 17 18" />
-  </svg>
-);
-
 interface Chapter {
   id: string;
   /** Short label for the jump strip. */
@@ -155,51 +181,52 @@ interface Chapter {
 
 const CHAPTERS: Chapter[] = [
   {
-    id: 'tut-watchlist',
+    id: 'tut-roster',
     tab: 'Roster',
-    title: 'Build your roster',
+    title: 'Start with your players',
     body: (
       <>
         <p>
-          Everything on the <Ui>Roster</Ui> page is a read on the players{' '}
-          <em>you</em> follow every day, so the first thing to do is put some there.
-          The search sits at the top right of every page — it belongs to your roster
-          rather than to any one view, so it is in the same place wherever you are.
-        </p>
-        <p className="tut-note">
-          Two lists, and it's worth getting the words straight now.{' '}
-          <strong>Your roster</strong> is this one: the players the Summary, Games and
-          Feed views report on.{' '}
-          <strong>Your watchlist</strong> is a separate list you build on the{' '}
-          <Ui>Research</Ui> board, out of players you're keeping an eye on but haven't
-          taken on — a free agent you might pick up belongs there and not here.
+          Nearly everything here is a read on the players <em>you</em> follow, so put
+          some on the list first. The search is at the top right of every page — on a
+          phone behind the{' '}
+          <Ui>
+            <SearchIcon />
+          </Ui>
+          , which opens a bar across the top with the cursor already in it.
         </p>
         <ol className="tut-steps">
           <Step>
-            Type a name into <Ui>Search for a player</Ui>. It matches the whole
-            season's roster, first name or last. On a phone there's no room for the
-            field, so it hides behind the{' '}
-            <Ui>
-              <SearchIcon />
-            </Ui>{' '}
-            — press that and a search bar opens across the top with the cursor
-            already in it, and <Ui>Escape</Ui> or the <Ui>✕</Ui> closes it again.
+            Type a name into <Ui>Search for a player</Ui> — it matches the whole
+            season, first name or last.
           </Step>
           <Step>
-            Tap the <Ui>+</Ui> at the right of a result to add them. They appear in
-            the list straight away.
+            Press the <Ui>+</Ui> beside a result to add him.
           </Step>
           <Step>
-            Tap the <strong>name</strong> instead and you get their player page
-            without adding them — season line, percentile rankings, game log. There's
-            an <Ui>Add to roster</Ui> button up there if you like what you see, and a{' '}
-            <Ui>Watch</Ui> star beside it if you'd rather just keep an eye on him.
+            Or press the <strong>name</strong> and read his player page first;{' '}
+            <Ui>Add to roster</Ui> is up there too.
           </Step>
         </ol>
         <p className="tut-note">
-          Two-way players appear twice in the search — once as a batter, once as a
-          pitcher — and are rostered separately. Add one, the other, or both; each gets
-          its own card.
+          <strong>Two lists, and the words matter.</strong> Your{' '}
+          <strong>roster</strong> is this one — the players the Roster page and the
+          Feed report on. Your <strong>watchlist</strong> is the <Ui>Watch</Ui> star:
+          men you are keeping an eye on but have not taken on, read on the{' '}
+          <Ui>Research</Ui> board.
+        </p>
+        <p>
+          Your roster keeps the order you put it in.{' '}
+          <Ui>
+            <PencilIcon /> Edit players
+          </Ui>{' '}
+          in the{' '}
+          <Ui>
+            <GearIcon /> Settings
+          </Ui>{' '}
+          menu is where you drag a row to move it, or press its <Ui>✕</Ui> twice to
+          drop him. Two-way players are two entries, rostered separately, and each
+          gets his own row.
         </p>
       </>
     ),
@@ -211,10 +238,10 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          The date control decides what every view is showing. It is one line under
-          the tabs — a step back, the days, a step forward:
+          The date bar under the tabs decides which days the Roster page is showing —
+          a step back, the days, a step forward:
         </p>
-        <Demo label="The date bar, under the tabs on every roster page">
+        <Demo label="The date bar, under the tabs on the Roster page">
           <div className="date-bar">
             <div className="date-bar-row">
               <span className="date-step">
@@ -232,128 +259,138 @@ const CHAPTERS: Chapter[] = [
         </Demo>
         <ul className="tut-list">
           <li>
-            <strong>Today</strong> is where you start. The baseball day turns over at
-            3am Eastern, so a west-coast game finishing after midnight still counts as
-            tonight.
+            The baseball day turns over at <strong>3am Eastern</strong>, so a
+            west-coast game finishing after midnight still counts as tonight.
           </li>
           <li>
-            <strong>The arrows move a window, not a day.</strong> On{' '}
-            <Ui>Today</Ui> a press is a day either way — back to{' '}
-            <Ui>Yesterday</Ui>, forward to <Ui>Tomorrow</Ui>, which is the
-            look-ahead: scheduled first pitches, announced starters, and how your
-            hitters have done against that hand. On a fortnight a press is a
-            fortnight.
+            <strong>The arrows move a window, not a day.</strong> On <Ui>Today</Ui> a
+            press is a day either way; on a fortnight a press is a fortnight.{' '}
+            <Ui>Tomorrow</Ui> is the look-ahead — first pitches and announced starters.
           </li>
           <li>
             <strong>Press the middle for a calendar.</strong> One day picked twice is
-            that day; two days are the range between them. Several days roll into one
-            line per player — every game stacked together. A range can run up to 62
-            days.
+            that day, two days are the range between them, up to about two months.
           </li>
         </ul>
         <p className="tut-note">
-          The bar is under the tabs on the <Ui>Roster</Ui> and <Ui>Feed</Ui> pages
-          and it says which days you are looking at: what kind of days they are over
-          the dates themselves. It names a span whenever the days you have arrived at
-          are exactly that span's — step back from <Ui>Today</Ui> and it says{' '}
-          <Ui>Yesterday</Ui>, step forward again and it says <Ui>Today</Ui>, so a
-          link you share from there is about the reader's own day rather than about
-          yours. Anything else it calls a <Ui>Custom range</Ui>, which is the honest
-          word for days you picked yourself.
-        </p>
-        <p className="tut-note">
-          It also says when the days on screen are not simply a range. In{' '}
-          <Ui>Schedule</Ui> the table is showing days <em>ahead</em>, so the bar
-          reads <Ui>Schedule · Week 19</Ui> and the arrows step between the
-          spans your league gives you; with <Ui>Projected</Ui> on it reads{' '}
-          <Ui>Projected</Ui>, those figures being estimates rather than anything
-          that has happened.
+          The face says what <em>kind</em> of days these are, so a link you share is
+          about the reader's own day rather than yours: <Ui>Yesterday</Ui> where the
+          days are exactly that, <Ui>Custom range</Ui> where you picked them, and{' '}
+          <Ui>Schedule · Week 19</Ui> or <Ui>Projected</Ui> in the two readings that
+          are not simply a range. The Feed keeps a range of its own.
         </p>
       </>
     ),
   },
   {
-    id: 'tut-views',
-    tab: 'Views',
-    title: 'The tabs, and two ways to read a day',
+    id: 'tut-readings',
+    tab: 'Readings',
+    title: 'Four ways to read your roster',
     body: (
       <>
         <p>
-          The tabs across the top are the four things this app is about — your{' '}
-          <Ui>Roster</Ui>, your <Ui>Matchup</Ui> this week, the whole league on{' '}
-          <Ui>Research</Ui>, and your <Ui>League</Ui>. They stay where they are as you
-          scroll.
-        </p>
-        <p>
-          <Ui>Roster</Ui> is your own players over the dates you picked, and the row of
-          buttons under the tabs is <em>how</em> you read them: nothing pressed is the
-          stat table, <Ui>Feed</Ui> is the same players and days as a stream you read
-          down, and <Ui>Schedule</Ui> and <Ui>Projected</Ui> have their own chapters.
-          One at a time — pressing one puts the others away — and pressing the lit one
-          puts you back on the table.
+          The tabs are the pages: <Ui>Roster</Ui> is your players, <Ui>Research</Ui> is
+          the whole league, and <Ui>Matchup</Ui> and <Ui>League</Ui> appear once a
+          fantasy league is connected. The row under them is <em>how</em> you read the
+          Roster page — one at a time, and pressing the lit one puts you back on the
+          table.
         </p>
         <Demo label="The tabs, and the reading buttons under them">
-          {/* The two rows stack and take the stage's whole width — the stage is
-              a centered wrapping flex row, which is right for a run of chips
-              and wrong for a replica of two full-width bands: side by side, the
-              tab strip shrank to its words and the three buttons wrapped into a
-              column beside it. */}
           <div className="tut-demo-stack">
-          <div className="view-bar">
-            <div className="main-tabs">
-              <span className="main-tab is-active">Roster</span>
-              <span className="main-tab">Matchup</span>
-              <span className="main-tab">Research</span>
-              <span className="main-tab">League</span>
+            <div className="view-bar">
+              <div className="main-tabs">
+                <span className="main-tab is-active">Roster</span>
+                <span className="main-tab">Matchup</span>
+                <span className="main-tab">Research</span>
+                <span className="main-tab">League</span>
+              </div>
             </div>
-          </div>
-          <div className="view-tools">
-            <span className="feed-toggle on">Feed</span>
-            <span className="schedule-toggle">Schedule</span>
-            <span className="projected-toggle">Projected</span>
-          </div>
+            <div className="view-tools">
+              <span className="feed-toggle on">Feed</span>
+              <span className="schedule-toggle">Schedule</span>
+              <span className="projected-toggle">Projected</span>
+            </div>
           </div>
         </Demo>
         <dl className="tut-defs">
-          <dt>Roster</dt>
+          <dt>The table — nothing lit</dt>
           <dd>
-            The default. One row per player — opponent, H/AB, R, HR, RBI, SB, OPS, BB,
-            K — with a <strong>Total</strong> row pinned at the bottom. The opponent
-            column reads the matchup and first pitch before the game, the live score
-            and inning during it, the final after. Scroll it sideways on a phone; the
-            headshot column stays put.
-          </dd>
-          <dt>Feed</dt>
-          <dd>
-            Everything that happened, newest first, across everyone you watch, in three
-            sections: <strong>Live</strong> (whoever is at bat, on deck, on base or on
-            the mound), <strong>Recent plays</strong> — <strong>Recent outings</strong>{' '}
-            on the pitcher side — and <strong>Upcoming</strong> games that haven't
-            started yet. Tap any row to open it; the recent section pages 20 at a time
-            behind a <Ui>Load more</Ui> button.
+            A row per player over the days you picked, batters then pitchers, each half
+            with its own headings. The opponent cell reads the matchup before the game,
+            the score and inning during it, the final after. The <strong>Total</strong>{' '}
+            row is a divider as well as a sum — it sits under whoever is starting today.
           </dd>
           <dt>
-            Feed, <Ui>By player</Ui>
+            <Ui>Feed</Ui>
+          </dt>
+          <dd>The same players and days read by the clock. Next chapter.</dd>
+          <dt>
+            <Ui>Schedule</Ui>
           </dt>
           <dd>
-            The same day sorted by who rather than by when: one card per player,
-            holding his live at-bat, his plays or his outing and his next game. This is
-            the deep read — every plate appearance, every pitch, the video — and it is
-            where the old <strong>Games</strong> tab went, that page having been this
-            grouping and nothing else. Cards start collapsed; tap a header to open one.
-            Pick more than one day and a batter's card splits into his games, dated,
-            with the closed card counting games instead of plays. Tap a pitcher's
-            outing and it opens as its own page — his line, the innings, the lineup he
-            faced and his arsenal for that outing.
+            The days <em>ahead</em> in place of the stats: a column per day naming that
+            day's opponent, a count of the games in the span, and the days a pitcher is
+            announced to start. How far ahead is in the date bar.
+          </dd>
+          <dt>
+            <Ui>Projected</Ui>
+          </dt>
+          <dd>
+            What these players are expected to do over the days still to be played,
+            added to what they have done. A projected figure is always drawn broken
+            rather than solid — an estimate never wears the same clothes as a
+            measurement.
           </dd>
         </dl>
+        <h3 className="tut-sub">While games are on</h3>
+        <p>
+          The page re-reads itself every 20 seconds while anyone on your roster is in a
+          live game. Headshots pick up a colored ring for a man <strong>at bat</strong>,{' '}
+          <strong>on deck</strong>, <strong>on base</strong> or{' '}
+          <strong>on the mound</strong>, with his lineup spot — or <strong>SP</strong> /{' '}
+          <strong>RP</strong> — in the corner.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'tut-feed',
+    tab: 'Feed',
+    title: 'The day as it happened',
+    body: (
+      <>
+        <p>
+          <Ui>Feed</Ui> is your roster's day as one stream, newest first:{' '}
+          <strong>Live</strong> pinned at the top, then <strong>Recent plays</strong>,{' '}
+          <strong>Recent outings</strong> and <strong>Upcoming</strong>.
+        </p>
+        <ul className="tut-list">
+          <li>
+            <strong>A plate appearance</strong> gives the outcome, the pitcher and the
+            contact. Press it for MLB's description, the pitch-by-pitch table and a
+            strike-zone plot — hover or tap a pitch and it lights in both. A clip plays
+            in place where there is film.
+          </li>
+          <li>
+            <strong>Steals, pickoffs, balks and wild pitches</strong> get their own rows
+            under the man they happened to.
+          </li>
+          <li>
+            <strong>A pitcher's outing</strong> is one bar, and the bar opens his outing
+            page.
+          </li>
+          <li>
+            <strong>An upcoming game</strong> opens a batter's platoon splits, or the
+            lineup a pitcher is about to face.
+          </li>
+        </ul>
         <p className="tut-note">
-          Both show your whole roster — batters first, then pitchers. On the table the
-          pitchers are a second block under the batters with their own column headings,
-          and those headings take over the top of the screen as you scroll down to
-          them. On the feed a pitcher's outings are their own section below the plays.{' '}
-          <Ui>Research</Ui> is a different animal — the whole league rather than your
-          roster — and has the next chapter to itself.
+          The pills above the plays narrow them to one kind — <Ui>All</Ui>, <Ui>H</Ui>,{' '}
+          <Ui>RBI</Ui>, <Ui>HR</Ui>, <Ui>SB</Ui>, <Ui>R</Ui>, <Ui>Video</Ui> — and touch
+          nothing else; the live section and the outings are never filtered. A red{' '}
+          <Ui>N new plays</Ui> button opens whatever has arrived since you last read.
+          Every clip has a speaker in its corner, which is how you hear one clip with{' '}
+          <Ui>Mute clip audio</Ui> still on.
         </p>
       </>
     ),
@@ -365,454 +402,294 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          <Ui>Research</Ui> is the one page that isn't about your roster: every
-          player in the league on a single sortable table. It answers the other
-          question — not "how did my guys do tonight" but "who else is doing this".
-          It needs nothing watched, which makes it the one view that works before
-          you've added anybody.
+          <Ui>Research</Ui> is the one page that is not about your roster: every player
+          in the league on a single sortable table, forty-odd columns wide. It needs
+          nothing rostered, which makes it the one view that works before you have added
+          anybody.
         </p>
-        <Demo label="Which players the board includes — three buttons, not a choice of one">
+        <Demo label="Which players the board includes — three switches, not a choice of one">
           <div className="research-include">
+            <span className="research-toggle research-inc on">Free Agents</span>
             <span className="research-toggle research-inc">My Roster</span>
             <span className="research-toggle research-inc">Other Rosters</span>
-            <span className="research-toggle research-inc on">Free Agents</span>
           </div>
         </Demo>
         <p>
-          Those three say <em>whose</em> players are on the board, and they{' '}
-          <strong>compose</strong> — each one is separately on or off, so "my roster
-          and the free agents" is a thing you can ask for. It opens on{' '}
-          <Ui>Free Agents</Ui>, which is the question the board is usually being asked;
-          turn all three on for the whole league. Without a fantasy league connected
-          there is no way to know who is on somebody else's team, so the third button
-          reads <Ui>Everyone Else</Ui> and means exactly that, and the middle one
-          isn't offered at all.
+          Those three <strong>compose</strong> — each is separately on or off, so "my
+          roster and the free agents" is a thing you can ask for. Without a fantasy
+          league there is no ownership to read, so the first reads{' '}
+          <Ui>Everyone Else</Ui> and the third is not offered. <Ui>Watchlist</Ui> beside
+          them works the other way round: it <em>adds</em> your starred players,
+          whoever owns them.
         </p>
+        {/* Six of the eleven pills, which is what a 390px phone fits without the
+            last one being cut in half. The real row scrolls sideways there; this
+            one cannot, `.tut-demo` having turned its pointer events off, so a
+            replica wider than the stage would be a control with a hidden half and
+            no way to reach it. */}
         <Demo label="The position row — it picks the board and filters it at once">
           <div className="research-positions">
             <span className="research-pos-tab active">Batters</span>
             <span className="research-pos-tab">Pitchers</span>
             <span className="research-pos-tab">C</span>
-            <span className="research-pos-tab">1B</span>
             <span className="research-pos-tab">SS</span>
             <span className="research-pos-tab">OF</span>
             <span className="research-pos-tab">SP</span>
-            <span className="research-pos-tab">RP</span>
           </div>
         </Demo>
         <p>
-          That row is the main control, and it does two jobs at once: the position you
-          pick decides <em>which board you're on</em>. <Ui>SS</Ui> puts you on the
-          batting table, <Ui>RP</Ui> on the pitching one. <Ui>IF</Ui> and{' '}
-          <Ui>OF</Ui> are the whole infield and outfield, so they overlap the single
-          positions on purpose, and <Ui>SP</Ui> / <Ui>RP</Ui> split the pitchers by
-          whether most of their appearances are starts. On a phone the row scrolls
-          sideways rather than wrapping — a table wants every pixel of height it can
-          get, and eleven pills over three lines would push the first name off the
-          bottom of the screen.
+          The position also decides <em>which board you are on</em>: <Ui>SS</Ui> puts
+          you on the batting table, <Ui>RP</Ui> on the pitching one, and <Ui>IF</Ui> and{' '}
+          <Ui>OF</Ui> overlap the single positions on purpose. Beside it,{' '}
+          <Ui>Season · 7d · 15d · 30d · 60d</Ui> is the span every number is drawn from,
+          and <Ui>Teams</Ui> re-reads the same board as thirty clubs.
         </p>
-        <ul className="tut-list">
-          <li>
-            <strong>Sort by any column.</strong> Tap a header; tap again to reverse
-            it. Columns whose good end is the low one — ERA, WHIP, a batter's K —
-            open small-first on their own. Players with no value for that stat sink
-            to the bottom either way, so a blank never outranks a real number.
-          </li>
-          <li>
-            <strong>Season · 7d · 15d · 30d · 60d.</strong> Every number on the board
-            is drawn from the span you pick here, so it's out in the open rather than
-            behind a button. It's also the one research setting the address bar
-            carries.
-          </li>
-          <li>
-            <strong>The star beside a name.</strong> That's your{' '}
-            <strong>watchlist</strong> — nothing to do with your roster, and the
-            reason both exist. Star the free agent you're thinking about, the
-            leaguemate's shortstop you're eyeing for a trade, anybody. The{' '}
-            <Ui>Watchlist</Ui> button up top then narrows the board to them, and it
-            composes with everything else: the position, the window, the filters.
-            Players who are on your <em>roster</em> carry a small baseball instead,
-            wherever the board is showing more than just them.
-          </li>
-          <li>
-            <strong>Connect a fantasy league</strong> from the baseball button beside
-            the gear and the board learns who owns whom: <Ui>Free Agents</Ui> becomes
-            the players nobody in your league has, and <Ui>Other Rosters</Ui> the ones
-            they do. That page walks through where ESPN keeps the two cookies it
-            needs, and it's also where you say which team in the league is yours. With
-            that set, the button's <Ui>Use my fantasy team</Ui> swaps the other three
-            views over to it — same tables, your fantasy team instead of the roster
-            you built here, each player carrying the slot he's in today (his position
-            if he's in the lineup, <Ui>BE</Ui> or <Ui>IL</Ui> if he isn't). The roster
-            you built is untouched and comes back when you switch off — untouched
-            being the point, so while the fantasy team is in view nothing in the app
-            offers to edit it or the saved one: the reorder screen is away, the search
-            finds players but no longer adds them, and a player's page shows no add or
-            remove. And you only
-            need one person in a league to do any of this: whoever connects first can
-            turn on a share link, and everyone else joins by opening it — no cookies,
-            no league ID. Connecting also adds a <Ui>Ros%</Ui> column to the board and
-            a rostered figure to each player's page: the share of all ESPN leagues
-            he's on a roster in, which sorts and filters like any other column — and a{' '}
-            <Ui>Δ7d</Ui> beside it for which way that has been moving. Sort by it once
-            for the week's biggest adds, twice for the drops. Four more spans are a
-            tick away in <Ui>Columns</Ui> — <Ui>Δ1d</Ui>, <Ui>Δ3d</Ui>,{' '}
-            <Ui>Δ15d</Ui> and <Ui>Δ30d</Ui> — and they often disagree: the
-            man everyone dropped last month can be the one they're picking back up
-            today. Each label says the span it actually measured, and a span with no
-            history behind it yet isn't offered at all.
-          </li>
-        </ul>
-        <h3 className="tut-sub">The four buttons</h3>
         <dl className="tut-defs">
-          <dt>Search</dt>
-          <dd>Find one player by name, anywhere in the league.</dd>
-          <dt>Filters</dt>
+          <dt>
+            <Ui>Search</Ui> · <Ui>Filters</Ui>
+          </dt>
           <dd>
-            Pick a stat, <Ui>≥</Ui> or <Ui>≤</Ui>, a number, <Ui>Add</Ui>. Stack as
-            many as you like — "300+ PA" and ".350+ xwOBA" is two of them — and each
-            shows as a chip under the bar that stays put whether the panel is open or
-            shut. A filter on a column you've hidden still applies.
+            Search matches a name or a club. Filters is a builder — a stat, <Ui>≥</Ui>{' '}
+            or <Ui>≤</Ui>, a number — and they stack as chips you can drop. A filter on
+            a hidden column still applies.
           </dd>
-          <dt>Watchlist</dt>
+          <dt>
+            <Ui>Columns</Ui> · <Ui>Ranks</Ui>
+          </dt>
           <dd>
-            Narrows the board to the players you've starred. The number on the button
-            is how many of them are on this board — batters or pitchers, whichever
-            you're looking at.
+            The board opens on the box score plus the headline Statcast numbers; the
+            rest are a tick away, and their order is yours to set. <Ui>Ranks</Ui> puts a
+            percentile badge under every value, 100 always the good end — dashed where
+            the player is short of the qualifying bar.
           </dd>
-          <dt>Columns</dt>
+          <dt>Sorting</dt>
           <dd>
-            The two boards carry about forty columns each, so they open on the
-            box-score line plus the headline Statcast numbers and the rest are a tick
-            away. Each group has an <Ui>All</Ui> / <Ui>None</Ui>. Your choice is saved
-            to your account, per board.
+            Press a header, press again to reverse. ERA, WHIP and a batter's K open
+            small-first on their own, and a blank never outranks a real number.
           </dd>
         </dl>
         <p className="tut-note">
-          The count above the table — "622 of 622 batters" — always says how much of
-          the board you're looking at, so a short table reads as a tight filter rather
-          than a short league. Tap any name to open that player's page, which is where
-          the <Ui>Add to roster</Ui> button is.
+          After each name: the <strong>star</strong> is your watchlist, the{' '}
+          <strong>baseball</strong> means he is on your roster, the{' '}
+          <strong>padlock</strong> that a leaguemate has him, the{' '}
+          <strong>newspaper</strong> that there is news about him today. The line above
+          the table — "455 of 622 batters" — always says how much of the board you are
+          looking at, so a short table reads as a tight filter rather than a short
+          league.
         </p>
       </>
     ),
   },
   {
-    id: 'tut-navigate',
-    tab: 'Navigation',
-    title: 'Getting around',
-    body: (
-      <>
-        <p>
-          Two things are clickable on a player wherever they appear, and they go to
-          two different places. It's worth learning once:
-        </p>
-        <ul className="tut-list">
-          <li>
-            <strong>The headshot</strong> opens the <strong>player page</strong> — the
-            season-long view: percentile rankings, splits, game log, arsenal. That
-            works from the summary table, the feed, a card header and the search
-            results alike.
-          </li>
-          <li>
-            <strong>The name</strong>, in the summary table or the feed, jumps to that
-            player's card on the <Ui>Games</Ui> view, expands it and scrolls it to
-            the top — so you get from "he had a good night" to the pitch-by-pitch in
-            one tap.
-          </li>
-        </ul>
-        <p>
-          After a jump like that, a <Ui>Back</Ui> button appears at the{' '}
-          <strong>bottom left</strong>. It returns you to the view you came from, at
-          the scroll position you left it at. Using the view tabs clears it — an
-          explicit navigation means you're no longer on a detour.
-        </p>
-        <p className="tut-note">
-          The player page closes with its own <Ui>Back</Ui> button, top left, or the{' '}
-          <Ui>Esc</Ui> key.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: 'tut-cards',
-    tab: 'Cards',
-    title: 'Inside a card',
-    body: (
-      <>
-        <p>
-          On the <Ui>Games</Ui> view, a card's header is the whole summary: name,
-          season line, the game's score, and a tag for anything live. Tap the header
-          to expand it — and tap it again to close.
-        </p>
-        <h3 className="tut-sub">Batters</h3>
-        <p>
-          An open card is one block per game, and inside it one card per plate
-          appearance: the outcome, the pitch-by-pitch table, and a strike-zone plot of
-          where those pitches went. Hover a pitch — or tap it on a phone — and it
-          lights up in the table and the zone at once.
-        </p>
-        <p>
-          Batted balls carry exit velocity, launch angle and distance. Where a clip
-          exists it plays right there in the at-bat, and the <Ui>Highlights</Ui>{' '}
-          button on a finished game plays every one of that player's at-bats back to
-          back.
-        </p>
-        <p className="tut-note">
-          Every clip has a speaker button in its top-left corner. If you have{' '}
-          <Ui>Mute clip audio</Ui> on in settings, that is where you turn the sound
-          back on for one clip without changing the setting — handy on a phone, where
-          the browser's own controls disappear while a clip is playing.
-        </p>
-        <h3 className="tut-sub">Pitchers</h3>
-        <p>A pitcher's card opens onto four sections, each its own bar:</p>
-        <dl className="tut-defs">
-          <dt>Line</dt>
-          <dd>
-            The outing: decision, IP, pitch count and strike rate, then the results
-            (H/R/ER/BB/K), the rates (ERA, WHIP, K%, whiff, CSW) and the contact he
-            gave up. Open by default — it's what you came for.
-          </dd>
-          <dt>Innings</dt>
-          <dd>
-            Every batter faced, grouped by inning. An inning header carries BF/H/R/K
-            and opens to the results; a result opens again to the full pitch sequence.
-          </dd>
-          <dt>Opponent</dt>
-          <dd>
-            How the lineup he's facing hits — season, and against his hand — with each
-            number's league rank beside it. On a pitcher who hasn't taken the ball
-            yet, this <em>is</em> the card.
-          </dd>
-          <dt>Arsenal</dt>
-          <dd>
-            One row per pitch type: usage, strike rate, velo, spin and movement, each
-            with an arrow against his own season, then what hitters did against it.
-          </dd>
-        </dl>
-        <p className="tut-note">
-          The Line and Arsenal sections carry <Ui>Overall</Ui> / <Ui>vs RHB</Ui> /{' '}
-          <Ui>vs LHB</Ui> tabs, and only offer a hand he actually faced.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: 'tut-details',
+    id: 'tut-player',
     tab: 'Player page',
-    title: 'The player page',
+    title: "A player's page",
     body: (
       <>
         <p>
-          Tapping any headshot opens the season-long view of that player. It works for
-          anyone on the season roster, on your list or not, and its tabs are:
+          A name or a headshot, anywhere in the app, opens the season-long view of that
+          player — on your roster or not. The head carries a <Ui>Watch</Ui> star,{' '}
+          <Ui>Add to roster</Ui> or <Ui>On roster</Ui>, and a link out to Baseball
+          Savant. Its tabs:
         </p>
         <dl className="tut-defs">
           <dt>Overview</dt>
           <dd>
-            The tab it opens on, and it leads with what he is doing today — or, on a
-            day his club isn&rsquo;t playing, the next game he has. Under that: his
-            latest news, his season line and his last five games. Each block links to
-            the tab that holds the whole of it.
+            What he is doing today — his at-bats, his outing, or the next game he has —
+            then his news, his season line and his last five games. Each block links to
+            the tab holding the whole of it.
           </dd>
           <dt>Percentile Rankings</dt>
           <dd>
-            The Savant card — where he ranks in the league on each metric. Rows that
-            pair an actual with its expected counterpart (wOBA/xwOBA, ERA/xERA) read
-            as the expected number at rest; hover or tap one to reveal both ends and
-            see how far over or under he's been running.
+            Where he ranks in the league on each metric. A row pairing an actual with
+            its expected (wOBA/xwOBA, ERA/xERA) shows the expected number; press it for
+            both ends.
+          </dd>
+          <dt>Arsenal</dt>
+          <dd>
+            Pitchers only: <strong>Pitch Usage</strong>, what he throws to each hand,
+            and <strong>Movement Profile</strong>, where each pitch breaks against the
+            league, with his arm angle in the corner. Pick a pitch in one and it lights
+            in both.
           </dd>
           <dt>Splits</dt>
           <dd>
-            His season cut by the hand he faced, as one bar per stat running from the
-            center toward the side he is <em>stronger</em> against — so the question a
-            platoon split is opened with is answered without any subtraction. A hatched
-            bar means one side is too thin to lean on.
+            One bar per stat, running from the center toward the hand he is{' '}
+            <em>stronger</em> against — so a platoon question is answered without any
+            subtraction. Hatched means one side is too thin to lean on.
           </dd>
           <dt>News</dt>
           <dd>
-            What has happened to him lately, newest first: RotoWire&rsquo;s notes on
-            him — a lineup he is out of, a bullpen session, a save, the closer&rsquo;s
-            job changing hands — interleaved with MLB&rsquo;s own transaction log, the
-            IL placements, rehab assignments, recalls and trades a fantasy manager acts
-            on. A report opens his RotoWire page; a transaction is the one line MLB
-            publishes and has nowhere to go. Where the two describe the same move on
-            the same day, the report is the row you get.
+            Beat reports — a lineup he is out of, a bullpen session, a job changing
+            hands — interleaved with MLB's own IL placements, recalls and trades.
           </dd>
           <dt>Stats</dt>
           <dd>
-            The research board turned on its side: the same five spans down the page —
-            season, then the last 7, 15, 30 and 60 days — under the board's own columns,
-            so lately reads against the whole year in one glance.
+            The research board turned on its side: season, then the last 7, 15, 30 and
+            60 days down the page, under the board's own columns.
           </dd>
           <dt>Game Log</dt>
           <dd>
-            Every regular-season game, newest first, with a season total row at the
-            bottom. Columns marked <strong>Szn</strong> are season-to-date{' '}
-            <em>through</em> that game, not the game's own — that's what a game log
-            means by AVG. Press any row to open that afternoon.
+            Every game, newest first. Columns marked <strong>Szn</strong> are
+            season-to-date <em>through</em> that game rather than the game's own. Press
+            a row to open that afternoon.
+          </dd>
+          <dt>Schedule · Charts</dt>
+          <dd>
+            His club's next fortnight, or a starter's next turns; and a rolling average
+            over the last 50, 100 or 250 plate appearances.
+          </dd>
+        </dl>
+      </>
+    ),
+  },
+  {
+    id: 'tut-pitchers',
+    tab: 'Pitchers',
+    title: 'An outing, pitch by pitch',
+    body: (
+      <>
+        <p>
+          A pitcher's game opens as a page of its own — from his bar in the Feed, from
+          his Overview, or from a row of his Game Log — in four sections.
+        </p>
+        <dl className="tut-defs">
+          <dt>Line</dt>
+          <dd>
+            The outing: decision, IP, pitch count and strike rate, then the results, the
+            rates and the contact he gave up.
+          </dd>
+          <dt>Innings</dt>
+          <dd>
+            A bar per half-inning. Press one and the inning opens as the batters he
+            faced, clips and all; press a batter and you get the pitch sequence beside a
+            strike-zone plot, the two lighting up together.
+          </dd>
+          <dt>Opponent</dt>
+          <dd>
+            How the lineup he is facing hits — overall and against his hand — with each
+            number's league rank beneath it, over a span and a home/away cut you pick.
+            On a pitcher who has not taken the ball yet, this <em>is</em> the page.
           </dd>
           <dt>Arsenal</dt>
-          <dd>Pitchers only: the season's pitch mix, with its own platoon splits.</dd>
-          <dt>Charts</dt>
           <dd>
-            A rolling average over the last 50, 100 or 250 plate appearances — the
-            shape of a hot or cold stretch.
+            A row per pitch type: usage, velo, spin and movement against his own season,
+            and what hitters did against it.
+          </dd>
+        </dl>
+        <p className="tut-note">
+          Line and Arsenal carry <Ui>Overall</Ui> / <Ui>vs RHB</Ui> / <Ui>vs LHB</Ui>,
+          and only offer a hand he actually faced. Nothing here has a chevron on it: the
+          bar is the thing to press.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'tut-fantasy',
+    tab: 'Fantasy',
+    title: 'Connect your fantasy league',
+    body: (
+      <>
+        <p>
+          The{' '}
+          <Ui>
+            <BaseballMark size={14} width={2} />
+          </Ui>{' '}
+          button beside the gear is everything fantasy. With nothing connected it opens
+          the league page: paste a <Ui>League URL or ID</Ui>, press{' '}
+          <Ui>Connect league</Ui>, and say which team is yours. A private league also
+          wants ESPN's <Ui>SWID</Ui> and <Ui>espn_s2</Ui> cookies, and the page walks
+          through where they are — a laptop errand, once.
+        </p>
+        <p className="tut-note">
+          Only one person in a league needs to do that. Whoever connects first turns on{' '}
+          <Ui>Share this league</Ui> and hands out the link; everybody else opens it and
+          picks their team — no cookies, no league ID.
+        </p>
+        <dl className="tut-defs">
+          <dt>
+            <Ui>Matchup</Ui>
+          </dt>
+          <dd>
+            Your week. Each category runs from its label toward whoever leads it, under
+            a meter for the matchup as a whole; press a category for a day-by-day chart,
+            or <Ui>Projected</Ui> to carry every total to the end of the week. Both
+            managers' rosters are at the ends of the strip.
+          </dd>
+          <dt>
+            <Ui>League</Ui>
+          </dt>
+          <dd>
+            <strong>Scoreboard</strong> is the week's matchups as cards;{' '}
+            <strong>Rankings</strong> is every team against every category over a span
+            you pick; <strong>Transactions</strong> is who has added, dropped and traded
+            whom, with a dot for moves you have not seen.
+          </dd>
+          <dt>
+            <Ui>Use my fantasy team</Ui>
+          </dt>
+          <dd>
+            Swaps the Roster readings over to your ESPN roster, each player carrying
+            today's slot — his position if he is starting, <Ui>BE</Ui> or <Ui>IL</Ui> if
+            not. The roster you built here is untouched and comes back when you switch
+            off.
           </dd>
         </dl>
         <p>
-          The header carries <Ui>Add to roster</Ui> when he isn't on it and a remove
-          button when he is, a <Ui>Watch</Ui> star for the other list, and a link out
-          to his Baseball Savant page. While the views are reading your fantasy team
-          the first two step aside — ESPN owns that list, so the page says{' '}
-          <Ui>On roster</Ui> for a player who is on it and leaves the adding and
-          dropping to ESPN. The star stays either way; the watchlist is yours.
+          A league also fills in <Ui>Free Agents</Ui> and <Ui>Other Rosters</Ui> on the
+          research board and adds <Ui>Ros%</Ui> — the share of all ESPN leagues a man is
+          rostered in — with <Ui>Δ7d</Ui> beside it. Sort by it once for the week's
+          biggest adds, twice for the drops.
         </p>
-      </>
-    ),
-  },
-  {
-    id: 'tut-editing',
-    tab: 'Editing',
-    title: 'Reorder and remove',
-    body: (
-      <>
-        <p>
-          Your roster keeps the order you put it in, and that order is what every
-          view reads down. As soon as there is anybody on your roster,{' '}
-          <Ui>
-            <PencilIcon /> Edit players
-          </Ui>{' '}
-          appears in the{' '}
-          <Ui>
-            <GearIcon /> Settings
-          </Ui>{' '}
-          menu beside the title — one player is enough, since removing him is as
-          much what this screen is for as putting two in an order. Press it from
-          anywhere and it takes you to{' '}
-          <Ui>Roster</Ui>, where the editing happens.
-        </p>
-        <ol className="tut-steps">
-          <Step>
-            Tap <Ui>Edit players</Ui>. The edit screen takes the whole page — the
-            tabs, the dates and the search all step out of the way, leaving the list
-            and the title above it, with <Ui>Done</Ui> beside that title as the way
-            back.
-          </Step>
-          <Step>
-            Drag a row to move it. On a phone, drag from the <Ui>⠿</Ui> grip — the
-            rest of the row scrolls the page as usual. With a mouse you can grab
-            anywhere on the row. The new order saves as soon as you let go.
-          </Step>
-          <Step>
-            Tap a row's <Ui>✕</Ui> to remove that player. It arms first, turning into{' '}
-            <Ui>Remove?</Ui>; tap again to confirm. There's no undo, which is why it
-            takes two.
-          </Step>
-          <Step>
-            Tap <Ui>Done</Ui> beside the title to go back to the table.
-          </Step>
-        </ol>
         <p className="tut-note">
-          The list is your whole roster, batters then pitchers, in the order the table
-          draws them — and it counts your roster rather than what the views are showing,
-          so a player hidden by <Ui>Hide injured players</Ui> is still here to be
-          dropped. A player can also be removed from their player page.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: 'tut-live',
-    tab: 'Live',
-    title: 'While games are on',
-    body: (
-      <>
-        <p>
-          When any watched player is in a game that's in progress, the app re-polls
-          every 20 seconds on its own — no refreshing. That poll is only for live
-          games, so anything else that changes during the day — a lineup posting, an
-          IL move — arrives the next time the page reads it. The one thing the app
-          can't see for itself is a move you make on ESPN, and{' '}
+          The one thing the app cannot see for itself is a move you make on ESPN.{' '}
           <Ui>
             <RefreshIcon /> Refresh from ESPN
           </Ui>{' '}
-          in the fantasy menu is what sends it to go and look.
+          is what sends it to go and look.
         </p>
-        <ul className="tut-list">
-          <li>
-            Headshots pick up a colored ring for a player who's{' '}
-            <strong>at bat</strong>, <strong>on deck</strong>,{' '}
-            <strong>on base</strong> or <strong>on the mound</strong>, on the cards
-            and in the summary table alike, with a matching tag beside the name.
-          </li>
-          <li>
-            The feed's <strong>Live</strong> section pins exactly those players at the
-            top, so whatever is happening right now never scrolls away.
-          </li>
-          <li>
-            A batter's headshot carries his <strong>lineup spot</strong> in the
-            corner; a pitcher's carries <strong>SP</strong>, or <strong>RP</strong>{' '}
-            with the inning he entered.
-          </li>
-          <li>
-            On a pitcher's card, the half-inning he's currently throwing is outlined
-            in purple and tagged <strong>Live</strong>.
-          </li>
-        </ul>
       </>
     ),
   },
   {
-    id: 'tut-tips',
-    tab: 'Tips',
-    title: 'Shortcuts worth knowing',
+    id: 'tut-settings',
+    tab: 'Settings',
+    title: 'Settings, and a few shortcuts',
     body: (
       <>
         <ul className="tut-list">
           <li>
             <strong>
-              <CollapseIcon /> Collapse all
-            </strong>{' '}
-            — bottom right, whenever anything is open. It clears whichever view you're
-            on.
-          </li>
-          <li>
-            <strong>↑ Back to top</strong> — bottom right too, once you've scrolled a
-            screenful.
-          </li>
-          <li>
-            <strong>The address bar is your state.</strong> The dates, the view, which
-            cards are open, which player page you're on, and on the league
-            board the position, the time span and the columns — all of it lives in the
-            URL. Reload and you're where you left off; send the link and someone else
-            lands on the same screen. A link saved under <Ui>Today</Ui> opens on the
-            new today, not the day you saved it.
-          </li>
-          <li>
-            <strong>
               <GearIcon /> Settings
             </strong>{' '}
-            — beside the title: hiding injured players, muting clip audio, the
-            color scheme, editing your player order, this guide, and sign out. The
-            two toggles and the scheme are saved to your account, so they follow you
-            to another device.
+            beside the title holds the color scheme, <Ui>Hide injured players</Ui>,{' '}
+            <Ui>Mute clip audio</Ui>, <Ui>Edit players</Ui>, this guide and sign out.
+            All of it is saved to your account, so it follows you to another device.
           </li>
           <li>
-            <strong>Four color schemes.</strong> <Ui>Midnight</Ui> is the navy
-            original, <Ui>Lavender</Ui> is dark gray and violet, and{' '}
-            <Ui>Maroon</Ui> and <Ui>Powder Blue</Ui> are the two halves of a 1980
-            road uniform — one dark, one light. Pick one under{' '}
-            <Ui>
-              <GearIcon /> Settings
-            </Ui>
-            . Each is a swatch of the palette it selects, and the change is
-            immediate — the whole app, every view.
+            <strong>Six color schemes.</strong> <Ui>Dark</Ui> and <Ui>Light</Ui> are the
+            plain pair; <Ui>Midnight</Ui> is the navy original, <Ui>Lavender</Ui> is
+            gray and violet, and <Ui>Maroon</Ui> and <Ui>Powder Blue</Ui> are the two
+            halves of a 1980 road uniform. Each button is a swatch of the palette it
+            picks.
           </li>
           <li>
-            <strong>Expanding scrolls.</strong> Whatever you open — a card, a game, an
-            inning, an at-bat — lands at the top of the screen, so you never open
-            something and then have to go looking for it.
+            <strong>Give a table the whole page</strong> with the expand button in the
+            corner cell above the headshots — the roster, the research board and a game
+            log all have one.
+          </li>
+          <li>
+            <strong>Back and Escape.</strong> Every page that opens over another has a{' '}
+            <Ui>Back</Ui> button at the top left and answers <Ui>Esc</Ui>, and one press
+            undoes exactly one thing. <strong>↑</strong> at the bottom right returns you
+            to the top.
+          </li>
+          <li>
+            <strong>The address bar is your state</strong> — the dates, the page, the
+            reading, the player you have open, the board's whole setup. Reload and you
+            are where you left off; send the link and someone else lands on the same
+            screen. A link saved under <Ui>Today</Ui> opens on the new today.
           </li>
         </ul>
       </>
@@ -855,12 +732,44 @@ function useActiveChapter(rootRef: RefObject<HTMLElement | null>): string {
   return active;
 }
 
+/**
+ * The strip follows the chapter it is marking.
+ *
+ * Measured at 390px with nine chapters: five chips fit, so a reader on
+ * `Settings` was being shown a lit chip four positions off the right end of a
+ * strip that had never moved — a jump list saying nothing about where you are,
+ * which is the one job it has beyond jumping.
+ *
+ * **`scrollLeft` on the strip rather than `scrollIntoView` on the chip.** That
+ * call walks every scrollable ancestor, and this one's nearest is the overlay
+ * itself — so nudging the strip sideways would also have moved the page the
+ * reader is scrolling, which is what raises the highlight in the first place.
+ * Written as "bring it just inside whichever edge it is past", so a chip
+ * already in view is left exactly where it is and no press ever costs a jolt.
+ */
+function useFollowActive(navRef: RefObject<HTMLElement | null>, active: string) {
+  useEffect(() => {
+    const nav = navRef.current;
+    const chip = nav?.querySelector<HTMLElement>(`[data-chapter="${active}"]`);
+    if (!nav || !chip) return;
+    const pad = 16;
+    const left = chip.offsetLeft - pad;
+    const right = chip.offsetLeft + chip.offsetWidth + pad;
+    if (left < nav.scrollLeft) nav.scrollTo({ left, behavior: 'smooth' });
+    else if (right > nav.scrollLeft + nav.clientWidth) {
+      nav.scrollTo({ left: right - nav.clientWidth, behavior: 'smooth' });
+    }
+  }, [navRef, active]);
+}
+
 export function Tutorial({ onClose }: { onClose: () => void }) {
   // Same as the player page: this covers the app but scrolls in its own box, so
   // the page behind it has to be frozen or the scroll chains straight through.
   useLockBodyScroll();
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const active = useActiveChapter(scrollRef);
+  useFollowActive(navRef, active);
   // The background inert and the focus in here, as every overlay in this app
   // now does — measured before the fix, 10 of 10 tab stops off this page and
   // into the chrome behind it. See `hooks.ts::useOverlayFocus`.
@@ -892,19 +801,21 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
             How to use <span className="brand-sicko">Statcast Sicko</span>
           </h1>
           <p className="tut-lede">
-            Watch a handful of players, pick a stretch of days, and read the night
-            three ways — as a table, a card per player, or a live stream. Here's the
-            whole app in nine short chapters.
+            Follow a handful of players, pick a stretch of days, and read them four
+            ways — as a stat table, as the day's plays, as the fixtures ahead, or as
+            what those fixtures are worth. Here is the whole app in nine short
+            chapters.
           </p>
         </div>
       </div>
 
       <div className="tut-nav-wrap">
-        <nav className="tut-nav" aria-label="Chapters">
+        <nav className="tut-nav" aria-label="Chapters" ref={navRef}>
           {CHAPTERS.map((c) => (
             <button
               key={c.id}
               type="button"
+              data-chapter={c.id}
               className={`tut-nav-chip${active === c.id ? ' is-active' : ''}`}
               onClick={() => jump(c.id)}
               aria-current={active === c.id ? 'true' : undefined}
