@@ -615,8 +615,9 @@ vocabulary and this is a habit of reading rather than a setting on either table.
 The whole of the rule — 0–100 with 100 always the good end, `ascFirst` read back
 for orientation, nulls out of the denominator and unbadged, the four profile
 columns and the Fantasy group left out for having no good end, the dashed credit
-cells left out for having no value on screen — is `components/columnRanks.tsx`
-and is argued under **the research board**. What is this tab's own is where the
+cells left out for having no value on screen, **the scale built from the
+qualified players and a dashed ring on anyone outside them** — is
+`components/columnRanks.tsx` and is argued under **the research board**. What is this tab's own is where the
 population comes from.
 
 **A percentile needs a population and this tab has none**: it is one player's
@@ -659,6 +660,26 @@ whose board has not landed simply has no badges yet**, which is the app's own
 loading rule — never a wait over data, nothing blanks while a read is in flight —
 and they arrive a window at a time.
 
+**The population is that board's *qualified* players**, which is where this tab
+inherits a change rather than making one: `rankScales` is the board's own
+function and it now builds each scale from the rows where `ResearchRow.qualified`
+is true — Savant's bar for the span, 2.1 plate appearances per team game or 1.25
+batters faced. A row short of it is still drawn, still badged and marked with a
+dashed ring; see **the research board** for the whole argument, including why
+that ring is the percentile card's mark arriving on a second surface rather than
+a second meaning for a broken border.
+
+**That makes this tab the one place the per-span qualifier is visible as such**,
+because it draws five spans of one man at once and he can be on either side of
+the bar in different ones. Driven on the live app, Nick Gonzales — a season
+regular at 494 PA — reads Season `xwOBA .325 → 56`, 15-day `.389 → 91`, 30-day
+`.331 → 68` and 60-day `.317 → 54` with no ring, and **his 7-day row rings every
+badge on it**: 11 plate appearances against that window's bar of 13, so his
+`.522 → 99` is a placement on the qualified players' scale rather than a standing
+among them, and the row says so where a bare 99 would not. Yordan Alvarez, 23 PA
+over the same week, clears it and draws none. Rows are **58.55px either way** —
+the ring is an `outline`, so it costs no height and no width.
+
 **Each row is ranked within its own span's board**, keyed by window, which is the
 only comparison that means anything: a seven-day line against the season board
 would rank every player last on every counting column. Checked against an
@@ -666,7 +687,9 @@ independent computation over the same blobs — Perez's 30-day `HR 5 → 92`, `O
 .784 → 70`, `K% 18.2% → 71`, `xwOBA .335 → 76` (population 482), and Sale's
 7-day `ERA 4.50 → 35`, `K 8 → 92`, `FIP 1.48 → 90`, `IP 6.0 → 83` (population
 415) — all exact. And the badge's tooltip names the span it used: `Games pitched:
-56th percentile of the 752 pitchers with a figure on the Season board.`
+56th percentile of the 354 qualified pitchers with a figure on the Season
+board.`, and on a ringed badge one sentence more, naming the bar he is short of
+and what the ring means
 
 **The board and this tab show the same number for the same player, window and
 column**, which is the test the design was arranged around. Driven back to back

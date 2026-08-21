@@ -1159,16 +1159,24 @@ export interface ResearchRow {
   games: number;
   /** A majority of his appearances are starts — the same test `isRotationStarter`
    *  applies to a watched pitcher, recomputed for whichever window the board is
-   *  on. Computed server-side because the qualifier below is measured against
-   *  it: a starter qualifies on innings and a reliever on appearances. The
-   *  SP/RP pills read ESPN's season-long eligibility where there is one and
-   *  fall back to this where there isn't, so the two answers may differ — see
-   *  `espnPositions` in ResearchTable.tsx. Always false on a batter row. */
+   *  on. Computed server-side so one definition of a starter serves the SP/RP
+   *  pills' fallback; it used to serve the qualifier below too, and no longer
+   *  does — Savant's rule makes no starter/reliever split. The SP/RP pills read
+   *  ESPN's season-long eligibility where there is one and fall back to this
+   *  where there isn't, so the two answers may differ — see `espnPositions` in
+   *  ResearchTable.tsx. Always false on a batter row. */
   starter: boolean;
-  /** The rate-stat qualifier, measured against games **his team** has played
-   *  rather than games he has played, which is the whole point of it. Three
-   *  rules, because one number can't serve all three roles — see `qualifies`
-   *  in research.ts. */
+  /** **Savant's percentile bar for this window** — 2.1 plate appearances per
+   *  team game for a batter, 1.25 batters faced for a pitcher, measured against
+   *  games **his team** played inside the span rather than games he played,
+   *  which is the whole point of it. Not MLB's 3.1-PA rate-stat qualifier; see
+   *  `qualifies` in research.ts for the measurement that pins each figure.
+   *
+   *  **This is what the percentile scale is built from** — the rows where it is
+   *  true are the population `rankScales` ranks within, on the board and on the
+   *  player page's Stats tab alike. A row where it is false is still drawn and
+   *  still badged, placed on that scale with a dashed ring saying he is not one
+   *  of them (`columnRanks.tsx`). */
   qualified: boolean;
 
   // Batting half — null on a pitcher row.

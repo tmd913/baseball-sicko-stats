@@ -6,7 +6,7 @@ import { LoadingBlock, LoadingLine } from './Loading';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
-import { RankBadge, RanksButton, rankScales } from './columnRanks';
+import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import {
   defaultScheduleSpan,
@@ -1200,6 +1200,10 @@ export function ResearchTable({
   /** What a badge says it is ranked against — the board and the span, in
    *  words, since a 7-day percentile and a season one are different claims. */
   const rankPopulationLabel = `the ${windowLabel(statWindow)} board`;
+  /** How many of the board clear Savant's bar for this span — the scale's own
+   *  size, named wherever the population is. Counted through `rankPopulation`
+   *  so it cannot come to disagree with the set the scale is built from. */
+  const qualifiedCount = useMemo(() => rankPopulation(population).length, [population]);
 
   /**
    * What the search box matches each row against, **folded once per row rather
@@ -1842,9 +1846,9 @@ export function ResearchTable({
       {showRanks && !schedule && (
         <span
           className="research-badge"
-          title={`Every value carries its percentile against the whole ${windowLabel(
+          title={`Every value carries its percentile against the qualified players on the ${windowLabel(
             statWindow,
-          )} board — 100 is best`}
+          )} board — 100 is best. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`}
         >
           Ranks
         </span>
@@ -2199,8 +2203,12 @@ export function ResearchTable({
                 <RanksButton
                   on={showRanks}
                   onToggle={() => onShowRanksChange(!showRanks)}
-                  population={`the whole ${windowLabel(statWindow)} board (${population.length} ${
+                  population={`the qualified players on the whole ${windowLabel(
+                    statWindow,
+                  )} board (${qualifiedCount} of ${population.length} ${
                     kind === 'pitcher' ? 'pitchers' : 'batters'
+                  }, Savant's bar of ${
+                    QUALIFIER_WORDS[kind]
                   }), whatever you have narrowed it to`}
                 />
               </>
@@ -2589,6 +2597,7 @@ export function ResearchTable({
                             value={c.value(r)}
                             kind={kind}
                             population={rankPopulationLabel}
+                            qualified={r.qualified}
                           />
                         )}
                       </td>

@@ -65,20 +65,23 @@ async function getTeamAbbrevs(): Promise<Map<number, string>> {
 
 // ---- Qualifying ------------------------------------------------------------
 //
-// The rate-stat qualifier is 3.1 plate appearances (or 1.0 inning) per game
-// **his team** has played — which is why it needs the standings and can't be
-// read off the leaderboard, whose only game count is the player's own.
+// The qualifier is a rate **per game his team has played** — which is why it
+// needs the standings and can't be read off the leaderboard, whose only game
+// count is the player's own.
 //
-// **Nothing reads `ResearchRow.qualified` any more.** The board's `Qualified`
-// toggle was its only reader in either workspace and has been removed, so
-// everything below still runs on every cold build of the blob and still ships a
-// boolean on every row, answering a question nothing on screen asks. It is kept
-// deliberately: the reasoning is unchanged and correct, and one client-side
-// filter would make it useful again. Pruning it would drop this whole section,
-// `getTeamGames`/`getTeamGamesInRange`'s standings and schedule calls, and the
-// field from both `types.ts` — and would need the storage key's `-v7` bumped,
-// or a stored blob keeps deserializing with it. `starter` must survive either
-// way: the SP/RP position pills read it.
+// **`ResearchRow.qualified` has a reader again, and it is the percentile
+// badges** (`client/src/components/columnRanks.tsx`). It spent a spell with
+// none — the board's `Qualified` toggle was its only one and was removed — and
+// this file's comment said so and kept the field on the grounds that "one
+// client-side filter would make it useful again". What arrived is not a filter:
+// nobody is dropped from the board. The flag now decides **whose values build
+// the percentile scale**, which is the one job it can do without putting an
+// invisible rule in front of the reader — the objection that retired the
+// toggle. Every row still draws, and a row outside the population is marked
+// rather than blanked.
+//
+// So `qualified` is no longer a field with no reader, and the rule it carries
+// is **no longer MLB's**. See `qualifies` below.
 
 /** Games played, per team id, from the standings. */
 /**
@@ -139,27 +142,56 @@ async function getTeamGames(): Promise<Map<number, number>> {
 
 /** A majority of his appearances are starts — the same test `isRotationStarter`
  *  applies to a watched pitcher, ties counting as a starter. Here rather than in
- *  the client so the SP/RP pills and the qualifier below share one definition. */
+ *  the client so one definition of a starter serves the SP/RP pills' fallback.
+ *  It used to serve the qualifier below as well; Savant's rule makes no such
+ *  split, so this is now read by the pills alone. */
 function isStarter(row: ResearchRow): boolean {
   return row.games > 0 && (row.gamesStarted ?? 0) * 2 >= row.games;
 }
 
+/** Savant's rate per team game, by trade. Measured off its own exports — see
+ *  `qualifies` below for the reproduction and the two boundary players. */
+const QUALIFIER_RATE: Record<PlayerKind, number> = { batter: 2.1, pitcher: 1.25 };
+
 /**
- * Whether he clears the bar, against his own team's games played.
+ * **Savant's bar for its percentile rankings**, measured against his own team's
+ * games played.
  *
- * **Three rules, because one number cannot serve all three roles.** A batter
- * qualifies on 3.1 plate appearances per team game and a starter on one inning
- * — MLB's own figures, and `Math.floor` is what reproduces them (162 games is a
- * 502 PA qualifier, and 3.1 × 162 is 502.2).
+ * **Two rules, one per trade, and they are Savant's rather than MLB's.** A
+ * batter needs **2.1 plate appearances per team game** and a pitcher **1.25
+ * batters faced per team game**. MLB's own rate-stat qualifier — 3.1 PA or one
+ * inning per team game — is a different and much higher bar, and is not what
+ * Savant ranks within; this used to compute MLB's, which was right for the
+ * `Qualified` toggle it was written for and wrong for a percentile scale.
  *
- * A **reliever qualifies on appearances**, one per three team games, because
- * the innings rule excludes literally every one of them: at 117 team games it
- * asks for 117 innings and the hardest-worked reliever in the league has 59.
- * Innings are also the wrong measure of a reliever's season — the *most used*
- * arm in the league right now has 62 appearances and 47 innings, a matchup lefty
- * whose value is in how often he is asked, not how long he stays. One
- * appearance per three team games is ~39 today, which is about four relievers a
- * club: a settled bullpen core rather than everyone who has warmed up.
+ * **Both figures were measured off Savant rather than recalled.** Taking its
+ * own `percentile-rankings` CSV for 2026 as the answer key and its
+ * `expected_statistics` board at `min=1` as the field, and placing each player
+ * against his club's games played out of the MLB standings:
+ *
+ * - **Pitchers: 354 ranked of 814, and `bf >= 1.25 × G` reproduces the set
+ *   exactly** — zero false positives, zero false negatives. The boundary is
+ *   sharp in both directions: Austin Warren at 160 BF against a 128-game club
+ *   sits on 1.2500 and *is* ranked, Matt Strahm at 161 BF against a 129-game
+ *   club sits on 1.2481 and is *not*. That pair is also what settles the
+ *   rounding — the comparison is `>= rate × G` with no flooring, since
+ *   `Math.floor(1.25 × 129)` is 161 and would have qualified Strahm.
+ * - **Batters: 246 ranked of 637, and `pa >= 2.1 × G` reproduces 636 of them.**
+ *   The single miss is Patrick Bailey, 269 PA against a 268.8 bar, and it is
+ *   Savant disagreeing with itself rather than with us: its `min=q`
+ *   leaderboard *does* carry him (247 rows to the card's 246), so the two
+ *   Savant surfaces are a refresh apart at the margin. Everything else lines
+ *   up, with no inversions anywhere in the ratio ordering.
+ *
+ * **And the leaderboard qualifier and the player-page one are the same rule** —
+ * that was worth checking separately and it holds: `min=q` returns 247 batters
+ * and 354 pitchers against the percentile card's 246 and 354.
+ *
+ * **Per window, not per season**, which comes free: `teamGames` is
+ * `getTeamGamesInRange` on a dated board, so a 7-day window asks for 2.1 PA
+ * against the six or seven games that club actually finished inside it rather
+ * than against 162. A rate expressed per team game is the only form that
+ * survives being scaled to a span.
  *
  * A player with **no** team games to measure against falls back to the league
  * maximum rather than to zero — zero would be a threshold of nothing and
@@ -167,9 +199,10 @@ function isStarter(row: ResearchRow): boolean {
  */
 function qualifies(kind: PlayerKind, row: ResearchRow, teamGames: number): boolean {
   if (teamGames <= 0) return false;
-  if (kind !== 'pitcher') return (row.pa ?? 0) >= Math.floor(3.1 * teamGames);
-  if (row.starter) return (row.outs ?? 0) >= 3 * teamGames;
-  return row.games >= Math.floor(teamGames / 3);
+  // Batters faced is the pitcher's plate-appearance count and is what Savant's
+  // own board calls `pa` — the same quantity on both sides of the ball.
+  const volume = (kind === 'pitcher' ? row.battersFaced : row.pa) ?? 0;
+  return volume >= QUALIFIER_RATE[kind] * teamGames;
 }
 
 /** The same leaderboard either way. `byDateRange` takes `playerPool=ALL` just as
@@ -620,8 +653,19 @@ const inFlight = new Map<BoardKey, Promise<Cached>>();
 // the version answers is "would a stored blob serve the wrong thing", and a
 // field that has started having a value is as much a wrong thing as one that is
 // missing. v10 is `batSpeed`, arriving on both boards and all five windows.
+//
+// **v11 adds no field at all and is a bump on *meaning*** — the same reason the
+// arsenal blob went to `-v5`. `qualified` is byte-for-byte the boolean it was
+// and now answers a different question: Savant's percentile bar (2.1 PA or 1.25
+// BF per team game) rather than MLB's rate-stat qualifier (3.1 PA or an inning,
+// with a third rule for relievers). It also **begins to be read back out of a
+// blob**, which is the test that rule actually sets — until now nothing on
+// either side of the wire read it, so a wrong value cost nothing; every
+// percentile badge on the board and on the Stats tab is now built from the rows
+// it selects. A v10 blob would deserialize perfectly and rank the whole league
+// against MLB's population for six hours after the deploy.
 const storeKey = (kind: PlayerKind, window: ResearchWindow) =>
-  `research-${kind}-${window}-${SEASON}-v10.json`;
+  `research-${kind}-${window}-${SEASON}-v11.json`;
 
 async function build(kind: PlayerKind, window: ResearchWindow): Promise<Cached> {
   const rows = await buildBase(kind, window);
