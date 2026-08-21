@@ -1859,7 +1859,7 @@ export interface EspnScoreboard {
  *
  * Mirrors `EspnRankings` and its parts in the server's `espn.ts`.
  */
-export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs';
+export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs' | 'week';
 
 export interface EspnRankSpanInfo {
   span: EspnRankSpan;
@@ -1967,8 +1967,15 @@ export interface EspnRankings {
   projectedDaysLeft: number;
   /** Only the spans this league can actually be asked for — a half with no
    *  matchup periods in it is absent rather than served empty, so the tab
-   *  strip is drawn from what came back rather than from a list held here. */
+   *  strip is drawn from what came back rather than from a list held here.
+   *  **`week` is never in it**: the strip offers five named cuts and the
+   *  league has nineteen weeks, so a picked one rides on `week` below. */
   spans: EspnRankSpanInfo[];
+  /** **The one matchup period this table is of**, where the reader picked a
+   *  week off the league's calendar rather than one of the five spans — and
+   *  null where they did not. Its `live` is always false: the week being
+   *  played is `matchup`, the rule, rather than the range it happens to be. */
+  week: EspnRankSpanInfo | null;
   format: EspnScoringFormat;
   scoringType: string;
   categories: EspnCategory[];

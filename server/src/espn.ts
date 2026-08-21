@@ -3539,9 +3539,26 @@ export async function getMatchupWindow(
 // average, runs created — which comes back null and is dashed rather than
 // summed as though it were a count.
 
-/** The five cuts the Rankings tab offers, in the order it lists them —
- *  `matchup` leads and is the default. */
-export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs';
+/**
+ * The five cuts the Rankings tab offers, in the order it lists them —
+ * `matchup` leads and is the default — **and `week`, which is not one of
+ * them.**
+ *
+ * `week` is what the tab's own bar produces: one matchup period the reader
+ * picked off the league's calendar, which is a cut of the same shape as
+ * `matchup` and a different *kind* of thing from the other four. It is
+ * deliberately **absent from `spans`**, the list the strip is drawn from — the
+ * strip offers the five named cuts, and there are nineteen weeks — so nothing
+ * downstream has to special-case a strip entry that would have to be relabeled
+ * every time the reader moved.
+ *
+ * **The week being played is not a `week`.** A reader who picks it off the list
+ * gets `matchup`, which is the *rule* "the week being played" rather than the
+ * range that week happens to be — the same reason the scoreboard's `mp=` is
+ * absent on the current period. So a `week` is always a settled one, which is
+ * also why it is never `projectable`.
+ */
+export type EspnRankSpan = 'season' | 'matchup' | 'first' | 'second' | 'playoffs' | 'week';
 
 /** One span, as the tab strip needs it: what it is called and what it covers. */
 export interface EspnRankSpanInfo {
@@ -3678,8 +3695,25 @@ export interface EspnRankings {
    *  half with no matchup period in it — the second half in April, either of
    *  them in a league that publishes no matchup count — is **absent from this
    *  list rather than served empty**, which is the same rule the
-   *  scoreboard's forward arrow follows for a period ESPN has not opened. */
+   *  scoreboard's forward arrow follows for a period ESPN has not opened.
+   *
+   *  **`week` is never in it** — see `EspnRankSpan`. The strip is drawn from
+   *  this list and a strip cannot hold nineteen weeks; the one the reader
+   *  picked rides on `week` below. */
   spans: EspnRankSpanInfo[];
+  /**
+   * **The one matchup period this table is of**, where the reader picked one
+   * off the league's calendar, and null where the table is one of the five
+   * named spans.
+   *
+   * It is an `EspnRankSpanInfo` like the five so the bar that states it has one
+   * shape to read whichever is in force — the label (`Week 12`) and the days
+   * are computed here, off the same `dateForPeriod` anchor the scoreboard's own
+   * header uses, so the two cannot print different days for one week. `live` is
+   * always false: a week the reader picked is a settled one, the week being
+   * played being `matchup` instead.
+   */
+  week: EspnRankSpanInfo | null;
   format: EspnScoringFormat;
   scoringType: string;
   categories: EspnCategory[];
@@ -3985,6 +4019,19 @@ export async function getRankings(
   span?: EspnRankSpan | null,
   force = false,
   projected = false,
+  /**
+   * **One matchup period, picked off the league's own calendar** — the tab's
+   * bar, in place of the five named cuts. It wins over `span` where it names a
+   * period the schedule actually carries, and is ignored otherwise, which is
+   * the same direction an unrecognized `span` falls in: a bad value costs the
+   * reader the cut they asked for, never the table.
+   *
+   * **The week being played is not one of these.** It normalizes away here as
+   * well as in the client, so a link carrying `period=19` in the live week
+   * opens on `Current matchup` — the rule rather than the range, which is what
+   * makes it still true tomorrow.
+   */
+  period?: number | null,
 ): Promise<EspnRankings> {
   if (force) {
     const prefix = `${creds.leagueId}:`;
@@ -4055,12 +4102,39 @@ export async function getRankings(
     });
   }
 
+  // **A week the reader picked, if it is one this league has.** Not the week
+  // being played — that is `matchup`, the rule — and not a period the schedule
+  // has never carried, which falls back to the span beside it rather than
+  // ranking an empty table.
+  const weekPeriod =
+    period != null && period !== current && meta.periods.some((p) => p.period === period)
+      ? period
+      : null;
+
   // A span this league cannot be asked for falls back to the one that leads
   // the list rather than to a named constant — which is what keeps the default
   // and the order one decision. `season` is the floor because it is the one
   // span every league has: it is ESPN's own line and needs no matchup period.
-  const asked =
-    span && spans.some((s) => s.span === span) ? span : (spans[0]?.span ?? 'season');
+  const asked: EspnRankSpan =
+    weekPeriod != null
+      ? 'week'
+      : span && span !== 'week' && spans.some((s) => s.span === span)
+        ? span
+        : (spans[0]?.span ?? 'season');
+  // The week as a span, for the bar that states it — one shape whichever cut is
+  // in force. Off the same anchor the five are dated from, so a week's days
+  // here and the scoreboard's own header cannot disagree.
+  const week: EspnRankSpanInfo | null =
+    weekPeriod == null
+      ? null
+      : {
+          span: 'week',
+          label: `Week ${weekPeriod}`,
+          periods: [weekPeriod, weekPeriod],
+          ...(await dated(weekPeriod, weekPeriod)),
+          // A picked week is a settled one — the live one is `matchup`.
+          live: false,
+        };
 
   // The values, by team. Three sources for four spans, and each is the
   // cheapest honest answer to its own question.
@@ -4129,6 +4203,16 @@ export async function getRankings(
     // winners' bracket — measured, the eight teams on a bye are short by
     // exactly their week's own total.)
     for (const t of meta.teams) values[t.id] = onlyCategories(t.values);
+  } else if (asked === 'week' && weekPeriod != null) {
+    // **One settled week, exactly as `matchup` reads the live one** — the same
+    // `mScoreboard` sum over a single matchup period, with ESPN's own rates for
+    // it read as they come. `frozen` because it is over: the totals go to a
+    // blob and are read back with no freshness test, which is `getSpanTotals`'
+    // standing rule and is why stepping back through a season costs one read a
+    // week and then nothing. No live day is added — that day belongs to the
+    // week being played, and this is not it.
+    const raw = await getSpanTotals(creds, [weekPeriod], true, null, force);
+    for (const [id, v] of Object.entries(raw)) values[Number(id)] = onlyCategories(v);
   } else if (asked === 'matchup' && current != null) {
     const raw = await getSpanTotals(creds, [current], false, liveDay, force);
     // One period's rates are ESPN's own and read as they come — **unless** the
@@ -4289,6 +4373,7 @@ export async function getRankings(
     projectedEnd,
     projectedDaysLeft,
     spans,
+    week,
     format: meta.format,
     scoringType: meta.scoringType,
     categories: meta.categories,

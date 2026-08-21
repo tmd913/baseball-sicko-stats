@@ -1542,6 +1542,16 @@ app.get(
       raw === 'playoffs'
         ? raw
         : null;
+    // **And `?period=` — one matchup week, off the league's own calendar.** It
+    // is not a sixth value of `span=` because it is not one of the five the
+    // strip offers: it names a week, and a week is a number. Validated to
+    // digits here and against the league's own schedule in `getRankings`,
+    // which is the only place that knows which periods exist — an unknown one
+    // falls back to the span beside it rather than 400ing, the direction every
+    // unrecognized value on this page falls in.
+    const rawPeriod = req.query.period;
+    const period =
+      typeof rawPeriod === 'string' && /^\d{1,3}$/.test(rawPeriod) ? Number(rawPeriod) : null;
     try {
       const creds = await getEspnCreds(userId(req));
       if (!creds) {
@@ -1549,7 +1559,13 @@ app.get(
         return;
       }
       res.json(
-        await getRankings(creds, span, req.query.refresh === '1', req.query.projected === '1'),
+        await getRankings(
+          creds,
+          span,
+          req.query.refresh === '1',
+          req.query.projected === '1',
+          period,
+        ),
       );
     } catch (err) {
       if (!espnError(err, res)) throw err;

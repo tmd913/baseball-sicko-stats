@@ -104,7 +104,7 @@ import { ThemeSwatches } from './components/ThemePicker';
 import LeagueView, { LEAGUE_TABS, ProjectedTools } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import type { MatchupReading } from './components/LeagueMatchup';
-import { spanDetail } from './components/LeagueRankings';
+import { RankKey, spanDetail } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
@@ -1657,6 +1657,47 @@ export default function App() {
   });
 
   /**
+   * **Which week of the league's own calendar the Rankings table is of**, where
+   * the reader has picked one off the tab's bar — and null where the table is
+   * one of the five named spans instead.
+   *
+   * **In the URL as `lwk=`**, by the rule `lspan=` follows one line up: it
+   * decides what data is on screen, so a link that leaves it out describes a
+   * different table. A **fourth League param** rather than a sixth value of
+   * `lspan=`, and the reason is what that strip is: `lspan=` names one of five
+   * *cuts*, each of which is a rule (`Current matchup` is the week being played,
+   * on the recipient's own today), and a week is a number. One param carrying
+   * both would be a strip with a value it cannot draw — nineteen weeks is not a
+   * segmented control — and the app's own trap, two things in one param, read
+   * the other way round. None of the others can collide: `preset`, `start`,
+   * `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`, `sched`,
+   * `plays`, `newplays`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`,
+   * `win`, `help`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `proj`, `rproj`,
+   * `rankproj`, `league`.
+   *
+   * **A week is a range and is honestly one**, which is where it parts from a
+   * date preset: `Week 12` is a fact about the league's calendar rather than a
+   * rule about today, so freezing it in a link is what a link to it *means*.
+   * The one period that is both — the week being played — is normalized away by
+   * the bar itself, which selects `Current matchup` for it, so `lwk=` never
+   * names the live week and a shared link never freezes it. That is the same
+   * normalization `mp=` makes by being absent on the current period.
+   *
+   * **Unrecognized falls back rather than emptying the view.** Anything but
+   * digits is no week at all, and a period this league's schedule has never
+   * carried is answered by the server with the span beside it — so the table
+   * is the five-span one rather than a page of nothing.
+   *
+   * It is **not put away with the tab** the way the two lenses are: which weeks
+   * a reader is looking at is data rather than a lens, and it is remembered
+   * exactly as `lspan=` is.
+   */
+  const [rankWeek, setRankWeek] = useState<number | null>(() => {
+    const raw = initialParams.get('lwk');
+    return raw && /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+  });
+
+  /**
    * **The Rankings tab's own projected reading** — every team's figure and
    * standing read against the end of the matchup rather than against today.
    *
@@ -2044,7 +2085,7 @@ export default function App() {
       // in flight, whether the change is the span or the lens, so the only mark
       // a press of `Projected` leaves is the ball inside the button that
       // started it. A failed read leaves the last table standing too.
-      .espnRankings(rankSpan, false, rankProjected)
+      .espnRankings(rankSpan, false, rankProjected, rankWeek)
       .then((r) => {
         if (!canceled) setRankings(r);
       })
@@ -2057,7 +2098,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [view, leagueTab, espnConnected, rankSpan, rankProjected, espnLeagueId]);
+  }, [view, leagueTab, espnConnected, rankSpan, rankWeek, rankProjected, espnLeagueId]);
 
   /**
    * The Transactions feed, read on the **first entry to the League view** —
@@ -2147,6 +2188,12 @@ export default function App() {
   const scoreboardLive = scoreboard?.live === true;
   const rankSpanLive =
     rankings != null &&
+    // **A week the reader picked is a settled one and cannot move**, so it is
+    // not polled at all — the same reasoning that leaves a settled scoreboard
+    // week alone: a request a minute to be told a fact. `rankings.week` is the
+    // server's own answer rather than the request, so this cannot outlive a
+    // week it declined.
+    rankings.week == null &&
     (rankings.span === 'season' ||
       rankings.spans.find((s) => s.span === rankings.span)?.live === true);
 
@@ -2194,7 +2241,10 @@ export default function App() {
     if (leagueTab === 'rankings' && rankSpanLive) {
       // The lens rides along, or a tick would quietly swap a projected table
       // back to the live one a minute after the reader asked for it.
-      api.espnRankings(rankSpan, false, rankProjected).then(setRankings).catch(quiet('rankings'));
+      api
+        .espnRankings(rankSpan, false, rankProjected, rankWeek)
+        .then(setRankings)
+        .catch(quiet('rankings'));
     }
     api.espnTransactions().then(setTransactions).catch(quiet('transactions'));
   }, [
@@ -2204,6 +2254,7 @@ export default function App() {
     rankSpanLive,
     matchupPeriod,
     rankSpan,
+    rankWeek,
     rankProjected,
     projected,
     loadLeagueProjection,
@@ -3014,8 +3065,16 @@ export default function App() {
     // Omitted at the default, which is now the week being played — so a link
     // shared without one opens on the recipient's *own* current matchup rather
     // than on the sharer's, which is the same rule a date preset follows.
-    if (view === 'league' && leagueTab === 'rankings' && rankSpan !== 'matchup') {
+    if (view === 'league' && leagueTab === 'rankings' && rankWeek == null && rankSpan !== 'matchup') {
       p.set('lspan', rankSpan);
+    }
+    // **And the week, where the reader picked one instead.** The two are
+    // alternatives rather than a pair — a week *is* the cut — so exactly one of
+    // them is ever in a link, and `lspan=` above drops out while this is set.
+    // Written only on the tab that draws the bar, the rule every param here
+    // follows.
+    if (view === 'league' && leagueTab === 'rankings' && rankWeek != null) {
+      p.set('lwk', String(rankWeek));
     }
     // The Rankings tab's own lens, and **only on the span it can act on**: the
     // current matchup is the one span a projection has an answer for (there is
@@ -3024,6 +3083,7 @@ export default function App() {
     if (
       view === 'league' &&
       leagueTab === 'rankings' &&
+      rankWeek == null &&
       rankSpan === 'matchup' &&
       rankProjected
     ) {
@@ -3076,6 +3136,7 @@ export default function App() {
     matchupTeam,
     matchupReading,
     rankSpan,
+    rankWeek,
     rankProjected,
     simulate,
     hideInjured,
@@ -4430,6 +4491,15 @@ export default function App() {
      honestly — rather than from a list here, so a season with no All-Star break
      in ESPN's calendar has no halves and April has no second half, instead of
      either being offered and coming back empty. */
+  /** **A span and a week are alternatives**, so picking one of the five clears
+   *  the other — which is what keeps the strip and the bar under it from ever
+   *  claiming two different tables. Written once, because the pills and the
+   *  phone `<select>` are one control and two copies of this would be two
+   *  copies free to disagree. */
+  const pickRankSpan = (sp: EspnRankSpan) => {
+    setRankWeek(null);
+    setRankSpan(sp);
+  };
   const leagueSpanTabs =
     view === 'league' && leagueTab === 'rankings' && rankings && rankings.spans.length > 1 ? (
       <>
@@ -4439,9 +4509,24 @@ export default function App() {
               key={sp.span}
               type="button"
               role="tab"
-              aria-selected={sp.span === rankSpan}
-              className={`lg-span-tab${sp.span === rankSpan ? ' active' : ''}`}
-              onClick={() => setRankSpan(sp.span)}
+              /* **Nothing is lit while a week is in force**, and that is the
+                 honest reading rather than a hole: the reader has stepped off
+                 the five named cuts, and the bar directly under this row says
+                 in 15px type which week they are on. Lighting `Current matchup`
+                 for `Week 12` would be the strip claiming a table that is not
+                 on screen.
+
+                 **Off `rankings.week` rather than off `rankWeek`**, which is
+                 the same rule the bar under it keeps and was found by driving
+                 it: `?lwk=999` is a period this league's schedule has never
+                 carried, the server answers it with the span beside it, and a
+                 strip reading the *request* then lit nothing over a table that
+                 was plainly `Current matchup`. The response is what is on
+                 screen. It lags a press by the read, exactly as the figures do,
+                 which is rule 1 rather than a cost. */
+              aria-selected={!rankings.week && sp.span === rankSpan}
+              className={`lg-span-tab${!rankings.week && sp.span === rankSpan ? ' active' : ''}`}
+              onClick={() => pickRankSpan(sp.span)}
               title={spanDetail(sp) || sp.label}
             >
               {sp.label}
@@ -4450,10 +4535,20 @@ export default function App() {
         </div>
         <select
           className="lg-span-select"
-          value={rankSpan}
-          onChange={(e) => setRankSpan(e.target.value as EspnRankSpan)}
+          /* A `<select>` must have a value, and while a week is in force none of
+             the five is it — so the week takes an option of its own at the head
+             of the list, which is the same statement the pills make by lighting
+             nothing and the only one this control can make. It is the bar's
+             answer echoed rather than a second opinion: picking it does nothing
+             but keep the week. */
+          value={rankings.week ? 'week' : rankSpan}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v !== 'week') pickRankSpan(v as EspnRankSpan);
+          }}
           aria-label="Which span"
         >
+          {rankings.week && <option value="week">{rankings.week.label}</option>}
           {rankings.spans.map((sp) => (
             <option key={sp.span} value={sp.span}>
               {sp.label}
@@ -4489,6 +4584,21 @@ export default function App() {
      (`projectable`, the current matchup of a week still being played) — absent
      rather than disabled, and independently of the span strip beside it, which
      needs more than one span to be worth drawing where this needs none. */
+  /* **The key that explains `OVR`, `BAT` and `PIT`, in the tools row with the
+     other buttons.** It stood in the table's caption row, which was the right
+     place for a caption's ⓘ; that row is a **date bar** now — a control, three
+     columns wide with an arrow at each end — and a fourth thing in it would
+     either break the centering the bar's own grid exists for or take a third of
+     the middle column on a 320px phone, where the days already run to 175px.
+
+     Up here it is beside the projection's own key, which is where a key
+     belongs: both are read once and then in the way (`InfoKey`'s own rule), and
+     both explain a *reading* of the table rather than captioning it. Drawn only
+     on the Rankings tab, and only once there is a table to explain. */
+  const leagueRankKey =
+    view === 'league' && leagueTab === 'rankings' && rankings ? (
+      <RankKey rankings={rankings} />
+    ) : null;
   const leagueRankProjected =
     view === 'league' && leagueTab === 'rankings' && rankings?.projectable ? (
       <ProjectedTools
@@ -4789,10 +4899,27 @@ export default function App() {
   const viewTools =
     rosterTools || (view === 'league' && espnConnected) ? (
       <div className="view-tools">
-        {/* Scoreboard / Rankings / Transactions. */}
-        {leagueTabs}
+        {/* **Scoreboard / Rankings / Transactions, on a centered line of their
+            own**, with everything else in the row breaking to the line under
+            them. They are *which page of this league*, one tier down from the
+            main tabs and the same kind of statement; the span strip, the two
+            keys and the lens are *which reading of that page*, which is the
+            next question rather than a peer of it — and on the Rankings tab all
+            four of them sat on one line with the three tabs, so the control a
+            reader looks for first was one group among four and moved along the
+            row as the window changed.
+
+            A wrapper rather than `flex: 1 1 100%` on the strip itself: that
+            basis stretches the *shell* of a segmented control across the row
+            with its three pills bunched at the left end, which this file
+            already records measuring at 596px for a control 295 wide. The line
+            is the full-width box and the strip inside it is centered at its own
+            content width. */}
+        {leagueTabs && <div className="lg-tabs-line">{leagueTabs}</div>}
         {/* Which span the Rankings table is drawn from. */}
         {leagueSpanTabs}
+        {/* What its three summary columns are made of. */}
+        {leagueRankKey}
         {/* And whether it is drawn to the end of the week. */}
         {leagueRankProjected}
         {rosterTools && (
@@ -5998,6 +6125,11 @@ export default function App() {
           }}
           rankings={rankings}
           rankSpan={rankSpan}
+          onRankSpan={pickRankSpan}
+          /* Which week the Rankings bar is on. A week and a span are
+             alternatives, so this is the only writer of one that does not clear
+             the other — it *is* the other. */
+          onRankWeek={setRankWeek}
           rankingsLoading={showRankingsWait}
           rankingsError={rankingsError}
           transactions={transactions}

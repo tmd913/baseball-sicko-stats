@@ -562,6 +562,35 @@ the list then names the week without them rather than dropping it.
 
 ### The Rankings tab, and the five spans
 
+*(Six now, and the sixth is not one of them. `week` is one matchup period the
+reader picked off the league's calendar — the tab's own bar — and it is
+deliberately **absent from `spans`**, the list the strip is drawn from: the
+strip offers five named cuts and the league has nineteen weeks, so a strip entry
+for it would have to be relabeled every time the reader moved. It rides on
+`?period=` and comes back on `week`, an `EspnRankSpanInfo` like the five so the
+bar has one shape to read whichever is in force.*
+
+*It is the `matchup` branch with one period substituted:
+`getSpanTotals(creds, [period], frozen: true, null)` — the same `mScoreboard`
+sum over a single matchup period, with ESPN's own rates for it read as they
+come. **Frozen**, because it is over: the totals go to a blob and are read back
+with no freshness test, so stepping back through a season costs one read a week
+and then nothing. **No live day is added** — that day belongs to the week being
+played, and this is not it.*
+
+*The week being played is **not** a `week`: `period === current` normalizes to
+null and falls through to whatever span was asked for, which is why a `week` is
+always settled and so never `projectable`. An unknown period does the same,
+which is the direction an unrecognized `span=` already falls in — a bad value
+costs the reader the cut they asked for, never the table.*
+
+*Checked cell by cell against the board for the same week: every team's figure
+in `?period=12` equals its own `scores` entry in `/api/espn/scoreboard?period=12`
+— **120 of 120 cells, 0 mismatches**, 12 rows, 10 categories. No cache version
+was bumped and none was owed: the span blob's shape and meaning are unchanged
+and the key is `espn-span-<league>-12-12-v1.json`, one it has never held
+before.)*
+
 **The season table the League page opened with was the raw values, and a value
 is only half of what a manager wants from it.** 232 home runs is a lot or a
 little depending on the eleven numbers beside it, and the reader was doing that
