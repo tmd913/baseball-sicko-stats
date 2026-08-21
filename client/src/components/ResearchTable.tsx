@@ -44,6 +44,8 @@ import {
   DEFAULT_SORT,
   defaultColumnKeys,
   isDefaultColumns,
+  NAME_COLUMN,
+  NAME_KEY,
   OPPONENT_KEY,
   opponentColumn,
   PITCHER_COLUMNS,
@@ -1356,12 +1358,47 @@ export function ResearchTable({
   // connected reader's team board opened sorted by a column no row has, which
   // is an order that is neither the default nor anything he can see: measured,
   // the thirty came out in the server's own order with no header lit.
-  const defaultSortKey =
-    columnsByKey.has('rosterPct') && visibleKeys.has('rosterPct')
+  //
+  // **The team reading opens on the club's name**, which is the one board where
+  // the alphabet is a reading rather than the absence of one. Thirty clubs is a
+  // list you look *things up* in — the reader has a club in mind and wants the
+  // row — where six hundred players is a leaderboard you scan, which is what
+  // `DEFAULT_SORT`'s own comment means by "names worth reading rather than the
+  // alphabet". And it is the fix for a live case of the fault the paragraph
+  // above records: `Ros%` is not in a club's vocabulary, so the team board fell
+  // to `PA` — which a reader who has unticked PA does not have on the table.
+  // Measured before this line, at 1200 with a connected league: **no header lit
+  // anywhere in the 28-column header row**, no cell carrying `research-sorted`,
+  // and the thirty in an order (Cubs, Pirates, Nationals, Brewers, …) that
+  // nothing on screen accounts for. The name column is on every team board by
+  // construction and cannot be unticked, so the order is legible from the
+  // column it is drawn from.
+  const defaultSortKey = teams
+    ? NAME_KEY
+    : columnsByKey.has('rosterPct') && visibleKeys.has('rosterPct')
       ? 'rosterPct'
       : DEFAULT_SORT[kind];
-  const activeSortKey =
-    sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
+  /** Whether the name column is a sort control on this reading — see the header
+   *  cell, which draws `Team` as a button and `Player` as a word. */
+  const nameSortable = teams;
+  const sortableKey = (k: string) => visibleKeys.has(k) || (nameSortable && k === NAME_KEY);
+  const onDefaultSort = !(sortKey && sortableKey(sortKey));
+  const activeSortKey = onDefaultSort ? defaultSortKey : (sortKey as string);
+  /**
+   * **The direction, resolved the same way the key above is.** `sortAsc` is the
+   * direction the reader last *pressed*, and while the board is on its default
+   * there has been no press — so the answer is the default column's own
+   * `ascFirst`, which is already the field that decides which way a header
+   * opens and which end a rank counts from.
+   *
+   * It was the stored `sortAsc` outright, which reads `false` on a fresh board
+   * and was right for as long as every possible default (`Ros%`, `PA`, `IP`)
+   * opened descending. A name does not: left on the stored flag the team board
+   * opened at Washington and ended at Arizona.
+   */
+  const defaultSortColumn =
+    defaultSortKey === NAME_KEY ? NAME_COLUMN : columnsByKey.get(defaultSortKey);
+  const activeSortAsc = onDefaultSort ? (defaultSortColumn?.ascFirst ?? false) : sortAsc;
 
   // Memoised on the pill alone: a fresh closure every render would break the
   // `visible` memo below, which lists this among its dependencies.
@@ -1513,7 +1550,7 @@ export function ResearchTable({
     searchFold(search),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
     activeSortKey,
-    sortAsc,
+    activeSortAsc,
   ].join('|');
   // App keeps a scroll offset per view (keyed `'research'`) and restores it in
   // a layout effect of its own, so leaving the board and coming back lands
@@ -1599,9 +1636,15 @@ export function ResearchTable({
       return true;
     });
 
-    const col = drawnByKey.get(activeSortKey) ?? columnsByKey.get(activeSortKey);
+    // The name column is resolved ahead of both maps because it is in neither:
+    // it is not a stat, so the picker never offers it and the filter builder
+    // never sees it — see `NAME_COLUMN`.
+    const col =
+      activeSortKey === NAME_KEY
+        ? NAME_COLUMN
+        : (drawnByKey.get(activeSortKey) ?? columnsByKey.get(activeSortKey));
     if (!col) return out;
-    const dir = sortAsc ? 1 : -1;
+    const dir = activeSortAsc ? 1 : -1;
     // A column of words orders by them, the null-to-the-bottom rule below being
     // exactly as right for a player with no game today as for one with no
     // barrel rate. Only the opponent takes this path — see `Column.text`.
@@ -1635,7 +1678,7 @@ export function ResearchTable({
     posMatch,
     filters,
     activeSortKey,
-    sortAsc,
+    activeSortAsc,
     columnsByKey,
     drawnByKey,
   ]);
@@ -1670,7 +1713,16 @@ export function ResearchTable({
 
   function toggleSort(col: Column) {
     if (activeSortKey === col.key) {
-      setSortAsc((v) => !v);
+      // **Flipped from the direction on screen, not from the stored flag.** On
+      // a board still on its default the two differ — the stored flag is
+      // `false` and the arrow is the default column's `ascFirst` — so a press
+      // on the header that is already lit read as "descending, please" while
+      // the ▲ under the reader's finger said it was ascending. Writing the key
+      // as well as the direction is what takes the board off its default: the
+      // reader has now chosen this column, and hiding it later must fall the
+      // order back rather than leave a sort nothing on screen accounts for.
+      setSortKey(col.key);
+      setSortAsc(!activeSortAsc);
     } else {
       setSortKey(col.key);
       setSortAsc(col.ascFirst ?? false);
@@ -2617,6 +2669,16 @@ export function ResearchTable({
             while a re-read is in flight (`loading` is gated on the cache being
             empty), so this can only ever be a board with nothing on it yet. */}
         <div className="research-head" ref={headRef}>
+          {/* **The settings first, the count last.** They were one wrapping run
+              with the count leading it, which is the shorter box and was chosen
+              for that; what it got wrong is which of the two the *rows* are
+              about. The badges qualify the board — the window, the position,
+              the include set — and the count is a fact about the table
+              immediately under it, so it is the last thing read before the
+              first row and sits on its own line against them. The badges keep
+              the wrapping run they always had; the head is now the column of
+              the two. See the stylesheet for the height this costs. */}
+          <div className="research-badges">{badges}</div>
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
               {loading ? (
@@ -2630,7 +2692,6 @@ export function ResearchTable({
               )}
             </div>
           )}
-          {badges}
         </div>
 
         {!loading && !error && visible.length === 0 && boardRows.length > 0 && (
@@ -2653,9 +2714,71 @@ export function ResearchTable({
                   <ExpandButton isFull={isFull} onToggle={toggle} what="board" />
                 </th>
                 {/* Club and position used to be two columns of their own here
-                    and are now the second line of this one — see the cell. */}
-                <th className="sum-name-col" scope="col">
-                  {teams ? 'Team' : 'Player'}
+                    and are now the second line of this one — see the cell.
+
+                    **A sort control on the team reading and a word on the
+                    player one**, which is the same asymmetry the include
+                    buttons and the position pills already carry: a control is
+                    drawn where it has a subject. Thirty clubs is a list you
+                    look a row up in, so A-to-Z is a reading of it and the
+                    board opens on exactly that (see `defaultSortKey`); six
+                    hundred players alphabetically is a phone book nobody
+                    asked the research board for, and `Player` stays a word.
+
+                    It takes `research-sort` for the button — the padding it
+                    zeroes off the `th` is the padding the button puts back
+                    from the same `--sort-gutter`, so the label stays on the
+                    gutter the names below it start on — and **not `active`**,
+                    whose rule pins the sorted column to whichever edge it is
+                    passing. This column is the leftmost one and is already
+                    pinned there above 820px; a second `left` on it would park
+                    it past its own right edge. `is-sorted` is the lit state
+                    alone. */}
+                <th
+                  className={`sum-name-col${
+                    nameSortable
+                      ? ` research-sort research-name-sort${
+                          activeSortKey === NAME_KEY ? ' is-sorted' : ''
+                        }`
+                      : ''
+                  }`}
+                  scope="col"
+                  /* `none` rather than absent while it is a control and
+                     unsorted — that is what the stat headers say, and the
+                     attribute's absence means "this column cannot be sorted",
+                     which on this reading is untrue. Absent on the player
+                     reading, where it is true. */
+                  aria-sort={
+                    !nameSortable
+                      ? undefined
+                      : activeSortKey === NAME_KEY
+                        ? activeSortAsc
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                  }
+                >
+                  {nameSortable ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(NAME_COLUMN)}
+                      title={NAME_COLUMN.title}
+                    >
+                      Team
+                      {/* The arrow **trails** the label here, where every other
+                          header leads with it. Same rule, opposite alignment:
+                          the reservation is paid on the side away from the edge
+                          the label is set against, so the label's own edge is
+                          the cell's. Leading it on a left-aligned column pushed
+                          `TEAM` 11px inside the gutter its thirty club names
+                          are set on. */}
+                      <span className="research-arrow" aria-hidden="true">
+                        {activeSortKey === NAME_KEY ? (activeSortAsc ? '▲' : '▼') : ''}
+                      </span>
+                    </button>
+                  ) : (
+                    'Player'
+                  )}
                 </th>
                 {columns.map((c) => {
                   const active = activeSortKey === c.key;
@@ -2664,7 +2787,7 @@ export function ResearchTable({
                       key={c.key}
                       scope="col"
                       className={`sum-num research-sort${active ? ' active' : ''}`}
-                      aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
+                      aria-sort={active ? (activeSortAsc ? 'ascending' : 'descending') : 'none'}
                     >
                       <button type="button" onClick={() => toggleSort(c)} title={c.title}>
                         {/* The arrow leads the label rather than trailing it, and
@@ -2678,7 +2801,7 @@ export function ResearchTable({
                             the reservation is still paid and the label's right
                             edge is the cell's, exactly like the values below. */}
                         <span className="research-arrow" aria-hidden="true">
-                          {active ? (sortAsc ? '▲' : '▼') : ''}
+                          {active ? (activeSortAsc ? '▲' : '▼') : ''}
                         </span>
                         {/* A string for every column in the app but one: the
                             Schedule view's days are two lines (`Fri` over

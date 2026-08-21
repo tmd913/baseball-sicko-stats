@@ -697,3 +697,42 @@ export function withColumn(kind: PlayerKind, keys: string[], key: string): strin
 /** The column the board opens on: the players with the most work behind them,
  *  so the table lands on names worth reading rather than the alphabet. */
 export const DEFAULT_SORT: Record<PlayerKind, string> = { batter: 'pa', pitcher: 'ip' };
+
+/** The key the name column sorts under — see `NAME_COLUMN`. It is deliberately
+ *  not a stat key: nothing in either vocabulary can collide with it, because
+ *  `ResearchRow.name` is the one field on the row that is not a number. */
+export const NAME_KEY = 'name';
+
+/**
+ * **The name column, as a sort and nothing else.**
+ *
+ * It is a `Column` because that is what the comparator, the header and the
+ * direction rule all speak, and it is kept *out* of `BATTER_COLUMNS` and
+ * `PITCHER_COLUMNS` because everything those two feed would be wrong about it:
+ * the column picker would offer a column that is already on the table and
+ * cannot be taken off it, and the filter builder would offer a threshold on a
+ * club's name. `text` is what routes it down the alphabetical path the opponent
+ * column already uses — including that path's null-to-the-bottom rule, which
+ * costs nothing here (every club has a name) and is free correctness if a
+ * nameless row ever arrives.
+ *
+ * **`ascFirst`, because A-to-Z is what the reader means by "sort by name".**
+ * Every stat on this board opens on its leaders; a name has no leaders, and the
+ * one order anybody wants from a column of words is the one a phone book is in.
+ * That flag is also what `defaultSortKey` reads to open the team board
+ * ascending — see `activeSortAsc`, which is the direction rule this column made
+ * necessary.
+ */
+export const NAME_COLUMN: Column = {
+  key: NAME_KEY,
+  label: 'Team',
+  title: 'The club, A to Z',
+  // Never drawn: the name cell is the identity block, which this table renders
+  // from `PlayerIdentity` and not from a column's `format`.
+  format: () => null,
+  text: (r) => r.name,
+  // Nothing numeric to compare and nothing to threshold — the same declaration
+  // the opponent column makes, and for the same reason.
+  value: () => null,
+  ascFirst: true,
+};

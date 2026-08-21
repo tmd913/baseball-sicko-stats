@@ -9838,11 +9838,40 @@ button.start-line:focus-visible {
    produced it. Neither is a control. The way to change any of them is a scroll
    up, or the button in the corner cell.
 
-   **One row, wrapping**, rather than the count on a line of its own above a row
-   of badges: the count is the first thing the badges qualify — *467 of 622
-   batters · SS · free agents · last 30 days* is one sentence — and a line each
-   costs a phone 31px of table for a layout that says nothing more. Measured at
-   390 with three badges: **41px as one wrapping row against 72px as two**.
+   **Two rows: the settings, then the count**, and this reverses what stood
+   here. It was one wrapping run with the count leading it, on the argument that
+   *467 of 622 batters · SS · free agents · last 30 days* is one sentence and
+   that a line each costs a phone 31px of table to say nothing more — measured
+   then at **41px as one wrapping row against 72 as two**. The sentence is still
+   one sentence; what the layout got wrong is which half of it the rows are
+   about. The badges qualify the *board* and the count is a fact about the
+   *table*, and the table starts one pixel below this box — so the count is the
+   last thing read before the first row, and the badges sit above it as the
+   qualification they are.
+
+   **It costs less than the shape that was rejected, and at some widths it costs
+   nothing at all** — because the two lines are the same box rather than two:
+   the badge run keeps its own `align-items` and its wrap, the count is a bare
+   15px line, and the head's 6/10 padding is paid once. Where the count was
+   *inside* the run it was also taking up room in it, so pulling it out
+   sometimes takes a wrap row with it and the head comes back **shorter**.
+   Swept at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920 on a checked board,
+   before → after:
+
+     player reading  103→93  72→93  72→93  72→62  41→62  41→62  41→62  41→62
+     team reading     72→93  72→62  72→62  41→62  41→62   —→62  41→62  41→62
+
+   — the one dash is a cell whose *before* was not captured (the API went down
+   mid-sweep and the reading was not retaken); it is not an inference written
+   down as a measurement.
+
+   — **+21 where the run does not change shape, −10 where a row of it goes**,
+   against the flat 31 the count-on-its-own-box version cost. Every one of those
+   numbers rides out to the header row through `--research-head-h`, which is
+   measured rather than declared for exactly this reason: the split moved the
+   headings' resting `top` 143 → 164 at 1200 and 172 → 193 at 390, the reset
+   target stayed at 110 and 158 (the table's offset and the head's height grew
+   by the same amount), and no rule had to be told any of it.
 
    The ground is `--bg`, which is the pane's own and the tools row's above it:
    rows pass under this box and it has to stop them, and a band that took the
@@ -9859,9 +9888,12 @@ button.start-line:focus-visible {
   top: 0;
   z-index: 4;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
+  /* A column of two, where it was a wrapping row of everything. `align-items`
+     is left at `stretch` deliberately: both children are full-width bands of
+     the head, and centering them would take the count off the gutter the
+     badges start on. */
+  flex-direction: column;
+  gap: 6px;
   /* The side gutter is the pane's own bleed given back — `--table-bleed`, not
      `--app-gutter` — for the reason `.view-tools` reads it two rules up: the
      number is how far this pane has already come out through the box that holds
@@ -9869,11 +9901,31 @@ button.start-line:focus-visible {
   padding: 6px var(--table-bleed, 0px) 10px;
   background: var(--bg);
 }
+/* **Every setting the board is on, as one wrapping run** — the shape the head
+   itself used to be, moved down one level so that the head can be the column of
+   badges-then-count. Nothing here changed but the selector it is written on:
+   the run wraps at a phone's width and each row of it is a row of labels, and a
+   badge is `white-space: nowrap` so the wrap happens between them.
+
+   No reserved height. The run is what it wraps to, the head is what the run
+   plus the count come to, and `--research-head-h` is measured off the head —
+   which is the same rule the head has always been under, and the reason a
+   wrapping band above a count is not the "control that changes size under the
+   finger that pressed it" the app forbids: nothing in this box is pressable,
+   and the box it moves — the header row — reads its offset from the
+   measurement rather than from a number written down. */
+.research-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
 /* How many rows survived the filters, and out of how many — without it a short
-   table reads as a short league rather than a tight filter. It leads the head
-   rather than sitting up in the control bar, so it reads as the table's
-   caption: the number describes what is under it, not what the controls are set
-   to. */
+   table reads as a short league rather than a tight filter. It is the **last**
+   line of the head rather than the first, which is what makes it the table's
+   caption in position as well as in wording: the number describes the rows
+   directly under it, where the badges above describe the board they were drawn
+   from. */
 .research-count {
   font-size: 12px;
   font-weight: 600;
@@ -10168,6 +10220,30 @@ button.start-line:focus-visible {
 .league-table th.research-sort button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+/* ---- The one sort control on a column of words ----
+   The board's **team reading** sorts on the club's name, and the header that
+   says so is the name column rather than a stat column. It takes
+   `.research-sort` for the button — the hit target, the 10px line, the gutter
+   read off `--sort-gutter` — and differs in the two things that follow from the
+   column being left-aligned rather than right.
+
+   **Not `.active`.** That class carries the sorted column's both-edges pin,
+   which is written for a stat column somewhere out in the table; this one is
+   the leftmost column and is already `position: sticky; left:` above 820px, so
+   a second `left` would park it past its own right edge. The lit state is all
+   this column wants of it, so the lit state is all it takes.
+
+   `text-transform` back to `uppercase`, which `.research-sort button` turns off
+   for the Statcast labels' sake (`xwOBA`, `Brl%`) — `TEAM` is a word this table
+   sets in caps like every other non-stat header, and left alone it came back as
+   `Team` beside a `PLAYER` on the reading next door. */
+.research-table th.research-name-sort button {
+  justify-content: flex-start;
+  text-transform: uppercase;
+}
+.research-table th.research-name-sort.is-sorted button {
+  color: var(--accent);
 }
 /* ---- The sort mark's box, reserved in **both** axes ----
    Reserved whether or not this column is the sorted one, so clicking a header
