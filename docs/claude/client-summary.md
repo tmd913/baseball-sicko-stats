@@ -437,6 +437,46 @@ Filtering happens in `App.tsx` (`filteredCards`, which is what both roster views
 
 **Emptied, it says so in its own words** — on whichever of the three views it emptied, and in whichever of the *three* readings emptied it. The hide-injured message names the gear; this one names the toggle in the row above and adds the thing a reader needs at 9am: lineups post a couple of hours before first pitch, so an empty page in the morning may only mean they aren't out yet. **That excuse is wrong in fantasy mode and is not offered there** — your lineup is set the moment you set it, so an empty table means the kind on screen really is all bench and IL, and pointing at lineups still to post would send someone off to wait for something that has already happened. It says that instead, naming what the toggle is hiding. **And over a range it says *days* rather than today** (`nobody here was in your lineup on any of these days`), because the filter is no longer a statement about one afternoon there — a message reading "today" over a table showing last July would be naming a day nothing on screen is about. The toggle's own tooltip splits the same three ways for the same reason. The two messages can't both fire, the injured one requiring the kind's list to be empty before this one is applied. **Expanded, the toggle comes with the kind tabs and the date control** into `.expanded-chrome` rather than being reduced to a `.research-badge` the way the board's settings are: it is what the rows *are*, a table narrowed to nine names with nothing on screen saying why is the one state this must never be in, and being the live control it is also the way back out without leaving the page.
 
+#### The tools row and the dates are inside the pane
+
+**`paneChrome` — the app's own `.view-tools` and `.date-bar`, rendered as
+`.summary-scroll`'s first children.** They are in the page on every other view;
+here they are not, and the reason is the one this view has always turned on:
+`.app.summary-mode` is a viewport-tall flex column in which only the pane
+scrolls, and **a sticky box sticks to the box that scrolls**. A date bar left
+above the pane is pinned to a column that never moves — it simply sits where it
+was laid out — while the table's header row is pinned to the pane, 54px lower.
+Two boxes stuck to two different edges, drawn as one band, with the first rows
+of the table lost in the difference.
+
+Inside, they stick against the same scrollport: the tools row scrolls away with
+the rows, the bar holds at the top of the pane, the header row holds directly
+under it. `thead th` takes `top: var(--pane-bar-h, 0px)`, set to the bar's
+*measured* `--date-bar-h` by `.summary-scroll.has-pane-chrome` — **a class
+rather than `:has(> .date-bar)`**, because the question is whose bar it is
+rather than whether one is present: the expanded full-page box draws its own
+above the pane, and a header row held 54px down under nothing there is a band of
+rows showing through the gap. `SummaryTable` renders `paneChrome` only while
+`!isFull` for the same reason, or the expanded box would hold two date bars.
+
+**Both take `position: sticky; left: 0`**, which is the half a two-axis pane
+adds and the half the legend at the foot of this same pane already documents:
+without it a reader scrolled out to the K column leaves the dates behind at the
+far left of a 1,900px content box. Their width is the pane's own client width —
+a block child of a scroll container sizes to its content box, not to its scroll
+width — so pinning at 0 puts them across the viewport exactly as they were. The
+tools row puts the app's gutter back (`padding: 10px var(--app-gutter) 0`), the
+pane having already bled through it; the bar does not, being a full-width band
+by design with its own 10px of padding.
+
+**Measured at 1200×900 on the live fantasy roster**, at rest → 600px down the
+pane → 400px across it: `.app-chrome` **0 / 0 / 0** (static here, and always
+visible), `.view-tools` **102 / −498 / −498** at x **0**, `.date-bar`
+**158 / 102 / 102** at x **0**, `thead` **212 / 156 / 156**. At 390 the same
+ladder reads 100 / 156 / 210 at rest with page-body overflow **0**. Expanded:
+one date bar, in `.expanded-chrome`, `has-pane-chrome` off, `thead` at the
+pane's own top (**117** against a pane at 116).
+
 ### The Schedule view: the days ahead, in place of the stats
 
 **Both wide tables are cut by what has already happened, and the question a fantasy manager arrives with on a Sunday night is not.** *Who plays how many games this week, against whom, and which of my starters gets two turns* is answerable from neither the summary table (a roster's past range) nor the research board (the league's past season), and it is the question the whole week turns on. So both tables take a **Schedule view**: a column per day across the top, a row per player, each cell naming that day's opponent — `@ LAD`, `vs SEA`, a faint dash for an off day — with a per-row count of the games in the span and, on a pitcher's row, the days his club has **announced** him to start.

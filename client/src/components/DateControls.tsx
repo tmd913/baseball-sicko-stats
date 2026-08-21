@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import { addDays, wideRange } from '../lib';
-import { useDismissable, usePopoverFit } from '../hooks';
+import { useDismissable, usePopoverFit, usePublishedHeight } from '../hooks';
 
 /**
  * The app's date controls: **a full-width bar of its own, directly under the
@@ -256,6 +256,7 @@ export function DateBar({
   popover,
   popoverLabel,
   fixed = false,
+  measure = false,
 }: {
   reading: DateBarReading;
   start: string;
@@ -333,6 +334,20 @@ export function DateBar({
    * and this is the one surface where they are not the reader's to pick.
    */
   fixed?: boolean;
+  /**
+   * **Publish this bar's height as `--date-bar-h`.** The app's own bar passes
+   * it and nobody else does, which is the whole of the rule: the property is
+   * what the summary table's header row sticks below, and there is one such
+   * table on screen at a time under one such bar. A team page's bar and the
+   * expanded box's are neither of them the one a page's header row is under.
+   *
+   * Measured rather than declared for the reason every height in this app is:
+   * the bar is 54px on a desktop and stays 54 as its label changes (that is
+   * this control's own rule), but the panel it opens adds 50 and the whole box
+   * bleeds and wraps differently at 320 — and a header row stuck 54px down
+   * under a 104px bar is a column heading behind a control.
+   */
+  measure?: boolean;
 }) {
   const { lead, range } = dateBarFace(reading, start, end);
   const asPopover = popover != null;
@@ -349,6 +364,8 @@ export function DateBar({
      allows in any case. */
   useDismissable(asPopover && shown, barRef, onClose ?? (() => {}));
   usePopoverFit(asPopover && shown, popRef);
+  /* Runs unconditionally and does nothing unless asked — see `measure`. */
+  usePublishedHeight(barRef, '--date-bar-h', measure && !fixed);
   if (fixed) {
     return (
       <div className="date-bar date-bar-fixed" role="group" aria-label="Dates">

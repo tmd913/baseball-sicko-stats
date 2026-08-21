@@ -1,6 +1,6 @@
 ### Client
 
-`App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: `preset` **or** `start`/`end` (never both), expanded **player keys**, open details player (also a key), `view=feed`, `plays=hr` and `newplays=1` (the feed's two axes — which kind of play, one at a time, and whether it is narrowed to the plays since the reader last marked it read; both can be in force at once, so a link may carry either or both — see **Client — the Feed view**), `oldest=1` and `noldest=1` (which way each of the feed's *two* streams runs — the page's own and the new-plays page's, deliberately two params for the reason `proj`/`rproj` are two, and `noldest=` is written only under `newplays=1`), `proj=1` (a league **matchup's** projected figures — see **Client — a league matchup**), `mr=` (which reading of a matchup team page — `summary` or `feed`, `roster` being the omitted default; see the same document) and `rproj=1` (the **Roster** view's own projected reading, which is a different question about a different span and so deliberately a different param — see **Client — the Roster view**), `sim=1`, `help=1` (the how-to page — in the URL like every other view, so it survives a reload and can be handed to someone directly). **A preset is a rule, not a range** — while one is active the URL carries only its label and the dates are re-derived from `datePresets()` on load, so a link (or a reloaded tab) saved under "Today" opens on the *new* today after the date rolls over. Only a custom range from the picker writes `start`/`end`. An unrecognized `preset=` label falls back to whatever `start`/`end` say; legacy links that carry both follow the preset. `readKeys()` also accepts bare ids in `expanded`/`player` — links from before two-way support, read as batters.
+`App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: `preset` **or** `start`/`end` (never both), expanded **player keys**, open details player (also a key), `view=feed`, `plays=hr` and `newplays=1` (the feed's two axes — which kind of play, one at a time, and whether it is narrowed to the plays since the reader last marked it read; both can be in force at once, so a link may carry either or both — see **Client — the Feed view**), *(`oldest=1` and `noldest=1` stood here — which way each of the feed's two streams ran, deliberately two params for the reason `proj`/`rproj` are two. The control is gone; both are unread and dropped on the first sync, which is the courtesy `group=player` gets.)* `proj=1` (a league **matchup's** projected figures — see **Client — a league matchup**), `mr=` (which reading of a matchup team page — `summary` or `feed`, `roster` being the omitted default; see the same document) and `rproj=1` (the **Roster** view's own projected reading, which is a different question about a different span and so deliberately a different param — see **Client — the Roster view**), `sim=1`, `help=1` (the how-to page — in the URL like every other view, so it survives a reload and can be handed to someone directly). **A preset is a rule, not a range** — while one is active the URL carries only its label and the dates are re-derived from `datePresets()` on load, so a link (or a reloaded tab) saved under "Today" opens on the *new* today after the date rolls over. Only a custom range from the picker writes `start`/`end`. An unrecognized `preset=` label falls back to whatever `start`/`end` say; legacy links that carry both follow the preset. `readKeys()` also accepts bare ids in `expanded`/`player` — links from before two-way support, read as batters.
 
 ### Two lists: the roster and the watchlist
 
@@ -19,7 +19,7 @@ The words are now used one way each, everywhere. See **Roster, watchlist, users 
 
 A roster entry is identified by **`${kind}-${id}`** (`playerKey()` in both `types.ts` files), not by the MLB id: a **two-way player is two entries**, watched as a hitter, as a pitcher, or both. `getSeasonPlayers` emits a row per kind for primary-position code `Y`, so the roster search offers Ohtani twice. Everything downstream keys on that: `store.ts` (add dedupes on kind+id; `removeRosterPlayer(id, kind)` — omitting `kind` removes every entry for the id, which is what a pre-two-way client means), `PlayerAdder`'s watched-set and `detailsKey`. (Three more have gone: `expandedKeys` and the `id="player-<key>"` the summary table's names used to scroll to, retired when one player's day became the player page's own tab and the jump became a plain `setDetailsKey`; and the feed's own `feedOpenKeys`, retired when every openable shape in the feed became a **popup** rather than an accordion and its open state stopped being anything App had to name — see **Details are popups, not accordions** below.) `PUT /api/watchlist/order` takes **`keys`**, usually just one kind's, and `reorderRoster` splices them back into the slots that kind already occupied so the other kind never moves. **The watchlist is nothing but those keys** — `PUT /api/watch` takes one and a boolean — which is what makes a two-way player watchable as a pitcher and not as a batter, exactly as he is rosterable as one and not the other.
 
-**Three views, one row of tabs: Roster · Feed · Research.** Roster is the summary table over the date range, Feed the same players and days read as a stream, Research the whole league over the season.
+**Three views, one row of tabs: Roster · Feed · Research.** *(Superseded — the row is four tabs and the Feed is a reading of the Roster page; see **Four tabs, and the Feed became a reading of the Roster** below. Kept as written, this file's rule for its own reasoning, because the argument that collapsed the two tiers is the argument that later moved the Feed as well.)* Roster is the summary table over the date range, Feed the same players and days read as a stream, Research the whole league over the season.
 
 It was two tiers once, and the thing that collapsed it is worth keeping because it is the same observation twice. The top row was the real division — the roster over a range against the league over a season — and under it sat Roster's own **Summary / Games / Feed**, three readings of one set of players over one set of days. But Games and Feed were not two readings. Games was a card per player over the range; the feed was a stream over the same range; what differed was the **sort order**, roster against clock. Sorting is not a page. So Games became a grouping *on* the feed, and Roster was left holding a single reading with a whole tier of chrome to select it.
 
@@ -30,6 +30,351 @@ What remains is three pages that really are three questions, and they read as si
 **`view` is one piece of state again** (`'summary' | 'feed' | 'research'`), the `section`/`rosterTab` pair and the `setView` shim over them having existed only to hold the two tiers apart. `summary` is still the default and still omitted from the URL — renaming the param to match the `Roster` label would cost every link in the wild and buy a word.
 
 **Three dead names are still read, and all of them mean the feed.** `view=games` was the card-per-player page and `view=players` its own older name; both became the feed's grouping, and the grouping is now the player page's Overview tab. The **feed** is where they still land, and that is the right answer rather than a lazy one: it is the same players over the same days, which is the closest thing to what those links asked for, where the page they *became* needs a player named and a bare `view=games` names none. **`group=player` and `expanded=` are read only in the sense that they are ignored** — the first URL sync drops both, the cards they named existing nowhere now. That is the courtesy `readKeys` extends to pre-two-way ids, and the safe direction for an old link to be read in: it opens on something, rather than on a default that says nothing about what was asked for.
+
+### Four tabs, and the Feed became a reading of the Roster
+
+**The row above is the record of how this got to three pages and one row, and
+the row is four tabs now: Roster · Matchup · Research · League.** Nothing in
+that argument was wrong about the two readings; it was answering the wrong
+question. *Summary is as different from Feed as either is from Research* is a
+claim about the two **readings**, and what the tab row is for is which of four
+**subjects** you are on — your roster, your week, the league's season, your
+fantasy league. The stream and the table are one subject read two ways, and the
+sentence they belong in was already written a row down: the stats behind you,
+the fixtures ahead, what the fixtures are worth. The day as it happened is the
+fourth of those, not a fifth page.
+
+**So `Feed` is a toggle in the reading run** (`feedToggle`), beside `Schedule`
+and `Projected` and folded onto `.research-toggle`'s selector lists with them,
+so the four readings are one object by construction. They are mutually
+exclusive and the plain table is *none of them lit*: pressing `Feed` clears
+`scheduleSpan` and `rosterProjected` for the reason those two already clear each
+other — a stream has no stat columns for a schedule to replace or a projection
+to fill, so a toggle left lit would sit over a page it is not reading. Pressing
+`Schedule` or `Projected` from the stream comes back to the table first
+(`setView('summary')` ahead of the state, which has to be that way round or the
+`view !== 'summary'` reset fires on the same commit and puts the lens straight
+back out).
+
+**`view` still holds `'feed'`, and that is deliberate rather than leftover.**
+Every link in the wild carries `view=feed`; the stream keeps its own date range
+(`DateScope`), its own scroll memory and its own five params, and none of that
+is chrome. What changed is which row the control sits in. `mainTab(view)` is
+what the strip tests, since the `Roster` tab covers two values and a pill unlit
+over its own stream would be the row lying about where you are; `lastRosterView`
+is a render-time ref on `dateScopeRef`'s own terms (derived from `view`,
+idempotent, written only while a roster reading is on screen) so the tab returns
+to the reading it was left on.
+
+**`Matchup` is the fourth tab and is the page the Scoreboard already had.** One
+component drawn twice — see **Client — a league matchup**, *The same page, as a
+tab*: a card on the Scoreboard opens it *over* the League view and this opens
+the reader's own week as a page of the app. What differs is not the matchup but
+what is behind it, so `standalone` turns off exactly the four things an overlay
+owes the view it covers (the pinned body, the inert background, the focus
+capture, the Escape listener) and the Back row that goes with them. `myMatchupId`
+is the board row carrying `myTeamId`; a **bye** is found there like any other,
+ESPN publishing one as a matchup with no away side, and the page draws its own
+bye head — the empty state is for a period this manager is not in at all.
+
+**`matchupPageOpen` is the one test for "a matchup page is on screen"**, either
+door. `mt=`, `mr=`, `proj=1` and the projection read all hang off it; two copies
+of that test are two copies that will one day disagree about whether the lens is
+drawn.
+
+### The tabs are the width of the window, and the chrome is two rows shorter
+
+**The strip is `.main-tabs`/`.main-tab`, full width with the active tab
+underlined**, which is `.details-tabs`' shape one tier up. It was a segmented
+control at the head of the wrapping row, and both halves of that were the same
+compromise: the one control saying which page of the app you are on had the same
+weight as a span strip, and it moved down the window as the window narrowed.
+Each tab is `flex: 1 1 0` — basis zero rather than auto, so four tabs are four
+quarters whatever their words are (`Research` is 62px of text against `League`'s
+46, and basis-auto would make the strip a set of proportions rather than a set
+of columns).
+
+**It keeps its own selector rather than folding onto `.view-switch`**, which is
+this repo's fold-don't-restyle rule read the other way round: two things that
+are the same object share a list, and these two have stopped being the same
+object. `.view-switch` is still the segmented control — the Schedule spans, a
+matchup's tools, the opposing-lineup cuts — and a fold that had this strip and
+those pills agreeing about a border, a ground and a radius would be one rule
+holding two shapes apart by exception. The strip is also **the bottom of the
+chrome**: `.view-bar` has no bottom margin, so the active tab's 2px underline
+sits on the chrome's own hairline rather than 14px above it.
+
+**Everything that is not a page is in `.view-tools`, a band in the page.** The
+roster's four readings and the stream's order, the League view's three tabs and
+the Rankings span and lens, the research board's whole control set portalled in
+— and **a matchup team page's four readings**, which is the same row folded onto
+rather than a second one that resembles it (see **Client — a league matchup**,
+*The reading run is the app's own row*). All the things that used to share the
+tab row. It keeps that row's rule
+exactly (`flex: none` on every group, so the row breaks between two rather than
+inside one) and the `container-type: inline-size` the feed-order toggle's two
+thresholds are measured against came with it: `.view-tools` is a block-level box
+the width of its container, so it takes the declaration where it stands, where
+`.view-bar-tabs` was a shrink-to-fit flex item and taking containment there took
+its intrinsic contribution to nought (measured then: the whole tab row **1356 →
+0px** at 1400, every tab still painted).
+
+**And the band scrolls away, where the tabs do not.** That is the whole of what
+the split buys and it is what was asked for: which page you are on is the last
+thing that should leave the screen, and which reading is a thing set on arrival.
+The pinned box reached **303px at 320px wide** because everything that could be
+called chrome was in it; it is the title row and four tabs now — **102px at
+1200, 100 at 390, 148 at 320** (the header wrapping at that last width and
+nothing else).
+
+### The two rows under the tabs are chrome, and they paint their own ground
+
+**They looked like two different things on two readings of one page**, and each
+of the three differences was the same mistake: the rows were taking properties
+from whichever box they happened to be rendered into. Measured at 1200 on the
+Roster's two readings:
+
+| | table reading (in the pane) | stream reading (in the page) |
+| --- | --- | --- |
+| ground behind the buttons | `rgb(18,19,20)` — the pane's `--bg` | `rgb(27,29,31)` — the body's gradient |
+| bar ground | `rgb(18,19,20)` | `rgb(25,26,27)` |
+| bar shadow | none | `--shadow-bar` |
+| gap above / below the buttons | 10 / 10 | 14 / 14 |
+| bar opens at | y **158** | y **166** |
+
+So pressing `Feed` changed the color of the band the button was in, gave the
+dates an edge they had not had, and moved the whole ladder eight pixels.
+
+**The bar's appearance is one rule with three selectors now** (`.app > .date-bar`,
+`.mup-view > .date-bar`, `.summary-scroll > .date-bar`) and what it says is true
+of every placement: content passes under this bar, so it needs an opaque ground
+and a shadow to say so, and the box above it — the app's chrome or a matchup's
+band — closes itself with a hairline, so the seam this one owns is the one
+*below*. `--bg-2` is the chrome's own bottom stop, which is what makes the bar
+read as the band continuing. The **placement** stays per-selector, that being
+the one thing the three genuinely answer differently.
+
+**And `.view-tools` paints its own ground**, the same token the bar takes,
+bleeding to the edges of whatever box holds it (`--table-bleed` — the pane has
+already bled and takes padding alone; the page takes a negative margin and the
+same padding back). A ground that is a fact about the container is what
+`--cell-bg` is this app's standing answer to, one box larger.
+
+**The token is `--bg`, and it was `--bg-2` — which is a dark-palette reading of
+a token that is not a dark-palette token.** On the four near-black schemes
+`--bg-2` is a shade off the page (`#191a1b` against `#121314` on Dark), which is
+what "the band continues the chrome" was meant to buy. On the two light ones it
+is nothing of the kind: **Light's is `#d7d7dc` and Powder Blue's `#c7dcf1`**,
+against a `#ffffff` page — so the band shipped as a grey, then a *powder blue*,
+block laid across a white page above a white table. Reported as exactly that,
+and it is the same mistake as reading a color off one palette: this row is
+chrome that should disappear into the page and be read by its contents, not a
+panel sitting on one. Measured across all six palettes after, the band, the bar
+and the table's pane are one color in every one of them — `#121314`, `#0b1220`,
+`#1c1b22`, `#1d1319`, `#ffffff`, `#ffffff` — and on the Feed, where the page
+carries the body's radial glow rather than a flat pane, band and page match to
+the value at **x = 40, 300, 600, 900 and 1160**, the right-hand end being where
+that glow is strongest.
+
+**Nothing under it at all, and that took two goes.** The gap to the date bar was
+a *margin* first — a strip of container, which is how the two readings came to
+disagree about its color — then *padding*, which fixed the color and left 14px
+of band doing nothing: buttons, then a dead band, then the bar's own 7px of
+padding before its arrows, against 14px above the buttons. Read as a gap,
+reported as one. There is no third thing between the readings and the days to be
+spaced apart — they are two rows of one band — so the band closes on the bar's
+own edge and the only separation is the bar's padding. Measured on all four
+surfaces: **14px above the buttons, 0 of band below them, 9px from a button's
+foot to an arrow's**, where it was 14 / 14 / 23.
+
+**But the gap comes back where no bar follows**, as a margin
+(`.view-tools:not(:has(+ .date-bar))`). The research board and the League view
+have nothing to continue the band with, so what follows is *content* — the
+board's count line and the Rankings caption, which without it sit on the band's
+own bottom edge (measured, both flush at y=198 and y=152). Padding is band and
+margin is the space between two different things, which is exactly the
+distinction the two rules turn on.
+
+**And the phone block has to carry that condition too**, which is this file's
+oldest trap walked straight into: *a media query adds no specificity*, so the
+`@media (max-width: 640px)` block at the end of the file — where this row takes
+`--stack-gap` with the rest of the phone rhythm — beat the scoped rule above and
+put the margin back at every width under 640. Outside the paint, that margin
+shows the ground of whatever box the row is in, which on the table reading is
+the pane's darker `--bg`: measured, **12px of dead band between the buttons and
+the dates at 320, 375, 390, 480 and 640**, against 0 from 641 up. It was
+reported off a phone, twice, while every desktop width measured clean. A rule
+that overrides a scoped one has to be scoped the same way — so the narrow block
+is two rules now, the gap unconditional and the margin under the same
+`:not(:has(+ .date-bar))`. Re-measured at **320 / 375 / 390 / 480 / 640 / 641 /
+900 / 1200 / 1920: 14px above the buttons, 0 of band below them and 9px to an
+arrow at every one**, on the Roster's two readings and a matchup team page's
+two; research and League keep their 12px phone gap.
+
+**And `.app-chrome:has(+ .view-tools)` (and `.mup-chrome`'s) drop their bottom
+margin**, or the 14px *above* the band would be the same strip of container one
+row up. `:has()` rather than a class, because nothing about the chrome changes —
+what changes is what follows it.
+
+**They drop their *shadow* as well, and that was the last seam.** `--shadow-bar`
+says *the page passes under this bar*; where a reading band follows, what is
+under it is more chrome, and a soft dark wash laid across the top of the band is
+what made one band read as two — measured on the dark palette, `rgb(21,22,23)`
+at the band's top ramping to `rgb(25,26,27)` by y=120 against a flat
+`rgb(25,26,27)` below. `.app-chrome` closes itself with a `border-bottom` so
+`none` leaves its hairline standing; `.mup-chrome` carries its hairline *inside*
+the shadow (`inset 0 -1px 0`), so there the inset is what is left. The two
+fixed-height views take a named selector rather than `:has()`, the band being
+inside the table's pane there and so not the chrome's next sibling.
+
+**The band has one shadow, at its own bottom edge, and getting it to stay there
+took three goes.** The bar's own `box-shadow` bled back up over the row above
+it, which is the other half of the same seam. Both failed attempts are worth
+recording, because each is a thing that reads as true and is not:
+
+- **A blur radius does not extend by half of itself.** `blur/2 − offset` said a
+  2px inset would close it; measured, a **7px** ramp survived. `R` is defined as
+  a Gaussian of standard deviation `R/2`, which is visible to about two standard
+  deviations — so a shadow extends by roughly the whole blur radius.
+- **A negative `z-index` child paints *after* its own stacking context's
+  background, not before it.** Insetting by the full `blur − offset` (10px) and
+  putting the pseudo at `z-index: -1` moved the ramp *inside* the bar instead:
+  the painting order for a stacking context is its own background, then the
+  negative layer, so `-1` never put the shadow under the ground meant to hide
+  it.
+
+What ends it is `clip-path: inset(100% -40px -40px -40px)` on a pseudo-element
+carrying the shadow: the visible region begins at the pseudo's own bottom edge,
+so nothing it paints can reach back over the band, and the negative side and
+bottom insets let the shadow spread outward as before. On the pseudo rather than
+the bar, which would take the calendar popover with it; a pseudo rather than a
+second shadow token, the value being themed and a "down-only" variant six more
+overrides.
+
+**Measured by reading a pixel column down the band and counting distinct
+values**: **102 of 102 rows** at exactly `rgb(215,215,220)` from the chrome's
+hairline to the bar's bottom border, on the Roster's table reading, its stream
+reading and a matchup team page alike, and **100 of 100** at 390. Below the bar
+the shadow is still there and still fades — 231 → 235 over the 20px under it.
+
+**The row's contents are centered**, which is the band's other half: the bar's
+face is centered on the window and the readings sat against the gutter, so the
+two rows read as two controls rather than as one band. A wrapped row centers
+each line on its own, which is right here — every group in it is atomic, so a
+line holds whole groups and centering balances them rather than stranding one at
+an edge. Page-body overflow measured **0** at 320 / 390 / 1200 / 1920 after.
+
+**Measured after, reading a vertical line down the middle of the two rendered
+pages and differencing them pixel by pixel**: identical at every sampled row
+from the tab strip to the first row of content, but for 3–4 levels over the 6px
+directly under the chrome's hairline. The bar opens at **y=166 on both** roster
+readings and **y=262 on both** matchup readings, the band is **64px** and
+`rgb(25,26,27)` on all six surfaces (Roster, Feed, Matchup ×2, Research,
+League), and page-body overflow is **0** at 320 / 390 / 1200 / 1920 on every
+one.
+
+### The sticky ladder, and the one place it is not a ladder
+
+```
+.app-chrome    title row + tabs   pinned
+.view-tools    which reading      scrolls away
+.date-bar      which days         pinned, under the chrome
+  thead                           pinned, under the bar
+```
+
+**The bar left the chrome to make that possible**, and it is pinned on its own
+(`.app > .date-bar`, `top: var(--chrome-h)`, `z-index: 39` — under the chrome's
+41). `--chrome-h` is zero wherever the chrome is not pinned (the fixed-height
+columns, a short window), so one declaration answers three states with no rule
+per view; `@media (max-height: 560px)` unpins the bar for the reason it unpins
+the chrome, and by name rather than by inheritance, since a zero `--chrome-h`
+would otherwise leave the bar as the one thing holding a band against a 390px
+screen. `--scroll-offset` gained `--date-bar-h` with it, or a clip scrolled to
+the top of the window on the Feed lands behind 54px of dates.
+
+**`--date-bar-h` is measured, by `hooks.ts::usePublishedHeight`** — the third of
+this file's measured heights and the plainest, `--chrome-h` needing to read
+`position` off the computed style and `--details-chrome-h` needing to write onto
+an overlay rather than the root. It is **0 on the way out as well as in**: the
+property is what a table's header row sticks below, and a stale height there is
+a 54px band of nothing above the first column heading on every view with no bar.
+It is published by the app's own bar and by a matchup team page's (`measure` on
+`DateBar`), which are never both on screen; the expanded box's bar is above its
+pane rather than in it and publishes nothing.
+
+**All three of them round *down*, and that is a bug rather than a preference.**
+A reader reported "a small gap between the date picker and table headers, which
+you can see content scrolling through", and the seam measured **flush at 320,
+390, 640, 1200 and 1920 and at device pixel ratios 1 and 2** — because 54 is an
+integer at every one of those. The bar's face is a control height plus a line of
+text in **a font this app does not choose**, which is exactly the case the
+measure-don't-declare rule exists for, and the rounding is the other half of it:
+the seam is `published − actual`, so it is a **gap** whenever the published
+number is the larger. `Math.round` gives one on any bar whose height lands above
+`.5`.
+
+**Driven, and the first attempt had it the wrong way round** — the instinct is
+that a sticky box must clear the one above it, which argues for rounding *up*,
+and up is the direction that opens the gap. With the bar forced to 55.391px:
+`ceil` publishes **56** and the seam measures **+0.609px**; `floor` publishes
+**55** and it measures **−0.391**, a sub-pixel overlap, which paints as nothing.
+The same test on the Feed's chrome→bar seam with the tab strip forced to
+104.391px: **−0.391** floored. `--scroll-offset` reads `--chrome-h` too and does
+not care which way a fraction goes.
+
+**The exception is the Roster's table reading, and it is not an exception to the
+ladder but to where the ladder is drawn.** That view is a viewport-tall flex
+column in which only `.summary-scroll` scrolls, and **a sticky box sticks to the
+box that scrolls**. A bar left in the page there is pinned to a column that never
+moves; the table's header row is pinned to the pane, 54px lower. Two boxes stuck
+to two different edges, drawn as one band, with the first rows of the table lost
+in the difference. So App hands both rows to `SummaryTable` as `paneChrome` and
+they are rendered as the pane's own first children, where they stick against the
+same scrollport — and they take `position: sticky; left: 0` as well, the pane
+scrolling in both directions, which is the horizontal pinning the legend at the
+foot of that pane already documents.
+
+**Measured at 1200×900 on the live fantasy roster**, before → after a 600px
+scroll of the pane and then 400px across it:
+
+| | at rest | scrolled down | and across |
+| --- | --- | --- | --- |
+| `.app-chrome` | y 0, h 102 | **0** | **0** |
+| `.view-tools` | y 102 | **−498** | −498, x **0** |
+| `.date-bar` | y 158 | **102** | 102, x **0** |
+| `thead` | y 212 | **156** | 156 |
+
+which is the pane's top, the bar's height on top of it, and nothing else moving.
+`thead`'s `top` is `var(--pane-bar-h, 0px)`, set to `--date-bar-h` by
+`.summary-scroll.has-pane-chrome` — a class rather than `:has(> .date-bar)`,
+because the question is *whose* bar it is: the expanded full-page box draws its
+own above the pane, and a header row held 54px down under nothing there would be
+a band of rows showing through the gap. Checked expanded: one date bar, in
+`.expanded-chrome`, `has-pane-chrome` off, `thead` at the pane's own top.
+
+**`flex: none` on both rows in the page, and that is the trap the move creates
+rather than a tidying.** The bar carries `flex: 1 1 100%` — "its own line",
+written for the wrapping rows it used to sit in — and the fixed-height views make
+`.app` a **column** flex container, where that basis is 100% of the *height*. Left
+alone, a 54px bar became the whole viewport and pushed the table off the bottom
+of it. In the chrome and in the pane it was inert, both of those being blocks.
+
+**Driven across all four tabs and four widths.** The four readings are exclusive
+and there is exactly **one** date bar in every one of them (table, Feed,
+Schedule, Projected), with the bar's lead reading `Today` / `Today` /
+`Schedule · Week 19` / `Projected` and the `Roster` tab lit throughout.
+`--chrome-h` / `--date-bar-h` go `0/54` on the Roster, `0/0` on Research,
+`102/0` on League and `0/0` on the Matchup tab (whose own bar is a team page's
+and does not publish). The feed-order toggle still loses its word at a container
+of 335 — 276 at a 320 window, 346 at 390 — which is the threshold measured on
+the old tab row, unmoved. **Page-body overflow is 0** at 320, 390, 640, 1200 and
+1920 on every view. Bundle: JS **598.51 → 602.30 KB** (178.32 → 179.14 gzipped)
+and CSS **159.28 → 160.47** (28.58 → 28.78) — 3.8KB and 1.2KB raw, 0.8 and 0.2
+over the wire, for a fourth view, a fourth reading, a tab strip, a band, a
+measured height and the how-to page's rewritten chapter. The CSS figure is net
+of what the matchup page gave back: folding its reading run onto `.view-tools`
+retired `.mup-tools`, `.mup-tool-icons`, `.mup-dates`, two ghost rules and two
+container queries.
 
 The Roster and Feed pills only render once something is on the roster (`showRosterViews`); **Research needs no roster and is always there** — with nothing rostered the bar is that lone pill, which is the one tab a new user can actually use.
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
 import { projectStarters, rangeDatesOf, startedOn } from '../lib';
@@ -70,9 +71,9 @@ export default function LeagueTeam({
   reading,
   lens,
   onLens,
-  oldestFirst,
   schedule,
   projection,
+  chrome,
   onOpenDetails,
 }: {
   teamId: number;
@@ -91,9 +92,6 @@ export default function LeagueTeam({
    *  guard as it. */
   lens: FeedLens;
   onLens: (lens: FeedLens) => void;
-  /** Which way the stream runs, and the press that turns it — the overlay's,
-   *  beside the lens, so crossing to the other manager keeps both. */
-  oldestFirst: boolean;
   /** The Schedule view's index, or null for the ordinary stat columns — the
    *  same "the mode is the presence of an index" rule App applies, so a table
    *  can never be in schedule mode with no schedule in it. */
@@ -107,6 +105,23 @@ export default function LeagueTeam({
   /** Open a player's page — the same `${kind}-${id}` key every other route into
    *  it uses, so a name pressed here opens what a name pressed on the roster
    *  table opens. */
+  /**
+   * **The page's own reading run and its date bar**, handed down because *where*
+   * they are drawn is a fact about the reading rather than about the controls.
+   *
+   * On the **roster** reading this page is a fixed-height column in which only
+   * `.summary-scroll` scrolls, and a sticky box sticks to the box that scrolls
+   * — so the bar goes *inside* the pane (`SummaryTable`'s `paneChrome`) where
+   * it and the table's header row stick against the same scrollport, exactly as
+   * the app's own Roster page does it. On the **feed** reading the overlay is
+   * the scroller and they are ordinary page content above the stream.
+   *
+   * It is drawn in every branch, the empty and failed ones included: the dates
+   * are what a reader empties this page with, and an empty state naming "the
+   * date control above" over a page with no date control is the one thing it
+   * must not do.
+   */
+  chrome?: ReactNode;
   onOpenDetails: (key: string) => void;
 }) {
   const [report, setReport] = useState<PlayerReport[] | null>(null);
@@ -268,26 +283,38 @@ export default function LeagueTeam({
   // Never over data: the block wait is behind the app's own delay, so a warm
   // answer never flashes one, and a span change re-reads with the old rows
   // still on screen until the new ones land.
-  if (waiting && !report) return <LoadingBlock>Reading this team&rsquo;s games</LoadingBlock>;
+  if (waiting && !report)
+    return (
+      <>
+        {chrome}
+        <LoadingBlock>Reading this team&rsquo;s games</LoadingBlock>
+      </>
+    );
   if (error) {
     return (
-      <div className="empty-state">
-        <h3>Couldn&rsquo;t read this team</h3>
-        <p>{error}</p>
-      </div>
+      <>
+        {chrome}
+        <div className="empty-state">
+          <h3>Couldn&rsquo;t read this team</h3>
+          <p>{error}</p>
+        </div>
+      </>
     );
   }
-  if (!report) return null;
+  if (!report) return <>{chrome}</>;
   const who = team?.name ?? `Team ${teamId}`;
   if (teamCards.length === 0) {
     return (
-      <div className="empty-state">
-        <h3>Nobody on this team over these days</h3>
-        <p>
-          {who} had nobody on the roster over the days in view. The date control above is what
-          changes them.
-        </p>
-      </div>
+      <>
+        {chrome}
+        <div className="empty-state">
+          <h3>Nobody on this team over these days</h3>
+          <p>
+            {who} had nobody on the roster over the days in view. The date control above is what
+            changes them.
+          </p>
+        </div>
+      </>
     );
   }
 
@@ -301,9 +328,13 @@ export default function LeagueTeam({
           projection={projection}
           /* Who sits above the `Total` line — see `splitStarters`. */
           starters={starterKeys}
+          /* Inside the pane, so the bar and the header row stick against the
+             same scrollport — see `chrome`. */
+          paneChrome={chrome}
         />
       ) : (
         <>
+          {chrome}
           {/* **The lens, at the head of the stream it narrows** — the Feed
               view's own row of pills, drawn from the same component so a reader
               who knows that page knows this one, and drawn *here* rather than up
@@ -352,7 +383,6 @@ export default function LeagueTeam({
                day against it and `Clear` would mark the reader's own feed read
                from a page that is not it. See `LeagueMatchup`'s `feedLens`. */
             playFilter={lens !== 'all' ? lens : undefined}
-            oldestFirst={oldestFirst}
           />
         </>
       )}

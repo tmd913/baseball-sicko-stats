@@ -1234,10 +1234,11 @@ function byRecency(a: FeedEntry, b: FeedEntry): number {
  * timestamps are equal, a play's own grouped events being the case that has
  * needed the tiebreak from the beginning.
  *
- * **The stream borrows it too, now that it can be read forwards** (`oldestFirst`
- * below). That the reversal is one negation rather than a second sort is the
- * whole reason a control could be put on it: there is no order this file can be
- * asked for that these two functions do not already agree about.
+ * **The stream borrowed it too**, for as long as it could be read forwards; the
+ * control that turned it round is gone and the pair is down to one caller
+ * again, the Live block's in-progress events. Kept as a negation rather than
+ * inlined there, for the reason it was written that way: the tiebreak is the
+ * whole point, and one of it cannot disagree with itself.
  */
 export function byPlayOrder(a: FeedEntry, b: FeedEntry): number {
   return -byRecency(a, b);
@@ -1284,9 +1285,9 @@ export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
 /**
  * The roster as a flat, most-recent-first stream. A "Live" section pins whoever
  * is at bat, on deck, on base or on the mound to the top; below it, everything
- * that has happened reads newest-first — or forwards, if the reader has pressed
- * `Oldest first` (see `oldestFirst`, which reverses that section and only that
- * section). `reports` is one kind at a time (App's
+ * that has happened reads newest-first. (It could be turned round for a while;
+ * see the note by `FeedGlyph` in `FeedFilters.tsx` for what that control was
+ * and what its reasoning is still good for.) `reports` is one kind at a time (App's
  * kind tabs sit above this view), so a batter's at-bats and a pitcher's outings
  * never mix: for a batter an item is a single plate appearance or base-running
  * event, for a pitcher it's a whole outing grouped by inning.
@@ -1312,10 +1313,7 @@ export function LiveFeed({
   onShowNew,
   onShowAll,
   onClearNew,
-  newPlaysOrder,
   newPlaysFilters,
-  oldestFirst = false,
-  newOldestFirst = false,
 }: {
   reports: PlayerReport[];
   /** Open a player's page — what the headshot and the name both do now. */
@@ -1388,67 +1386,13 @@ export function LiveFeed({
    * `newplays=1` is a fact about which stream the view is showing.
    */
   onClearNew?: () => void;
-  /**
-   * **The new-plays page's two controls**, which sit in two boxes rather than on
-   * one row: `newPlaysOrder` in the page's pinned head beside `Back`, and
-   * `newPlaysFilters` in the page itself at the head of the list they narrow.
-   * They were one node on one row in the head; see `NewPlaysPage`, which draws
-   * them and carries the argument for the split.
-   *
-   * Built by App and handed down rather than built here, for the reason every
-   * other half of this feature is App's: it owns the lens, the marker and the
-   * URL those controls write. What this file owns is the box they are drawn in,
-   * which is the page below and nothing this component can hand upwards — the
-   * page is portalled out of here, so App cannot render it and cannot know
-   * whether it is open.
-   *
-   * Absent for the second caller (`LeagueTeam.tsx`), along with the rest of the
-   * feature, and absent on the pitcher tab, where App gates the mode itself.
-   */
-  newPlaysOrder?: ReactNode;
   newPlaysFilters?: ReactNode;
-  /**
-   * **Read the day forwards** — the stream reversed, first play of the day at
-   * the top. Default false, which is the stream as it has always been and what
-   * the second caller (`LeagueTeam.tsx`) gets by passing nothing.
-   *
-   * **It reverses one of the three sections**, and that is the whole of what it
-   * means:
-   *
-   * - **Recent** is the section with a clock the reader reads *along*, so it is
-   *   the one that turns round — `byPlayOrder` rather than `byRecency`, which
-   *   is that comparator negated and therefore cannot disagree with it about a
-   *   play's own grouped events (cause then effect, either way round). The page
-   *   size turns round with it: `Load more` walks *forward* in time from the
-   *   first pitch of the day instead of back from the last.
-   * - **Live** does not. It is not ordered by a clock at all — `ROLE_ORDER`
-   *   puts the man at bat above the man on deck above the man on base, which is
-   *   a priority and reads the same in any direction. Reversing it would say
-   *   nothing except that on-base now outranks at-bat. It also stays *pinned to
-   *   the top*: what is happening now is why this page is open, and a control
-   *   that reorders plays is not a control that rebuilds the page.
-   * - **Upcoming** does not either, and the reason is that it already agrees
-   *   with both readings. It is sorted by first pitch, earliest first — which
-   *   is *next up first* under newest-first and *forwards in time* under
-   *   oldest-first. The two orders it could be asked for are the same order, so
-   *   there is nothing to flip; a reversed Upcoming would only bury the game
-   *   that starts soonest under the one that starts at ten.
-   */
-  oldestFirst?: boolean;
-  /**
-   * **The new-plays page's direction, which is not this stream's.** It was one
-   * flag for both, and the fault was that the page is a box opened *over* a
-   * stream that is still on screen behind it: reversing the page reversed the
-   * feed underneath, and leaving the page put the reader back on a day running
-   * backwards with nothing on that page having said so. Two flags, two
-   * parameters (`oldest=1` here, `noldest=1` there) — see App's
-   * `newPlaysOldestFirst`, which carries the argument and the default.
-   *
-   * It reaches exactly one list, `newRecent` below. Live and Upcoming are not
-   * on the page at all, so the three-sections note above is the whole of what
-   * an order can turn here.
-   */
-  newOldestFirst?: boolean;
+  /* **The stream's direction was two props and is none.** `oldestFirst` and
+     `newOldestFirst` reversed this list and the new-plays page's, off a toggle
+     in the pinned row and a second one in that page's head — deliberately two
+     pieces of state, since turning one stream round must not turn the other.
+     The control is gone from the app (see `FeedFilters.tsx`) and both lists run
+     newest-first, which is the order that makes a stream a stream. */
 }) {
   // How much of the Recent section is on screen, grown a page at a time by the
   // "Load more" button. Deliberately not in the URL — it's a reading position,
@@ -1486,18 +1430,18 @@ export function LiveFeed({
     .map((p) => ({ report: p.report, live: p.live, events: p.liveEvents }))
     .sort((a, b) => liveOrder(a.live) - liveOrder(b.live));
 
-  // Everything that has happened, interleaved by clock — newest-first unless the
-  // reader has turned the stream round (`oldestFirst`): for a batter every
+  // Everything that has happened, interleaved by clock, newest first: for a
+  // batter every
   // completed plate appearance and every base-running event of his own, and for
   // a pitcher his whole outing as a single item. The in-progress at-bat (no
   // event yet) lives in the Live section above, and a pitcher pinned there has
   // already been kept out of this list by `playerDayEntries`.
   // Sorted here rather than taking `playerDayEntries`' own order, which is one
   // man's day and already `byRecency`: the merge across players is what decides
-  // the stream, and re-sorting the merged list is what makes the flip one line.
+  // the stream.
   const allRecent = perPlayer
     .flatMap((p) => p.entries)
-    .sort(oldestFirst ? byPlayOrder : byRecency);
+    .sort(byRecency);
 
   /**
    * **The `Video` lens needs today's highlight reels**, and only today's — see
@@ -1593,17 +1537,13 @@ export function LiveFeed({
   const outings = allRecent.filter((e) => e.type === 'pitching');
   const allPlays = allRecent.filter((e) => e.type !== 'pitching');
   const recent = allPlays.filter((e) => passesFilters(e, playFilter, false, 0, hasFilm));
-  /* **And it is sorted again on its own direction.** `allRecent` is already in
-     this stream's order, and `filter` hands back a fresh array, so the page's
-     list is re-sorted in place rather than merged a second time — one flip of
-     one comparator, the same pair (`byPlayOrder` / `byRecency`) the stream
-     uses, so the two lists cannot come to disagree about a play's own grouped
-     events. Where the two directions agree this is a sort over an already
-     sorted array and costs nothing worth measuring. */
+  /* **No second sort.** This used to be re-sorted on a direction of its own —
+     the page had its own order toggle, deliberately a second piece of state so
+     that turning one stream round did not turn the other. Both toggles are gone
+     and `allPlays` is already in this stream's order, so the filter's fresh
+     array is the page's list. */
   const newRecent = newOnly
-    ? allPlays
-        .filter((e) => passesFilters(e, playFilter, true, seenPlays, hasFilm))
-        .sort(newOldestFirst ? byPlayOrder : byRecency)
+    ? allPlays.filter((e) => passesFilters(e, playFilter, true, seenPlays, hasFilm))
     : EMPTY_ENTRIES;
 
   /**
@@ -1622,10 +1562,6 @@ export function LiveFeed({
   // earlier ones are underway). Only the ones the player is actually in: see
   // `isUpcomingFor`.
   //
-  // **`oldestFirst` does not reach this one**, and the reason is that it would
-  // change nothing worth having: earliest-first is *next up first* reading the
-  // day backwards and *forwards in time* reading it forwards, so both orders
-  // this list could be asked for are this order. See the prop's own note.
   const upcoming = perPlayer.flatMap((p) => p.upcoming).sort(byStartTime);
 
   /**
@@ -1839,7 +1775,6 @@ export function LiveFeed({
       {newOnly && onShowAll && (
         <NewPlaysPage
           entries={newRecent}
-          order={newPlaysOrder}
           filters={newPlaysFilters}
           onOpenDetails={onOpenDetails}
           onClose={onShowAll}
@@ -1954,19 +1889,15 @@ function coveredRange(entries: FeedEntry[]): string | null {
  */
 function NewPlaysPage({
   entries,
-  order,
   filters,
   onOpenDetails,
   onClose,
   playFilter,
 }: {
   entries: FeedEntry[];
-  /** **The direction control**, built by App and drawn in the pinned head
-   *  beside `Back` — the same place it sits on the page, which is the tab row
-   *  there and this head here: the bar that is always on screen. It is wired to
-   *  `newPlaysOldestFirst`, this page's own state, and not to the stream's; see
-   *  `newOldestFirst` above and App's note on the parameter. */
-  order?: ReactNode;
+  /* The direction control stood here, wired to this page's *own* state rather
+     than the stream's so that turning one round did not turn the other. Both
+     are gone; the page reads newest-first with the stream. */
   /** **The kind pills**, built by App and drawn in the page at the head of the
    *  list they narrow rather than in the head above it. See the render below,
    *  which carries the argument and the guard. */
@@ -2018,23 +1949,16 @@ function NewPlaysPage({
                   empty list, there being no range to state. */}
               {range && <p className="newplays-range">{range}</p>}
             </div>
-            {/* **The order, in the head rather than on a row of its own.** It is
-                the one control here a reader reaches *while scrolling* — which
-                is what a pinned bar is for — and the head is this page's pinned
-                bar, the tab row's part one page along. On its own row it was a
-                second line of chrome carrying one button: measured, the navbar
-                was 112px at 320, 390 and 1200 with the pills in it and is 82
-                with the head alone, so the toggle rides for nothing where the
-                row cost 46. (66 of that 82 until `.newplays-chrome` was given
-                the bottom padding its head's margin was collapsing out of —
-                see `styles.css`.) `.details-head` wraps, so at a width that
-                cannot hold `Back`, the name and this control on one line it
-                takes a second line and the measured height follows it — that
-                being why `--details-chrome-h` is measured rather than declared.
-                It does not wrap at any width now, the control dropping its word
-                below a 360px container, but a two-day range line can still
-                wrap it. */}
-            {order}
+            {/* The order toggle stood here, in the head rather than on a row
+                of its own, on the argument that it was the one control here a
+                reader reaches *while scrolling* and a head is a pinned bar. It
+                is gone from the app; what the placement bought is on the record
+                either way — the navbar was 112px at 320, 390 and 1200 with a
+                row of its own and the head alone is 82, so the button rode for
+                nothing where a row cost 46. `.details-head` still wraps, and
+                `--details-chrome-h` is still measured rather than declared,
+                because a two-day range line can take this head to two lines on
+                its own. */}
           </div>
         </div>
 

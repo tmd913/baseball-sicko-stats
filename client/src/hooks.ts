@@ -285,7 +285,11 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
   const sync = useCallback(() => {
     const el = ref.current;
     const pinned = el && getComputedStyle(el).position === 'sticky';
-    const h = pinned ? Math.round(el.getBoundingClientRect().height) : 0;
+    // **Rounded down, never to nearest** — see `usePublishedHeight`, which is
+    // the same measurement and the same reason: this number is the `top` the
+    // date bar below is held at, so it has to be *at most* this bar's own
+    // height or the two are a hairline apart with the page running through it.
+    const h = pinned ? Math.floor(el.getBoundingClientRect().height) : 0;
     if (h === height.current) return;
     height.current = h;
     document.documentElement.style.setProperty('--chrome-h', `${h}px`);
@@ -310,6 +314,70 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
   // observer reports, and re-measuring is a rect read against one comparison.
   useLayoutEffect(sync);
   return [ref, height];
+}
+
+/**
+ * Publish an element's height on `:root` as a custom property.
+ *
+ * The third of this file's measured-rather-than-declared heights, and the
+ * plainest: `--chrome-h` has to read `position` off the computed style because
+ * the bar it measures stands down on three views, and `--details-chrome-h`
+ * writes onto an overlay rather than the root because two bars are pinned at
+ * once. This one has neither problem — the date bar is drawn or it is not — so
+ * it is the bare pattern: a `ResizeObserver` for a bar that wraps, a `resize`
+ * listener for the widths at which its label changes shape, and a layout
+ * effect on every render, all of which the two above already carry and for the
+ * same reasons.
+ *
+ * **Zero when the element is gone**, set on the way out as well as on the way
+ * in: the property is what the table's header row sticks below, and a stale
+ * height there is a 54px band of nothing between the top of the pane and the
+ * first column heading on every view that has no bar.
+ */
+export function usePublishedHeight(
+  ref: RefObject<HTMLElement | null>,
+  prop: string,
+  enabled = true,
+) {
+  const sync = useCallback(() => {
+    const el = enabled ? ref.current : null;
+    // **`floor`, not `round`, and that is a bug fix rather than a preference.**
+    //
+    // This number is the `top` a sticky box below is held at, measured from the
+    // same scrollport edge the bar's own top is — so the seam between them is
+    // `published − actual`, and it is a **gap** whenever that is positive. A bar
+    // measuring 54.6px publishes 55 under `round`, and the table's header row
+    // then sits 0.4px below the bar's bottom edge with the rows visibly running
+    // through the strip. Floored it can only ever be negative: the two overlap
+    // by a sub-pixel, which paints as nothing.
+    //
+    // Driven rather than reasoned, and the first attempt had it the wrong way
+    // round: with the bar forced to 55.391px, `ceil` published **56** and the
+    // seam measured **+0.609px**, `floor` publishes **55** and it measures
+    // **−0.391**. 54 is an integer at every width this was measured at, which
+    // is why the seam is flush here and not on the reporter's screen — the
+    // bar's face is a control height plus a line of text in a font this app
+    // does not choose, which is exactly the case the measure-don't-declare rule
+    // exists for, and the rounding is the other half of it.
+    const h = el ? Math.floor(el.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty(prop, `${h}px`);
+  }, [ref, prop, enabled]);
+  useLayoutEffect(() => {
+    const el = enabled ? ref.current : null;
+    if (!el) {
+      document.documentElement.style.setProperty(prop, '0px');
+      return;
+    }
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener('resize', sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', sync);
+      document.documentElement.style.setProperty(prop, '0px');
+    };
+  }, [sync, enabled, prop, ref]);
+  useLayoutEffect(sync);
 }
 
 /**
@@ -348,7 +416,11 @@ export function useOverlayChromeOffset<T extends HTMLElement>(
   const sync = useCallback(() => {
     const el = ref.current;
     const pinned = el && getComputedStyle(el).position === 'sticky';
-    const h = pinned ? Math.round(el.getBoundingClientRect().height) : 0;
+    // Down, for the reason the other two do it — this band is what the
+    // matchup's own date bar sticks below, and a published height *over* the
+    // real one is a hairline between them with the page running through it.
+    // See `usePublishedHeight`.
+    const h = pinned ? Math.floor(el.getBoundingClientRect().height) : 0;
     if (h === height.current) return;
     height.current = h;
     host.current?.style.setProperty('--details-chrome-h', `${h}px`);
@@ -385,8 +457,9 @@ export function useOverlayChromeOffset<T extends HTMLElement>(
  * scroll has to be restored by hand on unlock: pinning the body resets the
  * window to 0.
  */
-export function useLockBodyScroll() {
+export function useLockBodyScroll(enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
     const { body } = document;
     const y = window.scrollY;
     const prev = body.style.cssText;
@@ -399,7 +472,12 @@ export function useLockBodyScroll() {
       body.style.cssText = prev;
       window.scrollTo(0, y);
     };
-  }, []);
+    // **The flag is a dependency and the hook is otherwise untouched.** It
+    // exists for the one box in the app that is a *page* in one place and an
+    // overlay in another — the matchup, which is a tab of its own and also a
+    // page over the League view — and a page must not pin the document it is
+    // part of. Every other caller passes nothing and gets what it always got.
+  }, [enabled]);
 }
 
 /**
@@ -659,8 +737,13 @@ function markBackgroundInert(box: HTMLElement | null): () => void {
 export function useOverlayFocus(
   boxRef: RefObject<HTMLElement | null>,
   focusRef?: RefObject<HTMLElement | null>,
+  /** Off for a box that is a *page* rather than an overlay — see
+   *  `useLockBodyScroll`'s own flag, which is the same exception. Nothing
+   *  outside such a box is background, so nothing outside it may be inerted. */
+  enabled = true,
 ) {
   useEffect(() => {
+    if (!enabled) return;
     const opener = document.activeElement as HTMLElement | null;
     const release = markBackgroundInert(boxRef.current);
     (focusRef?.current ?? boxRef.current)?.focus({ preventScroll: true });
@@ -670,9 +753,11 @@ export function useOverlayFocus(
     };
     // Once per open. The refs are stable and the box is the box for the life of
     // the overlay; re-running would re-mark a background that has since gained
-    // a box *above* this one.
+    // a box *above* this one. `enabled` is in the list because it decides
+    // whether there is an open at all, and it does not change under a mounted
+    // box — the matchup is a page or an overlay for its whole life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 }
 
 /**

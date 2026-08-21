@@ -87,6 +87,77 @@ At **390** the same three read 50 / 50 / 96 → 50, the phone `<select>` standin
 
 **Where the bar bleeds is the container's business**, which is `--table-bleed`'s rule one box over: `--bar-bleed` is declared by whatever holds the bar — `--app-gutter` (22px) on `.app-chrome`, **12px** on the expanded full-page box — and defaults to 0, which is what a team page's tools want, that row being a centered 800px card column rather than the width of the overlay. Measured: the bar runs **0 → 1200** inside the chrome at a 1200 window and **0 → 1200** inside the expanded box, and **200 → 1000** on a team page, its face centered at 600 in all three.
 
+#### The bar is pinned on its own now, and the row above it scrolls away
+
+**It was the last thing inside `.app-chrome` and it is a sibling of it.** The
+passage above says the bar stays inside the chrome so that `--chrome-h` is one
+measurement of one pinned box; that reasoning is left as written and the
+conclusion has been overturned, by a report about the other half of the bargain.
+Everything that could be called chrome was in that box, so the pinned band
+reached **303px at 320px wide** — most of a phone held sideways — and a reader
+scrolling a table carried the reading toggles down the page with the dates.
+
+**The split is between what says *where you are* and what says *which
+reading*.** The chrome keeps the title row and the four main tabs and is pinned;
+the tools row (`.view-tools`, which now holds the reading toggles, the League
+tabs and the research board's control set) is in the page and scrolls away; the
+bar is pinned under the chrome at `top: var(--chrome-h)`, `z-index: 39` against
+the chrome's 41. Measured, the pinned band is **102px at 1200, 100 at 390 and
+148 at 320**, against 169 / 213 / 309 before.
+
+**There are two measured heights now rather than one**, which is the cost and it
+is one `ResizeObserver`: `--date-bar-h`, published by
+`hooks.ts::usePublishedHeight` from the app's own bar and from a matchup team
+page's (`measure` on `DateBar`, and the two are never both on screen — the
+expanded box's bar is above its pane rather than in it, so it publishes
+nothing).
+
+**It rounds *down*, and the direction is the whole of a reported bug.** The seam
+between the bar and whatever sticks under it is `published − actual`, so it is a
+**gap** whenever the published number is the larger — and `Math.round` produces
+one on any bar whose height lands above `.5`. The bar is 54px at every width
+this was measured at, which is why the seam was flush here and not on the
+screen it was reported from: the face is a control height plus a line of text in
+a font this app does not choose. Driven with the bar forced to 55.391px, `ceil`
+publishes **56** and the seam measures **+0.609px** where `floor` publishes
+**55** and it measures **−0.391** — a sub-pixel overlap, which paints as
+nothing. `--chrome-h` and `--details-chrome-h` take the same rounding for the
+same reason, this bar being what sticks under both of them. `--scroll-offset` is
+`--chrome-h + --date-bar-h + 12px`, or a clip scrolling itself into view on the
+Feed lands behind 54px of dates. The property goes to **0 on the way out as well
+as in**, since a table's header row sticks below it and a stale height is a band
+of nothing above the first column heading on every view with no bar. Measured
+across the tabs, `--chrome-h`/`--date-bar-h`: Roster **0/54**, Research **0/0**,
+League **102/0**, Matchup **0/0**.
+
+**And on the Roster's table reading the bar is inside the table's own pane.**
+That view is a viewport-tall flex column in which only `.summary-scroll` scrolls,
+and a sticky box sticks to the box that scrolls — so a bar in the page there is
+pinned to a column that never moves while the header row is pinned to the pane,
+54px lower. Both rows are handed to `SummaryTable` as `paneChrome` and rendered
+as the pane's first children, where they stick against the same scrollport and
+take `position: sticky; left: 0` besides, the pane scrolling in both directions.
+Measured at 1200×900 with the pane scrolled 600 down and 400 across: the bar
+holds at **y 102** (the pane's top) and the header row at **156**, both at
+**x 0**, with the tools row gone to −498. See **Client — the Roster view**,
+*The tools row and the dates are inside the pane*.
+
+**A matchup team page takes the identical arrangement**, which is the point of
+having one component: the bar is a child of `.mup-view` and sticky under that
+page's band on its feed reading, and inside `.summary-scroll` on its two table
+readings. See **Client — a league matchup**, *The ladder, and where the bar
+sticks on each reading*.
+
+**One thing the move needed and nothing else did.** The bar carries
+`flex: 1 1 100%` — "its own line", written for the wrapping rows it used to sit
+in — and the two fixed-height views make `.app` a **column** flex container,
+where that basis is 100% of the *height*. A 54px bar became the whole viewport
+and pushed the table off the bottom of it until `.app > .date-bar` took
+`flex: none`. It was inert in the chrome and is inert in the pane, both of those
+being blocks. `--bar-bleed` moved with it, from `.app-chrome` to
+`.app > .date-bar` — the child combinator is load-bearing, the bar being *also*
+rendered inside a pane that has already bled through those same gutters.
+
 **Where it is drawn.** On the Roster and the Feed, once there is something to read — the same guard the calendar carried, the dates qualifying exactly those two views and nothing on the research board. In the expanded full-page table, which keeps it for the reason it keeps the kind tabs: a table of dates with nothing on screen saying which days is the state that mode must never be in. And on a matchup's team pages, below their tools row. It goes with the rest of the chrome on the **edit screen** by being **named in `.app.edit-mode`'s list** rather than by being inside `.view-bar` — it used to inherit that for free and is a sibling of that row now; verified, `display: none` under that class where it is `block` without it.
 
 #### On the Feed the face opens the calendar, and the presets are not behind it

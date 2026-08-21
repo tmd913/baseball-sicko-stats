@@ -1,3 +1,15 @@
+### Where the control set lives
+
+*(One-line update: the board's bar is portalled into **`.view-tools`**, a band
+directly under the app's main tabs, rather than into the tab row itself — the
+tabs became a full-width underlined strip and everything that says which
+*reading* of a page you are on moved down one row together. See **Client**, *The
+tabs are the width of the window*. `.research-chrome` and `.research-bar` are
+still `display: contents` for the same reason and the same wrap rule applies, so
+every measurement below holds; passages saying "the tab row" mean that band.
+What did change: the band is in the page rather than in the pinned box, so it
+scrolls away with the board.)*
+
 ### The research board
 
 Split out of `client.md`. The board is the league over a season where the two
