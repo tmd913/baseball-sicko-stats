@@ -1052,10 +1052,41 @@ function splitStarters(
  * tab, which is the whole point of moving it: `Total · 9` on a sixteen-man
  * roster is a figure a manager can act on where `Total · 16` never was.
  *
- * The title says so when there is anything below the line, since the count on
- * its own cannot: nine of sixteen and nine of nine read identically.
+ * **And the count says how many it left out**, which is what the sentence above
+ * this one used to hand to the title: *nine of sixteen and nine of nine read
+ * identically*, so the label printed `· 9` and a hover explained the rest.
+ * That is the same fault the word beside it was changed to fix — half this
+ * app's traffic has no hover, and a number a reader cannot act on is worse for
+ * being explained somewhere they will never look. So the denominator is
+ * printed: **`Lineup · 11 of 14`** where the line has men under it, and
+ * **`Lineup · 11`** where it has none, since `11 of 11` is a fraction that
+ * divides nothing. It is the app's own `n of n` — the form the projected chip
+ * and the `Starts` column's title already say a span in.
+ *
+ * **It costs the label 35.7px and the table nothing**, measured under the lens
+ * on the live fantasy roster over 8/21–8/23: `Lineup · 11` **69.1 → 104.8px**
+ * on the batting table and `Lineup · 10` **71.3 → 107.1** on the pitching one,
+ * at **1400, 390 and 320 alike** — the string is the same width at every one of
+ * them, the label being text in a cell nothing else is competing for. The name
+ * column is **292.1 / 205.9px at 1400, 226.2 / 167.5 at 390 and 221.0 / 164.9
+ * at 320 before and after**, the table **1472.6 / 857.5 / 814.6** at the three,
+ * the divider **48.00px**, the rows 58.00, the header 51.00, the pinned
+ * headshot column at **left: 0**, and page-body overflow **0**. The label is
+ * **16.0px tall** at all three widths, which is one line: nothing wraps.
+ *
+ * And the two branches, read off the same page — hide the injured
+ * (`hideil=1`) and the batting table has nobody left under the line, so it goes
+ * back to **`Lineup · 11` at 69.1px** while the pitching table keeps two below
+ * and reads **`Lineup · 10 of 12`**.
+ *
+ * The title still says *what* is down there, which a fraction cannot: a
+ * denominator names a size, not a bench and an injured list.
  */
-function TotalLabel({ n, lineup, split }: { n: number; lineup: boolean; split: boolean }) {
+function TotalLabel({ n, all, lineup }: { n: number; all: number; lineup: boolean }) {
+  /** Anything below the line — the two counts are one partition, so this is the
+   *  same question `rest.length > 0` asks at the call site and cannot come to
+   *  disagree with the number printed beside it. */
+  const split = all > n;
   const only = split ? ' Only the players above this line are in it; the bench and the injured are below it.' : '';
   return (
     <span
@@ -1068,7 +1099,7 @@ function TotalLabel({ n, lineup, split }: { n: number; lineup: boolean; split: b
             : undefined
       }
     >
-      {lineup ? 'Lineup' : 'Total'} · {n}
+      {lineup ? 'Lineup' : 'Total'} · {split ? `${n} of ${all}` : n}
     </span>
   );
 }
@@ -1192,7 +1223,7 @@ function BatterTable({
         <tr className="sum-total-row">
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <TotalLabel n={top.length} lineup={hasPlan} split={rest.length > 0} />
+            <TotalLabel n={top.length} all={batters.length} lineup={hasPlan} />
           </th>
           {schedule ? (
             <ScheduleTotalCells index={schedule} players={top} kind="batter" />
@@ -1339,7 +1370,7 @@ function PitcherTable({
         <tr className="sum-total-row">
           <td className="sum-img-col" aria-hidden="true" />
           <th className="sum-name-col" scope="row">
-            <TotalLabel n={top.length} lineup={hasPlan} split={rest.length > 0} />
+            <TotalLabel n={top.length} all={pitchers.length} lineup={hasPlan} />
           </th>
           {schedule ? (
             <ScheduleTotalCells index={schedule} players={top} kind="pitcher" />
