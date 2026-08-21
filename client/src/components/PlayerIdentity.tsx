@@ -121,3 +121,94 @@ export function PlayerIdentity({
     </div>
   );
 }
+
+/**
+ * **The same block, for a club.**
+ *
+ * The research board's team reading puts thirty clubs where six hundred players
+ * were, and the identity column has to answer the same question of a row that
+ * is not a person: who is this, and in what context do you read the numbers
+ * beside it. So the block keeps its shape — a name line over a sub-line, in the
+ * classes `PlayerIdentity` uses — and swaps what each holds.
+ *
+ * **The name line is the club's name**, where a player's is his. The cap mark
+ * is *not* on the sub-line here, unlike the player block: on a team row it has
+ * moved into the photo column, where the headshot was, and drawing it twice on
+ * one row would be one fact competing with itself.
+ *
+ * **The sub-line is the club's record**, which is the position list's place —
+ * and it is the honest thing to put there, because it is the one fact about a
+ * club that stands to the numbers beside it the way a position list stands to a
+ * player's. There is no handedness on it, a club having none.
+ *
+ * `.row-id-record` is folded onto `.row-id-pos` in the stylesheet for the slot's
+ * typography rather than given rules that agree today, but it is its own class:
+ * a record and a position list are two different objects, and only one of them
+ * ellipsizes.
+ */
+export function TeamIdentity({
+  record,
+  children,
+}: {
+  /** Wins and losses over the span the row's numbers cover, or null where the
+   *  standings could not be read — an em dash, as every other unreadable value
+   *  on this board is, rather than a `0-0` that would claim a winless club. */
+  record: { wins: number; losses: number } | null;
+  children: ReactNode;
+}) {
+  return (
+    <div className="row-id">
+      <div className="row-id-name">{children}</div>
+      <div className="row-id-sub">
+        <span
+          className="row-id-record"
+          title={record ? `${record.wins}-${record.losses} over the span on screen` : undefined}
+        >
+          {record ? `${record.wins}-${record.losses}` : '—'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The cap mark at headshot size — what a team row carries where a player row
+ * carries a face.
+ *
+ * It is `TeamMark`'s image with the row circle's geometry, and it is an image
+ * rather than a button because there is nothing behind it: the page a headshot
+ * opens is a page about a person, and this app has no club page. A row that
+ * looks pressable and is not is worse than one that plainly is not, so the cell
+ * is inert on this reading — and so, for the same reason, is the name beside
+ * it.
+ */
+export function TeamPhoto({ teamId, team }: { teamId: number | null; team: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    /* The headshot's own wrapper, as a `<span>` — the box, not the button. It
+       is what makes the image cell the *same* cell on both readings rather than
+       two that measure alike today, and its `line-height: 0` is what keeps the
+       image out of the cell's inline flow (in it, the reserved descender took
+       every club row to 60px against the board's 58). */
+    <span className="sum-photo-wrap sum-photo-wrap-static">
+      {teamId === null || failed ? (
+        <span className="sum-photo sum-photo-team sum-photo-team-none" title={team}>
+          {team || '—'}
+        </span>
+      ) : (
+        <img
+          className="sum-photo sum-photo-team"
+          src={teamLogoUrl(teamId)}
+          /* The club's own color, for the reason `TeamMark` gives: thirteen of
+             the thirty `on-dark` cuts are drawn in white alone and would be
+             invisible on a light theme's page. */
+          style={{ background: teamColor(teamId) }}
+          alt={team}
+          title={team}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </span>
+  );
+}

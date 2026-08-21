@@ -7861,7 +7861,13 @@ button.start-line:focus-visible {
   appearance: none;
   border-radius: 50%;
 }
-.sum-photo-wrap:hover .sum-photo {
+/* The team reading's wrapper is a `<span>`, not a button: there is no club page
+   behind a cap mark. It takes the box and gives up the pointer and the hover
+   tint, which is the whole of the difference. */
+.sum-photo-wrap-static {
+  cursor: default;
+}
+.sum-photo-wrap:not(.sum-photo-wrap-static):hover .sum-photo {
   border-color: var(--accent);
 }
 .sum-photo-wrap:focus-visible {
@@ -7891,6 +7897,42 @@ button.start-line:focus-visible {
   background: var(--panel-2);
   border: 1px solid var(--border);
   flex-shrink: 0;
+}
+/* **The cap mark at headshot size**, on the research board's team reading —
+   folded onto `.sum-photo` above so the circle, the ring and the row's 42px
+   are one definition and a club row can never be a pixel off a player row.
+
+   Three things differ and each is what a cap mark is rather than what a face
+   is. `object-fit: contain` and the padding, because a logo has to sit *inside*
+   its ground where a headshot fills it — the same relationship `.row-id-logo`
+   has to its tile, at 42px instead of 15. And the ground is **not** declared
+   here: it is the club's own color, inline off `lib.ts::teamColor` for the
+   reason that note gives (thirty values keyed by club is not a thing the
+   palette has), which is why this rule leaves `background` alone and lets the
+   element's own style win. */
+/* A cap mark at headshot size, on the research board's team reading. It sits in
+   the same `.sum-photo-wrap` a headshot does — a `<span>` rather than a button,
+   since a cap mark opens nothing — so the image cell's box is the player row's
+   box by construction rather than by two rules that agree today, and the
+   wrapper's `line-height: 0` keeps the image out of the cell's inline flow
+   (left in it, the reserved descender took the row to **60.00px against the
+   board's 58.00**, on every one of thirty rows). */
+.sum-photo-team {
+  object-fit: contain;
+  object-position: center;
+  padding: 5px;
+  box-sizing: border-box;
+}
+/* …and the abbreviation, for a club with no logo to draw or one whose SVG
+   failed — the courtesy `.row-id-team` extends at 15px. It keeps the circle and
+   the ring and centers three letters in it. */
+.sum-photo-team-none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
 }
 /* Lineup-spot pip on the headshot corner (batting number, or a red "!" when
    benched) — matches the nav avatar's corner. */
@@ -8076,7 +8118,14 @@ button.start-line:focus-visible {
   -webkit-appearance: none;
   appearance: none;
 }
-.sum-name-link:hover {
+/* A club's name in the same slot, and it is **not** a link: the page a name
+   opens is a page about a person and this app has no club page. It takes the
+   type and nothing else, so there is no hover tint and no pointer promising a
+   press that would not happen. */
+.sum-name-link.is-static {
+  cursor: default;
+}
+.sum-name-link:hover:not(.is-static) {
   color: var(--accent);
   text-decoration: underline;
 }
@@ -9818,9 +9867,29 @@ button.start-line:focus-visible {
   flex: none;
   min-width: 15px;
 }
+/* **The record is folded onto the position list's slot and not onto its
+   behavior.** They sit on the same line, in the same 11px `--muted` sub-line,
+   and a reader is meant to recognize the second row of the identity block as
+   the same row whichever board he is on — so the two share the selector for
+   what makes that slot the slot. What the record does *not* take is the
+   ellipsis: `76-51` is five characters and cannot overflow, where a position
+   list is the one thing on that line allowed to truncate, and giving a record
+   `overflow: hidden` would be a rule that agrees today for no reason. */
+.row-id-pos,
+.row-id-record {
+  /* Nothing at all yet — the two share the line's type off `.row-id-sub`. The
+     selector list is here so the pair cannot come apart if that changes. */
+  min-width: 0;
+}
 .row-id-pos {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Tabular figures so `76-51` and `100-62` line up down the column: a record is
+   read as a pair of numbers, and thirty of them in a stack that jitters by the
+   width of a `1` reads as thirty different shapes. */
+.row-id-record {
+  font-variant-numeric: tabular-nums;
 }
 /* Which side he bats from, or which arm he throws with — `RHB` / `LHB` / `SH`,
    `RHP` / `LHP`, from `lib.ts::handCell`.
@@ -14851,9 +14920,15 @@ span.mup-move-name:hover {
   --sort-gutter: var(--row-gutter);
   /* The two ends of the rank scale, which the **badge** is filled from — it
      washed the whole cell until the scale moved onto the chip. Table-local
-     rather than on `:root`: this is the one surface in the app that reads a
-     diverging scale, and a palette entry would invite a second reader to
-     import the argument with the color. */
+     rather than on `:root`: a palette entry would invite a reader to import the
+     color without the argument.
+
+     **There are two surfaces now and they are one object**, so the pair is
+     declared on a selector list below (search `--rank-hot`) rather than copied:
+     the research board's *team* reading draws the same rank of the same clubs
+     in the same chip, and the note there carries why the board's monochrome
+     rule does not reach it. This block keeps the declaration it always had so
+     nothing that inherits from `.league-table` is disturbed. */
   --rank-hot: var(--strikeout);
   --rank-cold: var(--walk);
   /* The header's own line, declared for the reason the board and the Stats tab
@@ -15285,7 +15360,32 @@ span.mup-move-name:hover {
    Opaque rather than a `color-mix(…, transparent)` layer, unlike the wash it
    replaces: that one had to let the zebra stripe through because it covered a
    whole cell, where a badge is a discrete object and reads as one ink. */
-.league-table td .col-rank {
+/* **The board's team reading reads the same two ends**, because it draws the
+   same object: thirty clubs ranked 1-to-30 in a chip under a value. One
+   declaration, two selectors — a second copy is how two surfaces come to
+   disagree about what 15th of 30 looks like. */
+.research-table.is-teams {
+  --rank-hot: var(--strikeout);
+  --rank-cold: var(--walk);
+}
+/* **And the chip itself, folded on.**
+ *
+ * `.col-rank` on the research board is a bare `--faint` second line, and on the
+ * *player* reading it stays one: the board's stat columns are monochrome
+ * because its color vocabulary is spoken for by the live inning, the
+ * postponement and the trend. **On the team reading every one of those is off
+ * the table** — `Opp` is not drawn, the five trend columns are not drawn, and
+ * there are no roster tints, no lineup pips and no IL codes, because there are
+ * no players — so the objection that keeps the percentile monochrome does not
+ * reach a rank of clubs, and the scale is spent on the one thing this reading
+ * is for. It colors the rank and never the value, which is the rule the League
+ * table's own note above already sets.
+ *
+ * Two classes deep (`.research-table.is-teams`) so it outranks
+ * `.research-table td .col-rank`'s `--faint`, which is one class shallower and
+ * earlier in the file. */
+.league-table td .col-rank,
+.research-table.is-teams td .col-rank {
   /* Block so it takes its own line under the value, `fit-content` so it hugs
      its ordinal, and `margin-left: auto` so it lands on the same right edge the
      number above it is set to. */
@@ -15298,6 +15398,30 @@ span.mup-move-name:hover {
   border-radius: 999px;
   color: var(--text);
   background: var(--rank-bg, var(--panel-2));
+}
+/* **The chip's shape is shared; its vertical rhythm is the table's own** — the
+   `--table-bleed` split, applied to a row instead of a gutter.
+ *
+ * The research board's row is **58px** and the number that governs it is the
+ * 33px a cell has between its 12px paddings and its 1px rule (see
+ * `.sched-sp`'s note, which is where that budget is written down). A value line
+ * measures 18.85 of it, which leaves **14.15** for the badge under it — and the
+ * bare `.col-rank` the player reading draws is exactly 14.00. The League
+ * table's pill is 19 (14 of line, 1 of padding a side, 3 of margin) because
+ * its own row has the room, and taking it whole put every one of the thirty
+ * club rows at **60.00px**.
+ *
+ * So the pill keeps its fill, its radius, its ink and its right edge, and gives
+ * up the two measurements that are the *other* table's row: the margin goes,
+ * and the line comes down to 12 so that 1px of padding a side still lands the
+ * box on 14.00. Measured after: rows are **58.00px** on the team reading with
+ * the badges on and off, identical to the player reading beside it, and the
+ * ordinals (`1st` … `30th`, no descender among them) sit centered in the 12px
+ * line. */
+.research-table.is-teams td .col-rank {
+  margin: 0 0 0 auto;
+  padding: 1px 6px;
+  line-height: 12px;
 }
 
 /* ---- Transactions ---------------------------------------------------------

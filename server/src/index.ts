@@ -18,6 +18,7 @@ import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js'
 import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
+import { getTeamResearch } from './teamResearch.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
 import type { Arsenal } from './pitcherArsenal.js';
@@ -1628,6 +1629,27 @@ app.get(
       ? (asked as ResearchWindow)
       : 'season';
     const { season, rows } = await getResearch(kind, window);
+    res.json({ season, kind, window, rows });
+  }),
+);
+
+// The same board read as thirty clubs — one row per MLB team, carrying that
+// club's aggregate over the same window. A route of its own rather than a
+// parameter on the one above, because it is a different population off
+// different upstreams and a different blob; what it shares is the row shape, so
+// the client draws it with the board's own column vocabulary.
+app.get(
+  '/api/research/teams',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    // Unrecognized falls back to the season, for the reason the player board's
+    // does: the param rides in a shareable URL.
+    const asked = Number(req.query.window);
+    const window: ResearchWindow = RESEARCH_WINDOWS.includes(asked as ResearchWindow)
+      ? (asked as ResearchWindow)
+      : 'season';
+    const { season, rows } = await getTeamResearch(kind, window);
     res.json({ season, kind, window, rows });
   }),
 );

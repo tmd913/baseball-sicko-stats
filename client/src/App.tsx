@@ -1395,10 +1395,32 @@ export default function App() {
   const [researchWindow, setResearchWindow] = useState<ResearchWindow>(() =>
     toResearchWindow(initialParams.get('win')),
   );
+  /**
+   * **Which reading of the research board is on screen** — six hundred players,
+   * or thirty clubs.
+   *
+   * In the URL as `board=teams`, and up here with `pos`, `win`, `inc` and
+   * `cols` for the reason all four are: it decides what the table is a table
+   * *of*, which is the definition of a thing a link has to carry. Its own
+   * param rather than a value smuggled into `pos=`, because `pos=` already
+   * means one thing (which position, and so which board) and two params must
+   * never mean two things.
+   *
+   * `board=players` is the default and is never written; **anything
+   * unrecognized falls back to it** rather than emptying the view, the rule
+   * `toResearchPos` and `toResearchWindow` already follow — and the URL keeps
+   * whatever it was handed.
+   */
+  const [researchTeams, setResearchTeams] = useState(
+    () => initialParams.get('board') === 'teams',
+  );
   // Keyed by board **and** window: each is its own fetch and its own megabyte,
   // and both are kept, so flipping back to a window already read is instant.
+  // The team reading takes the same map with `team-` on the front of the key —
+  // thirty rows against six hundred, off a different route, so it is a
+  // different board in the sense this key means.
   const [research, setResearch] = useState<Record<string, ResearchRow[]>>({});
-  const researchCacheKey = `${researchKind}:${researchWindow}`;
+  const researchCacheKey = `${researchTeams ? 'team-' : ''}${researchKind}:${researchWindow}`;
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
   /**
@@ -2967,6 +2989,10 @@ export default function App() {
     if (view === 'research' && researchWindow !== 'season') {
       p.set('win', String(researchWindow));
     }
+    // Which reading of the board — thirty clubs rather than six hundred
+    // players. Players is the default and is never written, so a bare research
+    // link opens on the reading every other link in the app means.
+    if (view === 'research' && researchTeams) p.set('board', 'teams');
     // The three include buttons as one param, and only when they differ from
     // the default — free agents alone. A bare research link therefore opens on
     // *the recipient's* sets rather than the sender's, which is the right way
@@ -3081,6 +3107,7 @@ export default function App() {
     view,
     researchPos,
     researchWindow,
+    researchTeams,
     researchInclude,
     researchWatchlist,
     researchCols,
@@ -3118,13 +3145,20 @@ export default function App() {
     let canceled = false;
     setResearchLoading(true);
     setResearchError(null);
-    api
-      .research(researchKind, researchWindow)
+    const asked = researchTeams;
+    ;(asked ? api.teamResearch(researchKind, researchWindow) : api.research(researchKind, researchWindow))
       .then((r) => {
         // Keyed off what came back rather than what was asked for, so a server
         // that fell back to the season (an unrecognized window from an older
-        // link) caches under the window it actually served.
-        if (!canceled) setResearch((prev) => ({ ...prev, [`${r.kind}:${r.window}`]: r.rows }));
+        // link) caches under the window it actually served. The reading is the
+        // one half of the key the answer does not carry — it is which route was
+        // called — so it comes off the request.
+        if (!canceled) {
+          setResearch((prev) => ({
+            ...prev,
+            [`${asked ? 'team-' : ''}${r.kind}:${r.window}`]: r.rows,
+          }));
+        }
       })
       .catch((e: Error) => {
         if (!canceled) setResearchError(e.message);
@@ -3135,7 +3169,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [view, researchKind, researchWindow, researchCacheKey, research]);
+  }, [view, researchKind, researchWindow, researchTeams, researchCacheKey, research]);
 
   /**
    * **The five boards the Stats tab's percentile badges are ranked within.**
@@ -6123,6 +6157,8 @@ export default function App() {
              which the bigger crossing, to Roster and back, unmounts. */
           rows={researchRows}
           kind={researchKind}
+          teams={researchTeams}
+          onTeamsChange={setResearchTeams}
           loading={researchLoading && !research[researchCacheKey]}
           error={researchError}
           pos={researchPos}

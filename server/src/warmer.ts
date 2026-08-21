@@ -3,6 +3,7 @@ import { getSeasonArsenal } from './pitcherArsenal.js';
 import { getPercentiles } from './percentiles.js';
 import { getPitcherStats, getPlayerStats, getSeasonPlayers } from './mlbStats.js';
 import { getResearch } from './research.js';
+import { getTeamResearch } from './teamResearch.js';
 import { warmTeamHitting } from './teamHitting.js';
 import { RESEARCH_WINDOWS, TEAM_HITTING_WINDOWS } from './types.js';
 import { getAllRosterPlayers } from './store.js';
@@ -142,6 +143,21 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
         (['batter', 'pitcher'] as const).map((kind) =>
           getResearch(kind, window).catch((err) =>
             console.error(`research ${kind} ${window} warm failed:`, err),
+          ),
+        ),
+      );
+    }
+    // The same board read as thirty clubs. It rides here rather than in a loop
+    // of its own because it is the *same* per-day blobs underneath — the club
+    // axes are tallied in the same pass as the player ones — so by this point
+    // every window but the season's is a handful of `Map` additions. The season
+    // one still reduces ~170 days, which is why it is here at all and not on a
+    // reader's critical path. Sequential by window, for the reason above.
+    for (const window of RESEARCH_WINDOWS) {
+      await Promise.all(
+        (['batter', 'pitcher'] as const).map((kind) =>
+          getTeamResearch(kind, window).catch((err) =>
+            console.error(`team research ${kind} ${window} warm failed:`, err),
           ),
         ),
       );
