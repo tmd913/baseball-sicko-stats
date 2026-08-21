@@ -51,14 +51,29 @@ export function useOverflowArrows(
     });
   }, [boxRef, wrapRef, publish]);
 
+  /* **Measure on every render; observe once.** The two used to be one effect
+     with no dependency list, which re-ran the whole body each render — so every
+     render tore down a `ResizeObserver` and built another. That is cheap once
+     and is not cheap four times a render on the research board, which draws
+     four of these rows and re-renders on its own scroll. The measuring still
+     has to happen every render (the *content* can change without the box
+     doing so — a pitcher's page has an Arsenal tab and a batter's has not, and
+     a `ResizeObserver` on the box hears nothing when the content moved), so
+     that keeps its bare effect; the observer gets a stable one of its own.
+
+     `measure` is a `useCallback` over three refs, so the observer's effect
+     re-runs only if the caller passes a new `publish` — which none of them
+     does after mount. */
   useLayoutEffect(() => {
     measure();
+  });
+  useLayoutEffect(() => {
     const box = boxRef.current;
     if (!box) return;
     const ro = new ResizeObserver(measure);
     ro.observe(box);
     return () => ro.disconnect();
-  });
+  }, [boxRef, measure]);
 
   /** A press moves the row by most of a pane — enough to be a page rather than
    *  a nudge, and short of a whole one so the control at the edge stays on

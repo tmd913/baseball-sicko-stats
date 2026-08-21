@@ -7685,20 +7685,12 @@ button.start-line:focus-visible {
 .summary-view:not(.is-expanded) > .summary-scroll,
 .lg-rankings:not(.is-expanded) > .league-scroll,
 .research-view:not(.is-expanded) > .research-scroll {
-  /* **Scroll anchoring off, because this pane compensates its own.**
-
-     The head grows when it sticks (the condensed run appears inside it), and
-     Chrome's scroll anchoring already adjusts `scrollTop` when a box above the
-     viewport changes size — so the explicit compensation in `ResearchTable`
-     landed *on top of* the browser's and the rows jumped twice as far as they
-     should have. Measured at 390 crossing the threshold: `scrollTop` 160 → 265
-     where the head grew 42, and the first row moved 190 → 123.
-
-     Turning the browser's off rather than dropping ours is the choice, because
-     scroll anchoring is Chrome's and not Safari's: relying on it would hold the
-     rows still on a desktop and jump on the phone, which is the device this
-     whole row of work is about. One mechanism, the same on both. */
-  overflow-anchor: none;
+  /* *(`overflow-anchor: none` stood here and is gone with the thing it was for.
+     It stopped Chrome's scroll anchoring double-counting the `scrollTop` this
+     pane used to write when the head grew; the condensed run rides a
+     zero-height rail now, nothing in flow resizes, and there are no writes to
+     double-count. Restored to the default rather than left as a rule nothing
+     needs.)* */
   border-top: none;
 }
 /* A column, since the full-screen button's row sits above the table. The table
@@ -8903,7 +8895,10 @@ button.start-line:focus-visible {
      *measured* height of it — `--research-head-h`, published by
      `usePublishedHeight` — because a count line beside a row of badges wraps to
      one line, two or three with the width and the wording. */
-  --pane-bar-h: var(--research-head-h, 0px);
+  /* **Both boxes above it**, since the condensed run is a second sticky band
+     over this pane: `0px` for the run whenever its rail is not drawn, so this
+     is the head's height alone at rest. */
+  --pane-bar-h: calc(var(--research-cond-h, 0px) + var(--research-head-h, 0px));
   flex: 0 1 auto;
   min-height: 0;
   max-height: 100%;
@@ -10124,10 +10119,12 @@ button.start-line:focus-visible {
 .research-head {
   /* `position: sticky` and `left: 0` come from the fold above, which is where
      every block child of this pane gets the second axis; what is this box's own
-     is the `top`. Above the header row (2) and its top-left corner cell (3),
+     is the `top` — **the condensed run's measured height**, which is `0px`
+     whenever that rail is not drawn, so this is `top: 0` at rest by
+     construction rather than by a second rule. Above the header row (2) and its top-left corner cell (3),
      which both pass under it, and the same 4 the date bar takes over the
      summary table's for the same reason. */
-  top: 0;
+  top: var(--research-cond-h, 0px);
   z-index: 4;
   display: flex;
   /* A column of two, where it was a wrapping row of everything. `align-items`
@@ -10251,19 +10248,44 @@ button.start-line:focus-visible {
    that is a *scroll state* rather than a width. The label stays in the
    accessibility tree — visually hidden, never dropped — because a button whose
    only content is an `aria-hidden` glyph has no name at all. */
+/* **The rail the condensed run rides, and it takes no room at all.**
+
+   `height: 0` is the load-bearing declaration. The run used to be a child of
+   `.research-head`, which grew that box by 52px the moment it stuck — and a
+   sticky box keeps its place in flow, so every row below moved under the
+   finger. Correcting that by writing `scrollTop` (from a `ResizeObserver` on
+   the head) worked on a desktop and **cancelled the scroll on iOS**, where
+   assigning `scrollTop` during a touch or momentum scroll stops it dead. It
+   was reported from a phone as the board halting under the thumb at exactly
+   the moment the head stuck.
+
+   With no height there is nothing to move, nothing to correct and nothing to
+   cancel: the rail can appear and vanish mid-fling and not a row shifts. Its
+   child paints downward over the table, which is what a sticky header does
+   anyway, and the two boxes held under it take their offsets from the measured
+   `--research-cond-h`.
+
+   Sticky rather than fixed so it needs no arithmetic about where the pane
+   starts — the expanded box and the ordinary pane are the same coordinate
+   system to it, which is also why the run is simply drawn from the first frame
+   when expanded. `z-index` above the head's 4. */
+.research-condensed-rail {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 5;
+}
+/* The box that actually has the height — measured and published. It carries
+   the head's own ground and side gutter so the run lines up with the badges
+   under it and the rows behind it never show through. */
+.research-condensed-inner {
+  background: var(--bg);
+  padding: 10px var(--table-bleed, 0px) 6px;
+}
 .research-condensed {
   margin-inline: 0;
-  /* **A little air over the run, and only while it is there.** The head's own
-     `padding-block` is 6px over 10, which is right for a badge row and too
-     tight for a row of 36px controls landing directly under the app's tabs —
-     the marks read as pinned to the strip above rather than as a band of their
-     own. 10px on the row rather than on the head, so it is paid only in the
-     stuck state and the head at rest keeps the 6 it was measured with.
-
-     It costs the head nothing that has to be reserved: this box changes height
-     when the run appears anyway, and the `ResizeObserver` in `ResearchTable`
-     puts the whole difference onto `scrollTop` in the same frame. */
-  margin-top: 10px;
+  /* The air over the run is `.research-condensed-inner`'s own padding now —
+     the run left the head, so there is no head padding left to make up for. */
 }
 /* `.schedule-toggle-label` among them, and it is the reason this list is by
    name rather than by one shared class: Schedule is `ScheduleControl`'s button,
