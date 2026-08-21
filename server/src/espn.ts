@@ -874,6 +874,25 @@ export interface EspnPlayerPool {
    * own components off the wire.
    */
   slots: Record<number, number[]>;
+  /**
+   * **The MLB ids two ESPN rows both claimed** — the set `claimant` arbitrates,
+   * whether or not it managed to.
+   *
+   * It is here because a *baseline* written before that arbitration existed
+   * carries the loser's percentage for these men, and nothing in the blob says
+   * so. The migration that brought the v1 history forward reads this set and
+   * withholds exactly it (see `snapshotKey`), so the list has to be derived from
+   * the same join that decides the contest rather than typed out beside it —
+   * a hardcoded eight would be eight ids that agreed with the code on the day
+   * somebody wrote them down.
+   *
+   * Measured on the live pool: **8 ids**, of which 3 carry a percentage
+   * different enough from the winner's to move a delta at all.
+   *
+   * **It never leaves the server**, like `slots` above: it answers a question
+   * about stored history, not about a player.
+   */
+  contested: number[];
 }
 
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -948,7 +967,10 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
         slots[hit.id] = row.eligibleSlots;
       }
     }
-    const pool = { pct, eligible, slots, byEspnId };
+    const contested = [...claims]
+      .filter(([, at]) => at.rows.length > 1)
+      .map(([id]) => id);
+    const pool = { pct, eligible, slots, byEspnId, contested };
     poolCache = { pool, fetchedAt: Date.now() };
     return pool;
   })().finally(() => {
@@ -1017,7 +1039,7 @@ export type TrendWindow = (typeof TREND_WINDOWS)[number];
  * "Δ4d" over different columns would be unreadable, and this makes that
  * impossible rather than merely unlikely.
  */
-const TREND_DRIFT: Record<TrendWindow, number> = { 1: 0, 3: 1, 7: 2, 15: 3, 30: 5 };
+export const TREND_DRIFT: Record<TrendWindow, number> = { 1: 0, 3: 1, 7: 2, 15: 3, 30: 5 };
 
 /** The furthest back any window can reach, and so how much history a snapshot
  *  has to survive to be useful. Nothing prunes these blobs — the cache bucket's
@@ -1052,8 +1074,32 @@ export const TREND_MAX_DAYS = 30 + TREND_DRIFT[30];
  * 30D in a month. Nothing prunes the v1 blobs; the cache bucket's 400-day
  * lifecycle is the only expiry, which is the rule the rest of this file writes
  * under.
+ *
+ * **`-v3` because the meaning changed again, and this time in the other
+ * direction.** The v2 bump above accepted the loss of 1,376 players' history to
+ * hide three fabricated risers. That trade was right on the day and got worse
+ * every day after it: the three rows are eight ids out of 1,393, and the price
+ * was every column on the board for up to a month. So the v1 blobs were brought
+ * forward — the same numbers under a v3 key, with **the contested ids set to
+ * `null` rather than dropped**.
+ *
+ * `null` and not absence, because absence already means something here and
+ * means the opposite of this: `diffAgainst` reads a player missing from the
+ * baseline as having *risen from nothing*, which is how a call-up shows his real
+ * percentage instead of a blank cell. Dropping Will Smith from a baseline would
+ * have re-created his ▲64.2 by that route rather than fixing it. So the withheld
+ * ids are stored explicitly, `diffAgainst` passes the `null` through, and the
+ * client draws a dash in that column for that man — the one shape in this app
+ * that means "nothing here knows", which is the truth about him.
+ *
+ * A version rather than a quiet rewrite of the v2 blobs, on this file's own
+ * rule that a version guards **the meaning** of what is stored: v2 code reading
+ * a `null` would fail the `typeof was === 'number'` test, fall through to zero
+ * and resurrect the exact riser this is undoing. Under v3 it never sees one.
+ * The v1 blobs are left where they are — the migration only ever wrote new
+ * keys, so undoing it is deleting them.
  */
-const snapshotKey = (date: string) => `espn-ownership-${date}-v2.json`;
+const snapshotKey = (date: string) => `espn-ownership-${date}-v3.json`;
 
 /** Store today's map, once. Not overwritten later in the day: a baseline that
  *  crept toward the current value would shrink every delta measured against it
@@ -1064,11 +1110,14 @@ async function snapshotRosterPct(pct: Record<number, number>): Promise<void> {
   await writeBlob(key, JSON.stringify(pct));
 }
 
-async function readSnapshot(date: string): Promise<Record<number, number> | null> {
+/** A stored baseline. A `null` value is a **withheld** id — see `snapshotKey`;
+ *  it is not the same as an absent one, which `diffAgainst` reads as a rise
+ *  from nothing. */
+async function readSnapshot(date: string): Promise<Record<number, number | null> | null> {
   const raw = await readBlob(snapshotKey(date));
   if (raw === null) return null;
   try {
-    return JSON.parse(raw) as Record<number, number>;
+    return JSON.parse(raw) as Record<number, number | null>;
   } catch {
     return null;
   }
@@ -1123,6 +1172,15 @@ function baselineOrder(window: TrendWindow): number[] {
  *  is dropped like any other flat row, so nothing is added to the wire for the
  *  arrivals nobody has picked up.
  *
+ *  **A player the baseline holds as `null` is withheld rather than measured**,
+ *  and passes through as a `null` on the wire — the one value here that is not
+ *  a number and does not mean zero. It is how a migrated v1 baseline says "the
+ *  percentage I hold for this man is the other man's" without the absence above
+ *  reading it as a rise from nothing. See `snapshotKey`. Nothing writes one
+ *  today; the migrated blobs for 2026-08-10 … -08-20 are the only source, and
+ *  the last of them leaves the 30D band on 2026-09-25, after which no baseline
+ *  in play carries a null and the client stops seeing one.
+ *
  *  What it still cannot do is tell "he was rostered nowhere" from "ESPN had not
  *  listed him yet", and it does not need to: both are the same claim about the
  *  same man. A baseline that were somehow *truncated* would invent a rise for
@@ -1130,11 +1188,20 @@ function baselineOrder(window: TrendWindow): number[] {
  *  `readSnapshot` fails to parse and skips the day for entirely. */
 function diffAgainst(
   current: Record<number, number>,
-  base: Record<number, number>,
-): Record<number, number> {
-  const delta: Record<number, number> = {};
+  base: Record<number, number | null>,
+): Record<number, number | null> {
+  const delta: Record<number, number | null> = {};
   for (const [id, pct] of Object.entries(current)) {
-    const was = base[id as unknown as number];
+    const key = id as unknown as number;
+    // `in` rather than a truthiness test on the value: a withheld id is stored
+    // as an explicit `null`, and the whole point of storing it is that it is
+    // present. `base[key] === null` alone would answer the same today and stop
+    // answering the moment anything writes an absent key as undefined.
+    if (key in base && base[key] === null) {
+      delta[Number(id)] = null;
+      continue;
+    }
+    const was = base[key];
     const change = Math.round((pct - (typeof was === 'number' ? was : 0)) * 10) / 10;
     if (change !== 0) delta[Number(id)] = change;
   }
@@ -1150,8 +1217,15 @@ export interface RosterTrendWindow {
    *  rather than assumed because the header says it: a column labeled "7d"
    *  that measured five days would be a lie the reader has no way to catch. */
   days: number;
-  /** Change in roster % per MLB player id over `days`. */
-  delta: Record<number, number>;
+  /** Change in roster % per MLB player id over `days`.
+   *
+   *  **Absent, `null` and `0` are three different answers.** Absent is flat —
+   *  zeroes are dropped to keep the blob small, and the client fills them back.
+   *  `null` is *withheld*: the baseline for this man is known to be the wrong
+   *  player's, so nothing here knows how he has moved, and the client draws a
+   *  dash rather than a number. See `snapshotKey` for where nulls come from and
+   *  when they stop. */
+  delta: Record<number, number | null>;
 }
 
 /** One entry per window that had a usable baseline, ascending. A window with
@@ -1973,7 +2047,13 @@ export async function getOwnership(
         // Stated in full rather than cast: `byEspnId` is read below, and an
         // `as` here is how a failed upstream becomes a thrown property access
         // on the one path this catch exists to keep standing.
-        const empty: EspnPlayerPool = { pct: {}, eligible: {}, slots: {}, byEspnId: {} };
+        const empty: EspnPlayerPool = {
+          pct: {},
+          eligible: {},
+          slots: {},
+          byEspnId: {},
+          contested: [],
+        };
         return empty;
       }),
       getRosterTrend().catch((err: Error) => {

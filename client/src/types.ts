@@ -1454,7 +1454,13 @@ export type TrendWindow = (typeof TREND_WINDOWS)[number];
 export interface RosterTrendWindow {
   window: TrendWindow;
   days: number;
-  delta: Record<number, number>;
+  /** **Absent, `null` and `0` are three different answers.** Absent is flat —
+   *  the server drops zeroes to keep the blob small and the client fills them
+   *  back. `null` is *withheld*: the baseline for that man is known to be
+   *  another player's, so nothing knows how he has moved and the column draws a
+   *  dash. Mirrors `RosterTrendWindow` in the server's `espn.ts`, where
+   *  `snapshotKey` carries the reasoning. */
+  delta: Record<number, number | null>;
 }
 
 export interface EspnOwnership {

@@ -51,7 +51,9 @@ const PAGE_SIZE = 25;
 export type TrendDeltas = readonly {
   window: TrendWindow;
   days: number;
-  delta: Map<number, number>;
+  /** Absent is flat, `null` is withheld — see `RosterTrendWindow.delta` in
+   *  `types.ts`, whose three-way reading this map carries unchanged. */
+  delta: Map<number, number | null>;
 }[];
 
 /**
@@ -348,8 +350,10 @@ function PlayerLine({
 
   // Absent from a delta map means "hasn't moved", not "unknown" — the server
   // drops zeroes to keep the blob small — so a player with a roster % and no
-  // entry really is flat, and the 0.0 is filled back in here. Gated on the
-  // percentage itself: a move with no figure to have moved is nothing to draw.
+  // entry really is flat, and the 0.0 is filled back in here. An id stored as
+  // an explicit `null` is the third answer, withheld, and is drawn as a dash;
+  // `has` is what tells the two apart. Gated on the percentage itself: a move
+  // with no figure to have moved is nothing to draw.
   const trends =
     pct == null || player.mlbId == null || !rosterTrend
       ? []
@@ -358,7 +362,9 @@ function PlayerLine({
           .map((w) => ({
             window: w.window,
             days: w.days,
-            change: w.delta.get(player.mlbId as number) ?? 0,
+            change: w.delta.has(player.mlbId as number)
+              ? w.delta.get(player.mlbId as number) ?? null
+              : 0,
           }));
 
   return (
@@ -411,20 +417,26 @@ function PlayerLine({
                 <span
                   key={t.window}
                   className={`lg-tx-trend${
-                    t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
+                    t.change === null ? '' : t.change > 0 ? ' up' : t.change < 0 ? ' down' : ''
                   }`}
-                  title={`Rostered ${
-                    t.change === 0
-                      ? 'in the same share of leagues as'
-                      : `${Math.abs(t.change).toFixed(1)} points ${
-                          t.change > 0 ? 'more' : 'fewer'
-                        } than`
-                  } ${t.days} day${t.days === 1 ? '' : 's'} ago`}
+                  title={
+                    t.change === null
+                      ? `No reading over ${t.days} day${t.days === 1 ? '' : 's'} — two ESPN players share this name, so the figure that far back is the other one's`
+                      : `Rostered ${
+                          t.change === 0
+                            ? 'in the same share of leagues as'
+                            : `${Math.abs(t.change).toFixed(1)} points ${
+                                t.change > 0 ? 'more' : 'fewer'
+                              } than`
+                        } ${t.days} day${t.days === 1 ? '' : 's'} ago`
+                  }
                 >
                   <span className="lg-tx-trend-span">{t.days}d</span>
-                  {t.change === 0
-                    ? '0.0'
-                    : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
+                  {t.change === null
+                    ? '—'
+                    : t.change === 0
+                      ? '0.0'
+                      : `${t.change > 0 ? '▲' : '▼'}${Math.abs(t.change).toFixed(1)}`}
                 </span>
               ))}
             </span>
