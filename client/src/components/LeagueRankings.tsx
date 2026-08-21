@@ -209,6 +209,7 @@ function RankTable({
   matchupTeams,
   onOpenTeamMatchup,
   corner,
+  paneChrome,
 }: {
   rankings: EspnRankings;
   categories: EspnCategory[];
@@ -221,8 +222,41 @@ function RankTable({
    *  screen wherever the reader has scrolled to. The three wide tables put it
    *  in exactly that cell for exactly that reason. */
   corner?: ReactNode;
+  /** The app's tools row and this table's own caption, as the pane's first
+   *  children rather than the page's — see `LeagueRankings` below, and
+   *  `SummaryTable`'s `paneChrome`, which is the same arrangement for the same
+   *  reason. Null while expanded, where the caption is above the pane. */
+  paneChrome?: ReactNode;
 }) {
-  const [sort, setSort] = useState<SortKey>({ kind: 'team' });
+  // **`OVR` is drawn only where there is more than one side to combine** — the
+  // server declines to compute it otherwise, this reads that decision rather
+  // than repeating it, and a league scoring one side sees its own column once.
+  const hasOverall = rankings.rows.some((r) => r.overall);
+  /**
+   * **The table opens on `OVR`, best first.**
+   *
+   * It opened on the league standing — `{ kind: 'team' }`, ESPN's own seed —
+   * which is the order the *Scoreboard* is about and not the one this tab is:
+   * a reader crossing to Rankings has come to find out who is actually
+   * accumulating the categories, and the seed answers a different question
+   * (who has won more head-to-head weeks). Measured on the live league over the
+   * season span, the seed order put the OVR column at `1st · 6th · 3rd · 5th`
+   * down the first four rows, so the column the tab leads with was the one
+   * column not in order.
+   *
+   * **`asc: true` is best first**, here as everywhere on this table: every
+   * column sorts on its *rank*, so 1 is first whichever direction the category
+   * itself runs — see `toggle` below.
+   *
+   * **It falls back to the standing where there is no `OVR` column to sort
+   * on.** A league scoring one side of the ball has no overall (see
+   * `hasOverall`), and a sort keyed to a column that is not drawn is a table
+   * that opens with no active header and, every team's overall being null, the
+   * order it happened to arrive in.
+   */
+  const [sort, setSort] = useState<SortKey>(() =>
+    hasOverall ? { kind: 'overall' } : { kind: 'team' },
+  );
   const [asc, setAsc] = useState(true);
 
   const teams = useMemo(
@@ -259,10 +293,6 @@ function RankTable({
     () => rankings.rows.filter((r) => r.overall).length,
     [rankings.rows],
   );
-  // **`OVR` is drawn only where there is more than one side to combine** — the
-  // server declines to compute it otherwise, this reads that decision rather
-  // than repeating it, and a league scoring one side sees its own column once.
-  const hasOverall = rankings.rows.some((r) => r.overall);
 
   const rows = useMemo(() => {
     const out = [...rankings.rows];
@@ -332,6 +362,11 @@ function RankTable({
 
   return (
     <div className="league-scroll">
+      {/* The app's tools row and this table's caption, in the pane rather than
+          above it — see `LeagueRankings`. First, because everything below them
+          is the table and the header row sticks at this pane's own top once
+          they have scrolled past it. */}
+      {paneChrome}
       <table className="league-table">
         <thead>
           {/* **The sections order the columns and are not drawn.** There was a
@@ -637,6 +672,7 @@ export default function LeagueRankings({
   error,
   matchupTeams,
   onOpenTeamMatchup,
+  paneChrome,
 }: {
   rankings: EspnRankings | null;
   span: EspnRankSpan;
@@ -646,6 +682,23 @@ export default function LeagueRankings({
    *  until it lands, which is what gates the press on a row. */
   matchupTeams: Map<number, number> | null;
   onOpenTeamMatchup: (teamId: number, matchupId: number) => void;
+  /**
+   * **The app's own tools row** — the League tabs, the span strip and the
+   * `Projected` lens — handed down rather than left in the page, because this
+   * tab is a fixed-height column in which only `.league-scroll` scrolls and a
+   * sticky box sticks to *the box that scrolls*. Left above the pane the row is
+   * held against a column that never moves, which is not stickiness at all but
+   * a band that simply cannot leave; inside it, it scrolls away with the rows
+   * and the header row takes the top of the pane behind it. The Roster's table
+   * reading already does exactly this (`SummaryTable`'s `paneChrome`).
+   *
+   * It is rendered here wherever there is no pane to put it in — the wait, the
+   * two empty states — so the League tabs never go missing from a page that has
+   * nothing else on it. Not while expanded, where the fixed box covers the
+   * page's chrome anyway and the caption is the whole of what the table is read
+   * with.
+   */
+  paneChrome?: ReactNode;
 }) {
   /**
    * **The page, for the widest table on this view.** It is fifteen columns on
@@ -661,73 +714,116 @@ export default function LeagueRankings({
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   if (error && !rankings) {
     return (
-      <div className="empty-state">
-        <h3>Couldn't read your league</h3>
-        <p>{error}</p>
-      </div>
+      <>
+        {paneChrome}
+        <div className="empty-state">
+          <h3>Couldn't read your league</h3>
+          <p>{error}</p>
+        </div>
+      </>
     );
   }
 
   // Never over data: a span change leaves the previous table standing while the
   // next is in flight, and the block wait is only for a pane with nothing in it.
   if (!rankings) {
-    return loading ? <LoadingBlock>Reading your league's rankings</LoadingBlock> : null;
+    return (
+      <>
+        {paneChrome}
+        {loading ? <LoadingBlock>Reading your league's rankings</LoadingBlock> : null}
+      </>
+    );
   }
 
   const shown = rankings.spans.some((s) => s.span === span) ? span : rankings.span;
   const info = rankings.spans.find((s) => s.span === shown);
 
+  /* What the span covers, **directly above the table** rather than beside
+     the strip that picks it. The strip is in the app's tab row now (see
+     `App`), and this is not a control: it is the table's caption, which is
+     where the research board keeps its own count line and for the same
+     reason — the sentence describes what is under it, so it belongs
+     against it rather than an inch away among the buttons.
+
+     **The `Projected` toggle has gone up there with the strip** and this
+     row is a caption again: what is left is the sentence and the one ⓘ
+     that explains a column of it. The sentence still names the lens
+     (`projected to Aug 23 · 5 days still to play`) whether or not the
+     button is beside it, which is what lets the control sit with the
+     other filters — and is what the full-page box keeps, the tab row
+     being covered there.
+
+     **It goes into the pane with the tools row** where there is a table, for
+     `paneChrome`'s reason: it is the last thing above the rows, so it is the
+     last thing that should still be on screen thirty rows down. Above the pane
+     where there is no table to caption, and above it in the expanded box, where
+     it *is* the chrome — see `.lg-rankings.is-expanded`. */
+  const caption = (
+    <div className="lg-span-detail">
+      {rankings.projected ? projectedDetail(info, rankings) : spanDetail(info)}
+      {/* **The one thing on this table a reader cannot work out by looking.**
+          Every other column is a figure and its standing, which explain
+          themselves; `BAT` and `PIT` are a figure this app *made up* out of
+          the ranks beside them, and a number nobody can derive from the page
+          is a number that needs a key. It is the app's own ⓘ rather than a
+          paragraph under the strip, for `InfoKey`'s stated reason: a key is
+          read once and then in the way. */}
+      <RankKey rankings={rankings} />
+    </div>
+  );
+
+  const empty =
+    rankings.categories.length === 0 ? (
+      <div className="empty-state">
+        <h3>No scoring categories</h3>
+        <p>
+          ESPN scores this league as <code>{rankings.scoringType}</code>, which has no
+          categories to rank teams in — so there is nothing for this tab to draw. The
+          Scoreboard tab is what the league has.
+        </p>
+      </div>
+    ) : rankings.rows.every((r) => Object.keys(r.values).length === 0) ? (
+      <div className="empty-state">
+        <h3>Nothing played in {info?.label.toLowerCase() ?? 'this span'} yet</h3>
+        <p>ESPN has no category totals for these weeks, so there is nothing to rank.</p>
+      </div>
+    ) : null;
+
+  if (empty) {
+    return (
+      <>
+        {paneChrome}
+        <div ref={fullRef} className="lg-rankings">
+          {caption}
+          {empty}
+        </div>
+      </>
+    );
+  }
+
   return (
     <div ref={fullRef} className={`lg-rankings${isFull ? ' is-expanded' : ''}`}>
-      {/* What the span covers, **directly above the table** rather than beside
-          the strip that picks it. The strip is in the app's tab row now (see
-          `App`), and this is not a control: it is the table's caption, which is
-          where the research board keeps its own count line and for the same
-          reason — the sentence describes what is under it, so it belongs
-          against it rather than an inch away among the buttons.
-
-          **The `Projected` toggle has gone up there with the strip** and this
-          row is a caption again: what is left is the sentence and the one ⓘ
-          that explains a column of it. The sentence still names the lens
-          (`projected to Aug 23 · 5 days still to play`) whether or not the
-          button is beside it, which is what lets the control sit with the
-          other filters — and is what the full-page box keeps, the tab row
-          being covered there. */}
-      <div className="lg-span-detail">
-        {rankings.projected ? projectedDetail(info, rankings) : spanDetail(info)}
-        {/* **The one thing on this table a reader cannot work out by looking.**
-            Every other column is a figure and its standing, which explain
-            themselves; `BAT` and `PIT` are a figure this app *made up* out of
-            the ranks beside them, and a number nobody can derive from the page
-            is a number that needs a key. It is the app's own ⓘ rather than a
-            paragraph under the strip, for `InfoKey`'s stated reason: a key is
-            read once and then in the way. */}
-        <RankKey rankings={rankings} />
-      </div>
-
-      {rankings.categories.length === 0 ? (
-        <div className="empty-state">
-          <h3>No scoring categories</h3>
-          <p>
-            ESPN scores this league as <code>{rankings.scoringType}</code>, which has no
-            categories to rank teams in — so there is nothing for this tab to draw. The
-            Scoreboard tab is what the league has.
-          </p>
-        </div>
-      ) : rankings.rows.every((r) => Object.keys(r.values).length === 0) ? (
-        <div className="empty-state">
-          <h3>Nothing played in {info?.label.toLowerCase() ?? 'this span'} yet</h3>
-          <p>ESPN has no category totals for these weeks, so there is nothing to rank.</p>
-        </div>
-      ) : (
-        <RankTable
-          rankings={rankings}
-          categories={rankings.categories}
-          matchupTeams={matchupTeams}
-          onOpenTeamMatchup={onOpenTeamMatchup}
-          corner={<ExpandButton isFull={isFull} onToggle={toggle} what="table" />}
-        />
-      )}
+      {/* Expanded, the caption stands above the pane as it always has: that box
+          covers the app's chrome, so the sentence and its ⓘ are the whole of
+          what the table is read with, and a caption that scrolled away with the
+          rows would take the reader's only statement of what the span is with
+          it. The tools row is not drawn there at all — the box covers it. */}
+      {isFull && caption}
+      <RankTable
+        rankings={rankings}
+        categories={rankings.categories}
+        matchupTeams={matchupTeams}
+        onOpenTeamMatchup={onOpenTeamMatchup}
+        corner={<ExpandButton isFull={isFull} onToggle={toggle} what="table" />}
+        paneChrome={
+          isFull ? null : (
+            <>
+              {paneChrome}
+              {caption}
+            </>
+          )
+        }
+      />
     </div>
   );
 }

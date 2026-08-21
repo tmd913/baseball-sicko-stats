@@ -6393,18 +6393,42 @@ button.start-line:focus-visible {
    *vertically* there is the head instead, which is the rule below it. */
 .summary-scroll > .view-tools,
 .summary-scroll > .date-bar,
+.league-scroll > .view-tools,
+.league-scroll > .lg-span-detail,
 .research-scroll > .view-tools,
 .research-scroll > .research-head,
 .research-scroll > .error-banner,
 .research-scroll > .empty-state {
   position: sticky;
   left: 0;
-  /* The pane has already bled back out through `.app`'s gutters, so these two
+  /* **And a layer above everything the table pins**, which `position: sticky`
+     makes necessary rather than optional: a sticky box opens a stacking context
+     whatever its `z-index`, so the `z-index: 40` on the popover a row of chrome
+     opens is trapped inside the row and resolves against nothing. Measured on
+     the Roster with the `Projected` key open at 1200 — `elementFromPoint` 60px
+     into the panel returned **`date-bar date-bar-anchored`**, the bar (4)
+     painting over a panel that believed it was at 40. The Rankings caption's
+     ⓘ was worse inside the pane, the team badges (1) and the header row (2)
+     both showing through the key that explains them.
+
+     **5 is above the whole pinned ladder** — the first column at 1, the header
+     row at 2, its top-left corner at 3, the pane's date bar at 4 — and it costs
+     these rows nothing, because a row of chrome and the sticky box under it
+     **never overlap**: each sticks at 0 and sits directly under the one above
+     it in flow, so the lower one leaves its natural position only at the moment
+     the upper one has left the pane. The date bar's own `z-index: 4` is
+     declared later and stands; it wants to be under the row above it, not over
+     it.
+
+     The pane has already bled back out through `.app`'s gutters, so these two
      are at the window's edges and put their own gutter back. The bar does not:
      it is a full-width band by design and carries its own 10px of padding, so
      it wants the edge it now has. */
+  z-index: 5;
 }
 .summary-scroll > .view-tools,
+.league-scroll > .view-tools,
+.league-scroll > .lg-span-detail,
 .research-scroll > .view-tools {
   /* **`--table-bleed`, not `--app-gutter`** — the number is exactly how far
      this pane has already bled back out through the box that holds it, and
@@ -6419,6 +6443,15 @@ button.start-line:focus-visible {
      No horizontal *margin*: the pane has bled once already and a second helping
      would put the row past the window's edge. */
   padding-inline: var(--table-bleed, 0px);
+}
+/* The 10px that used to be `.lg-rankings`'s own `gap` between the caption and
+   the pane under it. The caption is *in* the pane now, so there is no gap left
+   to give it and the header row would otherwise sit on the sentence's baseline.
+   Padding rather than a margin, for the reason the tools row's ground is
+   painted rather than left to the container: what is above the header row here
+   is chrome, and the space belongs to the chrome. */
+.league-scroll > .lg-span-detail {
+  padding-bottom: 10px;
 }
 /* **The two boxes in the pane that are not chrome put the page's gutter back as
    a margin**, where the tools row and the head put it back as padding. The
@@ -6436,7 +6469,13 @@ button.start-line:focus-visible {
    it is in on every surface, and its content lines up with the gutter the rest
    of the page keeps. */
 .app > .view-tools,
-.mup-view > .view-tools {
+.mup-view > .view-tools,
+/* The Rankings tab draws it here on the three renders that have no pane to put
+   it in — the wait and the two empty states — where it is a child of
+   `.league-view` rather than of `.app`. Folded on rather than given a rule of
+   its own: it is the same band in a third box, and the token is what makes one
+   pair of declarations answer all of them. */
+.league-view > .view-tools {
   margin-inline: calc(-1 * var(--table-bleed, 0px));
   padding-inline: var(--table-bleed, 0px);
 }
@@ -6476,9 +6515,12 @@ button.start-line:focus-visible {
    **The two fixed-height views need naming rather than `:has()`**, and that is
    the placement rule again: on a table reading the band is inside the table's
    own pane, so the chrome's next sibling is the pane and the adjacent selector
-   above cannot see it. */
+   above cannot see it. The research board and the League's Rankings tab join
+   them for the identical reason, each band having moved into its own pane
+   (`.research-scroll`, `.league-scroll`). */
 .app-chrome:has(+ .view-tools),
 .app.summary-mode .app-chrome,
+.app.league-rank-mode .app-chrome,
 .app.research-mode .app-chrome {
   box-shadow: none;
 }
@@ -7178,7 +7220,14 @@ button.start-line:focus-visible {
 .app.summary-mode {
   padding-bottom: 0;
 }
+/* `.app.league-rank-mode` and `.app.research-mode` are named here for the same
+   reason `.summary-mode` is, and it is the same reason three times over: on all
+   of them, the row that used to follow the chrome is now inside the table's own
+   pane, so `:has(+ .view-tools)` above cannot see it and the chrome would put
+   14px of page back between itself and a band that is drawn to sit on its
+   hairline. */
 .app.summary-mode .app-chrome,
+.app.league-rank-mode .app-chrome,
 .app.research-mode .app-chrome {
   margin-bottom: 0;
 }
@@ -7196,8 +7245,14 @@ button.start-line:focus-visible {
    border, which is measured: the pane at y=198 with its first child at 199.
    Unscoped is the honest rule — there are two callers of `SummaryTable` and
    both sit under a band — and `:not(.is-expanded)` still keeps the full-page
-   box's, that one having its own padding and nothing above it to close it. */
+   box's, that one having its own padding and nothing above it to close it.
+
+   **The Rankings and research panes join it** now that their tools rows are
+   inside them: each meets `.app-chrome`'s hairline directly, so its own top
+   border was the second of two lines a pixel apart there too. Expanded they
+   keep the border, exactly as the summary's does and for the same reason. */
 .summary-view:not(.is-expanded) > .summary-scroll,
+.lg-rankings:not(.is-expanded) > .league-scroll,
 .research-view:not(.is-expanded) > .research-scroll {
   border-top: none;
 }
@@ -12855,9 +12910,11 @@ button.start-line:focus-visible {
   max-height: 100%;
   overflow: auto;
 }
-.app.league-rank-mode .lg-span-detail {
-  flex: none;
-}
+/* The caption's `flex: none` used to live here, back when it was a child of
+   `.lg-rankings` on this view. It is inside the pane now (see
+   `.league-scroll > .lg-span-detail`), where it is an ordinary block and the
+   expanded box has its own rule for the one render that still puts it above the
+   pane. */
 .league-view {
   padding-bottom: 8px;
 }

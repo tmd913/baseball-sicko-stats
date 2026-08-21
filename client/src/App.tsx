@@ -4945,6 +4945,26 @@ export default function App() {
       {showRosterViews && dateBar}
     </>
   ) : null;
+  /**
+   * **And the Rankings tab takes the tools row into its own pane for the
+   * identical reason.** `.app.league-rank-mode` is the same viewport-tall flex
+   * column `summary-mode` is — the tab is a fifteen-column table read across —
+   * so a tools row left up here is held against a column that never scrolls,
+   * which is a band that cannot leave rather than a band that stays. Inside the
+   * pane it scrolls away with the rows and the table's header row takes the top
+   * of the pane behind it.
+   *
+   * There is no date bar in it: the League view is not read over a range of
+   * days, the span strip in the row itself being what says which games these
+   * numbers are drawn from.
+   *
+   * **No test on the data here**, unlike `tableTakesChrome`'s `viewCards`:
+   * `LeagueRankings` draws the row above its own wait and its own empty states,
+   * so there is exactly one place that knows whether a pane exists to put it
+   * in — and duplicating that test up here is how the two would come to
+   * disagree and drop the League tabs off a page altogether.
+   */
+  const leagueTakesChrome = view === 'league' && leagueTab === 'rankings' && espnConnected;
 
   // The search bar the header icon opens: a full-width row directly under the
   // header, above the view tabs. It is a row of its own rather than an overlay
@@ -5677,18 +5697,22 @@ export default function App() {
           bar and the header row stick against the same scrollport, one under
           the other.
 
-          **The research board is the second page this is true of**, and the
-          only difference is that it has no dates to take with it: it is the
+          **Two more pages are now true of this**, and each takes the same
+          answer. The research board has no dates to take with it: it is the
           same viewport-tall column with the same one scroller, so its control
           set is inside its pane too and scrolls away with the rows, leaving
           the board's own head stuck at the top. It renders that row itself
           rather than being handed one (`viewTools` is null on that view — see
-          there), so nothing about this line has to know.
+          there), so nothing about this line has to know. The League's Rankings
+          tab takes it minus the bar it has no use for: `.app.league-rank-mode`
+          is the same column, so the row goes to `LeagueRankings` as
+          `rankPaneChrome` and is rendered inside `.league-scroll` — see
+          `leagueTakesChrome`.
 
           Everywhere else the window is the scroller and this is the plain
           arrangement: the tools row in the flow, the bar sticky under the
           pinned chrome. */}
-      {!tableTakesChrome && viewTools}
+      {!tableTakesChrome && !leagueTakesChrome && viewTools}
       {!tableTakesChrome && isRosterView(view) && showRosterViews && dateBar}
 
       {/* `!usingFantasy`, because this block is about the *saved* list and in
@@ -5949,6 +5973,10 @@ export default function App() {
           onOpenPlayer={openLeaguePlayer}
           connected={espnConnected}
           onConnect={openEspnSettings}
+          /* The tools row, into the Rankings pane rather than the page — see
+             `leagueTakesChrome`, which is also the test that keeps it out of
+             the page above. */
+          rankPaneChrome={leagueTakesChrome ? viewTools : null}
         />
       ) : view === 'research' ? (
         <ResearchTable

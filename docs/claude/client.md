@@ -382,6 +382,18 @@ own above the pane, and a header row held 54px down under nothing there would be
 a band of rows showing through the gap. Checked expanded: one date bar, in
 `.expanded-chrome`, `has-pane-chrome` off, `thead` at the pane's own top.
 
+**The League's Rankings tab is the second such page and takes the same answer**,
+minus the bar it has no use for: `.app.league-rank-mode` is the same
+viewport-tall column, so App hands the tools row down as `rankPaneChrome` and
+`LeagueRankings` renders it and the table's own caption as `.league-scroll`'s
+first children. Two rules the chrome above needed by name went with it —
+`.app.league-rank-mode .app-chrome` joins `.app.summary-mode .app-chrome` in the
+`margin-bottom: 0` and `box-shadow: none` lists, `:has(+ .view-tools)` no longer
+being able to see a row that has moved into a pane. Measured, and the fault a
+sticky row of chrome hides — it traps the popover it opens, on the Roster as
+well — in **Client — the League rankings**, *The band scrolls away, and the
+header row pins to the pane*.
+
 **`flex: none` on both rows in the page, and that is the trap the move creates
 rather than a tidying.** The bar carries `flex: 1 1 100%` — "its own line",
 written for the wrapping rows it used to sit in — and the fixed-height views make

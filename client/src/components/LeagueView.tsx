@@ -38,6 +38,7 @@
  * (`App.tsx::LEAGUE_POLL_MS`). See `docs/claude/client-league.md`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type {
   EspnCategory,
   EspnCategorySide,
@@ -949,6 +950,7 @@ export default function LeagueView({
   onOpenPlayer,
   connected,
   onConnect,
+  rankPaneChrome,
 }: {
   tab: LeagueTab;
   board: EspnScoreboard | null;
@@ -984,6 +986,12 @@ export default function LeagueView({
   onOpenPlayer: (mlbId: number) => void;
   connected: boolean;
   onConnect: () => void;
+  /** The app's tools row, on the Rankings tab alone — the one tab here that is
+   *  a wide table in a fixed-height column rather than a list of cards, so the
+   *  row has to be inside the pane that scrolls to be able to scroll away. See
+   *  `LeagueRankings`'s `paneChrome`. Null on the other two, where App leaves
+   *  the row in the page as it does on every other view. */
+  rankPaneChrome?: ReactNode;
 }) {
   // Every empty state names its own cause. This one is the view's rather than a
   // tab's: with no league connected there is nothing for any of the three to
@@ -1016,6 +1024,7 @@ export default function LeagueView({
           error={rankingsError}
           matchupTeams={matchupTeams}
           onOpenTeamMatchup={onOpenTeamMatchup}
+          paneChrome={rankPaneChrome}
         />
       ) : tab === 'transactions' ? (
         <LeagueTransactions
