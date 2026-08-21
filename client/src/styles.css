@@ -12359,23 +12359,32 @@ button.start-line:focus-visible {
    player page is written here. Its padding moves off the shell and onto the
    rows, because the chapter strip is sticky and has to span the full width
    rather than sit inside a padded column. */
-.tutorial-view {
-  /* **Room at the foot for the two floating buttons** — the `↑` in the right
-     corner and the `Back` pill in the left — rather than letting them sit on
-     the last thing there is to read, which at the bottom of the scroll is the
-     `Got it` button. Both figures are written on this element at runtime by
-     `Tutorial.tsx::useFloatHeight`, read off the pill itself rather than
-     repeated from `.float-btn` above: its height, plus its inset twice, once
-     for the gap under it and once for the gap over it. Measured at 390, 46 + 48
-     = 94 against the flat 64px that was here before — 30px short, which left
-     the pill overlapping the `Got it` button by 6.08 and the two overlapping
-     sideways as well (24 → 113.47 against 81.75 → 308.23). The fallbacks are
-     what that measurement returns, and are here only for the frame before it
-     runs. */
-  padding: 0 0 calc(var(--tut-float-h, 46px) + var(--tut-float-inset, 24px) * 2);
-  /* Above the player page: a `?help=1` link can land on top of an open details
-     view, and closing the guide should reveal it rather than the other way
-     round. */
+/* **The two views that carry the floating pair**, folded onto one rule rather
+   than given two that agree: they are the same object — the same `.details-view`
+   shell, the same `.tut-head`, the same own scroller, the same `z-index` — and
+   both were already carrying the identical flat `64px` before either had the
+   buttons. See `FloatControls.tsx`.
+
+   **Room at the foot for the two floating buttons** — the `↑` in the right
+   corner and the `Back` pill in the left — rather than letting them sit on the
+   last thing there is to read, which at the bottom of either scroll is a button
+   (`Got it` on the guide, `Connect league` on the settings page). Both figures
+   are written on the element at runtime by `useFloatHeight`, read off the pill
+   itself rather than repeated from `.float-btn` above: its height, plus its
+   inset twice, once for the gap under it and once for the gap over it. Measured
+   at 390, 46 + 48 = 94 against the flat 64px that was here before — 30px short,
+   which left the guide's pill overlapping `Got it` by 6.08 and the two
+   overlapping sideways as well (24 → 113.47 against 81.75 → 308.23). The
+   fallbacks are what that measurement returns, and are here only for the frame
+   before it runs.
+
+   **Above the player page**, both of them: a `?help=1` link can land on top of
+   an open details view, and the league page is reached from the settings menu,
+   which can be open over one. Closing either should reveal it rather than the
+   other way round. */
+.tutorial-view,
+.espn-view {
+  padding: 0 0 calc(var(--float-pair-h, 46px) + var(--float-pair-inset, 24px) * 2);
   z-index: 60;
 }
 .tut-head {
@@ -12695,12 +12704,6 @@ button.start-line:focus-visible {
    The connect page rides on `.details-view` and the how-to page's head, for the
    reason the guide itself does: it is the same fixed full-screen box with its
    own scroller, so only what differs from those is written here. */
-.espn-view {
-  padding: 0 0 64px;
-  /* Above the player page, like the guide: it is reached from the settings
-     menu, which can be open over an already-open details view. */
-  z-index: 60;
-}
 .espn-body {
   padding-bottom: 40px;
 }

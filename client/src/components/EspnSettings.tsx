@@ -4,6 +4,12 @@ import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
 import { LoadingLine } from './Loading';
 import { BackButton } from './BackButton';
+import {
+  FloatControls,
+  useFloatHeight,
+  useHeadGone,
+  useScrollToTop,
+} from './FloatControls';
 
 /**
  * What a pasted ESPN league URL yields. Both ids are in the address bar of any
@@ -163,6 +169,21 @@ export function EspnSettings({
 
   // The overlay box itself, read only to ask whether a press of Escape is ours.
   const viewRef = useRef<HTMLDivElement | null>(null);
+  const headRef = useRef<HTMLDivElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  /**
+   * The floating `Back` and `↑`, and the room kept for them at the foot — the
+   * how-to page's pair, on the same terms and for the same reason. This page is
+   * long for the same reason that one is: connecting a league is a paragraph of
+   * what it buys you, a status panel, a sharing section, and then a set of
+   * instructions for finding two browser cookies in Safari's developer tools.
+   * Measured at 390: 3,032px of page against an 844px viewport, three and a half
+   * screenfuls, and the head's `Back` is off the top after the first. See
+   * `FloatControls.tsx`.
+   */
+  const headGone = useHeadGone(headRef, viewRef);
+  useFloatHeight(viewRef, backRef);
+  const toTop = useScrollToTop(viewRef);
   // See `hooks.ts::useOverlayFocus`. It matters most here of the four: this
   // page is a form, so a Tab that left it put the caret in the roster search
   // behind while the reader was half-way through pasting a cookie.
@@ -349,7 +370,7 @@ export function EspnSettings({
 
   return (
     <div className="details-view espn-view" ref={viewRef} tabIndex={-1}>
-      <div className="tut-head">
+      <div className="tut-head" ref={headRef}>
         <BackButton onClose={onClose} />
         <div className="tut-title-block">
           <h1 className="tut-title">Fantasy league</h1>
@@ -707,6 +728,11 @@ export function EspnSettings({
           </div>
         </form>
       </div>
+
+      {/* Last in the DOM, as on the how-to page: the floating `Back` is a second
+          copy of the one in the head, and a keyboard reader tabbing from the top
+          should meet the head's before it. */}
+      <FloatControls shown={headGone} backRef={backRef} onTop={toTop} onClose={onClose} />
     </div>
   );
 }

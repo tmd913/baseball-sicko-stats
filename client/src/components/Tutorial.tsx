@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { BackButton } from './BackButton';
+import {
+  FloatControls,
+  useFloatHeight,
+  useHeadGone,
+  useScrollToTop,
+} from './FloatControls';
 import { BaseballMark } from './BaseballMark';
 
 /**
@@ -14,7 +20,7 @@ import { BaseballMark } from './BaseballMark';
  * corner and a `↑` in the bottom-right, both of them the app's own floating
  * shapes: nine chapters is a long way from either end of itself, and the strip
  * that is pinned through them jumps you *within* the page and never off it. See
- * `FloatControls` below.
+ * `FloatControls.tsx`, which the league settings page shares.
  *
  * It's one continuous read rather than a set of tabs: a tutorial is written to
  * be gone through in order, and tabs would hide eight of the nine chapters
@@ -770,152 +776,6 @@ function useFollowActive(navRef: RefObject<HTMLElement | null>, active: string) 
   }, [navRef, active]);
 }
 
-/**
- * Has the page's own head gone off the top?
- *
- * **The threshold is the head's own height, and it is observed rather than
- * declared** — the rule this repo applies wherever a number is a function of
- * width or of a font the app does not choose (`--chrome-h`, `--clip-w`). That
- * head is a `clamp(22px, 5vw, 30px)` title over a lede that wraps, so it is
- * **242px at 390 wide and 203px at 1440** — driven, and the pair reveals at a
- * `scrollTop` of 243 and 204 respectively, which is that height and the pixel
- * that clears it. A threshold typed in as a round 200 would fire 42px late on
- * the phone and 3px early on the desktop, and the phone is the width with
- * 9,728px of page to get through.
- *
- * And the head's height is exactly the right number for a second reason. The
- * chapter strip is the next thing in flow and is `position: sticky; top: 0`,
- * so its natural offset *is* the head's height — the strip pins to the top of
- * the scroller at the same instant the last of the head leaves it. Before that
- * moment the head's own `Back` is on screen and `Top` would point at where you
- * already are; after it, neither is true and the strip is the only thing
- * pinned. One boundary, and it answers for both buttons.
- *
- * An `IntersectionObserver` rather than a scroll handler, as `useActiveChapter`
- * above does it: the browser reports the crossing once instead of the app
- * asking on every frame of a 9,700px read.
- */
-function useHeadGone(
-  headRef: RefObject<HTMLElement | null>,
-  rootRef: RefObject<HTMLElement | null>,
-): boolean {
-  const [gone, setGone] = useState(false);
-  useEffect(() => {
-    const root = rootRef.current;
-    const head = headRef.current;
-    if (!root || !head) return;
-    const io = new IntersectionObserver(([e]) => setGone(!e.isIntersecting), {
-      root,
-      threshold: 0,
-    });
-    io.observe(head);
-    return () => io.disconnect();
-  }, [headRef, rootRef]);
-  return gone;
-}
-
-/**
- * The floating pair's geometry, written onto the view so the page can **reserve
- * the room at its foot** rather than let two fixed buttons sit on the last
- * thing there is to read. They are fixed to the viewport, so the only place
- * they can cover anything is the bottom of the last screenful — which is where
- * the `Got it` button is, the page's own last word. Measured at 390: with the
- * flat 64px this view carried, the pill overlapped that button by 6.08px, and
- * the two overlap horizontally as well (the pill runs 24 → 113.47 and the button
- * 81.75 → 308.23). With the reserve it clears it by 23.92px, and by 24.23 at
- * 1440, where the two never meet sideways in the first place.
- *
- * **Read off the button rather than repeated from the stylesheet**, which is
- * the point: `.float-btn` declares the 46px height and the 24px inset, and a
- * `calc()` up here naming those numbers again would be two rules that agree
- * today. `offsetHeight` and the computed `bottom` of the box actually on screen
- * cannot fall out of step with the rule that sizes it.
- */
-function useFloatHeight(
-  viewRef: RefObject<HTMLElement | null>,
-  boxRef: RefObject<HTMLElement | null>,
-) {
-  useEffect(() => {
-    const view = viewRef.current;
-    const box = boxRef.current;
-    if (!view || !box) return;
-    const write = () => {
-      view.style.setProperty('--tut-float-h', `${box.offsetHeight}px`);
-      view.style.setProperty('--tut-float-inset', getComputedStyle(box).bottom);
-    };
-    write();
-    const ro = new ResizeObserver(write);
-    ro.observe(box);
-    return () => ro.disconnect();
-  }, [viewRef, boxRef]);
-}
-
-/**
- * The way out and the way back up, from wherever you have got to.
- *
- * Nine chapters is 9,728px at 390 wide against an 844px viewport — eleven and a
- * half screenfuls — and the only thing pinned through them is the chapter
- * strip, which jumps you *within* the page and never off it. So a reader four
- * chapters down had the head's `Back` a screenful and a half above him and the
- * `Got it` button five screenfuls below, and no way out that did not involve
- * first going somewhere.
- *
- * **Both of these are shapes the app already had, in the corners it already
- * floats things in.** `.float-btn` is the round 46px button in the bottom
- * right, `.back-to-top` is its `↑`, and `.back-nav` is the pill in the bottom
- * left at the same 24px inset — written for the jump-back button this page's
- * own rewrite removed, and since then a class with no user at all. Nothing new
- * is drawn here: the ground, the lift, the fade, the reduced-motion clause and
- * the hover are `.float-btn`'s, and the `Back` is `BackButton` under a
- * different class rather than a second copy of its chevron.
- *
- * Two buttons in opposite corners rather than one stacked cluster, because that
- * is what those two classes are and what the app's other floating pair (the
- * `Updating` badge in the left corner, `back-to-top` in the right) already
- * looks like. **And chapter 9 of this very page already says so** — *`↑` at the
- * bottom right returns you to the top* — a sentence that was true of every
- * other view in the app and, until now, not of the page making the claim.
- *
- * **Nothing insets them from a phone's home indicator, and nothing needs to.**
- * `client/index.html` deliberately leaves `viewport-fit` off, so iOS lays the
- * web view out *inside* the safe area; `styles.css` has no `env(safe-area-inset-*)`
- * anywhere for that reason, and `.float-btn`'s plain `bottom: 24px` has been
- * the app's answer on every other view. See `docs/claude/espn-connection.md`.
- *
- * **No `history.back()`.** The app writes its view state with
- * `history.replaceState` (`App.tsx`), so `help=1` leaves no entry to return to
- * — measured, `history.length` is 2 both before and after opening the page, and
- * a press would take the reader out of the app entirely. This calls the same
- * `onClose` the head's `Back`, the `Got it` button and Escape all call.
- */
-function FloatControls({
-  shown,
-  backRef,
-  onTop,
-  onClose,
-}: {
-  shown: boolean;
-  backRef: RefObject<HTMLButtonElement | null>;
-  onTop: () => void;
-  onClose: () => void;
-}) {
-  const on = shown ? ' visible' : '';
-  return (
-    <>
-      <BackButton onClose={onClose} className={`float-btn back-nav${on}`} ref={backRef} />
-      <button
-        type="button"
-        className={`float-btn back-to-top${on}`}
-        onClick={onTop}
-        aria-label="Back to top"
-        title="Back to top"
-      >
-        ↑
-      </button>
-    </>
-  );
-}
-
 export function Tutorial({ onClose }: { onClose: () => void }) {
   // Same as the player page: this covers the app but scrolls in its own box, so
   // the page behind it has to be frozen or the scroll chains straight through.
@@ -951,19 +811,7 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Back to the head. The pair goes `visibility: hidden` the moment the head is
-  // on screen again, and a focused element that is hidden under the reader's
-  // own press drops focus to the document body — so the press hands it to the
-  // view instead, which is where a Tab from the top of the page should start
-  // anyway. `preventScroll` because the view is the scroller itself and
-  // focusing it must not undo the scroll just asked for.
-  const toTop = () => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    const held = document.activeElement;
-    if (held instanceof HTMLElement && held.matches('.float-btn')) {
-      scrollRef.current?.focus({ preventScroll: true });
-    }
-  };
+  const toTop = useScrollToTop(scrollRef);
 
   return (
     <div className="details-view tutorial-view" ref={scrollRef} tabIndex={-1}>
