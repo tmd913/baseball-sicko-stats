@@ -154,11 +154,27 @@ band — closes itself with a hairline, so the seam this one owns is the one
 read as the band continuing. The **placement** stays per-selector, that being
 the one thing the three genuinely answer differently.
 
-**And `.view-tools` paints its own ground**, `--bg-2` like the bar, bleeding to
-the edges of whatever box holds it (`--table-bleed` — the pane has already bled
-and takes padding alone; the page takes a negative margin and the same padding
-back). A ground that is a fact about the container is what `--cell-bg` is this
-app's standing answer to, one box larger.
+**And `.view-tools` paints its own ground**, the same token the bar takes,
+bleeding to the edges of whatever box holds it (`--table-bleed` — the pane has
+already bled and takes padding alone; the page takes a negative margin and the
+same padding back). A ground that is a fact about the container is what
+`--cell-bg` is this app's standing answer to, one box larger.
+
+**The token is `--bg`, and it was `--bg-2` — which is a dark-palette reading of
+a token that is not a dark-palette token.** On the four near-black schemes
+`--bg-2` is a shade off the page (`#191a1b` against `#121314` on Dark), which is
+what "the band continues the chrome" was meant to buy. On the two light ones it
+is nothing of the kind: **Light's is `#d7d7dc` and Powder Blue's `#c7dcf1`**,
+against a `#ffffff` page — so the band shipped as a grey, then a *powder blue*,
+block laid across a white page above a white table. Reported as exactly that,
+and it is the same mistake as reading a color off one palette: this row is
+chrome that should disappear into the page and be read by its contents, not a
+panel sitting on one. Measured across all six palettes after, the band, the bar
+and the table's pane are one color in every one of them — `#121314`, `#0b1220`,
+`#1c1b22`, `#1d1319`, `#ffffff`, `#ffffff` — and on the Feed, where the page
+carries the body's radial glow rather than a flat pane, band and page match to
+the value at **x = 40, 300, 600, 900 and 1160**, the right-hand end being where
+that glow is strongest.
 
 **Nothing under it at all, and that took two goes.** The gap to the date bar was
 a *margin* first — a strip of container, which is how the two readings came to

@@ -6032,7 +6032,7 @@ button.start-line:focus-visible {
      to be spaced apart: they are two rows of one band, and the band closes on
      the bar's own edge. The 14 above stays, that one being the gap to the
      chrome's hairline. */
-  background: var(--bg-2);
+  background: var(--bg);
   padding-block: 14px 0;
   /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
      on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
@@ -6286,7 +6286,7 @@ button.start-line:focus-visible {
 .app > .date-bar,
 .mup-view > .date-bar,
 .summary-scroll > .date-bar {
-  background: var(--bg-2);
+  background: var(--bg);
   border-top: none;
   border-bottom: 1px solid var(--border);
 }
