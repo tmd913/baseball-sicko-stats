@@ -224,6 +224,113 @@ overflows by **0** at every width in the table, and the outing page's own
 geometry is unmoved — its head and its strip are both 860 at 1200, exactly as
 before.
 
+### The strip runs edge to edge, and the arrows are drawn over its ends
+
+**Reported as "there is some extra spacing on the left and right", and there
+were two of them stacked.** The outer one is `.details-chrome`'s: that box bleeds
+to the overlay's own edges and pads its contents back in by `--table-bleed`,
+which is right for the head — a name, a portrait and a Rostered line are a
+reading column — and wrong for a *scroller*, which stops short of the glass and
+leaves the tab at that end clipped against a gutter of bare ground. The inner
+one is the arrows, laid out beside the strip at 28px plus a 2px gap each. On a
+390px phone they came to **46px of inset at each end**, and because the left
+arrow is `hidden` at rest, the page opened with 46px of **nothing** before
+`Overview` — which is the spacing that got reported.
+
+**Measured on a batter (Judge) and a pitcher, before → after**, by rebuilding the
+previous rules in the same tab at the same instant and reading both off one
+render:
+
+| | width | wrapper offsets | scroll pane offsets | pane width |
+| --- | --- | --- | --- | --- |
+| batter | 390 | 16 / 16 → **0 / 0** | 46 / 46 → **0 / 0** | 298 → **390** |
+| pitcher | 390 | 16 / 16 → **0 / 0** | 46 / 46 → **0 / 0** | 298 → **390** |
+| batter | 320 | 16 / 16 → **0 / 0** | 46 / 46 → **0 / 0** | 228 → **320** |
+| batter | 700 | 16 / 16 → **0 / 0** | 46 / 46 → **0 / 0** | 608 → **700** |
+| batter | 747 | 16 / 16 → **0 / 0** | 46 / 46 → **0 / 0** | 655 → **747** |
+| batter | 800 | 26.5 / 26.5 → **26.5 / 26.5** | 26.5 → **26.5** | 747 → **747** |
+| batter | 1200 | 226.5 → **226.5** | 226.5 → **226.5** | 747 → **747** |
+| pitcher | 1200 | 184 → **184** | 184 → **184** | 832 → **832** |
+| outing | 320 | 16 / 16 → **0 / 0** | 46 / 46 → **0 / 0** | 228 → **320** |
+| outing | 1200 | 170 → **170** | 170 → **170** | 860 → **860** |
+
+**A desktop strip is not inset, it is centered, and that is why the last four
+rows do not move.** The bleed is capped by the same `max(column, tabs' own
+width)` the section above argues, so where the tabs fit the width term wins and
+the strip is the centered control it always was. What the bleed buys is only the
+widths where the strip would otherwise have had to scroll — and it buys one more
+thing there: the batter's strip now **stops scrolling at 747px of viewport**, its
+tabs' own width, where the section above records 779, that being 747 plus the
+gutters it no longer has to give up. The page body and the overlay overflow by
+**0** at every width in the table, before and after.
+
+**`margin-inline: auto` cannot express a bleed and was tried first.** A box whose
+used width exceeds its containing block gets auto margins of **zero**, not the
+negative pair centering would imply — measured, the wrapper came out at 16 → 406
+on a 390px phone, bled 32px to the right alone, with the overlay overflowing by
+16. So the centering is written out as `calc((100% - <the width>) / 2)` against
+the same expression the width uses: a margin percentage and a width percentage
+resolve against the one containing-block width, and that pair is free to go
+negative.
+
+**The arrows had to come out of the flow, and there is no third answer.** They
+cannot simply go: a phone reader has no more idea than a desktop one that
+`Charts` exists, the scrollbar being deliberately hidden, and that is the whole
+reason they were added. They cannot stay beside the strip either, since 60px of
+390 is exactly the inset being removed. So they are `position: absolute` over the
+strip's two ends, on a fade of `--bg` — solid under the 16px chevron and out to
+nothing by the far edge, `--bg` being `.details-chrome`'s own background on both
+pages that draw this strip.
+
+**That does not drop *reserve the box, don't move the page*; it satisfies it more
+cheaply.** The rule is why the arrow with nothing behind it is `visibility:
+hidden` rather than absent, and the section above measures the pane at a
+byte-identical 46 / 298 through every state to prove the reservation held. Out of
+the flow the pane is **0 / 390 in every state** — `hidden`/`visible` at rest,
+`visible`/`visible` mid-strip, `visible`/`hidden` at the far right — because
+nothing either arrow does is in the flow at all.
+
+**And a hidden arrow does not hit-test, so the end a reader has reached is all
+tab.** Verified with real `Input.dispatchMouseEvent` presses rather than
+`el.click()`: at 390 with `Splits` active and the strip at home,
+`elementFromPoint(20, y)` is `.details-tab` and a press there **selects
+Overview**; scrolled to the middle with both arrows up, the same press at x=20
+lands on the arrow and **scrolls the strip home without changing the tab**, which
+is the right reading of a press on a tab that is half cut off in the direction
+the arrow points.
+
+**The active tab now lands clear of the arrow rather than 24px clear of the
+edge.** `PlayerDetails`' scroll-into-view `PEEK` was 24, which under a 44px arrow
+left the tab it had just chosen half under a chevron; it reads the stylesheet's
+own `--tabstrip-arrow-w` off the wrapper instead of carrying a second copy of the
+number. It costs nothing at the two ends — an arrow there is hidden because there
+is nothing left to scroll, and the larger peek clamps against the same 0 or
+maximum as before. Measured at 390 on a pitcher, pressing `News` from the far
+right: the tab lands at 43.58 against a left arrow ending at 44.
+
+**The pinned head does not move.** `--details-chrome-h` is **219 → 219** at 390,
+**234 → 234** at 320 and **165 → 165** at 1200, with `--scroll-offset` following
+it unchanged; the outing page's own chrome is 218 → 218 at 320 and 120 → 120 at
+1200. Nothing about this change is in the block axis, and the measurement is
+there because a pinned head whose height moves takes the content's `top` with it.
+
+**`.details-chrome`'s side pair is written as `--table-bleed` now** rather than
+as the 16 it resolves to. Not cosmetic: `.details-tabstrip` spends exactly that
+padding to reach the glass, and two hard-coded 16s that have to agree is how a
+bleed comes to overshoot its box by a pixel nobody can find. Rendering is
+unchanged — the chrome's rect is 0 → 390 and its content edges 16 / 374 at 390,
+and 0 → 1200 and 16 / 1184 at 1200, in both readings.
+
+**The outing page sets one term and inherits the rest.** `.outing-view
+.details-tabstrip` was overriding the finished `max-width`; it declares
+`--tabstrip-col: 860px` instead, so the column, the measured width and the bleed
+stay in one place and this page differs in the one term it actually differs in —
+and it cannot forget to keep a bleed it never had to write.
+
+**Bundle**: JS 612,641 → 612,777 raw and 180,139 → 180,209 gzipped; CSS 160,799
+→ 161,201 and 28,501 → 28,679. +136 and +402 raw, which is two gradients, a
+custom property spent twice and the peek's `getComputedStyle`.
+
 ### Every tab's read is lazy now, including the percentile card's
 
 **The percentile card was the one eager fetch on this page and it was the

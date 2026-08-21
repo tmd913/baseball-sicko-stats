@@ -40,15 +40,26 @@ import type { ReactNode, RefObject } from 'react';
  * independent of the box, which makes the sum the one figure that is stable
  * under what it is used to set.
  *
- * ### The arrows are laid out before they are shown
+ * ### The strip runs edge to edge, and the arrows are drawn over its ends
  *
- * Both are in the flow the moment the strip overflows, and the one with nothing
+ * The wrapper takes its container's gutters back (`--table-bleed`), so the
+ * scroll track reaches the glass rather than stopping in a strip of bare ground
+ * — see `.details-tabstrip`. The arrows were the other half of the same inset:
+ * laid out *beside* the strip they cost the tabs 60px of a 390px phone, 28 of
+ * button and 2 of gap at each end, on the width where the strip is most
+ * truncated to begin with. Measured at 390×844 on a batter, the pane was
+ * 46 → 344 and is 0 → 390.
+ *
+ * Both arrows appear the moment the strip overflows and the one with nothing
  * behind it is `visibility: hidden` rather than absent — *reserve the box,
  * don't move the page*. A reader who scrolls to the last tab must not have the
- * strip shift 28px under the finger that is about to press it, and an arrow
- * that appears and disappears at each end would do exactly that. They are small
- * aimed targets, so they keep their hover: the `(hover: hover)` scoping is for
- * full-width pressable surfaces, which these are the opposite of.
+ * strip shift under the finger that is about to press it, and an arrow that
+ * appeared and disappeared at each end would do exactly that. Out of the flow
+ * that holds by construction rather than by reservation, and a hidden box does
+ * not hit-test, so the end a reader has reached is all tab and no dead band.
+ * They are small aimed targets, so they keep their hover: the `(hover: hover)`
+ * scoping is for full-width pressable surfaces, which these are the opposite
+ * of.
  */
 export function TabStrip({
   children,
@@ -129,7 +140,7 @@ export function TabStrip({
       {state.over && (
         <button
           type="button"
-          className="tabstrip-arrow"
+          className="tabstrip-arrow tabstrip-arrow-l"
           style={{ visibility: state.left ? 'visible' : 'hidden' }}
           disabled={!state.left}
           aria-label={`Scroll ${label} left`}
@@ -155,7 +166,7 @@ export function TabStrip({
       {state.over && (
         <button
           type="button"
-          className="tabstrip-arrow"
+          className="tabstrip-arrow tabstrip-arrow-r"
           style={{ visibility: state.right ? 'visible' : 'hidden' }}
           disabled={!state.right}
           aria-label={`Scroll ${label} right`}
