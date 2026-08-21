@@ -13154,6 +13154,19 @@ button.start-line:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
 }
+/* **The heading's own top margin, which is the browser's and not this
+   stylesheet's.** `.espn-label` is a `<p>` and declares only a `margin-bottom`,
+   so it keeps the UA's `margin-block-start: 1em` — 12px at the label's 12px
+   type. Everywhere else the label sits in the page's flow, where that margin
+   collapses into the rhythm around it and is never seen; inside a *padded* card
+   it cannot collapse through the padding, so it lands on top of it. Measured at
+   390: 25px from the card's edge to the label against 13px from the body to the
+   bottom edge, a card whose head was nearly twice its foot. Zeroed here rather
+   than on `.espn-label` itself, which would move every other label on the page
+   to fix one. Now 13 and 13. */
+.onboard-tip .espn-label {
+  margin-top: 0;
+}
 /* The card is the block's own bottom edge, so the paragraph inside it does not
    carry `.espn-note`'s 10px of it. */
 .onboard-tip-note {

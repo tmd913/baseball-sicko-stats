@@ -345,7 +345,19 @@ export function LeagueOnboarding({
             The claim in the last sentence is `apple-mobile-web-app-capable`'s,
             declared in `client/index.html` — without that meta an added icon
             opens a Safari tab like any bookmark, and this would be describing
-            something the app does not do. */}
+            something the app does not do.
+
+            **`Open as Web App` is named because the sheet can contradict the
+            meta.** iOS 18.2 put a switch on the Add to Home Screen sheet, and
+            the meta decides which way it starts rather than what it does: a
+            reader who has turned it off for something else, or who is handed a
+            phone where it is off, adds an icon that opens a Safari tab while the
+            page above it promises full screen. Naming the switch costs a clause
+            and is the difference between a tip that holds whatever state the
+            sheet is in and one that holds only in the default. `Leave … switched
+            on` rather than `turn on` for the same reason — with the meta shipped
+            it is on when the reader gets there, and telling somebody to turn on
+            what is already on reads as a step they have missed. */}
         {phase !== 'loading' && !INSTALLED && (
           <aside className="onboard-tip">
             <p className="espn-label">Add it to your home screen</p>
@@ -355,8 +367,9 @@ export function LeagueOnboarding({
                 <ShareGlyph /> Share
               </strong>{' '}
               in Safari&rsquo;s toolbar, then <strong>Add to Home Screen</strong>.
-              It opens from the home screen the way an app does — full screen, no
-              address bar, no tab to find again.
+              Leave <strong>Open as Web App</strong> switched on — that is what
+              makes the icon open the way an app does: full screen, no address
+              bar, no tab to find again.
             </p>
           </aside>
         )}
