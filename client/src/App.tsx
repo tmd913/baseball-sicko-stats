@@ -104,7 +104,7 @@ import { ThemeSwatches } from './components/ThemePicker';
 import LeagueView, { LEAGUE_TABS, ProjectedTools } from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import type { MatchupReading } from './components/LeagueMatchup';
-import { RankKey, spanDetail } from './components/LeagueRankings';
+import { RankKey } from './components/LeagueRankings';
 import type { LeagueTab } from './components/LeagueView';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
@@ -158,8 +158,28 @@ function mainTab(v: View): 'roster' | 'matchup' | 'research' | 'league' {
   return v === 'summary' || v === 'feed' ? 'roster' : v;
 }
 
-/** Which of the two roster views a date range belongs to — see `dateScope`. */
-type DateScope = 'summary' | 'feed';
+/**
+ * Which **reading of the roster** a date range belongs to — see `dateScopeRef`.
+ *
+ * It was two, the Roster and the Feed, on the argument that a table read for
+ * what a line comes to and a stream scrolled back through ask different
+ * questions of one control. That argument was right and did not go far enough:
+ * the Roster tab is not one reading but **three**, and the other two move the
+ * days as hard as crossing to the Feed does. The Schedule reading is a table of
+ * fixtures *ahead*; the Projected reading opens on today → the end of the
+ * period. Sharing one entry between them meant every excursion cost the stats
+ * table its days and had to be undone by hand on the way back — which is what
+ * `beforeProjection` was, and it is gone with this.
+ *
+ * So there is one entry per control in the tools row: the plain stat table, the
+ * Feed, the Schedule reading and the Projected one.
+ */
+type DateScope = 'summary' | 'feed' | 'schedule' | 'projected';
+
+/** The four, for the two places that have to walk every entry rather than the
+ *  one on screen — `settleMatchup` and the seed. Written once so a fifth
+ *  reading cannot be added to the type and missed in a loop. */
+const DATE_SCOPES: DateScope[] = ['summary', 'feed', 'schedule', 'projected'];
 
 /** A range as this app holds one: the two days, and the preset label they were
  *  derived from — null for a range picked by hand, which has none. A preset is
@@ -378,45 +398,45 @@ export default function App() {
     };
   }, [initialParams, presets, initialPreset]);
   /**
-   * The date range, **one per roster view**.
+   * The date range, **one per reading of the roster**.
    *
-   * It was one range shared by both, and the two pages ask different questions
-   * of it: the Roster is a table read for what a line comes to, and the Feed is
-   * a stream scrolled back through — so a reader who went to the Feed for last
-   * week's plays came back to a summary table of last week, put the calendar
-   * back to Today to fix it, and found the Feed on Today the next time they
-   * crossed. One control was answering two questions and losing one of them
-   * each way. Nothing else about the control moves: it is the same button, the
-   * same presets and the same picker, drawn on whichever page is on screen and
-   * writing to that page's own entry.
+   * It was one range shared by everything, then two — the Roster and the Feed —
+   * on the argument that a table read for what a line comes to and a stream
+   * scrolled back through ask different questions of one control. A reader who
+   * went to the Feed for last week's plays came back to a summary table of last
+   * week, put the calendar back to Today to fix it, and found the Feed on Today
+   * the next time they crossed: one control answering two questions and losing
+   * one of them each way.
    *
-   * **Both entries are seeded from the same link**, which is the honest reading
-   * of one — `?preset=Yesterday` means yesterday, whichever page it opens on —
-   * and they part from there as the reader moves each. The URL then carries the
-   * range of the page in view, that being the one it describes.
+   * **It is four now, because the Roster tab is not one reading but three.**
+   * The tools row offers `Feed`, `Schedule` and `Projected` beside the plain
+   * stat table, and the last two move the days as hard as crossing to the Feed
+   * does — Schedule is a table of fixtures *ahead* and Projected opens on today
+   * → the end of the matchup period. Both borrowed the stats table's entry and
+   * made an excursion out of it, which is the same fault one control over:
+   * `Stats → Schedule → Stats` came back on the schedule's days, and the
+   * projected lens only came back at all because it remembered a range on the
+   * way out and wrote it back on the way in (`beforeProjection`, gone with
+   * this — an excursion nobody takes needs no return ticket).
    *
-   * Which of the two is live is `dateScope`, resolved below `view`: the entry
-   * is a fact about which page is on screen, so it cannot be picked until that
-   * is known.
+   * Nothing else about the control moves: it is the same bar, the same calendar
+   * and the same arrows, drawn on whichever reading is on screen and writing to
+   * that reading's own entry.
+   *
+   * **Every entry is seeded from the same link**, which is the honest reading of
+   * one — `?preset=Yesterday` means yesterday, whichever reading it opens on —
+   * and they part from there as the reader moves each. A link can only carry one
+   * range, and it is the one on screen: the URL writes the entry of the reading
+   * in view, that being the one it describes.
+   *
+   * Which entry is live is `dateScopeRef`, resolved below the three pieces of
+   * state that decide it: the entry is a fact about which reading is on screen,
+   * so it cannot be picked until all three are known.
    */
-  const [ranges, setRanges] = useState<Record<DateScope, DateRange>>(() => ({
-    summary: { ...initialRange, preset: initialPreset },
-    feed: { ...initialRange, preset: initialPreset },
-  }));
-  /**
-   * Which entry that is, held as a ref and written during render because it has
-   * to be **sticky**: Research and League draw no dates at all, so crossing one
-   * of them must not swap the range out from under the report. Mapping them to
-   * `summary` would spend a full `/api/report` read on the way out of the Feed
-   * and another on the way back in — the app's most expensive request, twice,
-   * for a range nobody is looking at in between — and would flicker the roster
-   * pills and the live poll along with it.
-   *
-   * Derived purely from `view` and idempotent, so any re-render (StrictMode's
-   * double pass included) recomputes the same answer. It is the rule the file's
-   * own `reportsRef` write already follows.
-   */
-  const dateScopeRef = useRef<DateScope>('summary');
+  const [ranges, setRanges] = useState<Record<DateScope, DateRange>>(() => {
+    const seed = { ...initialRange, preset: initialPreset };
+    return { summary: seed, feed: seed, schedule: seed, projected: seed };
+  });
   // The picker allows selecting through the end of the current year so the full
   // published schedule (scheduled games, probable pitchers) can be viewed ahead.
   const maxDate = useMemo(() => `${baseballToday().slice(0, 4)}-12-31`, []);
@@ -501,28 +521,16 @@ export default function App() {
     // Summary is the default; the rest are opted into explicitly.
     return 'summary';
   });
-  /* Which page's date range is on screen, and the range itself. The write is
-     guarded on `isRosterView` so Research and League leave the last roster
-     view's range standing rather than swapping it — see `dateScopeRef`. */
-  if (isRosterView(view)) dateScopeRef.current = view === 'feed' ? 'feed' : 'summary';
   /* **Which reading the Roster tab returns to.** The tab covers two `view`
      values and a press on it has to mean *the page*, not one of its readings —
      so a reader who was in the stream, went to Research and came back finds the
-     stream. Written during render on the same terms as `dateScopeRef` above:
-     derived purely from `view`, idempotent, and only while a roster reading is
-     on screen, so a crossing leaves the last one standing. */
+     stream. Written during render on the same terms as `dateScopeRef` below:
+     derived purely from navigation state, idempotent, and only while a roster
+     reading is on screen, so a crossing leaves the last one standing. (That one
+     is declared further down now, its answer depending on two toggles that are
+     not in scope up here.) */
   const lastRosterView = useRef<View>('summary');
   if (isRosterView(view)) lastRosterView.current = view;
-  const { start, end, preset: activePreset } = ranges[dateScopeRef.current];
-  /** Move the range **of the page on screen**, which is the only one a control
-   *  in the chrome can have been pressed from. The scope is read off the ref at
-   *  call time rather than closed over, so this is stable and every caller —
-   *  the presets, the range picker, the projected lens's excursion into the
-   *  days ahead and the way back from it — writes the entry the reader is
-   *  looking at. */
-  const setRange = useCallback((r: DateRange) => {
-    setRanges((prev) => ({ ...prev, [dateScopeRef.current]: r }));
-  }, []);
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
   // live-only UI can be exercised when nothing is actually being played. Still
   // reachable by hand as `?sim=1`; only its settings-menu entry is hidden (see
@@ -720,14 +728,59 @@ export default function App() {
   );
   const [rosterProjection, setRosterProjection] = useState<RosterProjection | null>(null);
   const [rosterProjLoading, setRosterProjLoading] = useState(false);
+  /* **`beforeProjection` is gone.** It held the range the reader was on when
+     they turned the lens on, so that turning it off could put them back rather
+     than strand them in a future week with no stats in it. That was the right
+     answer while the lens borrowed the stats table's own entry and made an
+     excursion out of it; it borrows nothing now — the projected reading has an
+     entry of its own (`DateScope`), so the stats table's days were never moved
+     and there is nothing to move back. An excursion nobody takes needs no
+     return ticket. */
+
   /**
-   * The range the reader was on when they turned it on, so turning it off puts
-   * them back rather than stranding them in a future week with no stats in it.
-   * A pair rather than a preset label, since a hand-picked range has none —
-   * and the preset is restored alongside so `Today` goes back to *being* Today
-   * rather than to the two dates it happened to mean.
+   * **Which reading's range is on screen.**
+   *
+   * A ref, written during render, and **sticky**: Research and League draw no
+   * dates at all, so crossing one of them must not swap the range out from
+   * under the report. Mapping them to `summary` would spend a full
+   * `/api/report` read on the way out of the Feed and another on the way back
+   * in — the app's most expensive request, twice, for a range nobody is looking
+   * at in between — and would flicker the roster pills and the live poll along
+   * with it.
+   *
+   * **The order of the tests is the order the readings exclude each other in**,
+   * which is not arbitrary: the Feed is a `view` and the other two are toggles
+   * that only exist on the table, and Schedule and Projected clear each other
+   * on press (see `scheduleControl` and `toggleRosterProjected`), so at most one
+   * of the last two is ever set. Written this way round, the test never has to
+   * ask what happens if both are.
+   *
+   * Derived purely from those three and idempotent, so any re-render
+   * (StrictMode's double pass included) recomputes the same answer. It is the
+   * rule the file's own `reportsRef` write already follows.
    */
-  const beforeProjection = useRef<DateRange | null>(null);
+  const dateScopeRef = useRef<DateScope>('summary');
+  if (isRosterView(view)) {
+    dateScopeRef.current =
+      view === 'feed'
+        ? 'feed'
+        : scheduleSpan !== null
+          ? 'schedule'
+          : rosterProjected
+            ? 'projected'
+            : 'summary';
+  }
+  const { start, end, preset: activePreset } = ranges[dateScopeRef.current];
+  /** Move the range **of the reading on screen**, which is the only one a
+   *  control in the chrome can have been pressed from. The scope is read off the
+   *  ref at call time rather than closed over, so this is stable and every
+   *  caller — the arrows, the calendar, the URL's own re-derivation of a preset
+   *  — writes the entry the reader is looking at. The one caller that must
+   *  *not* go through it is the projected lens's own seed, which runs on the
+   *  commit before the scope has moved: see `toggleRosterProjected`. */
+  const setRange = useCallback((r: DateRange) => {
+    setRanges((prev) => ({ ...prev, [dateScopeRef.current]: r }));
+  }, []);
   const [matchupWindow, setMatchupWindow] = useState<MatchupWindow | null>(null);
   /** Has the question *which days is this matchup* been answered, one way or
    *  the other — the window landed, the read failed, or there is no league to
@@ -779,9 +832,10 @@ export default function App() {
    * 27ms. Batched into one callback there is one read, which is what the gate
    * was for.
    *
-   * **Both entries, because a link seeds both** — the Roster and the Feed take
-   * the same range off a shared link and part from there, so a `Matchup` link
-   * has to mean the matchup on whichever of the two it is read from.
+   * **Every entry, because a link seeds every one** — the four readings of the
+   * roster take the same range off a shared link and part from there, so a
+   * `Matchup` link has to mean the matchup on whichever of them it is read
+   * from.
    *
    * **With no span it falls back to `Today` rather than keeping the label.**
    * The two are one thing here, unlike the Schedule view's own spans, where the
@@ -803,7 +857,7 @@ export default function App() {
       setMatchupWindowSettled(true);
       setRanges((prev) => {
         let next: Record<DateScope, DateRange> | null = null;
-        for (const scope of ['summary', 'feed'] as DateScope[]) {
+        for (const scope of DATE_SCOPES) {
           const r = prev[scope];
           if (r.preset !== MATCHUP_PRESET) continue;
           const to: DateRange | null = span
@@ -3013,6 +3067,17 @@ export default function App() {
     const p = new URLSearchParams();
     // The preset *is* the range — writing its dates out too would pin the link
     // to whatever "Today" meant when it was saved, which is the whole bug.
+    //
+    // **And it is the range of the reading on screen, which is the only one a
+    // link can carry.** There are four entries (`DateScope`) and one
+    // `start`/`end`/`preset`, so the query string describes the page it was
+    // copied off and nothing else — the same bargain as `sched=` and `rproj=1`
+    // beside it, which say which reading that page is. On the way *in* the one
+    // range seeds all four, which is the honest reading of one: `?preset=
+    // Yesterday` means yesterday whichever reading it opens on, and they part
+    // from there as the reader moves each. Carrying four would mean four
+    // params to describe one screen, three of them about pages the recipient is
+    // not looking at.
     if (activePreset) {
       p.set('preset', activePreset);
     } else {
@@ -3518,15 +3583,35 @@ export default function App() {
    *
    * The reader is free to move off it: the date control is untouched, so
    * picking a single future day narrows the projection to that day's games and
-   * a past range projects nothing and reads as it always did. Turning the lens
-   * **off** puts the range back where it was, preset and all — otherwise a
-   * press and an unpress would strand somebody in a future week with no stats
-   * in it.
+   * a past range projects nothing and reads as it always did. **Those days are
+   * the lens's own** (`DateScope`), so moving them costs the stats table
+   * nothing and turning the lens off has nothing to put back — where the same
+   * press used to save a range on the way out and write it back on the way in.
+   *
+   * **What the lens's entry remembers, and for how long: nothing, and no time
+   * at all.** It is **re-derived on every press**, which is the one place this
+   * file's own "each reading keeps its own days" is deliberately not carried
+   * through, and the reason is the rule one paragraph down: a lens is put away
+   * when its page leaves the screen. A remembered projected range would be an
+   * answer to a question that has already been retracted — and a *stale* one,
+   * "the rest of this period" derived on Tuesday being three played days by
+   * Friday, which is precisely the reading the lens is not for. The seed is
+   * what the toggle promises in its own tooltip (*open on the days there are
+   * games in*), and it is owed on the second press as much as on the first.
+   * What the entry buys is the other half: while the lens **is** on, the days
+   * are its own and the stats table's are untouched.
+   *
+   * **Seeded by name rather than through `setRange`.** The scope moves on the
+   * commit this press causes, so at the moment the callback runs the ref still
+   * says `summary` — and `setRange` writes whatever the ref says. Writing
+   * `projected` by name is the same rule the reset below already follows, one
+   * scope over.
    *
    * **The Schedule view goes off with it**, and that is exclusivity rather than
    * tidiness: that mode replaces the stat *columns* with days and this replaces
    * the *figures* in them, so they are two readings of one set of cells and
-   * cannot both be in force.
+   * cannot both be in force. Its own days are left where they are — an entry is
+   * put away, not thrown away.
    */
   const toggleRosterProjected = useCallback(() => {
     // Back to the table first, for the reason the Schedule toggle does it: this
@@ -3536,29 +3621,23 @@ export default function App() {
     // and put the lens straight back out.
     setView('summary');
     setRosterProjected((on) => {
-      if (on) {
-        const back = beforeProjection.current;
-        beforeProjection.current = null;
-        if (back) setRange(back);
-        return false;
-      }
-      beforeProjection.current = { start, end, preset: activePreset };
+      if (on) return false;
       const today = baseballToday();
       // The rest of this matchup period where the league publishes one — which
       // is the span a manager plans in — and the week ahead where it does not.
       // `end` is clamped forward of today either way, a period whose last day
       // has passed being nothing to project.
       const to = matchupWindow?.end ?? addDays(today, 6);
-      setRange({ start: today, end: to < today ? today : to, preset: null });
+      const days = { start: today, end: to < today ? today : to, preset: null };
+      setRanges((prev) => ({ ...prev, projected: days }));
       setScheduleSpan(null);
       return true;
     });
-  }, [start, end, activePreset, matchupWindow, setRange]);
+  }, [matchupWindow]);
 
   /**
    * **Leaving the Roster puts the lens away**, exactly as pressing the toggle a
-   * second time would: off, and the range it was turned on over back where it
-   * was, preset and all.
+   * second time would.
    *
    * This is the lens-for-an-afternoon rule the state itself already states,
    * carried one step further than "not a saved preference". Not saving it keeps
@@ -3578,11 +3657,14 @@ export default function App() {
    * page that is not the roster, which it had no business being in: the Feed
    * has no such reading, and a link copied off it claimed one.
    *
-   * **The range is written to `summary` by name** rather than through
-   * `setRange`, which writes whichever scope is on screen — by the time this
-   * runs the view has already changed, and on the way to the Feed that scope is
-   * the Feed's. Putting the roster's range back into the Feed's entry would
-   * move a second page nobody touched.
+   * **And it puts nothing back, where it used to restore a range by name.** The
+   * lens has an entry of its own now, so the stats table's days were never
+   * moved and there is nothing to move back; the paragraph that stood here —
+   * *the range is written to `summary` by name rather than through `setRange`,
+   * because by the time this runs the view has already changed* — was the
+   * record of a hazard that no longer exists. The rule it stated is still live
+   * one function up, where the lens's own seed writes `projected` by name for
+   * the mirror-image reason.
    *
    * **The player page is not a leaving.** It is an overlay over this view, the
    * URL still names the roster, and closing it returns to the same table at the
@@ -3592,10 +3674,7 @@ export default function App() {
    */
   useEffect(() => {
     if (view === 'summary' || !rosterProjected) return;
-    const back = beforeProjection.current;
-    beforeProjection.current = null;
     setRosterProjected(false);
-    if (back) setRanges((prev) => ({ ...prev, summary: back }));
   }, [view, rosterProjected]);
 
   /**
@@ -4514,83 +4593,38 @@ export default function App() {
         })}
       </div>
     ) : null;
-  /* The Rankings span — **in the tab row with everything else, and a dropdown
-     on a phone**. It is the research board's window tabs asking the same shape
-     of question about a different thing (which games these numbers are drawn
-     from), so it takes that control's answers exactly: pills on a desktop, a
-     native `<select>` under 640px, both rendered and swapped by one media query
-     rather than by a JS media test that could drift from the CSS.
+  /* **The Rankings span strip is gone, and its five cuts are the bar's own
+     list.** It was a group in this row — pills above 640px, a `<select>` below,
+     both rendered and swapped by one media query — naming `Current matchup`,
+     `Season` and the season's halves, and it was argued as the *fast path* to
+     the five when the bar under it grew a picker holding both the spans and
+     every week: "one door, two ways in".
 
-     It is drawn from `rankings.spans` — the spans the server says it can serve
-     honestly — rather than from a list here, so a season with no All-Star break
-     in ESPN's calendar has no halves and April has no second half, instead of
-     either being offered and coming back empty. */
-  /** **A span and a week are alternatives**, so picking one of the five clears
-   *  the other — which is what keeps the strip and the bar under it from ever
-   *  claiming two different tables. Written once, because the pills and the
-   *  phone `<select>` are one control and two copies of this would be two
-   *  copies free to disagree. */
+     That is the sentence this reversal overturns. The bar's `PeriodPicker`
+     opens with **`Spans` as its first group and `Weeks` as its second**, off
+     the same `rankings.spans` the strip was drawn from — so the strip offered
+     nothing the face did not, one tier further from the table, and the two had
+     to be kept in step about which of them was lit (`rankings.week` rather than
+     `rankWeek`, a rule written twice for that reason and now written once).
+
+     **What it cost, measured on the live 12-team league**, `.view-tools` and
+     the table's first row before → after. On the four spans that draw no
+     `Projected` toggle — `Season`, the two halves, and any picked week — the
+     strip *was* the second line of the tools row, so removing it removes the
+     line: at 1200 / 1440 / 1920 the row is **96 → 50** and the first row of the
+     table comes up **299 → 253**, at 640 **98 → 50** and **299 → 251**, and at
+     320 / 390 **98 → 92** and 347 / 299 → **341 / 293**, the narrow copy of the
+     ⓘ taking the line the strip has left. On `Current matchup` the row is
+     **unchanged** (98 / 96) because `ProjectedTools` is on that line anyway —
+     stated rather than smoothed over: the saving is four spans out of five.
+
+     **`pickRankSpan` survives it**, because the bar's list still picks a span
+     and a span still clears the week: the two are alternatives, and written
+     once so the list and the URL cannot come to claim two different tables. */
   const pickRankSpan = (sp: EspnRankSpan) => {
     setRankWeek(null);
     setRankSpan(sp);
   };
-  const leagueSpanTabs =
-    view === 'league' && leagueTab === 'rankings' && rankings && rankings.spans.length > 1 ? (
-      <>
-        <div className="lg-span-row" role="tablist" aria-label="Which span">
-          {rankings.spans.map((sp) => (
-            <button
-              key={sp.span}
-              type="button"
-              role="tab"
-              /* **Nothing is lit while a week is in force**, and that is the
-                 honest reading rather than a hole: the reader has stepped off
-                 the five named cuts, and the bar directly under this row says
-                 in 15px type which week they are on. Lighting `Current matchup`
-                 for `Week 12` would be the strip claiming a table that is not
-                 on screen.
-
-                 **Off `rankings.week` rather than off `rankWeek`**, which is
-                 the same rule the bar under it keeps and was found by driving
-                 it: `?lwk=999` is a period this league's schedule has never
-                 carried, the server answers it with the span beside it, and a
-                 strip reading the *request* then lit nothing over a table that
-                 was plainly `Current matchup`. The response is what is on
-                 screen. It lags a press by the read, exactly as the figures do,
-                 which is rule 1 rather than a cost. */
-              aria-selected={!rankings.week && sp.span === rankSpan}
-              className={`lg-span-tab${!rankings.week && sp.span === rankSpan ? ' active' : ''}`}
-              onClick={() => pickRankSpan(sp.span)}
-              title={spanDetail(sp) || sp.label}
-            >
-              {sp.label}
-            </button>
-          ))}
-        </div>
-        <select
-          className="lg-span-select"
-          /* A `<select>` must have a value, and while a week is in force none of
-             the five is it — so the week takes an option of its own at the head
-             of the list, which is the same statement the pills make by lighting
-             nothing and the only one this control can make. It is the bar's
-             answer echoed rather than a second opinion: picking it does nothing
-             but keep the week. */
-          value={rankings.week ? 'week' : rankSpan}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v !== 'week') pickRankSpan(v as EspnRankSpan);
-          }}
-          aria-label="Which span"
-        >
-          {rankings.week && <option value="week">{rankings.week.label}</option>}
-          {rankings.spans.map((sp) => (
-            <option key={sp.span} value={sp.span}>
-              {sp.label}
-            </option>
-          ))}
-        </select>
-      </>
-    ) : null;
   /* **The Rankings lens, in the tab row with the span strip** — a reversal: it
      stood in the table's own caption row, on the reasoning that a control
      saying what the figures *are* belongs against the figures.
@@ -4618,17 +4652,27 @@ export default function App() {
      (`projectable`, the current matchup of a week still being played) — absent
      rather than disabled, and independently of the span strip beside it, which
      needs more than one span to be worth drawing where this needs none. */
-  /* **The key that explains `OVR`, `BAT` and `PIT`, in the tools row with the
-     other buttons.** It stood in the table's caption row, which was the right
-     place for a caption's ⓘ; that row is a **date bar** now — a control, three
-     columns wide with an arrow at each end — and a fourth thing in it would
-     either break the centering the bar's own grid exists for or take a third of
-     the middle column on a 320px phone, where the days already run to 175px.
+  /* **The key that explains `OVR`, `BAT` and `PIT` — the narrow copy of it.**
 
-     Up here it is beside the projection's own key, which is where a key
-     belongs: both are read once and then in the way (`InfoKey`'s own rule), and
-     both explain a *reading* of the table rather than captioning it. Drawn only
-     on the Rankings tab, and only once there is a table to explain. */
+     It has moved into the date bar, at that bar's own right-hand end, where the
+     table it explains is (see `LeagueRankings.tsx`'s `endSlot`). The paragraph
+     that used to stand here said a fourth thing in the bar's row "would either
+     break the centering the bar's own grid exists for or take a third of the
+     middle column on a 320px phone" — and both halves of that were right. The
+     first is answered by a **mirrored ghost** at the bar's left end, which puts
+     the face back on the bar's own center line by construction; the second is
+     not answered at all and cannot be. Measured: the two end slots cost 38px
+     each and the widest face this bar prints is 247.48px, so the fourth thing
+     costs the face nothing only from **432px** up.
+
+     So below that the bar's ends collapse and **this is the copy on screen** —
+     one media query in the stylesheet, both rendered, neither chosen in JS,
+     which is the swap every pill row that becomes a `<select>` already makes.
+     It is the same `RankKey` component in both places, so the two cannot come
+     to explain the table differently; what differs is only which row has the
+     width for it.
+
+     Drawn only on the Rankings tab, and only once there is a table to explain. */
   const leagueRankKey =
     view === 'league' && leagueTab === 'rankings' && rankings ? (
       <RankKey rankings={rankings} />
@@ -4808,8 +4852,17 @@ export default function App() {
           // *figures* in them, so they are two readings of one set of cells.
           // Left on, its toggle would sit lit over a table it was not reading,
           // which is what this app's rule about a control lying about its reach
-          // forbids. The range it moved the reader to stays, the days ahead
-          // being exactly what a schedule is for.
+          // forbids.
+          //
+          // **And this reading arrives on its own days**, where it used to
+          // inherit whatever the lens had moved the shared range to — argued at
+          // the time as "the days ahead being exactly what a schedule is for",
+          // which was true of the lens's days and of nothing else. A reading
+          // with an entry of its own (`DateScope`) opens on the days it was
+          // last read over, and this one's range decides *whose* rows these are
+          // rather than which columns are drawn, so inheriting a week in the
+          // future was the wrong inheritance twice over: it silently changed the
+          // roster the fixtures were of.
           setRosterProjected(false);
           setScheduleSpan(defaultScheduleSpan(matchupWindow));
         }}
@@ -4936,12 +4989,14 @@ export default function App() {
         {/* **Scoreboard / Rankings / Transactions, on a centered line of their
             own**, with everything else in the row breaking to the line under
             them. They are *which page of this league*, one tier down from the
-            main tabs and the same kind of statement; the span strip, the two
-            keys and the lens are *which reading of that page*, which is the
-            next question rather than a peer of it — and on the Rankings tab all
-            four of them sat on one line with the three tabs, so the control a
-            reader looks for first was one group among four and moved along the
-            row as the window changed.
+            main tabs and the same kind of statement; the key and the lens are
+            *which reading of that page*, which is the next question rather than
+            a peer of it — and on the Rankings tab all of them sat on one line
+            with the three tabs, so the control a reader looks for first was one
+            group among four and moved along the row as the window changed. (The
+            span strip that used to be the widest of those groups is gone, its
+            five cuts being the first group of the bar's own list — see
+            `pickRankSpan`.)
 
             A wrapper rather than `flex: 1 1 100%` on the strip itself: that
             basis stretches the *shell* of a segmented control across the row
@@ -4950,9 +5005,8 @@ export default function App() {
             is the full-width box and the strip inside it is centered at its own
             content width. */}
         {leagueTabs && <div className="lg-tabs-line">{leagueTabs}</div>}
-        {/* Which span the Rankings table is drawn from. */}
-        {leagueSpanTabs}
-        {/* What its three summary columns are made of. */}
+        {/* What its three summary columns are made of — the narrow copy; above
+            431px the bar's own right-hand end holds it. See `leagueRankKey`. */}
         {leagueRankKey}
         {/* And whether it is drawn to the end of the week. */}
         {leagueRankProjected}

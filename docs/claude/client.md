@@ -63,9 +63,13 @@ Every link in the wild carries `view=feed`; the stream keeps its own date range
 is chrome. What changed is which row the control sits in. `mainTab(view)` is
 what the strip tests, since the `Roster` tab covers two values and a pill unlit
 over its own stream would be the row lying about where you are; `lastRosterView`
-is a render-time ref on `dateScopeRef`'s own terms (derived from `view`,
-idempotent, written only while a roster reading is on screen) so the tab returns
-to the reading it was left on.
+is a render-time ref on `dateScopeRef`'s own terms (derived from navigation
+state, idempotent, written only while a roster reading is on screen) so the tab
+returns to the reading it was left on. (`dateScopeRef` is four-valued now — the
+stat table, the stream, the Schedule reading and the Projected one each keep
+their own days, and it is derived from `view`, `scheduleSpan` and
+`rosterProjected` rather than from `view` alone. See **Client — the date bar**,
+*And the range is one per reading, not one per view*.)
 
 **`Matchup` is the fourth tab and is the page the Scoreboard already had.** One
 component drawn twice — see **Client — a league matchup**, *The same page, as a

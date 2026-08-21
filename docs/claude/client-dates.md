@@ -1,10 +1,12 @@
-### The date bar, and the range each roster view keeps
+### The date bar, and the range each roster reading keeps
 
 Split out of `client.md`, which holds the shell these sit in — the pinned
 chrome, the view tabs and the report the dates decide the days of. This is the
 **full-width bar under the tabs**, the row it opens, the component a matchup's
 team pages share with it, and the thing that earned them a file of their own:
-**the Roster and the Feed each keep their own range.**
+**each reading of the roster keeps its own range.** (It was *the Roster and the
+Feed* when this file was split off, and is four now — see *And the range is one
+per reading, not one per view* at the foot of the file.)
 
 #### It is a bar, and it was a button
 
@@ -522,3 +524,197 @@ overflow. A matchup's own team page is untouched — one `Matchup` pill, leading
 at 154.95** (27.73) — 0.7KB raw and 0.4KB over the wire, for a derived preset, a
 boot gate, a resolver and one more entry in a list; the paragraphs arguing them
 cost the bundle nothing.
+
+### And the bar can carry one control at its right-hand end
+
+**`endSlot` on `DateBar`** — one control drawn in the *collapsed* row, beside
+the two steps, rather than inside anything the face opens. It exists for the
+League Rankings tab's ⓘ, the key that explains `OVR`/`BAT`/`PIT`; the whole of
+that move is argued in **Client — the League Rankings tab**, *And then the span
+strip went, and the ⓘ came down into the bar*. What belongs here is the two
+rules the bar itself gained.
+
+**A fourth thing in this row was rejected once, in as many words** — it "would
+either break the centering the bar's own grid exists for or take a third of the
+middle column on a 320px phone". Both halves were right and each is answered
+separately.
+
+**The centering is a ghost.** The row goes from three tracks to five: an empty
+`aria-hidden` span, a step, the face, a step, the slot, with the first and last
+the same `--bar-end-w` (30px, the app's icon-button width). The two arrows are
+equal for exactly this reason one track in, so holding the far end open to the
+control's own width is the same trick read outward — *reserve the box, don't
+move the page*, spent sideways. Measured on the live 12-team league,
+`face.center − bar.center` is **0.00px at 320, 390, 640, 1200 and 1920**, with
+the slot filled and empty alike, and the face's own width is unchanged at
+**212 / 221.16 / 221.16 / 221.16 / 221.16**.
+
+**The phone is not answered, so it is a width.** Each end slot costs **38px**
+(30px of button and the row's 8px gap), and the widest face the Rankings bar
+prints is its projected reading's, measured at **247.48px**. 247.48 + 2×38 +
+2×44 (the arrows and their gaps) + 20 (the bar's own side padding) is
+**431.48**, so 432 is the narrowest window at which the fourth thing costs the
+face nothing at all. At 320 it would take the face **212 → 136** — 102px of
+content against the 169 the range line alone wants, which is
+`Aug 10 – Aug 2…` where the bar's one job is to say which days. So
+`@media (max-width: 431px)` collapses the ends back to three tracks and hides
+the slot, and the caller keeps its own copy of the control wherever it was: both
+rendered, one media query, neither chosen in JS, which is the swap this
+stylesheet makes for every pill row that becomes a `<select>`.
+
+**A press on the slot closes the bar's popover and is not spent on the
+closing.** Two disclosures hang off one bar and only one may be open — measured
+at 640 the list is 320 wide at x=160 and the key's panel 320 at x=0, so they
+share screen from 432 up to about 900. This is the one place the bar parts from
+`useDismissable`'s rule, and it parts from it because that rule's reasoning does
+not reach: it is about a press *aimed past* an open panel at a control the panel
+was covering, and this control is in the bar's own row, above the panel and
+never covered by it. A press on it is aimed at it, so it gets what it aimed at,
+and the bar's other panel closes because a bar holding two is a bar holding one
+too many. Driven at 640 and 1200: with the list open, one press of the ⓘ leaves
+the list closed and the key open.
+
+`fixed` bars take no slot — there is no row of controls to end.
+
+### And the range is one per *reading*, not one per view
+
+**The section above (*The Roster and the Feed keep their own range*) is right
+and did not go far enough.** It split one range in two on the argument that a
+table read for what a line comes to and a stream scrolled back through ask
+different questions of one control. The Roster tab is not one reading, though:
+the tools row offers **Feed**, **Schedule** and **Projected** beside the plain
+stat table, and the last two move the days as hard as crossing to the Feed does
+— Schedule is a table of fixtures *ahead*, and Projected opens on today → the
+end of the matchup period.
+
+So `DateScope` is **four**: `summary | feed | schedule | projected`, one per
+control in that row.
+
+#### What was actually broken, driven before and after
+
+Both of the other two readings borrowed the stats table's entry, and **two paths
+left the reader stranded on days they never picked** — because `feedToggle` and
+`scheduleControl` each clear `rosterProjected` *directly*, which orphans the
+range `toggleRosterProjected` had saved on the way in (`beforeProjection`, only
+ever restored by the toggle itself or by the leave-the-Roster reset).
+
+Driven at 1200×900 on the live fantasy roster from `?preset=Yesterday`:
+
+| press | before | after |
+| --- | --- | --- |
+| — | `Yesterday · Thu, Aug 20` | same |
+| `Projected` | `Projected · Aug 21 – Aug 23` | same |
+| `Schedule` | `Schedule · Week 19`, URL `?start=2026-08-21&end=2026-08-23&sched=matchup` | `Schedule · Week 19`, URL **`?preset=Yesterday&sched=matchup`** |
+| `Schedule` off | **`Custom range · Aug 21 – Aug 23`** | **`Yesterday · Thu, Aug 20`** |
+| `Projected`, then `Feed`, then `Feed` off | **`Custom range · Aug 21 – Aug 23`** | **`Yesterday · Thu, Aug 20`** |
+
+Two readings of the same fault: the stats table came back on a future week with
+no stats in it, under a `Custom range` label that says nothing about why, and
+the preset the reader had picked was gone for good.
+
+And the plain case the split is named for, driven from `?preset=Last 15 days`
+with the stats table stepped back one window to `Jul 23 – Aug 6`:
+
+| | before | after |
+| --- | --- | --- |
+| `Schedule` on, URL | `?start=2026-07-23&end=2026-08-06&sched=matchup` | **`?preset=Last+15+days&sched=matchup`** |
+| rows under it | 37 | **36** |
+| `Schedule` off | `Jul 23 – Aug 6` | `Jul 23 – Aug 6` |
+| `Feed` on | `Last 15 days` | `Last 15 days` |
+| `Schedule` on again | `Jul 23 – Aug 6` | **`Last 15 days`** |
+
+The row count is the reading that matters there: the Schedule view's range
+decides **whose** rows these are (the union of rosters over those days) while
+the columns are the span's, so a schedule inheriting a range the reader moved on
+another page is a grid of fixtures for a different roster.
+
+#### `beforeProjection` is gone, and that is the point rather than a side effect
+
+An excursion nobody takes needs no return ticket. The lens writes its own entry
+and the stats table's is never touched, so there is nothing to save on the way
+in and nothing to write back on the way out — which is also why the two orphan
+paths above cannot exist any more: there is no orphan to leave.
+
+**The seed is written by name, not through `setRange`.** The scope moves on the
+commit the press causes, so at the moment the callback runs the ref still says
+`summary` and `setRange` writes whatever the ref says. `setRanges((prev) => ({
+...prev, projected: days }))` is the same rule the leave-the-Roster reset used
+to follow from the other side.
+
+#### What the lens's entry remembers, and for how long: nothing, and no time at all
+
+**It is re-derived on every press**, and this is the one place "each reading
+keeps its own days" is deliberately not carried through. The rule it answers to
+is `RULES.md`'s: *a lens is put away when its page leaves the screen*. A
+remembered projected range would be an answer to a question that has already
+been retracted — and a **stale** one, "the rest of this period" derived on
+Tuesday being three played days by Friday, which is precisely the reading the
+lens is not for. The seed is what the toggle promises in its own tooltip (*open
+on the days there are games in*) and it is owed on the second press as much as
+on the first. Driven: `Projected` on → step back to `Aug 18 – Aug 20` → off →
+on again lands on **`Aug 21 – Aug 23`**, the days there are still games in.
+
+What the entry buys is the other half, and it is the half that was broken: while
+the lens **is** on, the days are its own. Stepping under the lens moved the URL
+`?start=2026-08-21&end=2026-08-23&rproj=1` → `?start=2026-08-18&end=2026-08-20`
+and left the stats table on `Jul 23 – Aug 6` throughout.
+
+**The Schedule reading is not a lens and keeps its days indefinitely.** `sched=`
+is shared with the research board and survives every crossing; nothing resets
+it, so nothing resets its range either. It is remembered exactly as the Feed's
+is.
+
+#### One link, one range — and it seeds all four
+
+`start`/`end`/`preset` are one triple in the query string and there are four
+entries, so **the URL carries the range of the reading on screen** and nothing
+else. That is the same bargain `sched=` and `rproj=1` beside it already make:
+they say which reading the page is, and the dates say what that reading is over.
+Carrying four would be four params describing one screen, three of them about
+pages the recipient is not looking at.
+
+On the way **in**, the one range seeds all four, which is the honest reading of
+one — `?preset=Yesterday` means yesterday whichever reading it opens on — and
+they part from there as the reader moves each. That is the two-entry rule
+unchanged, applied to four. `settleMatchup` walks all four for the same reason
+it walked both: a `?preset=Matchup` link has to mean the matchup on whichever
+reading it is read from. Driven, each link opening on exactly what it names and
+with no error banner and 0 page-body overflow at 1200:
+
+| link | opens on |
+| --- | --- |
+| `?preset=Yesterday` | `Yesterday · Thu, Aug 20` |
+| `?preset=Yesterday&sched=matchup` | `Schedule · Week 19`, URL keeps `preset=Yesterday` |
+| `?preset=Yesterday&rproj=1` | `Projected · Thu, Aug 20` |
+| `?view=feed&preset=Yesterday` | `Yesterday · Thu, Aug 20`, on the stream |
+| `?start=2026-08-01&end=2026-08-05&sched=7` | the schedule over those five days' rosters |
+| `?preset=Matchup&rproj=1` | `Projected · Aug 10 – Aug 21` |
+
+#### What a crossing costs, and it is the cost the two-entry rule already named
+
+One `/api/report` read, and only when the two readings' ranges differ — the same
+read changing the date on one page has always cost, answered off the server's
+own cache, with nothing blanking while it is out (rule 1 of the loading system).
+Measured from `?preset=Today` with a counter on `fetch`: boot, `Projected` on →
+**1** read (its own days), cross to Research and back → **1** (the lens put away
+and the stats days restored), Feed and back → **2** total. Turning `Schedule` on
+from a stats table on the same days costs **0**, which is the ordinary case on a
+fresh session, both entries being seeded from the same link.
+
+#### The scope is still sticky across Research and League
+
+`dateScopeRef` is written during render and only while `isRosterView(view)`, so
+a crossing leaves the last reading's range standing — unchanged, and for the
+reason it was written: mapping Research and League to `summary` would spend two
+report reads on a range nobody is looking at in between. What changed is only
+what it resolves to. **The order of the tests is the order the readings exclude
+each other in**: the Feed is a `view`, and Schedule and Projected are toggles on
+the table that clear each other on press, so at most one of the last two is ever
+set and the test never has to ask what happens if both are.
+
+**Bundle over the whole branch** (the four scopes and the League Rankings
+change beside them): **JS 612.64 → 612.09 KB** raw and **182.55 → 182.43**
+gzipped — down on both, two entries and a wider `DateScope` costing less than
+the `beforeProjection` ref, its two restores and the span strip they landed
+with — and **CSS 160.79 → 161.09 KB** raw and **28.76 → 28.87** gzipped, all of
+it the bar's five-track grid and none of it this half.

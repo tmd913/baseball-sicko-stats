@@ -12,11 +12,13 @@
  * looking for; the value is what you do about it.
  *
  * **Which spans it offers is the league's business, not this file's.** The
- * server answers with the spans it can serve honestly (`spans`) and the strip
- * is drawn from that — so a season whose All-Star break ESPN's calendar does
- * not show has no halves at all, and April has no second half, rather than
- * either being drawn empty. See `espn.ts`, **The Rankings tab**, for what each
- * span is made of and what was measured to establish that it could be.
+ * server answers with the spans it can serve honestly (`spans`) and the bar's
+ * own list is drawn from that — so a season whose All-Star break ESPN's
+ * calendar does not show has no halves at all, and April has no second half,
+ * rather than either being drawn empty. See `espn.ts`, **The Rankings tab**,
+ * for what each span is made of and what was measured to establish that it
+ * could be. (It was a *strip* in the app's tools row as well until the bar's
+ * list grew a `Spans` group holding the same five; one door, one way in.)
  */
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -127,7 +129,12 @@ function ordinal(n: number): string {
 const rankBadge = rankFill;
 
 /**
- * What a span actually covers, in one line under the strip.
+ * What a span actually covers, in one line.
+ *
+ * **Not exported any more**, and that is the span strip's removal read one file
+ * over: App drew this under the pills as each one's `title`, and the pills are
+ * gone — the five cuts are the `Spans` group of the bar's own list, where this
+ * is each row's detail line. One caller, in this file.
  *
  * It is not decoration. `First half` is a phrase, and which weeks and which
  * days it is made of is the whole of what makes the numbers under it readable —
@@ -136,7 +143,7 @@ const rankBadge = rankFill;
  * half of it: a span reaching into the week being played is a total to date,
  * and saying `Season` over a figure that stops on Tuesday would be a claim.
  */
-export function spanDetail(info: EspnRankSpanInfo | undefined): string {
+function spanDetail(info: EspnRankSpanInfo | undefined): string {
   if (!info) return '';
   const days = info.start && info.end ? wideRange(info.start, info.end) : null;
   const weeks =
@@ -751,8 +758,9 @@ export default function LeagueRankings({
   matchupTeams: Map<number, number> | null;
   onOpenTeamMatchup: (teamId: number, matchupId: number) => void;
   /**
-   * **The app's own tools row** — the League tabs, the span strip and the
-   * `Projected` lens — handed down rather than left in the page, because this
+   * **The app's own tools row** — the League tabs, the `Projected` lens and,
+   * on a narrow window, this table's own ⓘ — handed down rather than left in
+   * the page, because this
    * tab is a fixed-height column in which only `.league-scroll` scrolls and a
    * sticky box sticks to *the box that scrolls*. Left above the pane the row is
    * held against a column that never moves, which is not stickiness at all but
@@ -772,8 +780,8 @@ export default function LeagueRankings({
    * **The page, for the widest table on this view.** It is fifteen columns on
    * the live league and every one of them is wanted at once, which is the
    * whole of the argument the three tables that already offer this make — and
-   * this one is read inside a tab strip, a span strip and a caption, so it has
-   * more chrome above it than any of them.
+   * this one is read inside a tab strip and a date bar, so it has more chrome
+   * above it than any of them.
    *
    * The hook is called before the early returns because hooks must be, and it
    * costs nothing on a render that draws a message instead: with no table
@@ -865,10 +873,14 @@ export default function LeagueRankings({
    *
    * **The list holds both kinds of thing**, because the bar has to be a whole
    * control rather than half of one: the five spans first (they are the cuts a
-   * reader reaches for) and every week under them. The strip up in the tools row
-   * is the fast path to the five and lights whichever is in force — and lights
-   * nothing while a week is, which is honest rather than broken: the bar under
-   * it says what the table is of, in bigger type than the strip does.
+   * reader reaches for) and every week under them. **It is the only door now**:
+   * the five were also a strip up in the tools row, argued as a fast path to
+   * them — "one door, two ways in" — and that reversed once the list held the
+   * same five off the same `rankings.spans`. A second control naming one of two
+   * things the first control also names is a second control to keep in step
+   * about which of them is lit, and the strip needed a rule of its own for the
+   * week it could not name. Gone, the bar says what the table is of and nothing
+   * else claims to.
    *
    * **The arrows step weeks and go off where there is no week to step from.**
    * A span of several has no next one — `First half` is not a position in a run
@@ -893,6 +905,29 @@ export default function LeagueRankings({
       prevTitle={onePeriod == null ? 'Pick a week to step through them' : 'The week before'}
       nextTitle={onePeriod == null ? 'Pick a week to step through them' : 'The week after'}
       popoverLabel="Pick a span or a week"
+      /**
+       * **And the ⓘ that explains `OVR`, `BAT` and `PIT` is at the bar's own
+       * right-hand end**, in the collapsed row rather than in anything a press
+       * of the face opens.
+       *
+       * It stood in the tools row, beside the projection's key, on the
+       * reasoning that a key belongs with the other buttons — and the reason it
+       * was put there rather than here is recorded in this file's own comment
+       * and in `App.tsx`: a fourth thing in a three-column grid "would either
+       * break the centering the bar's own grid exists for or take a third of
+       * the middle column on a 320px phone". `endSlot` is that objection
+       * answered rather than overruled — a mirrored ghost at the left end keeps
+       * the face on the bar's center line, and below 432px the pair collapses
+       * and App's own copy of this key is what is on screen. The argument for
+       * the move is that **the span strip it used to sit beside is gone**: the
+       * five cuts are the first group of the bar's own list, so the tools row
+       * held a key to a table whose one remaining control is this bar.
+       *
+       * `rankings` is in hand here — this is below the wait and the two empty
+       * states — so the key is drawn only once there is a table to explain,
+       * which is the test it already carried up in the tools row.
+       */
+      endSlot={<RankKey rankings={rankings} />}
       /**
        * **Publish this bar's height**, which is what holds the table's header
        * row directly under it rather than behind it.
