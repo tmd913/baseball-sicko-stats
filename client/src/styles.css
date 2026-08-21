@@ -10140,6 +10140,17 @@ button.start-line:focus-visible {
    only content is an `aria-hidden` glyph has no name at all. */
 .research-condensed {
   margin-inline: 0;
+  /* **A little air over the run, and only while it is there.** The head's own
+     `padding-block` is 6px over 10, which is right for a badge row and too
+     tight for a row of 36px controls landing directly under the app's tabs —
+     the marks read as pinned to the strip above rather than as a band of their
+     own. 10px on the row rather than on the head, so it is paid only in the
+     stuck state and the head at rest keeps the 6 it was measured with.
+
+     It costs the head nothing that has to be reserved: this box changes height
+     when the run appears anyway, and the `ResizeObserver` in `ResearchTable`
+     puts the whole difference onto `scrollTop` in the same frame. */
+  margin-top: 10px;
 }
 /* `.schedule-toggle-label` among them, and it is the reason this list is by
    name rather than by one shared class: Schedule is `ScheduleControl`'s button,
