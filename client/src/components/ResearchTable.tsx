@@ -1463,6 +1463,12 @@ export function ResearchTable({
    */
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [stuck, setStuck] = useState(false);
+  /** **How tall the condensed run is**, published because two sticky boxes are
+   *  held under it — the head, and through `--pane-bar-h` the table's own
+   *  header row. Measured rather than declared for this file's usual reason:
+   *  it is a control height plus a font this app does not choose, and it is 0
+   *  whenever the rail is not drawn. */
+  const condRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const mark = sentinelRef.current;
     const box = scrollRef.current;
@@ -1475,48 +1481,22 @@ export function ResearchTable({
     return () => io.disconnect();
   }, []);
   /**
-   * **The head resizes under the reader, so the scroll is paid the difference.**
+   * **Nothing here compensates the scroll any more, because nothing moves.**
    *
-   * The condensed run appears *inside* a `position: sticky` box, and a sticky
-   * box still occupies its place in flow — so growing it pushes every row below
-   * down by that much, under the finger that is scrolling. That is the fault
-   * *reserve the box, don't move the page* exists to stop, and the usual answer
-   * — lay the worst case out and hide it — is wrong here: it would cost the
-   * table a row of chrome at rest, on the one view where every pixel is a row.
+   * The condensed run used to render *inside* this head, which grew it by 52px
+   * the moment it stuck — and a sticky box still occupies its place in flow, so
+   * every row below shifted under the finger. That was answered by putting the
+   * difference onto `scrollTop` from a `ResizeObserver`, and the answer was
+   * worse than the fault: **assigning `scrollTop` during a touch or momentum
+   * scroll cancels the scroll on iOS.** Reported from a phone as the board
+   * stopping dead under the thumb at the exact moment the head stuck.
    *
-   * So the box is not reserved, the scroll is compensated: whenever the head
-   * changes height while the reader is scrolled into the table, the difference
-   * goes onto `scrollTop` in the same frame and the rows stay where they were.
-   *
-   * **A `ResizeObserver` rather than a delta across the `stuck` flip**, and the
-   * difference is measured rather than theoretical. The head does not reach its
-   * new height in one commit — the run inside it renders, then `ScrollRow`
-   * measures its own overflow and renders again — so a before/after pair taken
-   * around the flip catches part of the change and leaves the rest as a jump.
-   * Measured at 390 crossing the threshold that way: `scrollTop` 160 → 223
-   * where the head grew 42, and the first row still moved 190 → 165. Observing
-   * the box answers every change whatever caused it, which is also the honest
-   * rule — a filter badge landing while the reader is scrolled must not shift
-   * the rows either.
-   *
-   * `box.scrollTop > 0` is the whole of the guard: at rest the head is in flow
-   * above the scroll position and its height is not something the reader is
-   * looking past.
+   * The run is out of flow now — a zero-height sticky rail, `.research-condensed
+   * -rail` — so it can appear and vanish without moving a row, and there is
+   * nothing left to compensate. `overflow-anchor: none` went with it: it was
+   * only ever there to stop Chrome's scroll anchoring double-counting *our*
+   * writes, and there are no writes.
    */
-  useLayoutEffect(() => {
-    const head = headRef.current;
-    const box = scrollRef.current;
-    if (!head || !box) return;
-    let last = head.getBoundingClientRect().height;
-    const ro = new ResizeObserver(() => {
-      const next = head.getBoundingClientRect().height;
-      const delta = next - last;
-      last = next;
-      if (delta && box.scrollTop > 0) box.scrollTop += delta;
-    });
-    ro.observe(head);
-    return () => ro.disconnect();
-  }, []);
   useLayoutEffect(() => {
     const box = scrollRef.current;
     if (!box) return;
@@ -2020,6 +2000,11 @@ export function ResearchTable({
   }
 
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
+  /* Published here rather than beside `condRef` because it reads `isFull`, and
+     it measures the rail's **inner** box: the rail itself is `height: 0` — that
+     being the whole point of it — so measuring the rail would publish 0 and put
+     the head back under the run. */
+  usePublishedHeight(condRef, '--research-cond-h', stuck || isFull);
 
   /* **Every setting the board is on, stated as a badge**, and it is the head
      of the table rather than a mode's chrome. The control set scrolls away
@@ -2737,22 +2722,38 @@ export function ResearchTable({
         {/* The mark the head's stickiness is read off — see `stuck`. Zero-height
             and inert; it is a position, not a thing. */}
         <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
-        <div className={`research-head${stuck ? ' is-stuck' : ''}`} ref={headRef}>
-          {/* **The whole control set again, condensed, once the bar has gone.**
-              One run rather than three and glyphs rather than words — the shape
-              the bar itself used to take on a phone, kept for the one case that
-              argument was always right about: a reader who has scrolled into the
-              table wants the table, and a control they can still *press* beats
-              a badge that only says what it was set to. Which is why the badge
-              row below is down to the filters — everything else here is a lit
-              button. */}
-          {stuck && (
+        {/* **The whole control set again, condensed — on a rail that takes no
+            room.**
+
+            One run rather than three and marks rather than words: a reader who
+            has scrolled into the table wants the table, and a control they can
+            still *press* beats a badge that only says what it was set to. That
+            is what let the badge row come down to the filters — everything else
+            is a lit button here.
+
+            **The rail is `height: 0`**, which is the whole of why the scroll no
+            longer stalls. Drawn inside the head it grew that box by 52px on the
+            stick, and a sticky box keeps its place in flow, so the rows moved;
+            compensating with `scrollTop` cancels an iOS momentum scroll. With
+            no height there is nothing to move and nothing to correct.
+
+            **Drawn expanded from the first frame**, not only once stuck: that
+            box covers the app's chrome, so the three-row bar is not merely
+            scrolled away there, it is unreachable — which is the case the
+            badges were carrying alone and doing badly. */}
+        {(stuck || isFull) && (
+          <div className="research-condensed-rail">
+            <div className="research-condensed-inner" ref={condRef}>
             <ScrollRow label="the board's controls" className="research-row research-condensed">
               {rowWho}
               {rowSlice}
               {rowTools}
             </ScrollRow>
-          )}
+            </div>
+          </div>
+        )}
+        <div className={`research-head${stuck ? ' is-stuck' : ''}`} ref={headRef}>
+
           {/* **The settings first, the count last.** They were one wrapping run
               with the count leading it, which is the shorter box and was chosen
               for that; what it got wrong is which of the two the *rows* are

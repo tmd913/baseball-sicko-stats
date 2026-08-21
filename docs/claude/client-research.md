@@ -69,14 +69,58 @@ elements are the same consts the bar renders (`rowWho`, `rowSlice`, `rowTools`),
 from the same props and calling the same callbacks, so the two copies cannot
 disagree.
 
-**And the scroll is paid for the head's height, which is the part with the trap
-in it.** A sticky box still occupies its place in flow, so growing it pushes
-every row below down under the finger that is scrolling. Reserving the box — the
-app's usual answer — would cost the table a row of chrome at rest, on the one
-view where every pixel is a row. So a `ResizeObserver` on the head puts any
-height change onto `scrollTop` in the same frame.
+**The run rides a zero-height rail, and that is the whole of why the scroll is
+smooth.** It was a child of `.research-head`, which grew that box by 52px on the
+stick — and a sticky box keeps its place in flow, so every row below moved under
+the finger. That was answered by putting the difference onto `scrollTop` from a
+`ResizeObserver`, which held the rows still on a desktop and **stopped the
+scroll dead on a phone**: assigning `scrollTop` during a touch or momentum
+scroll cancels it on iOS. Reported from a phone as the board halting under the
+thumb at the exact moment the head stuck.
 
-Two things had to be measured rather than assumed:
+So `.research-condensed-rail` is `position: sticky; top: 0; height: 0`, and the
+box with the height in it is its child. Nothing in flow resizes, so the run can
+appear and vanish mid-fling without moving a row, and there is nothing left to
+compensate — the `ResizeObserver` and `overflow-anchor: none` are both gone with
+the writes they existed for.
+
+Sticky rather than `position: fixed` so it needs no arithmetic about where the
+pane begins: the expanded box and the ordinary pane are the same coordinate
+system to it. **And it is folded onto the pane's `left: 0` list, not given a
+`top` alone** — this pane scrolls sideways as well as down, and the first
+version pinned only the top, so the run rode off the left edge with the columns
+while the table moved under it. Measured after, stuck at 390 with the pane
+scrolled 300 and 900 to the right: the run's box stays at `left: 0` and 390
+wide, the same answer the head and the count give. The two boxes held under it take measured offsets —
+`.research-head` sticks at `var(--research-cond-h, 0px)` and the header row at
+`calc(var(--research-cond-h, 0px) + var(--research-head-h, 0px))` — and that
+token is `0px` whenever the rail is not drawn, so both are `top: 0` at rest by
+construction rather than by a second rule.
+
+**Measured at 390 and 1200, crossing in both directions:** `scrollTop` is never
+rewritten (set 162 → 162, set 154 → 154), the head is **37px in both states**,
+and the first row moves only the 8px the reader scrolled — 192 → 184 up, 184 →
+192 back, the same figures returning on the round trip. Stuck at 390 the rail's
+inner box is 52px at y=100, the head 37 at y=152 and the header row at 189: the
+seam between run and head measures **0.00px**. At rest `--research-cond-h` is
+`0px`, the head's `top` computes to `0px` and no rail is in the DOM.
+
+**Expanded, the run is drawn from the first frame** rather than on a scroll.
+That box covers the app's chrome, so the three-row bar there is not merely
+scrolled away, it is *unreachable* — the case the badges used to carry alone and
+carried badly, and the reason this reading needed the run more than the ordinary
+one did. Measured expanded at 390 with no scroll at all: inner 52 at y=11, head
+at 63, header row at 100.
+
+**A second source of chop went with it.** `useOverflowArrows` ran `measure()`
+and built a fresh `ResizeObserver` in one effect with no dependency list, so
+every render tore one down and made another — cheap once, and not cheap on a
+board that draws four of these rows and re-renders on its own scroll. The
+measuring keeps its bare effect (the *content* can change without the box doing
+so); the observer got a stable one of its own.
+
+Two things had to be measured rather than assumed while the compensation
+existed, and both are kept because they are the record of why it is gone:
 
 - **Chrome compensates already.** Scroll anchoring adjusts `scrollTop` when a box
   above the viewport resizes, so the explicit compensation landed on top of the
