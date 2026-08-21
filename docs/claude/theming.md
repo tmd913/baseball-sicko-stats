@@ -19,6 +19,40 @@ not want (below), and those are *shared* wherever the polarity allows it.
 first two were built right, and it has now been paid four times. **Maroon**: one
 `ThemeId` union member, one `THEMES` entry, two map keys in the boot script, one
 token block, three selector lines, and **not one component, rule or class name**.
+### The page is flat, and every box of chrome on it is the same value
+
+**There is no page wash any more, on any theme.** The base `body` rule painted a
+radial glow at the top right over `--bg`; Dark, Lavender and Maroon layered two
+more on it (an accent corner and a linear ombré from `--bg-2` down to `--bg`);
+`.app-chrome` and `.mup-chrome` sat on top of that as a *panel*, their own ombré
+from `--panel` to `--bg-2` under a second accent radial. Measured on Research at
+405 in Midnight, that read as five tones down one page: header `rgb(22,36,61)`,
+tab strip `rgb(17,26,47)`, the reading band `rgb(14,24,43)`, the page under it
+`rgb(13,21,38)`.
+
+**All of it is `--bg` now** — `body`, `.app-chrome`, `.mup-chrome`,
+`.view-tools` and the pinned `.date-bar`, one flat value, with `background-image:
+none` on every one of them. What separates the chrome from the page is its
+hairline, and its shadow where the page genuinely passes under it.
+
+**The reasoning that was overruled is worth keeping**, and it is left where it
+was written (`.app-chrome`'s own note: *a permanent part of the app should say so
+at rest*, which is why the bar was given a tone rather than the body's exact
+gradient). It lost to a plainer requirement — **one background color for the
+whole app** — arrived at after four rounds of two-tone seams on the reading band,
+each of which was a box painting a flat color against a ground that was a
+gradient. A gradient behind a flat box can only match it at one point; the
+cheapest way to stop producing that fault is to have no gradient.
+
+**`--page-glow` is gone with them**, from `:root` and from the three themes that
+overrode it — nothing reads it. `--brand-2` stays: that is the second stop of the
+brand *mark*, a 16px logo rather than a page. The light themes' own `body` rule
+went too, that one having existed only to stop the base rule painting a blue lift
+over white; with the base flat there is nothing to override. Bundle: CSS
+**160.59 → 159.36 KB** (28.85 → 28.51 gzipped), which a change that deletes six
+gradients should be.
+
+
 **Powder Blue** is the same plus **three rules of its own** — the two ombré
 gradients whose token order flips with the polarity, and the logo plate only a
 light theme needs — and one line in the picker's stylesheet, which is the only

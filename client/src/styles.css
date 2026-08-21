@@ -146,10 +146,15 @@
   /* The dimmer behind a dialog: a shade under `--bg` at two thirds, so the page
      behind reads as dimmed rather than as a second page. */
   --scrim: rgba(6, 11, 20, 0.66);
-  /* The lighter hue at the top right of the page's own radial gradient, and the
-     second stop of the brand mark's. Both were literals; both are what makes a
-     theme's page read as lit rather than flat, so both are the theme's to set. */
-  --page-glow: #16233f;
+  /* **`--page-glow` stood here and is gone with the wash it was the top of.**
+     The page is one flat `--bg` now — no radial lift at the top right, no
+     accent corner, no linear ombré, and no lighter panel behind the chrome:
+     every background in the app's own layer is the same value, which is what
+     was asked for after four rounds of two-tone seams. What that removes is a
+     whole class of them, since a gradient behind a box that paints a flat color
+     can only match it at one point.
+     `--brand-2` stays: it is the second stop of the brand *mark*, which is a
+     16px logo rather than a page. */
   --brand-2: #a855f7;
 
   /* pitch dot colors */
@@ -322,13 +327,6 @@
      against it too. The player page's 64px portrait is deliberately *not* this:
      it is a page header rather than a row, and is sized to the head it sits in. */
   --row-photo: 42px;
-  /* **The page's own ground, as one value.** `body` painted this inline and two
-     boxes of chrome now have to match it exactly — see `.view-tools`. A radial
-     glow at the top right over `--bg`, so the page is *not* a flat color where
-     the chrome sits: measured at 405 in Midnight, `rgb(16,26,47)` under the
-     band against `--bg`'s `rgb(11,18,32)`, which is why a chrome box painted
-     `var(--bg)` reads as a dark rectangle laid on it. */
-  --page-bg: radial-gradient(1200px 700px at 80% -10%, var(--page-glow) 0%, var(--bg) 55%);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   /* The two lifts that are not `--shadow`: a pinned bar sitting flat against
      the page (felt rather than seen), and a popover genuinely floating over it.
@@ -479,12 +477,11 @@ html {
 
 body {
   margin: 0;
-  background: var(--page-bg);
-  /* Anchor the gradient to the viewport, not the document, so it looks the same
-     on every view regardless of page height — a very tall page (the feed) would
-     otherwise push the percentage-positioned gradient up out of sight, leaving a
-     flat background, while a short one (summary) keeps it. */
-  background-attachment: fixed;
+  /* **Flat.** It was a radial glow over `--bg`, viewport-anchored so a tall page
+     could not push it out of sight, and three themes layered two more washes on
+     top of that. All of it is gone: the page is `--bg` and so is every box of
+     chrome that sits on it. */
+  background: var(--bg);
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -573,9 +570,18 @@ body {
   z-index: 41;
   margin: -14px calc(-1 * var(--app-gutter)) 14px;
   padding: 14px var(--app-gutter) 0;
-  background:
-    radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  /* **Flat `--bg`, and the two layers that stood here are gone**: a vertical
+     ombré from `--panel` down to `--bg-2`, and an accent radial at the top
+     right. The paragraphs above are the argument for them and are left as
+     written — *a permanent part of the app should say so at rest* — because the
+     reasoning is sound and was overruled by a plainer requirement: **one
+     background color for the whole app**. A panel two steps lighter than the
+     page is a tone boundary at the chrome's foot, and this surface has now
+     produced four of those in a row. What is left to say the bar is a bar is
+     its hairline, and its shadow where the page really does pass under it.
+     Measured before: the header read `rgb(22,36,61)` at its top against a page
+     of `rgb(13,21,38)` at 405 in Midnight — nine and twenty-three levels. */
+  background: var(--bg);
   /* The edge of the bar, twice over: a hairline for the eye and a shadow for
      the depth, the second being what says the page passes *under* this rather
      than stopping at it. Much softer than `--shadow` (the cards' 30px lift) —
@@ -3786,9 +3792,9 @@ body {
      it doesn't ride down the page with it. */
   margin: 0 -16px 16px;
   padding: 20px 16px 0;
-  background:
-    radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  /* Flat `--bg`, with `.app-chrome`: one background color for the whole app.
+     The ombré and the accent radial that stood here are gone with that one. */
+  background: var(--bg);
   box-shadow:
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
@@ -6039,24 +6045,13 @@ button.start-line:focus-visible {
      to be spaced apart: they are two rows of one band, and the band closes on
      the bar's own edge. The 14 above stays, that one being the gap to the
      chrome's hairline. */
-  /* **The page's own ground, viewport-anchored, so the box is invisible against
-     it.** It was flat `var(--bg)`, and `--bg` is not what the page is where this
-     band sits: `body` paints a radial glow at the top right over it, so on the
-     two views with no date bar under this row — Research and League, where 12px
-     of page shows between the band and the content — the band read as a dark
-     rectangle laid on a lighter page. Measured at 405 in Midnight: band
-     `rgb(11,18,32)` against a gap of `rgb(13,22,38)` at the left and
-     `rgb(16,26,47)` at the right, the glow being centered at 80% of the width.
-
-     `background-attachment: fixed` is what makes it line up: the gradient is
-     resolved against the viewport rather than this box, so it paints the same
-     pixel the body would have. `.app-chrome`'s own note records this technique
-     from the other side — its first version did exactly this and was
-     *invisible until something scrolled under it*, which is a fault for a bar
-     that should announce itself and is the whole point for a band that should
-     not. */
-  background: var(--page-bg);
-  background-attachment: fixed;
+  /* **Flat `--bg`, like the page and the chrome.** This has been four values in
+     four rounds — `--bg-2` (a dark-palette reading of a token the light schemes
+     make a powder blue), then `--bg` (which the page was not, carrying a glow),
+     then the page's own gradient viewport-anchored (which matched, and left the
+     chrome above still a lighter panel). It is flat now because *everything* is:
+     see `body`. A band cannot be a seam against a page that is the same value. */
+  background: var(--bg);
   padding-block: 14px 0;
   /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
      on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
@@ -6312,8 +6307,7 @@ button.start-line:focus-visible {
 .summary-scroll > .date-bar {
   /* The same ground as the row above it, and for its reason — see
      `.view-tools`. The two are one band and neither may be a rectangle. */
-  background: var(--page-bg);
-  background-attachment: fixed;
+  background: var(--bg);
   border-top: none;
   border-bottom: 1px solid var(--border);
 }
@@ -14338,9 +14332,9 @@ span.mup-move-name:hover {
      against 252 on the table one; matched, both are 262. */
   margin: 0 -16px 14px;
   padding: 20px 16px 12px;
-  background:
-    radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  /* Flat `--bg`, with `.app-chrome`: one background color for the whole app.
+     The ombré and the accent radial that stood here are gone with that one. */
+  background: var(--bg);
   box-shadow:
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
@@ -15562,7 +15556,6 @@ html[data-theme='lavender'] {
      radial. Both are `:root`'s in kind and this palette's in cast: a graphite
      scrim rather than a navy one, and a violet-gray glow rather than a blue. */
   --scrim: rgba(10, 8, 15, 0.66);
-  --page-glow: #2e2940;
   /* The second stop of the brand mark, which runs `--accent` → this. A rose,
      so the wordmark still travels rather than sitting in one violet. */
   --brand-2: #f472b6;
@@ -15681,7 +15674,6 @@ html[data-theme='maroon'] {
   /* The lift at the top right of the page's own radial: the maroon again, a step
      above the page, so the page reads as lit in its own color rather than in a
      borrowed one. */
-  --page-glow: #3a1f2c;
   /* The second stop of the brand mark, which runs `--accent` → this: the jersey
      read across, powder blue into maroon. A cranberry rather than #66283b
      itself, which at a page's own lightness would end the gradient in the dark
@@ -15824,7 +15816,6 @@ html[data-theme='dark'] {
      radial — `:root`'s in kind and this palette's in cast, which for a
      near-neutral theme means very nearly no cast at all. */
   --scrim: rgba(8, 9, 10, 0.66);
-  --page-glow: #24282b;
   /* The wordmark runs `--accent` → this. VS Code's own `charts.purple`, so the
      mark travels from the theme's steel blue into another of its colors rather
      than into one invented for it. */
@@ -16238,11 +16229,7 @@ html[data-theme='light'] {
    the wide tables' header row, still needs no version of its own: `--panel-2`
    is lighter than `--bg-2` in every theme, and on this one that header is what
    the white first row is read against. */
-html[data-theme='powder'] body,
-html[data-theme='light'] body {
-  background: var(--bg);
-  background-attachment: fixed;
-}
+
 html[data-theme='powder'] .pct-card,
 html[data-theme='light'] .pct-card,
 html[data-theme='powder'] .empty-state,
@@ -16290,18 +16277,15 @@ html[data-theme='light'] .lg-logo:not(.lg-logo-none) {
    thirty rules: what is written here is the *shape* of the wash, and each
    palette supplies its own colors to it. A fourth theme that wants the ombré
    joins these lists; one that does not, does not. */
-html[data-theme='lavender'] body,
-html[data-theme='maroon'] body,
-html[data-theme='dark'] body {
-  /* Lit from the top right, cooler toward the foot, with a wash of the theme's
-     own accent in the bottom-left corner — the same three layers the light
-     theme carried, with the linear one the other way up. */
-  background:
-    radial-gradient(1200px 700px at 80% -10%, var(--page-glow) 0%, transparent 60%),
-    radial-gradient(900px 600px at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 100%);
-  background-attachment: fixed;
-}
+/* **The three-layer page wash these themes carried is gone**, with the base
+   rule's own and with the chrome's panel gradient: the app has one background
+   color and it is `--bg`. The layers were a radial lift at the top right, a 9%
+   accent wash in the bottom-left corner and a linear from `--bg-2` down to
+   `--bg`, viewport-anchored — and every one of them is a tone that a box of
+   chrome painting a flat color has to disagree with somewhere. The light
+   themes' own `body` rule went with it too, that one having existed only to
+   stop the base rule painting a blue lift over white; with the base flat there
+   is nothing to override. */
 html[data-theme='lavender'] .pct-card,
 html[data-theme='maroon'] .pct-card,
 html[data-theme='dark'] .pct-card,
