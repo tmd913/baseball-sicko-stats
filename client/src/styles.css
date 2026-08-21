@@ -10141,7 +10141,12 @@ button.start-line:focus-visible {
 .research-condensed {
   margin-inline: 0;
 }
+/* `.schedule-toggle-label` among them, and it is the reason this list is by
+   name rather than by one shared class: Schedule is `ScheduleControl`'s button,
+   shared with the Roster view, and it carries that view's label class rather
+   than the board's. It was the one word left standing in a run of marks. */
 .research-condensed .research-toggle-label,
+.research-condensed .schedule-toggle-label,
 .research-condensed .research-inc-full {
   position: absolute;
   width: 1px;
@@ -10173,7 +10178,8 @@ button.start-line:focus-visible {
    so the condensed run reads as chrome rather than as buttons that happen to
    be small. */
 .research-condensed .research-inc,
-.research-condensed .research-toggle {
+.research-condensed .research-toggle,
+.research-condensed .schedule-toggle {
   width: var(--control-h);
   padding: 0;
   justify-content: center;

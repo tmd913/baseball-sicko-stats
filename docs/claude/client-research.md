@@ -59,7 +59,11 @@ scrolls rather than wrapping; no arrows, because these are labels and an arrow
 is a control.
 
 **When the head sticks, it carries the whole control set again, condensed.** One
-run instead of three, marks instead of words — the shape the bar used to take on
+run instead of three, marks instead of words — and the list of labels it hides
+is by *name* rather than by one shared class, because Schedule is
+`ScheduleControl`'s button, shared with the Roster view, and carries that view's
+`.schedule-toggle-label` rather than the board's. It was the one word left
+standing in a run of marks — the shape the bar used to take on
 a phone at rest, kept for the one case that argument was always right about. The
 elements are the same consts the bar renders (`rowWho`, `rowSlice`, `rowTools`),
 from the same props and calling the same callbacks, so the two copies cannot
