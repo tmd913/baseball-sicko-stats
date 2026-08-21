@@ -45,6 +45,7 @@ import {
   stateWord,
 } from './LeagueView';
 import { DateBar } from './DateControls';
+import { rankFill } from './columnRanks';
 
 /**
  * What the overall column is called in a header of two- and three-letter
@@ -118,23 +119,12 @@ function ordinal(n: number): string {
  * the badge's own denominator: a team with no figure is out of the ranking
  * rather than at the bottom of it, so it gets no badge either.
  */
-const BADGE_MAX = 48;
-
-function rankBadge(rank: number | undefined, n: number): React.CSSProperties | undefined {
-  if (typeof rank !== 'number' || !Number.isFinite(rank) || n < 2) return undefined;
-  // 0 at the best rank, 1 at the worst; `d` is the distance from the middle, so
-  // the scale passes through the neutral chip where a team is neither.
-  const t = Math.min(1, Math.max(0, (rank - 1) / (n - 1)));
-  const d = Math.abs(t - 0.5) * 2;
-  const pct = Math.round(d * BADGE_MAX * 10) / 10;
-  // The two ends are tokens on `.league-table` rather than hexes written here,
-  // so the scale is one definition and the strength is the only thing computed;
-  // `--panel-2` is the base they are mixed into, which is what makes the middle
-  // of a category a plain neutral chip rather than no chip at all.
-  return {
-    '--rank-bg': `color-mix(in srgb, var(${t < 0.5 ? '--rank-hot' : '--rank-cold'}) ${pct}%, var(--panel-2))`,
-  } as React.CSSProperties;
-}
+// The scale itself is `columnRanks.tsx::rankFill`, shared with the research
+// board's team reading — two tables ranking clubs 1-to-N under a value are one
+// object, and two copies of a diverging scale is how they come to disagree
+// about what 15th of 30 looks like. What stays here is the argument above for
+// why this table colors a rank at all.
+const rankBadge = rankFill;
 
 /**
  * What a span actually covers, in one line under the strip.

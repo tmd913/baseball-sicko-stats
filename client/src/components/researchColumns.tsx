@@ -578,6 +578,52 @@ const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   ]),
 };
 
+/**
+ * **The columns a *club* has not got**, dropped from the vocabulary on the
+ * board's team reading rather than drawn as thirty dashes — the rule `Ros%`
+ * already follows without a fantasy league ("a column you cannot fill is worse
+ * than one that isn't offered") and a trend window follows with no baseline.
+ *
+ * Each is here for one of three reasons, and none of them is taste:
+ *
+ * - **It is a fact about a player, and a club is not one.** `Ros%` and its five
+ *   trend windows are how many fantasy leagues have rostered *him*; `Opp` is
+ *   drawn from `/api/statuses`, which is keyed by player id and carries no club
+ *   entry — and today's opponent is a fact every one of that club's players
+ *   already carries on the player reading.
+ * - **The upstream cannot fill it for a club.** `xERA` is Savant's own model
+ *   and its team expected-statistics board publishes no `xera` column at all
+ *   (probed: fourteen columns, `est_ba`/`est_slg`/`est_woba` and their diffs,
+ *   and nothing else). `Sprint` is a separate measurement that appears in no
+ *   pitch row, which is why a *window* has none either.
+ * - **It would print the same thing twice.** A club's pitching W and L **are**
+ *   its record — every game has a decision, and the two columns came back
+ *   identical to the standings on all thirty clubs — and the record is already
+ *   under the name. `GS` is `G` on a club: 127 of 127 on every row measured,
+ *   since somebody starts every game.
+ *
+ * A key here is still kept in the reader's saved column list, exactly as `Ros%`
+ * is without a league, so crossing back to the player reading puts the column
+ * back where he had it.
+ */
+export const TEAM_HIDDEN: Record<PlayerKind, ReadonlySet<string>> = {
+  batter: new Set([
+    ROSTER_PCT_COLUMN.key,
+    ...TREND_WINDOWS.map(trendKey),
+    OPPONENT_KEY,
+    'sprintSpeed',
+  ]),
+  pitcher: new Set([
+    ROSTER_PCT_COLUMN.key,
+    ...TREND_WINDOWS.map(trendKey),
+    OPPONENT_KEY,
+    'xera',
+    'gamesStarted',
+    'wins',
+    'losses',
+  ]),
+};
+
 export const allColumns = (kind: PlayerKind): Column[] =>
   kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
 

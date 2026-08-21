@@ -1286,6 +1286,20 @@ export interface ResearchRow {
    *  still badged, placed on that scale with a dashed ring saying he is not one
    *  of them (`columnRanks.tsx`). */
   qualified: boolean;
+  /**
+   * **The club's won-lost record over the same span the row's numbers are** —
+   * only ever set on a **team** row, where it takes the place of the position
+   * list under the name (a club has no position and no hand). Absent on every
+   * player row, which is what `?` says: `getRecordFor` in `teamResearch.ts` is
+   * the only thing that fills it.
+   *
+   * Span-matched rather than season-long, and deliberately: every other number
+   * on a 7-day team row covers those seven days, and a season record sitting
+   * among them would be the one figure on the line answering a different
+   * question. Null where the record could not be read — a failure costs its own
+   * cell, not the row.
+   */
+  record?: { wins: number; losses: number } | null;
 
   // Batting half — null on a pitcher row.
   pa: number | null;

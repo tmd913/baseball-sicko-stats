@@ -544,6 +544,20 @@ export const api = {
     const w = window === 'season' ? '' : `&window=${window}`;
     return request(`/api/research?type=${kind}${w}`);
   },
+  /** The same board read as thirty clubs — one row per MLB team over the same
+   *  window, in the same row shape, so the board's own columns draw it. */
+  async teamResearch(
+    kind: PlayerKind,
+    window: ResearchWindow = 'season',
+  ): Promise<{
+    season: number;
+    kind: PlayerKind;
+    window: ResearchWindow;
+    rows: ResearchRow[];
+  }> {
+    const w = window === 'season' ? '' : `&window=${window}`;
+    return request(`/api/research/teams?type=${kind}${w}`);
+  },
   /**
    * Every player the league has something to say about today — his roster
    * status and where his club's game has him — keyed by MLB player id.

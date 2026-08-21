@@ -38,7 +38,7 @@ import {
   searchFold,
   statusCorner,
 } from '../lib';
-import { PlayerIdentity } from './PlayerIdentity';
+import { PlayerIdentity, TeamIdentity, TeamPhoto } from './PlayerIdentity';
 import {
   BATTER_COLUMNS,
   DEFAULT_SORT,
@@ -47,6 +47,7 @@ import {
   OPPONENT_KEY,
   opponentColumn,
   PITCHER_COLUMNS,
+  TEAM_HIDDEN,
   TREND_BY_KEY,
   trendKey,
 } from './researchColumns';
@@ -353,6 +354,34 @@ const POSITIONS: PositionOption[] = [
 const POSITION_BY_KEY = new Map(POSITIONS.map((p) => [p.key, p]));
 
 /**
+ * **The two the team reading keeps**, relabeled for a club.
+ *
+ * Nine of the eleven pills select a *position* and a club plays them all, so
+ * they go; what is left is the two that were never positions — they say which
+ * side of the ball the board is, which is exactly the question a team board
+ * still has to answer. They are the same two options (`batters` / `pitchers`)
+ * carrying the same `pos=` values, so the reading adds nothing to the URL and
+ * `researchKindFor` goes on deciding which board is fetched.
+ *
+ * Only the words change: "Batters" and "Pitchers" name people, and a row here
+ * is a club. `Hitting` and `Pitching` name what the numbers are about.
+ */
+const TEAM_SIDES: PositionOption[] = [
+  {
+    key: 'batters',
+    label: 'Hitting',
+    title: "How each club has hit — the whole roster's line",
+    kind: 'batter',
+  },
+  {
+    key: 'pitchers',
+    label: 'Pitching',
+    title: "How each club has pitched — the whole staff's line",
+    kind: 'pitcher',
+  },
+];
+
+/**
  * The same eleven, in the same order, cut into the three runs they already read
  * as. Only the phone's dropdown uses them: a row of pills shows the whole set
  * at once and needs no headings, where a closed select shows one.
@@ -547,6 +576,19 @@ const OP_LABEL: Record<Op, string> = { gte: '≥', lte: '≤' };
 interface Props {
   rows: ResearchRow[];
   kind: PlayerKind;
+  /**
+   * **The board read as thirty clubs rather than six hundred players.**
+   *
+   * A *reading* of the same board, not a second table: `rows` is the same
+   * `ResearchRow[]` shape and every column, sort, filter, badge and page below
+   * works untouched. What changes is the population, and with it the controls
+   * that are only about people — the ownership buttons, the watchlist, the
+   * position pills and the four per-row marks. Lifted to App with the rest of
+   * the cross-board controls and carried in the URL as `board=teams`, for the
+   * reason the window is: it decides what the table is a table *of*.
+   */
+  teams: boolean;
+  onTeamsChange: (on: boolean) => void;
   loading: boolean;
   error: string | null;
   /** The selected position pill. Lifted to App because changing it can change
@@ -748,8 +790,24 @@ const freshBoard = (): BoardState => ({
  * every rule about what is in it — the per-kind slots, the sort's fallback, the
  * draft's fallback — is still written in this file.
  */
+/**
+ * **Which of the four slots a board's search, sort and filters live in** — the
+ * two kinds times the two readings.
+ *
+ * The team reading gets its own for the reason the two kinds have theirs: "a
+ * batter's `PA ≥ 300` is not a condition the pitching board can even express",
+ * and it is not one thirty clubs can express either — every one of them has
+ * 4,800 of them. A sort is the same story: `Ros%` is the board's default sort
+ * with a league connected and is not a column a club has. So crossing to the
+ * clubs and back restores the player board exactly as it was, which is the
+ * whole point of this record existing.
+ */
+export type BoardStateKey = PlayerKind | `team-${PlayerKind}`;
+export const boardStateFor = (kind: PlayerKind, teams: boolean): BoardStateKey =>
+  teams ? (`team-${kind}` as const) : kind;
+
 export interface ResearchUi {
-  boards: Record<PlayerKind, BoardState>;
+  boards: Record<BoardStateKey, BoardState>;
   /** Which disclosures are open (Columns being a dialog rather than a panel,
    *  but held here with the other two: it is the same kind of state). An open
    *  panel is part of where you were:
@@ -782,7 +840,12 @@ export interface ResearchUi {
 
 /** The board as it opens — what App seeds its `useState` with. */
 export const freshResearchUi = (): ResearchUi => ({
-  boards: { batter: freshBoard(), pitcher: freshBoard() },
+  boards: {
+    batter: freshBoard(),
+    pitcher: freshBoard(),
+    'team-batter': freshBoard(),
+    'team-pitcher': freshBoard(),
+  },
   panels: { search: false, filters: false, columns: false },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
@@ -885,6 +948,8 @@ function WatchStar({
 export function ResearchTable({
   rows,
   kind,
+  teams,
+  onTeamsChange,
   loading,
   error,
   pos,
@@ -936,6 +1001,11 @@ export function ResearchTable({
   const allColumns = useMemo(() => {
     const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
     return base
+      // **A column a club has not got is not offered**, exactly as `Ros%` is
+      // not offered without a league — see `TEAM_HIDDEN`, which carries the
+      // reason for each one. It is first in the chain so nothing below it has
+      // to know about the reading.
+      .filter((c) => !(teams && TEAM_HIDDEN[kind].has(c.key)))
       .filter((c) => (c.key === 'rosterPct' ? hasRosterPct : true))
       // The one column whose cells read something other than the row. Injected
       // here for the reason a trend column's label is: the array above is the
@@ -955,7 +1025,7 @@ export function ResearchTable({
               title: `Change in roster % over the last ${days} day${days === 1 ? '' : 's'}`,
             };
       });
-  }, [kind, hasRosterPct, measured, statuses]);
+  }, [kind, teams, hasRosterPct, measured, statuses]);
   const columnsByKey = useMemo(
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],
@@ -991,7 +1061,7 @@ export function ResearchTable({
    * the column is merely unticked.
    */
   const columns = useMemo(() => {
-    if (schedule) return scheduleColumns(schedule, kind);
+    if (schedule) return scheduleColumns(schedule, kind, teams);
     const byKey = new Map(allColumns.map((c) => [c.key, c]));
     // `filter(Boolean)` rather than a fallback: a key with no column on this
     // board is one the board doesn't have — Ros% without a league, a trend
@@ -999,7 +1069,7 @@ export function ResearchTable({
     // already do. A saved list keeps the key, so connecting a league puts the
     // column back where the reader had it.
     return orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
-  }, [allColumns, orderedKeys, schedule, kind]);
+  }, [allColumns, orderedKeys, schedule, kind, teams]);
   /**
    * Which keys the sort's fallback will accept. Out of schedule mode that is
    * the columns on screen: hiding the one you were sorting on has to fall the
@@ -1057,14 +1127,25 @@ export function ResearchTable({
    * it. Every rule about the record is still written here; App only keeps it.
    */
   const boards = ui.boards;
-  const board = boards[kind];
+  /** **The team reading keeps its own**, on the very argument this file already
+   *  makes for the two kinds keeping theirs: "a batter's `PA ≥ 300` is not a
+   *  condition the pitching board can even express". A club's is not either —
+   *  every one of the thirty has 4,800 of them — and a sort on `Ros%` names a
+   *  column the reading has not got. So four slots rather than two, and
+   *  crossing to the clubs and back leaves the four filters you built on the
+   *  batters exactly where they were. */
+  const boardStateKey = boardStateFor(kind, teams);
+  const board = boards[boardStateKey];
   /** Change the board on screen, leaving the other one alone. */
   const patchBoard = (next: Partial<BoardState> | ((b: BoardState) => Partial<BoardState>)) =>
     onUiChange((u) => ({
       ...u,
       boards: {
         ...u.boards,
-        [kind]: { ...u.boards[kind], ...(typeof next === 'function' ? next(u.boards[kind]) : next) },
+        [boardStateKey]: {
+          ...u.boards[boardStateKey],
+          ...(typeof next === 'function' ? next(u.boards[boardStateKey]) : next),
+        },
       },
     }));
 
@@ -1143,8 +1224,22 @@ export function ResearchTable({
    *  leaderboard, before any pill or button. It is what `boardRows` narrows,
    *  and it is what the percentile badges are ranked within; see
    *  `boardPopulation` and `columnRanks.tsx`. */
-  const population = useMemo(() => boardPopulation(rows, kind), [rows, kind]);
+  /** …and on the team reading, the thirty clubs as they arrive. `boardPopulation`
+   *  cuts a leaderboard to its own trade by reading `positionType`, which a club
+   *  has not got — the pitching board would come back empty. The server already
+   *  answers with exactly the thirty rows the kind asks for, so there is nothing
+   *  left to cut. */
+  const population = useMemo(
+    () => (teams ? rows : boardPopulation(rows, kind)),
+    [rows, kind, teams],
+  );
   const boardRows = useMemo(() => {
+    // **Nothing partitions thirty clubs.** The three include buttons are a
+    // partition of *ownership* and the watchlist is a list of players; neither
+    // has anything to say about the Brewers, and both are off screen on this
+    // reading (see `controls`). Every club is on the board, which is why the
+    // count line reads `30 of 30` until a filter or the search narrows it.
+    if (teams) return population;
     const byTrade = population;
     return byTrade.filter((r) => {
       const key = `${r.kind}-${r.id}`;
@@ -1154,7 +1249,7 @@ export function ResearchTable({
       if (!ownedIds) return false;
       return ownedIds.has(r.id) ? include.others : include.fa;
     });
-  }, [population, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+  }, [teams, population, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
 
   /**
    * One yardstick per rankable column, over that population.
@@ -1176,6 +1271,12 @@ export function ResearchTable({
   /** What a badge says it is ranked against — the board and the span, in
    *  words, since a 7-day percentile and a season one are different claims. */
   const rankPopulationLabel = `the ${windowLabel(statWindow)} board`;
+  /** What the population is called on this reading — thirty clubs, not six
+   *  hundred batters. See `columnRanks.tsx` for why the same module answers
+   *  both: it is handed a population and asked for a scale, and a club row's
+   *  `qualified` is false throughout, which is what routes it down the path
+   *  that ranks against the field and draws no ring. */
+  const rankNoun = teams ? 'clubs' : undefined;
   /** How many of the board clear Savant's bar for this span — the scale's own
    *  size, named wherever the population is. Counted through `rankPopulation`
    *  so it cannot come to disagree with the set the scale is built from. */
@@ -1246,14 +1347,27 @@ export function ResearchTable({
   // came back sorted by G, which is a change nobody asked the toggle for. The
   // mode swaps the *columns* and nothing else, so the default here is the
   // board's whichever reading is on screen.
+  //
+  // **`columnsByKey` and not `hasRosterPct`**, and the difference is the team
+  // reading. That flag says a league is connected; this asks whether the column
+  // is in *this reading's vocabulary at all*, which it is not for a club — and
+  // `visibleKeys` cannot answer it, being the reader's saved list, which keeps
+  // the key exactly as it keeps it with no league. Left on the flag, a
+  // connected reader's team board opened sorted by a column no row has, which
+  // is an order that is neither the default nor anything he can see: measured,
+  // the thirty came out in the server's own order with no header lit.
   const defaultSortKey =
-    hasRosterPct && visibleKeys.has('rosterPct') ? 'rosterPct' : DEFAULT_SORT[kind];
+    columnsByKey.has('rosterPct') && visibleKeys.has('rosterPct')
+      ? 'rosterPct'
+      : DEFAULT_SORT[kind];
   const activeSortKey =
     sortKey && visibleKeys.has(sortKey) ? sortKey : defaultSortKey;
 
   // Memoised on the pill alone: a fresh closure every render would break the
   // `visible` memo below, which lists this among its dependencies.
-  const posMatch = useMemo(() => positionMatcher(pos), [pos]);
+  // …and nothing at all on the team reading, where the pills are a
+  // Hitting/Pitching switch and select no subset of the thirty.
+  const posMatch = useMemo(() => (teams ? undefined : positionMatcher(pos)), [pos, teams]);
   /** The codes the active pill selects on, so the Pos cell can lead with them —
    *  see `posCellText`. Undefined on the two whole-board pills alone. */
   const posCodes = POSITION_BY_KEY.get(pos)?.codes;
@@ -1385,6 +1499,9 @@ export function ResearchTable({
    */
   const boardSignature = [
     kind,
+    // The reading is the largest thing about the population there is — thirty
+    // rows where six hundred were — so it belongs here beside the board itself.
+    teams ? 'teams' : 'players',
     pos,
     statWindow,
     includeKeys(include).join('+'),
@@ -1626,6 +1743,34 @@ export function ResearchTable({
   function emptyBoard() {
     const noun = kind === 'pitcher' ? 'pitchers' : 'batters';
     const faLabel = includeMeta('fa', espnConnected).full;
+    /* **The team reading governs before any of the six below it**, which is the
+       rule this family already follows: the causes are tested in the order they
+       govern, and none of the six can even be reached here — the buttons that
+       define every one of them are off the bar and `boardRows` is the whole
+       population. So an empty board on this reading has exactly one cause, and
+       it is not a control the reader touched: the thirty rows did not arrive.
+       It names that rather than blaming a filter, and points at the one control
+       that can get a table back. */
+    if (teams) {
+      return (
+        <div className="empty-state">
+          <p className="empty-title">No clubs to show</p>
+          <p>
+            The team board came back empty, which is a read that failed rather
+            than a filter you set — nothing here narrows the thirty. Try another
+            span, or go back to{' '}
+            <button
+              type="button"
+              className="empty-inline-link"
+              onClick={() => onTeamsChange(false)}
+            >
+              Players
+            </button>
+            .
+          </p>
+        </div>
+      );
+    }
     if (nothingIncluded) {
       return (
         <div className="empty-state">
@@ -1762,31 +1907,49 @@ export function ResearchTable({
      button that expanded the table. */
   const badges = (
     <>
-      <span className="research-badge">{POSITION_BY_KEY.get(pos)?.label ?? pos}</span>
+      {/* **Which reading, first**, and it is here for the reason every other
+          badge in this row is: expanded, the switch that set it is behind the
+          box, and "of 30" would otherwise be the only thing on screen saying
+          these are clubs. */}
+      {teams && <span className="research-badge">Teams</span>}
+      <span className="research-badge">
+        {(teams ? TEAM_SIDES.find((p) => p.kind === kind) : POSITION_BY_KEY.get(pos))?.label ?? pos}
+      </span>
       {/* One badge per set the board is including — the watchlist among
           them, since it is one of the sets the board is a union of rather
           than a filter over them — or one saying it is including none,
           which is a state the buttons can reach and a blank row would leave
-          unexplained. */}
-      {nothingIncluded ? (
-        <span className="research-badge">Nobody included</span>
-      ) : (
-        includeKeys(include).map((k) => (
-          <span key={k} className="research-badge">
-            {includeMeta(k, espnConnected).full}
-          </span>
-        ))
-      )}
-      {includeWatchlist && <span className="research-badge">Watchlist</span>}
+          unexplained. None of it on the team reading, where the buttons are
+          not drawn and every club is on the board: a badge saying so would be
+          a badge on every possible table, which says nothing. */}
+      {!teams &&
+        (nothingIncluded ? (
+          <span className="research-badge">Nobody included</span>
+        ) : (
+          includeKeys(include).map((k) => (
+            <span key={k} className="research-badge">
+              {includeMeta(k, espnConnected).full}
+            </span>
+          ))
+        ))}
+      {!teams && includeWatchlist && <span className="research-badge">Watchlist</span>}
       {/* The badges under the values are a setting like any other, and one
           the reader most needs named here: expanded there is no toggle on
-          screen to explain a second number in every cell. */}
+          screen to explain a second number in every cell. Two sentences,
+          because a standing among thirty and a percentile against a bar are
+          two different claims — see `RankBadge`. */}
       {showRanks && !schedule && (
         <span
           className="research-badge"
-          title={`Every value carries its percentile against the qualified players on the ${windowLabel(
-            statWindow,
-          )} board — 100 is best. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`}
+          title={
+            teams
+              ? `Every value carries this club's rank among the 30 on the ${windowLabel(
+                  statWindow,
+                )} board — 1st is best, whichever end of the column that is.`
+              : `Every value carries its percentile against the qualified players on the ${windowLabel(
+                  statWindow,
+                )} board — 100 is best. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`
+          }
         >
           Ranks
         </span>
@@ -1877,6 +2040,16 @@ export function ResearchTable({
               take the disclosure buttons' shape for exactly that reason — `.on`
               already means "this control is doing something" everywhere else in
               the bar. */}
+          {/* **Nothing here can say anything about a club.** The three sets are
+              a partition of *ownership* — of players — and the watchlist beside
+              them is a list of players; on the team reading every row is in and
+              no button could take one out, which is the rule that suppresses a
+              mark every row would carry, applied to a control instead. It is
+              not disabled, it is not drawn: a control whose whole subject has
+              been swapped out is a setting lying about its own reach, which is
+              the same argument that takes Columns and Ranks off the bar in
+              schedule mode. */}
+          {!teams && (
           <div className="research-include" role="group" aria-label="Which players">
             {RESEARCH_INCLUDE_KEYS.filter(
               // Other rosters needs a league to name a set at all. A link that
@@ -1919,6 +2092,7 @@ export function ResearchTable({
               );
             })}
           </div>
+          )}
           {/* Out in the bar rather than inside the Filters panel: it decides which
               games every number on the board is drawn from, which is too large a
               thing to keep behind a disclosure — and being always visible, it needs
@@ -1957,16 +2131,33 @@ export function ResearchTable({
               </option>
             ))}
           </select>
-          <div className="research-positions" role="tablist" aria-label="Position" ref={posRowRef}>
-            {POSITIONS.map((p) => (
+          {/* **Eleven pills on the player reading, two on the team one**, and
+              the run is the same run: a club has no position to be eligible at,
+              so what is left of the row is the half of it that was never about
+              a position at all — the two whole-board pills, which already say
+              which side of the ball the board is. They keep their own `pos=`
+              values (`batters` / `pitchers`), so the reading writes nothing new
+              into the URL and a reader who was on `SS` and crosses to the clubs
+              and back is still on `SS`: `TEAM_SIDES` presses a pill only where
+              it would genuinely change the board. */}
+          <div className="research-positions" role="tablist" aria-label={teams ? 'Side' : 'Position'} ref={posRowRef}>
+            {(teams ? TEAM_SIDES : POSITIONS).map((p) => (
               <button
                 key={p.key}
                 type="button"
                 role="tab"
-                aria-selected={pos === p.key}
-                className={`research-pos-tab${pos === p.key ? ' active' : ''}`}
+                aria-selected={teams ? researchKindFor(pos) === p.kind : pos === p.key}
+                className={`research-pos-tab${
+                  (teams ? researchKindFor(pos) === p.kind : pos === p.key) ? ' active' : ''
+                }`}
                 title={(hasEligibility && p.espnTitle) || p.title}
-                onClick={() => onPosChange(p.key)}
+                /* On the team reading the press is a no-op where the kind is
+                   already right — pressing `Hitting` on a board reached from
+                   the `SS` pill must not spend that pill. */
+                onClick={() => {
+                  if (teams && researchKindFor(pos) === p.kind) return;
+                  onPosChange(p.key);
+                }}
               >
                 {p.label}
               </button>
@@ -1980,19 +2171,27 @@ export function ResearchTable({
               way an option does. */}
           <select
             className="research-pos-select"
-            value={pos}
+            value={teams ? (researchKindFor(pos) === 'pitcher' ? 'pitchers' : 'batters') : pos}
             onChange={(e) => onPosChange(e.target.value as ResearchPos)}
-            aria-label="Position"
+            aria-label={teams ? 'Side' : 'Position'}
           >
-            {POSITION_GROUPS.map((g) => (
-              <optgroup key={g.label} label={g.label}>
-                {g.positions.map((p) => (
+            {/* Two options and no headings on the team reading — an optgroup
+                over a run of one reads as a heading with nothing under it. */}
+            {teams
+              ? TEAM_SIDES.map((p) => (
                   <option key={p.key} value={p.key}>
                     {p.label}
                   </option>
+                ))
+              : POSITION_GROUPS.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.positions.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-              </optgroup>
-            ))}
           </select>
 
             {/* One group, so the four buttons never split across two lines of the
@@ -2008,6 +2207,53 @@ export function ResearchTable({
                 belong together — they name which slice of the league the table
                 is, where the buttons open panels. */}
             <div className="research-tools">
+            {/**
+             * **Teams leads the run, and it is a toggle rather than a
+             * segmented switch.**
+             *
+             * The first shape was a `Players · Teams` tablist at the head of
+             * the bar, beside the window tabs whose class list it borrowed, and
+             * it was measured out: two one-word tabs are **145.5px**, and the
+             * control set at 1920 fits on one row with nothing to spare — so it
+             * took the player board from **50px of chrome to 96 at 1920, 96 to
+             * 142 at 1200 and 98 to 146 at 480**, a whole extra row on the one
+             * page where every pixel of height is a row of the table, and on
+             * the reading that had not asked for the control. That is the
+             * measurement that kept the Watchlist button out of
+             * `.research-include`, arriving on a wider screen.
+             *
+             * As a member of `.research-tools` it costs the bar far less: the
+             * run is one flex item that wraps whole, so a button added to it
+             * grows a group that was already moving as a unit rather than
+             * adding a sixth thing for the row to place.
+             *
+             * **And the shape is honest.** `ScheduleToggle` two buttons along
+             * is the precedent and the same kind of thing: a mode you turn on
+             * that changes what the table is, with the board's own reading as
+             * the off state. Players is what this page *is* — every other view
+             * in the app is about players — and Teams is the lens. It is the
+             * run's third panel-less toggle, so it takes `.on` and never
+             * `.active`, exactly as Watchlist and Ranks do.
+             */}
+            <button
+              type="button"
+              className={`research-toggle${teams ? ' on' : ''}`}
+              aria-pressed={teams}
+              onClick={() => onTeamsChange(!teams)}
+              title={
+                teams
+                  ? 'Back to the players'
+                  : "Read the board as thirty clubs instead — each row a club's aggregate over the span on screen"
+              }
+            >
+              {/* A crest: the one shape in this run that says *club* rather
+                  than person, list or column. Distinct at 15px from the star,
+                  the calendar, the funnel and the bars beside it. */}
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3.2 20 6v6.2c0 4.2-3.2 7-8 8.6-4.8-1.6-8-4.4-8-8.6V6Z" />
+              </svg>
+              <span className="research-toggle-label">Teams</span>
+            </button>
             {/* Search and Filters lead the run — the two disclosures you come to
                 the board with a question in. Each carries an `on` state whenever
                 its panel holds something, open or shut: a collapsed control must
@@ -2076,6 +2322,11 @@ export function ResearchTable({
              * Filters button does — a control that holds something has to say so
              * with its panel shut, and this one has no panel at all.
              */}
+            {/* Off the bar on the team reading with the three include buttons
+                it composes with, and for the same reason: the watchlist is a
+                list of players, and unioning players onto a board of clubs is
+                not an operation. */}
+            {!teams && (
             <button
               type="button"
               className={`research-toggle${includeWatchlist ? ' on' : ''}`}
@@ -2091,6 +2342,7 @@ export function ResearchTable({
                 <span className="research-toggle-count">{watchlistCount}</span>
               )}
             </button>
+            )}
             {/**
              * **Schedule reads after the four that narrow the board and before
              * the two that dress it**, which is where it belongs in the run's
@@ -2141,13 +2393,26 @@ export function ResearchTable({
                 <RanksButton
                   on={showRanks}
                   onToggle={() => onShowRanksChange(!showRanks)}
-                  population={`the qualified players on the whole ${windowLabel(
-                    statWindow,
-                  )} board (${qualifiedCount} of ${population.length} ${
-                    kind === 'pitcher' ? 'pitchers' : 'batters'
-                  }, Savant's bar of ${
-                    QUALIFIER_WORDS[kind]
-                  }), whatever you have narrowed it to`}
+                  /* Two different sentences, because they are two different
+                     claims — and the wording is where a reader finds out which
+                     one is under his numbers. A club's badge is a standing among
+                     thirty, with no bar and so nothing to be short of; a
+                     player's is a percentile against a subset the bar defines,
+                     which is why only that one names the bar. */
+                  asRank={teams}
+                  population={
+                    teams
+                      ? `the ${population.length} clubs on the ${windowLabel(
+                          statWindow,
+                        )} board, whatever you have narrowed it to`
+                      : `the qualified players on the whole ${windowLabel(
+                          statWindow,
+                        )} board (${qualifiedCount} of ${population.length} ${
+                          kind === 'pitcher' ? 'pitchers' : 'batters'
+                        }, Savant's bar of ${
+                          QUALIFIER_WORDS[kind]
+                        }), whatever you have narrowed it to`
+                  }
                 />
               </>
             )}
@@ -2355,10 +2620,12 @@ export function ResearchTable({
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
               {loading ? (
-                <LoadingLine>Reading the league leaderboard</LoadingLine>
+                <LoadingLine>
+                  {teams ? 'Reading the team leaderboard' : 'Reading the league leaderboard'}
+                </LoadingLine>
               ) : (
                 `${visible.length} of ${boardRows.length} ${
-                  kind === 'pitcher' ? 'pitchers' : 'batters'
+                  teams ? 'clubs' : kind === 'pitcher' ? 'pitchers' : 'batters'
                 }`
               )}
             </div>
@@ -2368,7 +2635,7 @@ export function ResearchTable({
 
         {!loading && !error && visible.length === 0 && boardRows.length > 0 && (
           <div className="empty-state">
-            <p className="empty-title">No players match these filters</p>
+            <p className="empty-title">No {teams ? 'clubs' : 'players'} match these filters</p>
             <p>Loosen a threshold or clear a filter above.</p>
           </div>
         )}
@@ -2378,17 +2645,17 @@ export function ResearchTable({
         {!loading && !error && boardRows.length === 0 && emptyBoard()}
 
         {visible.length > 0 && (
-          <table className="summary-table research-table">
+          <table className={`summary-table research-table${teams ? ' is-teams' : ''}`}>
             <thead>
               <tr>
                 <th className="sum-img-col" scope="col">
-                  <span className="sr-only">Headshot</span>
+                  <span className="sr-only">{teams ? 'Cap logo' : 'Headshot'}</span>
                   <ExpandButton isFull={isFull} onToggle={toggle} what="board" />
                 </th>
                 {/* Club and position used to be two columns of their own here
                     and are now the second line of this one — see the cell. */}
                 <th className="sum-name-col" scope="col">
-                  Player
+                  {teams ? 'Team' : 'Player'}
                 </th>
                 {columns.map((c) => {
                   const active = activeSortKey === c.key;
@@ -2427,11 +2694,24 @@ export function ResearchTable({
             <tbody>
               {drawn.map((r) => {
                 const key = `${r.kind}-${r.id}`;
-                const posCell = posCellText(r, posCodes);
+                const posCell = teams
+                  ? { text: '', title: '' }
+                  : posCellText(r, posCodes);
                 return (
                   <tr key={key}>
                     <td className="sum-img-col">
-                      <ResearchPhoto row={r} playerKey={key} onOpen={onOpenDetails} />
+                      {/* **The cap logo where the headshot is** — a club has no
+                          face, and the mark MLB serves by team id is the one
+                          picture of a club this app already draws. None of the
+                          headshot's marks come with it: the lineup pip is a
+                          batting order and the status code is an injury
+                          designation, and neither is a fact about thirty men
+                          at once. */}
+                      {teams ? (
+                        <TeamPhoto teamId={r.teamId} team={r.team} />
+                      ) : (
+                        <ResearchPhoto row={r} playerKey={key} onOpen={onOpenDetails} />
+                      )}
                     </td>
                     <td className="sum-name-col">
                       {/* **Club and position, under the name.** They were two
@@ -2453,6 +2733,24 @@ export function ResearchTable({
                           line: the board trails a name with the roster baseball
                           and the watchlist star, where the summary table leads
                           it with a fantasy slot chip. */}
+                      {/* **The team reading swaps the block and drops every
+                          mark on the line.** `TeamIdentity` is the same two
+                          rows in the same classes with the club's record where
+                          the position list was — see there. The name is plain
+                          text rather than a link, there being no club page
+                          behind it; and none of the four marks is drawn,
+                          because each of them is a fact about a *person*. The
+                          baseball and the padlock say who owns him, which no
+                          fantasy league can say of the Brewers; the newspaper
+                          reads a per-player news map with no club entry; and
+                          the star adds a `${kind}-${id}` key to a watchlist of
+                          players. Each would be a mark on no row or on every
+                          row, and the rule for both is the same. */}
+                      {teams ? (
+                        <TeamIdentity record={r.record ?? null}>
+                          <span className="sum-name-link is-static">{r.name}</span>
+                        </TeamIdentity>
+                      ) : (
                       <PlayerIdentity
                         teamId={r.teamId}
                         team={r.team}
@@ -2515,6 +2813,7 @@ export function ResearchTable({
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
                       </PlayerIdentity>
+                      )}
                     </td>
                     {columns.map((c) => (
                       <td
@@ -2534,6 +2833,8 @@ export function ResearchTable({
                             scale={ranks.get(c.key)}
                             value={c.value(r)}
                             kind={kind}
+                            asRank={teams}
+                            noun={rankNoun}
                             population={rankPopulationLabel}
                             qualified={r.qualified}
                           />

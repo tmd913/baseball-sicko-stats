@@ -425,6 +425,130 @@ nightly: `/api/report` reads this for every opponent a watched pitcher has, so a
 reader must never be the one paying for it.
 
 
+### Team research: thirty clubs on the research board, and what reconciles
+
+`teamResearch.ts`. The board's **team reading** (see **Client — research**) is
+thirty `ResearchRow`s, one per club, over the same five windows the player board
+offers. Two halves, joined on nothing at all — each club is filled from both —
+and each is fetched in its own `try` on the standing rule.
+
+**The MLB half is a leaderboard of teams**, one path segment along from the one
+`research.ts` reads:
+`teams/stats?stats=season|byDateRange&group=hitting|pitching&season=…&sportId=1`.
+**Probed before anything was built on it**, and it answers in all four
+combinations — 30 splits each, carrying every field `buildBase` reads off the
+player leaderboard (`plateAppearances`, `battersFaced`, `strikeoutsPer9Inn`,
+`outs`, `earnedRuns`, `numberOfPitches` and the rest), so FIP comes out of
+`fipLike` here on exactly the inputs it does there.
+
+**This is not the endpoint the section above records as useless.** That one
+wanted a windowed *split* — home only, versus left-handers — and it is
+`sitCodes` that `byDateRange` ignores. An unsplit team line over a range comes
+back correctly, and was checked against the same range's schedule.
+
+**The Statcast half is summed a day at a time**, off two new axes in
+`statcastWindow.ts`'s day blob: `batterTeam` and `pitcherTeam`, the same pitch
+rows bucketed under the export's own `home_team`/`away_team` abbreviation
+instead of under a player id (`inning_topbot === 'Top'` is the away side
+batting, the same test `teamHitting.ts` makes off the same three columns). They
+are tallied in the **same pass** as the two player axes, because the day CSV is
+3.3MB and the expensive part is reading it; `teamStatcast` then sums them with
+the same `addCounts` and finishes with the same `toStatcast`, so a club's barrel
+rate is barrels over batted balls computed by the routine that computes a
+player's.
+
+**Why summed and not read, when Savant does publish two team boards.** Probed:
+`expected_statistics?type={batter,pitcher}-team` returns 30 rows keyed on the
+abbreviation, and `leaderboard/statcast?type={batter,pitcher}-team` returns 30
+more. But **`custom?type=batter-team` returns the 637-row *player* board** (its
+`ddlType` select offers Batters and Pitchers and nothing else), and
+**`batted-ball?type=batter-team` returns 633 rows with the `id` and `name`
+columns blank** — so Whiff%, Chase%, F-Str%, the GB/LD/FB mix, PulAir% and Bat
+are reachable for a club from no leaderboard at all. And none of the team boards
+takes a date range. Summing the days answers every column on every span with one
+rule; a leaderboard season beside a summed window would have been a board whose
+columns emptied when the reader pressed a tab.
+
+**So the two Savant team boards became the answer key instead.** Our summed
+season against theirs, all 30 clubs, both kinds, median absolute error:
+
+| column | vs Savant | batters | pitchers |
+| --- | --- | --- | --- |
+| xwOBA | `expected_statistics` `est_woba` | **0.000** (max 0.001) | **0.000** (max 0.001) |
+| EV | `statcast` `avg_hit_speed` | **0.0** (max 0.1) | **0.0** (max 0.1) |
+| LA | `statcast` `avg_hit_angle` | **0.0** (max 0.1) | **0.0** (max 0.1) |
+| Barrel% | `statcast` `brl_percent` | **0.0** (max 0.0) | **0.0** (max 0.0) |
+| HardHit% | `statcast` `ev95percent` | **0.0** (max 0.2) | **0.0** (max 0.2) |
+| SwSp% | `statcast` `anglesweetspotpercent` | +1.5 (1.0 – 1.7) | +1.5 (1.0 – 1.9) |
+| xBA | `expected_statistics` `est_ba` | −0.026 (max 0.030) | −0.025 (max 0.032) |
+| xSLG | `expected_statistics` `est_slg` | −0.042 (max 0.049) | −0.042 (max 0.053) |
+
+**The three that miss are `statcastWindow.ts`'s own definitions and not this
+file's**, which was checked rather than assumed — the same comparison run
+against the *player* season-length window (313 batters with 200+ PA, against
+Savant's `custom` board) gives **SwSp% +1.20 signed median (0.00 – 4.30)** and
+**0.00 on barrel rate, hard-hit rate and exit velocity**. So the team board is
+exactly as accurate as the player windows beside it, which is the property that
+matters to a reader comparing the two; xBA and xSLG are `xbaSum`/`xslgSum` over
+the **wOBA denominator** where Savant's are over at-bats, and moving either
+would move every window on the player board and wants its own change and its
+own bump.
+
+**And the MLB half reconciles against the player board — league-wide, exactly.**
+Summing the 30 team rows against summing all ~640 player rows for the same
+season: **11 of 11 batting fields identical** (145,164 PA, 128,944 AB, 31,410 H,
+5,955 2B, 516 3B, 4,411 HR, 17,186 R, 16,435 RBI, 12,951 BB, 32,108 K, 2,596 SB)
+and **7 of 8 pitching fields identical** (the same 31,410 hits and 4,411 home
+runs read from the other side, 145,164 BF, 102,095 outs, 12,951 BB, 32,108 K);
+earned runs differ by **29 of 15,750 (0.18%)**, MLB's team ER and the sum of its
+pitchers' not being the same quantity when a run is charged to a club and to no
+individual.
+
+**Per *club* they deliberately do not match, and that is the finding that
+settles the design.** The player leaderboard returns a traded player **once,
+under his current club, aggregated across his stints** — which `research.ts`
+records as the reason it reads that board at all — so summing it by club files
+a man's April with whoever holds him in August. Measured: only 21 of 330 batting
+cells and 0 of 240 pitching cells match, ATL 96 PA short and MIL 113, SF 258
+hits light against TOR 49 heavy. The team leaderboard is the club's own line and
+is the only thing that answers; the league totals above are what shows the two
+are reading the same league.
+
+**The record is the standings on a season board and the schedule on a windowed
+one** — the same split `research.ts` already makes for its team game counts, and
+for the same reason: the standings carry a season total and nothing else. Season
+takes `wins`/`losses` off the `teamRecords` rows `getTeamGames` already reads
+(`fields=` widened by two); a window counts `isWinner` off the schedule with the
+same `codedGameState === 'F'` test, so a postponement is not a loss. Spot
+checked against the standings: **TB 76-51, MIL 79-49, LAD 77-51** on the season
+board, and **PHI 5-0, KC 6-1, WSH 1-5** over the seven days ending yesterday.
+A finished game MLB has marked no winner on either side of counts for neither
+club rather than for both.
+
+**Two columns stay null and are not drawn for a club.** `xera` — Savant's team
+expected-statistics board publishes no such column (fourteen columns, `est_ba` /
+`est_slg` / `est_woba` and their diffs, and nothing else) — and `sprintSpeed`,
+which appears in no pitch row. The same two a *window* has none of, for the same
+two reasons.
+
+**Cache.** `team-research-{kind}-{window}-{SEASON}-v1.json`, 6h in memory and in
+the storage tier with an `inFlight` guard, the shape the player board uses. And
+**`statcast-counts-{date}` went `-v4` → `-v5`**, which is the rule at its most
+literal: a v4 blob deserializes perfectly with `batterTeam` and `pitcherTeam`
+**missing**, so the team board would have read `undefined` off every settled day
+and served thirty rows of dashes — and those blobs have no TTL at all, so *for
+ever*. The bump costs a re-parse off the day CSVs `savant.ts` keeps, not a
+re-download. Nothing else needed one: `team-hitting-*` is untouched, and the
+research blob's own `-v11` is unchanged, `ResearchRow.record` being a field only
+the new blob carries and only the new board reads.
+
+**Measured through the route**: a season team board **18.8s genuinely cold**
+(174 days reduced, CSVs on disk, and the v5 re-parse paid on the way), **0.9s**
+for a 7-day one, milliseconds off the blob. `warmer.ts` builds all ten nightly,
+in the same sequential-by-window loop the player boards use and immediately
+after it — by which point every window but the season's is a handful of `Map`
+additions, the day blobs having just been written.
+
 ### One player's spans, cut four ways — and why it has to be his own pitches
 
 `playerSplits.ts`, behind `GET /api/players/:playerId/windows?cut=vsr|vsl|home|away`
@@ -513,3 +637,4 @@ answer.
 row needs a name, a club and a position that a cut has no opinion about;
 `getResearch(kind, 'season')` already has them cached, and it is fetched in its
 own `try` so a dead board leaves the numbers standing.
+

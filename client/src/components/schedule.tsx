@@ -906,12 +906,23 @@ export const schedDayKey = (date: string) => `sched-${date}`;
  * a missing barrel rate does. It is not offered in the filter builder, a
  * threshold on a club abbreviation being nothing anyone can type.
  */
-export function scheduleColumns(index: ScheduleIndex, kind: PlayerKind): Column[] {
+export function scheduleColumns(
+  index: ScheduleIndex,
+  kind: PlayerKind,
+  /** The board's **team** reading, where a row *is* a club. Two things change
+   *  and nothing else does: the wording stops saying "his club", and the `GS`
+   *  column goes — a turn in the rotation is a fact about a pitcher, and on a
+   *  club row `startTally` would count nobody's and print thirty noughts. Every
+   *  day cell already works untouched: it was only ever drawn from `r.teamId`,
+   *  the player id deciding the start border alone. */
+  teams = false,
+): Column[] {
   const today = index.today;
+  const whose = teams ? 'this club plays' : 'his club plays';
   const games: Column = {
     key: SCHED_GAMES_KEY,
     label: 'G',
-    title: `Games his club plays ${spanPhrase(index)} — postponements excluded`,
+    title: `Games ${whose} ${spanPhrase(index)} — postponements excluded`,
     format: (r) => gameCount(index, r.teamId),
     value: (r) => gameCount(index, r.teamId),
     group: 'Schedule',
@@ -959,5 +970,5 @@ export function scheduleColumns(index: ScheduleIndex, kind: PlayerKind): Column[
     value: () => null,
     text: (r: ResearchRow) => dayText(index, r.teamId, date),
   }));
-  return kind === 'pitcher' ? [games, starts, ...days] : [games, ...days];
+  return kind === 'pitcher' && !teams ? [games, starts, ...days] : [games, ...days];
 }

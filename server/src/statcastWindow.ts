@@ -245,16 +245,55 @@ export function tally(into: StatcastCounts, r: Record<string, string>): void {
 
 // ---- One day ---------------------------------------------------------------
 
-export type DayCounts = Record<PlayerKind, Record<string, StatcastCounts>>;
+/**
+ * One day, tallied four ways off **one** parse of the day's export.
+ *
+ * The two player axes were here first and are what the research board's windows
+ * are summed from. The two **club** axes are the same rows bucketed by the
+ * abbreviation on them instead of the id — `batterTeam` under the batting side,
+ * `pitcherTeam` under the side that threw the pitch — and they are here rather
+ * than in a file of their own for the reason `parseDay` already gives about the
+ * batter and the pitcher: the day CSV is 3.3MB and the expensive part is
+ * reading it, so a second pass over the same rows to answer a second question
+ * about them would double the one cost that matters.
+ *
+ * A club key is the export's own `home_team`/`away_team` abbreviation, which is
+ * byte-identical to MLB's for all thirty (measured in `teamHitting.ts`, which
+ * keys the same way off the same file).
+ */
+export interface DayCounts {
+  batter: Record<string, StatcastCounts>;
+  pitcher: Record<string, StatcastCounts>;
+  /** The club **at bat**, keyed by abbreviation. */
+  batterTeam: Record<string, StatcastCounts>;
+  /** The club **in the field**, keyed by abbreviation — its pitching staff. */
+  pitcherTeam: Record<string, StatcastCounts>;
+}
 
-/** `-v4`: bumped when bunts came out of the EV/LA averages (v2), again when
+/** Which of the four axes one kind's players and one kind's clubs live on, so
+ *  the two readers below need no `if` of their own. */
+const TEAM_AXIS: Record<PlayerKind, 'batterTeam' | 'pitcherTeam'> = {
+  batter: 'batterTeam',
+  pitcher: 'pitcherTeam',
+};
+
+/** Every axis a day holds, for the passes that treat them alike. */
+const AXES = ['batter', 'pitcher', 'batterTeam', 'pitcherTeam'] as const;
+
+/** `-v5`: bumped when bunts came out of the EV/LA averages (v2), again when
  *  `pullAir`/`pullBip` were added (v3), and again for bat speed's two sums and
  *  its histogram (v4) — a stored blob holds *sums*, so a stale one would keep
  *  serving the pre-fix numbers, and it deserializes with any field added since
  *  it missing. Bump this whenever `StatcastCounts` gains one, exactly as the
  *  day snapshot and the research board itself do. A bump costs a re-parse off
- *  the day CSVs this file keeps forever, not a re-download. */
-const dayKey = (date: string) => `statcast-counts-${date}-v4.json`;
+ *  the day CSVs this file keeps forever, not a re-download.
+ *
+ *  **v5 is the two club axes arriving.** A v4 blob deserializes perfectly with
+ *  `batterTeam` and `pitcherTeam` **missing**, which is the exact fault the rule
+ *  names: the team board would read `undefined` off every settled day and serve
+ *  thirty rows of dashes for as long as the blobs lived — which, these having no
+ *  TTL at all, is for ever. */
+const dayKey = (date: string) => `statcast-counts-${date}-v5.json`;
 
 const dayMem = new Map<string, DayCounts>();
 const dayInFlight = new Map<string, Promise<DayCounts>>();
@@ -268,8 +307,25 @@ function parseCsv(csv: string): Record<string, string>[] {
   }) as Record<string, string>[];
 }
 
+/**
+ * Which club was batting and which was pitching on this row.
+ *
+ * `inning_topbot` is the away side's half when it reads `Top`, so the batting
+ * club is the away one there and the home one otherwise — the same test
+ * `teamHitting.ts::parseDay` makes off the same three columns, and the pitching
+ * club is simply the other name. A row missing either abbreviation is left out
+ * of both, which is the join-fails-to-null rule: a pitch we cannot place is not
+ * a pitch to file under a guess.
+ */
+function sides(r: Record<string, string>): { bat: string; pitch: string } | null {
+  const top = r.inning_topbot === 'Top';
+  const bat = top ? r.away_team : r.home_team;
+  const pitch = top ? r.home_team : r.away_team;
+  return bat && pitch ? { bat, pitch } : null;
+}
+
 function parseDay(csv: string): DayCounts {
-  const out: DayCounts = { batter: {}, pitcher: {} };
+  const out: DayCounts = { batter: {}, pitcher: {}, batterTeam: {}, pitcherTeam: {} };
   for (const r of parseCsv(csv)) {
     for (const kind of ['batter', 'pitcher'] as const) {
       const id = r[kind];
@@ -277,6 +333,14 @@ function parseDay(csv: string): DayCounts {
       const bucket = out[kind];
       tally((bucket[id] ??= empty()), r);
     }
+    // The same row again under the two clubs. `tally` is called once per bucket
+    // rather than once and copied, because it *adds into* a bucket — which is
+    // the whole reason a club's line comes out identical in shape to a player's
+    // and can be handed to the same `toStatcast` at the end.
+    const side = sides(r);
+    if (!side) continue;
+    tally((out.batterTeam[side.bat] ??= empty()), r);
+    tally((out.pitcherTeam[side.pitch] ??= empty()), r);
   }
   return out;
 }
@@ -293,8 +357,8 @@ function parseDay(csv: string): DayCounts {
  * denominator.
  */
 function addPull(day: DayCounts, csv: string): void {
-  for (const kind of ['batter', 'pitcher'] as const) {
-    for (const counts of Object.values(day[kind])) counts.pullBip = counts.bip;
+  for (const axis of AXES) {
+    for (const counts of Object.values(day[axis])) counts.pullBip = counts.bip;
   }
   for (const r of parseCsv(csv)) {
     // Every row of this export is a batted ball (checked: 781 of 781 on a real
@@ -307,6 +371,10 @@ function addPull(day: DayCounts, csv: string): void {
       const bucket = day[kind];
       (bucket[id] ??= empty()).pullAir++;
     }
+    const side = sides(r);
+    if (!side) continue;
+    (day.batterTeam[side.bat] ??= empty()).pullAir++;
+    (day.pitcherTeam[side.pitch] ??= empty()).pullAir++;
   }
 }
 
@@ -482,8 +550,52 @@ export async function windowStatcast(
   kind: PlayerKind,
   days: number,
 ): Promise<Map<number, WindowStatcast>> {
+  const totals = await sumDays(kind, days);
+  const out = new Map<number, WindowStatcast>();
+  for (const [id, counts] of totals) out.set(Number(id), toStatcast(counts));
+  return out;
+}
+
+/**
+ * **The same window, summed by club rather than by player** — thirty rows off
+ * the very rows the six hundred were counted from.
+ *
+ * It is the *same* function underneath (`sumDays` picks an axis; `toStatcast`
+ * turns the sums into rates), which is the whole argument for it: a club's
+ * barrel rate is then barrels over batted balls computed by the one routine
+ * that computes a player's, rather than a second definition that agrees today.
+ * A club key is an abbreviation, since that is what the export carries.
+ *
+ * Unlike the player board, **this is how a club's season is built too**, not
+ * only its windows — Savant's `expected_statistics` and `statcast` boards do
+ * answer for `type=batter-team`, but neither its `custom` board nor its
+ * `batted-ball` one does (probed: `type=batter-team` on `custom` returns the
+ * 637-row *player* board, and on `batted-ball` returns 633 rows with the id and
+ * name columns blank), so whiff, chase, first-pitch strike, the batted-ball
+ * mix, pull air and bat speed are reachable for a club by no leaderboard at
+ * all. Summing the days answers every column on every span with one rule, where
+ * a leaderboard season beside a summed window would have given the reader a
+ * board whose columns changed when he pressed a tab. See **Data sources** for
+ * the season-long reconciliation against the two team boards Savant *does*
+ * publish.
+ */
+export async function teamStatcast(
+  kind: PlayerKind,
+  days: number,
+): Promise<Map<string, WindowStatcast>> {
+  const totals = await sumDays(TEAM_AXIS[kind], days);
+  const out = new Map<string, WindowStatcast>();
+  for (const [team, counts] of totals) out.set(team, toStatcast(counts));
+  return out;
+}
+
+/** The shared half: every day in the window, added up along one axis. */
+async function sumDays(
+  axis: (typeof AXES)[number],
+  days: number,
+): Promise<Map<string, StatcastCounts>> {
   const dates = windowDates(days);
-  const totals = new Map<number, StatcastCounts>();
+  const totals = new Map<string, StatcastCounts>();
   let missed = 0;
 
   const perDay = await mapLimit(dates, 4, async (date) => {
@@ -498,16 +610,15 @@ export async function windowStatcast(
 
   for (const day of perDay) {
     if (!day) continue;
-    for (const [id, counts] of Object.entries(day[kind])) {
-      const n = Number(id);
-      let acc = totals.get(n);
-      if (!acc) totals.set(n, (acc = empty()));
+    // A v4 blob that somehow survives a deploy has no club axes at all; `?? {}`
+    // makes that a day contributing nothing rather than a throw, which is the
+    // same shape as the missing-day case a line above.
+    for (const [key, counts] of Object.entries(day[axis] ?? {})) {
+      let acc = totals.get(key);
+      if (!acc) totals.set(key, (acc = empty()));
       addCounts(acc, counts);
     }
   }
   if (missed) console.error(`Statcast window: ${missed}/${dates.length} days missing`);
-
-  const out = new Map<number, WindowStatcast>();
-  for (const [id, counts] of totals) out.set(id, toStatcast(counts));
-  return out;
+  return totals;
 }

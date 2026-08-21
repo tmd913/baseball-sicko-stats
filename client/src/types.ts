@@ -1201,8 +1201,23 @@ export interface ResearchRow {
    *  true are the population `rankScales` ranks within, on the board and on the
    *  player page's Stats tab alike. A row where it is false is still drawn and
    *  still badged, placed on that scale with a dashed ring saying he is not one
-   *  of them (`columnRanks.tsx`). */
+   *  of them (`columnRanks.tsx`). **False on every row of the team reading**,
+   *  where thirty clubs have all played the whole span and a bar would
+   *  partition nothing — which is what puts `rankScales` on its
+   *  nobody-qualifies path and builds the scale over all thirty. */
   qualified: boolean;
+  /**
+   * **The club's won-lost record over the same span the row's numbers are** —
+   * only ever set on a **team** row, where it takes the place of the position
+   * list under the name (a club has no position and no hand). Absent on every
+   * player row.
+   *
+   * Span-matched rather than season-long: every other number on a 7-day team
+   * row covers those seven days, and a season record among them would be the
+   * one figure on the line answering a different question. Null where the
+   * standings or the schedule could not be read.
+   */
+  record?: { wins: number; losses: number } | null;
 
   // Batting half — null on a pitcher row.
   pa: number | null;

@@ -233,6 +233,21 @@ weak category at a glance and reading a hundred and twenty ordinals. The board
 is untouched, and `.col-rank` is still one object in this app — the League table
 adds a fill to it and the two other callers draw it bare.
 
+**And there is a third caller now, which reads the fill rather than the bare
+line: the research board's own *team* reading** — thirty clubs, ranked 1st to
+30th under each value. That is the same object this table draws, not one that
+resembles it, so `rankBadge` moved out of this file into
+`columnRanks.tsx::rankFill` (one scale, two callers) and `--rank-hot` /
+`--rank-cold` became one declaration on a selector list of both surfaces rather
+than a copy. The departure above is what licenses it: the objection to color on
+the board rests on that board's vocabulary being spoken for by the live inning,
+the postponement and the trend, and on the team reading every one of those is
+off the table — `Opp` is not drawn, the trend columns are not drawn, and there
+are no roster tints, lineup pips or IL codes, because there are no players. What
+the board's row does **not** give up is its height, so the chip's padding and
+margin are declared there rather than inherited from here; see
+**Client — research**, which carries the 58px arithmetic.
+
 **It colors the rank and never the value**, which is what makes `lowerBetter`
 need no special case at all: the server has already computed the rank with the
 direction baked in (`rankBy`, 1 is best whichever way the category runs), so a

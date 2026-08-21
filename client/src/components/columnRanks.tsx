@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { PlayerKind, ResearchRow } from '../types';
 import type { Column } from './researchColumns';
 import { OPPONENT_KEY, ROSTER_PCT_COLUMN, TREND_BY_KEY } from './researchColumns';
@@ -185,6 +186,12 @@ export interface RankScale {
   qualifiedScale: boolean;
   /** 0–100 with 100 at the good end, or null for a value the row hasn't got. */
   of(value: number | null): number | null;
+  /** **1 at the good end, `n` at the other** — the same scale read as a
+   *  standing rather than as a share. What the board's team reading draws, and
+   *  what a thirty-row population can honestly say where a percentile of thirty
+   *  would be a share to the nearest 3.3 points wearing two significant
+   *  figures. Null for a value the row hasn't got, as `of` is. */
+  rankOf(value: number | null): number | null;
 }
 
 export type RankScales = ReadonlyMap<string, RankScale>;
@@ -300,12 +307,77 @@ export function rankScales(columns: Column[], population: ResearchRow[]): RankSc
         const worse = lowerIsBetter ? n - hi : lo;
         return midrank(worse, ties, n);
       },
+      rankOf(value) {
+        if (value === null || !Number.isFinite(value)) return null;
+        // How many are strictly better, plus one. `lowerBound` is the count
+        // strictly below and `n - upperBound` the count strictly above, so
+        // **the direction is read off `ascFirst` and nowhere else** — the same
+        // field that decides which way the header opens and which end the
+        // percentile counts from. There is deliberately no second table of
+        // which-way-is-good: a column that declares `ascFirst` is ranked 1st at
+        // its smallest (a club 1st in ERA has the lowest ERA), every other
+        // column 1st at its largest.
+        const better = lowerIsBetter ? lowerBound(values, value) : n - upperBound(values, value);
+        // **Ties share the top of their run**, which is the competition
+        // convention `teamHitting.ts::rankAll` and `espn.ts::rankAll` already
+        // use and the one the League table's own badge is drawn from: two clubs
+        // level for 4th are both 4th and the next distinct figure is 6th. It is
+        // deliberately *not* the midrank the percentile uses — that one exists
+        // to stop two hundred batters with no home run reading as the best
+        // nought, a problem thirty clubs with thirty distinct totals have not
+        // got, and "joint 4th" is what a reader of a thirty-row table expects.
+        return better + 1;
+      },
     });
   }
   return out;
 }
 
-/** What the population is called in a tooltip. Plural, because it always is. */
+/**
+ * **The fill under a rank chip** — 1st at one end of a diverging scale, last at
+ * the other, the middle a plain neutral.
+ *
+ * Lifted here from `LeagueRankings.tsx`, which had it, when the research
+ * board's **team** reading needed the same chip: a rank of clubs drawn under a
+ * value is one object in this app, and two copies of a scale is how two
+ * surfaces come to disagree about what 15th of 30 looks like. The tokens the
+ * two ends resolve to are declared per surface in the stylesheet (`--rank-hot`
+ * / `--rank-cold`), so this computes the *strength* and the sheet owns the
+ * color — the split that rule already had.
+ *
+ * `n` is the rows ranked **in that column**, not the rows on the table: a club
+ * with no figure is out of the ranking rather than at the bottom of it, and
+ * gets no chip at all.
+ */
+const BADGE_MAX = 48;
+
+export function rankFill(rank: number | undefined, n: number): CSSProperties | undefined {
+  if (typeof rank !== 'number' || !Number.isFinite(rank) || n < 2) return undefined;
+  // 0 at the best rank, 1 at the worst; `d` is the distance from the middle, so
+  // the scale passes through the neutral chip where a row is neither.
+  const t = Math.min(1, Math.max(0, (rank - 1) / (n - 1)));
+  const d = Math.abs(t - 0.5) * 2;
+  const pct = Math.round(d * BADGE_MAX * 10) / 10;
+  return {
+    '--rank-bg': `color-mix(in srgb, var(${t < 0.5 ? '--rank-hot' : '--rank-cold'}) ${pct}%, var(--panel-2))`,
+  } as CSSProperties;
+}
+
+/**
+ * What the population is called in a tooltip. Plural, because it always is.
+ *
+ * **The board's team reading passes its own** (`clubs`), and that is the whole
+ * of what this module needed to serve thirty aggregates instead of six hundred
+ * players. Everything else falls out of the population it is handed: `qualified`
+ * is false on every club row — there is no bar to clear when all thirty have
+ * played the span — so `rankScales` takes its already-written nobody-qualifies
+ * path, the scale is built over all thirty, no row wears the dashed ring (a
+ * mark every row would carry marks nothing), and the tooltip says the plain
+ * noun. What must never happen is a percentile against six hundred *players*
+ * rendering under a club's aggregate; a separate population is what prevents
+ * it, and it is the same argument the file's head makes for not ranking a
+ * qualified batter against the unqualified.
+ */
 const populationNoun = (kind: PlayerKind) => (kind === 'pitcher' ? 'pitchers' : 'batters');
 
 /** `94th`, `1st`, `22nd` — so the badge's tooltip reads as a sentence. */
@@ -359,6 +431,53 @@ function ordinal(n: number): string {
  * laid out, so a ring that comes and goes down a column cannot change a row's
  * height or a table's width, which is the `.sched-vs-estimated` argument about
  * the same choice. Measured: neither moves by a pixel.
+ *
+ * ---
+ *
+ * ## `asRank` — the same slot, a standing instead of a share
+ *
+ * The board's **team reading** draws `1st` … `30th` where the player reading
+ * draws 0–100, and it is the same badge in the same slot rather than a second
+ * one, because it is the same object: a place on this column's scale, under
+ * the value, on a table of the board's own rows.
+ *
+ * **A percentile of thirty is a share to the nearest 3.3 points wearing two
+ * significant figures.** The player badge's whole argument is that a percentile
+ * is what a *sample* of six hundred can honestly say; a complete population of
+ * thirty can say the thing itself, and `4th of 30` is both shorter and true in
+ * a way `88` over thirty clubs is not.
+ *
+ * **And it is the League Rankings' badge, folded onto rather than copied.**
+ * That table draws a rank of *teams* under a value in exactly this slot and in
+ * exactly this class, and the stylesheet's note on it already says so: "the
+ * rank under the value, in the slot and the type the research board's own
+ * percentile badge takes — `.col-rank`, folded onto rather than restyled, so a
+ * second line under a number is one object in this app." Two tables ranking
+ * clubs 1-to-N under a number are the *same* object, not two that resemble each
+ * other, so the fill comes from one `rankFill` above and the two ends of the
+ * scale from one pair of tokens in the sheet.
+ *
+ * **The color is the League table's argument, arriving on a surface where the
+ * objection to it has gone.** The monochrome rule two paragraphs up rests on
+ * this table's color vocabulary being spoken for — "the live inning, the
+ * postponement and the trend" — and on the *player* reading it still is. On the
+ * team reading every one of those is off the board: `Opp` is not drawn (a club
+ * has no per-player status map), the five trend columns are not drawn, and
+ * there are no roster tints, no lineup pips and no IL codes, because there are
+ * no players. So the scale is the only color on the table and it is spent on
+ * the one thing this reading is *for* — where each club stands. It colors the
+ * rank and never the value, which is the rule the League badge already carries.
+ *
+ * **Direction is `Column.ascFirst` and nothing else** — see `rankOf`. A column
+ * that declares it is ranked 1st at its smallest, so a club 1st in ERA has the
+ * league's lowest, and a column with no good end (`NO_GOOD_END`) draws no badge
+ * at all on either reading.
+ *
+ * **No dashed ring, ever, on this reading.** There is no bar for a club to be
+ * short of; `qualified` is false on all thirty, which is what makes
+ * `qualifiedScale` false and the ring unreachable — the ring marks a row
+ * *outside* a population, and a mark every row or no row would carry marks
+ * nothing.
  */
 export function RankBadge({
   col,
@@ -367,6 +486,8 @@ export function RankBadge({
   kind,
   population,
   qualified,
+  noun,
+  asRank = false,
 }: {
   col: Column;
   scale: RankScale | undefined;
@@ -382,9 +503,33 @@ export function RankBadge({
    *  adds the sentence explaining it; the number itself is the same either way,
    *  because he is placed on the same scale. */
   qualified: boolean;
+  /** What the population is called, where "batters" and "pitchers" is not what
+   *  it is — the team reading's thirty `clubs`. */
+  noun?: string;
+  /** Draw a standing (`4th`) rather than a percentile (`88`) — see the section
+   *  on it above. The board's team reading, and nothing else. */
+  asRank?: boolean;
 }) {
   if (!scale) return null;
   if (value === 0 && DASHES_AT_ZERO.has(col.key)) return null;
+  if (asRank) {
+    const rank = scale.rankOf(value);
+    if (rank === null) return null;
+    const which = col.ascFirst
+      ? ` Lower is better in this column, so 1st is the smallest ${col.label}.`
+      : ` Higher is better in this column, so 1st is the largest ${col.label}.`;
+    return (
+      <span
+        className="col-rank"
+        style={rankFill(rank, scale.n)}
+        title={`${col.title}: ${ordinal(rank)} of the ${scale.n} ${
+          noun ?? populationNoun(kind)
+        } with a figure on ${population}. 1 is best.${which}`}
+      >
+        {ordinal(rank)}
+      </span>
+    );
+  }
   const pct = scale.of(value);
   if (pct === null) return null;
   const dir = col.ascFirst
@@ -393,7 +538,8 @@ export function RankBadge({
   // Only call them qualified where they are: a board on which nobody cleared
   // the bar is ranked against the field, and says the plain noun instead.
   const outside = scale.qualifiedScale && !qualified;
-  const who = scale.qualifiedScale ? `qualified ${populationNoun(kind)}` : populationNoun(kind);
+  const plain = noun ?? populationNoun(kind);
+  const who = scale.qualifiedScale ? `qualified ${plain}` : plain;
   const short = outside
     ? ` He is short of that bar himself (${QUALIFIER_WORDS[kind]}), so this is his place on` +
       ' their scale rather than a standing among them — which is what the dashed ring says.'
@@ -434,12 +580,17 @@ export function RanksButton({
   on,
   onToggle,
   population,
+  asRank = false,
   disabled = false,
 }: {
   on: boolean;
   onToggle: () => void;
   /** What a badge would be ranked against, for the tooltip. */
   population: string;
+  /** The badges are standings rather than percentiles — the board's team
+   *  reading. The sentence changes with the badge, since 1-is-best and
+   *  100-is-best are opposite instructions. */
+  asRank?: boolean;
   /**
    * There is no population to rank against right now.
    *
@@ -459,7 +610,11 @@ export function RanksButton({
       aria-pressed={on && !disabled}
       disabled={disabled}
       onClick={onToggle}
-      title={`Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`}
+      title={
+        asRank
+          ? `Show each club's rank under every value — 1st to 30th, with 1st always the good end, among ${population}.`
+          : `Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`
+      }
     >
       {/* Three bars rising to the right: a rank, drawn as one. */}
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
