@@ -127,6 +127,55 @@ called chrome was in it; it is the title row and four tabs now — **102px at
 1200, 100 at 390, 148 at 320** (the header wrapping at that last width and
 nothing else).
 
+### The two rows under the tabs are chrome, and they paint their own ground
+
+**They looked like two different things on two readings of one page**, and each
+of the three differences was the same mistake: the rows were taking properties
+from whichever box they happened to be rendered into. Measured at 1200 on the
+Roster's two readings:
+
+| | table reading (in the pane) | stream reading (in the page) |
+| --- | --- | --- |
+| ground behind the buttons | `rgb(18,19,20)` — the pane's `--bg` | `rgb(27,29,31)` — the body's gradient |
+| bar ground | `rgb(18,19,20)` | `rgb(25,26,27)` |
+| bar shadow | none | `--shadow-bar` |
+| gap above / below the buttons | 10 / 10 | 14 / 14 |
+| bar opens at | y **158** | y **166** |
+
+So pressing `Feed` changed the color of the band the button was in, gave the
+dates an edge they had not had, and moved the whole ladder eight pixels.
+
+**The bar's appearance is one rule with three selectors now** (`.app > .date-bar`,
+`.mup-view > .date-bar`, `.summary-scroll > .date-bar`) and what it says is true
+of every placement: content passes under this bar, so it needs an opaque ground
+and a shadow to say so, and the box above it — the app's chrome or a matchup's
+band — closes itself with a hairline, so the seam this one owns is the one
+*below*. `--bg-2` is the chrome's own bottom stop, which is what makes the bar
+read as the band continuing. The **placement** stays per-selector, that being
+the one thing the three genuinely answer differently.
+
+**And `.view-tools` paints its own ground**, `--bg-2` like the bar, bleeding to
+the edges of whatever box holds it (`--table-bleed` — the pane has already bled
+and takes padding alone; the page takes a negative margin and the same padding
+back). A ground that is a fact about the container is what `--cell-bg` is this
+app's standing answer to, one box larger.
+
+**The 14px under it is padding rather than margin**, so it is inside what is
+painted — as a margin it was a strip of *container* again and the two readings
+disagreed about it for the same reason. And `.app-chrome:has(+ .view-tools)` (and
+`.mup-chrome`'s) drop their bottom margin, or the 14px *above* the band would be
+the same strip one row up. `:has()` rather than a class, because nothing about
+the chrome changes — what changes is what follows it.
+
+**Measured after, reading a vertical line down the middle of the two rendered
+pages and differencing them pixel by pixel**: identical at every sampled row
+from the tab strip to the first row of content, but for 3–4 levels over the 6px
+directly under the chrome's hairline. The bar opens at **y=166 on both** roster
+readings and **y=262 on both** matchup readings, the band is **64px** and
+`rgb(25,26,27)` on all six surfaces (Roster, Feed, Matchup ×2, Research,
+League), and page-body overflow is **0** at 320 / 390 / 1200 / 1920 on every
+one.
+
 ### The sticky ladder, and the one place it is not a ladder
 
 ```

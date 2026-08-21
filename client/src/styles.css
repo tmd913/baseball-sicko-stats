@@ -6006,7 +6006,24 @@ button.start-line:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 12px;
-  margin-bottom: 14px;
+  /* **It paints its own ground, and that is what makes the readings look the
+     same on every surface.** This row is rendered into three different boxes —
+     the page on a stream reading, the table's own pane on a table reading, a
+     matchup's page in both — and it took each of their grounds: measured at
+     1200, the strip behind the buttons was **rgb(18,19,20)** in the pane (the
+     table's `--bg`) against **rgb(27,29,31)** in the page (the body's own
+     gradient), so pressing `Feed` changed the color of the band the button was
+     in. A ground that is a fact about the container is the mistake `--cell-bg`
+     is the app's standing answer to; this row is *chrome*, so it carries the
+     chrome's own bottom stop wherever it is drawn.
+
+     **And the gap below it is padding rather than margin**, so it is inside
+     what is painted: with a margin the 14px between this row and the date bar
+     was a strip of *container* again, and the two surfaces disagreed about it
+     for the same reason. Band, then bar, then the page — no ground of anybody
+     else's in between. The height is unchanged either way. */
+  background: var(--bg-2);
+  padding-block: 14px;
   /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
      on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
      reason: that key is `position: static` so its 340px panel hangs off a *row*
@@ -6237,18 +6254,37 @@ button.start-line:focus-visible {
      inert, both of those being blocks. */
   flex: none;
 }
+/* ---- What a pinned date bar looks like, in all three of its places -------
+   The bar is drawn in the page on a stream reading, inside the table's own pane
+   on a table reading, and on a matchup team page in both — and it was **two
+   appearances**, which is what a reader crossing between two readings of one
+   page saw: measured at 1200, the ground was `--bg-2` with `--shadow-bar` in
+   the page and `--bg` with no shadow in the pane, so pressing `Feed` changed
+   the color of the dates and gave them an edge they had not had.
+
+   One rule, three selectors, this stylesheet's standing fold. What it says is
+   true of every placement: **content passes under this bar**, so it needs an
+   opaque ground and a shadow to say so, and the box above it — the app's chrome
+   or a matchup's band — closes itself with a hairline, so the seam this one
+   owns is the one below it rather than above. `--bg-2` is the chrome's own
+   bottom stop, which is what makes the bar read as the band continuing on the
+   two surfaces where it hangs directly off one.
+
+   The *placement* stays per-selector below — which box it sticks to, at what
+   offset and on which axes — because that is the one thing the three genuinely
+   answer differently. */
+.app > .date-bar,
+.mup-view > .date-bar,
+.summary-scroll > .date-bar {
+  background: var(--bg-2);
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-bar);
+}
 .app > .date-bar {
   position: sticky;
   top: var(--chrome-h);
   z-index: 39;
-  background: var(--bg-2);
-  /* The seam under it, where the bar in the chrome had one above it: the chrome
-     closes itself with a hairline, so a border-top here would be the second of
-     two lines a pixel apart, and what this bar now needs is a line between
-     itself and the page passing under it. */
-  border-top: none;
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-bar);
 }
 /* A short window unpins the chrome (see `.app-chrome`'s own rule) and this goes
    with it, for that rule's reason and not by inheriting it: `--chrome-h` would
@@ -6296,17 +6332,39 @@ button.start-line:focus-visible {
      (or the app's gutter as a tab) and the full-page box at 12. Reading the
      token is what keeps this row's buttons on the same left edge as the rest of
      the page it is in, whichever page that is. */
-  padding: 10px var(--table-bleed, 0px) 0;
-  margin-bottom: 10px;
+  /* The side gutter is the pane's own bleed given back — `--table-bleed`, not
+     `--app-gutter`, because the number is how far this pane has already come
+     out through the box that holds it and there are three such boxes (`.app` at
+     22px, a matchup page's at 16 or the app's gutter, the full-page box at 12).
+     No horizontal *margin*: the pane has bled once already and a second helping
+     would put the row past the window's edge. */
+  padding-inline: var(--table-bleed, 0px);
+}
+/* In the page it has to bleed for itself, which the pane did on its behalf. One
+   pair of declarations, the same token: the band runs to the edges of the box
+   it is in on every surface, and its content lines up with the gutter the rest
+   of the page keeps. */
+.app > .view-tools,
+.mup-view > .view-tools {
+  margin-inline: calc(-1 * var(--table-bleed, 0px));
+  padding-inline: var(--table-bleed, 0px);
+}
+/* **The band starts where the chrome ends.** The bar above closes itself with a
+   hairline and its own shadow, and 14px of page between the two would be the
+   strip this row's ground was painted to remove. `:has()` rather than a class
+   for the reason `.mup-chrome`'s own gap rule used it: nothing about the chrome
+   changes, what changes is what follows it. The two fixed-height views already
+   zero this margin for the table's sake and are unaffected. */
+.app-chrome:has(+ .view-tools),
+.mup-chrome:has(+ .view-tools) {
+  margin-bottom: 0;
 }
 .summary-scroll > .date-bar {
   top: 0;
   /* Above the header row (2) and above its own top-left corner cell (3): the
-     rows and the headings both pass under this. */
+     rows and the headings both pass under this. Its ground, its seam and its
+     shadow are the shared rule's — see there. */
   z-index: 4;
-  background: var(--bg);
-  border-top: none;
-  border-bottom: 1px solid var(--border);
 }
 /* **A three-column grid, not a flex row with `space-between`.** The middle has
    to be centered on the *bar* rather than on the space its neighbours leave:
@@ -6996,7 +7054,16 @@ button.start-line:focus-visible {
    short roster the pane ends above the fold and that line is what closes it,
    and on a long one it lands exactly on the edge of the window, where a hairline
    reads as the edge of the screen rather than as a border. */
-.app.summary-mode .summary-view:not(.is-expanded) > .summary-scroll {
+/* **No top hairline wherever the pane meets a band**, which is every surface it
+   is drawn on but the full-page box. The box above it — `.app-chrome` on the
+   Roster view, `.mup-chrome` on a matchup team page — closes itself with a
+   hairline of its own, so the pane's would be the second of two lines a pixel
+   apart. It was scoped to `.app.summary-mode` and the matchup's pane kept its
+   border, which is measured: the pane at y=198 with its first child at 199.
+   Unscoped is the honest rule — there are two callers of `SummaryTable` and
+   both sit under a band — and `:not(.is-expanded)` still keeps the full-page
+   box's, that one having its own padding and nothing above it to close it. */
+.summary-view:not(.is-expanded) > .summary-scroll {
   border-top: none;
 }
 /* A column, since the full-screen button's row sits above the table. The table
@@ -14154,7 +14221,13 @@ span.mup-move-name:hover {
      below.) 12px is `.mup-bar`'s own gap to the strip, so the band reads
      20 / 12 / 12 down. The 16px gap to the content stays outside the sticky
      box, on `.details-chrome`'s argument: it must not ride down the page. */
-  margin: 0 -16px 16px;
+  /* **14 below, which is `.app-chrome`'s**, not the 16 this band carried on its
+     own. What follows it is the reading run, exactly as `.view-tools` follows
+     the app's chrome, and two pixels is two pixels until you cross between two
+     readings of one page and the whole ladder under them sits at two heights.
+     Measured at 1200 before: the bar opened at 264 on the stream reading
+     against 252 on the table one; matched, both are 262. */
+  margin: 0 -16px 14px;
   padding: 20px 16px 12px;
   background:
     radial-gradient(760px 260px at 82% -40%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
@@ -14299,12 +14372,6 @@ span.mup-move-name:hover {
   top: var(--details-chrome-h);
   /* Over the page and under `.mup-chrome`'s 5. */
   z-index: 4;
-  background: var(--bg-2);
-  /* The band closes itself with a full-width hairline, so the seam this bar
-     needs is the one *under* it — the same swap `.app > .date-bar` makes. */
-  border-top: none;
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-bar);
   /* How far it bleeds is the box's own side padding, `--bar-bleed`'s standing
      rule: 16px in the overlay, the app's gutter as a tab (below). Scoped with
      `>` for the reason `.app > .date-bar` is — the same bar is *also* drawn
