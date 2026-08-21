@@ -162,33 +162,137 @@ function winnerOf(
 }
 
 /**
- * **How lopsided a category is** — the gap between the two figures as a share of
- * the two of them together, which is the length of the bar the row draws toward
- * whoever is ahead.
+ * A linearly-interpolated quantile of an **already-sorted** array. Interpolated
+ * rather than nearest-rank because the arrays here are one per league — twelve
+ * values — where nearest-rank makes the 5th percentile the minimum outright and
+ * the scale asymmetric at the two ends for no reason a reader could see.
+ */
+function quantile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const i = (sorted.length - 1) * p;
+  const lo = Math.floor(i);
+  const hi = Math.ceil(i);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+
+/**
+ * **What counts as a wide gap in this category, this week** — the denominator
+ * every category bar on the card is measured against, one per category, taken
+ * from every team in the league rather than from the two on the page.
  *
- * A scale with no calibration in it, which is the whole reason for this one
- * rather than the Splits card's: that bar measures a platoon gap against
- * `full`, the 90th percentile of the league's real gaps in that stat, because
- * one hitter's split means nothing until you know what a big split *is*. Here
- * the comparison is already complete — two teams, one week, one category — so
- * the pair can be measured against itself and needs no league behind it. `|a−b|
- * / (|a|+|b|)` is in [0, 1] by construction, so nothing can clamp and a full
- * bar means one side has the lot.
+ * ### The scale it replaces, and why it could not work
  *
- * What it says is **how close the category is**, which is the question a
- * manager reads a matchup with: 63 strikeouts against 66 is a 2% sliver and is
- * a coin flip with three days to go, where 12 home runs against 2 is a 71% bar
- * and is gone. It is deliberately *not* a probability and not a projection —
- * the two figures are printed either side of it, and the bar is the glance.
+ * This was `|a−b| / (|a|+|b|)`, and the argument for it was that it needs no
+ * calibration: the comparison is complete — two teams, one week, one category —
+ * so the pair can be measured against itself, and the result is in [0, 1] by
+ * construction. That is all true and the bar was still unreadable, because what
+ * `|a|+|b|` actually measures is **how near the category's zero the two figures
+ * sit**, which has nothing to do with how far apart they are.
+ *
+ * A counting category can reach its zero — a team really can hit no home runs
+ * in a week — so `HR 12–2` scores 71%. A rate category never comes near one: a
+ * lineup's OPS lives between about .650 and .850, so the widest gap the league
+ * produces divides by a total near 1.5 and vanishes. **Measured over the 30 real
+ * matchups of periods 14–18 on the live league**, the old scale's bar length by
+ * category, median and largest:
+ *
+ * | | R | HR | RBI | W | ERA | SB | WHIP | K | OPS | SVHD |
+ * | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+ * | median | 6.9% | 17.6% | 11.1% | 14.3% | 15.5% | 25.0% | 8.3% | 17.1% | **3.9%** | 33.3% |
+ * | largest | 26.9% | 47.4% | 29.4% | 100% | 54.3% | 66.7% | 27.1% | 47.7% | **12.1%** | 100% |
+ *
+ * **OPS never once exceeded an eighth of its track**, and its median week was a
+ * 3.9% mark against a rail — which is what "impossible to fill" means. Only `W`
+ * and `SVHD` ever filled, and both only by way of a side on zero, which is the
+ * degenerate case rather than the interesting one. So the bar was not measuring
+ * the category at all: it was measuring whether the category *has* a reachable
+ * zero.
+ *
+ * ### What it is now
+ *
+ * `p95 − p05` of every team's own figure in that category this period — the
+ * league's own spread — with `max − min` as the fallback where that is zero
+ * (nine teams on 0 saves and one on 3 leaves a flat middle and a real gap). A
+ * gap as wide as the league's spread fills the bar; half of it fills half.
+ *
+ * This is the **Splits card's `full`**, which is the app's own precedent for
+ * exactly this shape and was cited in the old argument as the thing this did not
+ * need — a platoon bar measures against the 90th percentile of the league's real
+ * gaps, because one hitter's split means nothing until you know what a big split
+ * is. The same turns out to be true of one week's category: `OPS .812–.784`
+ * means nothing until you know that the twelve teams that week ran from .705 to
+ * .846.
+ *
+ * **Trimmed at both ends rather than `max − min`**, which was driven against
+ * the same 30 matchups: the raw range clamps nothing and fills nothing either,
+ * an overall median of 30.0% and **not one full bar in 300** — the complaint
+ * again, one step milder. `p90 − p10` runs the other way, a median of 58.3% and
+ * **26% of bars clamped**, which throws away the top of the scale. `p95 − p05`
+ * sits between them: overall median **37.2%**, per-category medians **28.9%
+ * (OPS) to 50.8% (WHIP)**, every category able to reach a full bar, and **15 of
+ * 300 (5%)** actually there — a full bar is rare, and it now means one thing
+ * rather than "somebody is on nought".
+ *
+ * **It is the lens's own spread**, computed from whichever figures the card is
+ * drawing: measured against measured, projected against projected. A projection
+ * is a whole week and a live measurement is a part of one, so a projected gap
+ * over a part-week scale would clamp half the card.
+ *
+ * **And it self-scales through the week**, which is a property rather than a
+ * defect: on Tuesday every team's totals are small and so is the spread, so a
+ * two-homer lead reads as the real lead it is on Tuesday. The bar says how the
+ * category stands *now*, not how it will end — the figures either side of it are
+ * the reading, and `Projected` is the page's answer to the other question.
+ */
+function categorySpread(
+  categories: readonly EspnCategory[],
+  sides: readonly Record<number, number>[],
+): Map<number, number> {
+  const full = new Map<number, number>();
+  for (const c of categories) {
+    const vals: number[] = [];
+    for (const s of sides) {
+      const v = s[c.statId];
+      if (typeof v === 'number' && Number.isFinite(v)) vals.push(v);
+    }
+    vals.sort((a, b) => a - b);
+    // Under four teams there is no spread worth the name — a two-value "p95"
+    // is one of the two figures on the page, which would make every bar full.
+    if (vals.length < 4) continue;
+    const trimmed = quantile(vals, 0.95) - quantile(vals, 0.05);
+    const range = vals[vals.length - 1] - vals[0];
+    const span = trimmed > 0 ? trimmed : range;
+    if (span > 0) full.set(c.statId, span);
+  }
+  return full;
+}
+
+/**
+ * **How lopsided a category is** — the gap between the two figures against what
+ * a wide gap in that category *is*, which is the length of the bar the row draws
+ * toward whoever is ahead. See `categorySpread` for where the denominator comes
+ * from and for the scale this replaced.
+ *
+ * What it says is **how close the category is**, which is the question a manager
+ * reads a matchup with. It is deliberately not a probability and not a
+ * projection — the two figures are printed either side of it, and the bar is the
+ * glance.
  *
  * Zero either way (a category nobody has scored in yet, both sides on 0) is a
- * tie and draws nothing, which the guard gives for free.
+ * tie and draws nothing, which the guard gives for free. So does a category the
+ * spread could not be taken for: **no scale, no bar** — the row keeps both
+ * figures and the green winner, and claims nothing about the distance.
  */
-function barShare(left: number | undefined, right: number | undefined): number {
+function barShare(
+  left: number | undefined,
+  right: number | undefined,
+  full: number | undefined,
+): number {
   if (typeof left !== 'number' || typeof right !== 'number') return 0;
-  const total = Math.abs(left) + Math.abs(right);
-  if (!Number.isFinite(total) || total === 0) return 0;
-  return Math.min(1, Math.abs(left - right) / total);
+  if (typeof full !== 'number' || !(full > 0)) return 0;
+  const gap = Math.abs(left - right);
+  if (!Number.isFinite(gap)) return 0;
+  return Math.min(1, gap / full);
 }
 
 /**
@@ -398,11 +502,12 @@ function MovesColumn({
  *  it is a lens over — which is the behavior of every other toggle in this run
  *  and the reason it is `aria-pressed` rather than a tab.
  *
- *  **It also settles the two-`Summary` collision.** The strip above this row
- *  has a `Summary` tab — the comparison page — and for a while both were
- *  `.view-switch` pills one press apart, told apart only by their titles. They
- *  are two different shapes now, which is what they always were: one is which
- *  page you are on, the other is a lens over the page you are on. */
+ *  **It also settled the two-`Summary` collision**, which no longer exists at
+ *  all: the strip's comparison tab is called `Matchup` now, and this is the
+ *  only `Summary` on the page. The shapes stay different anyway, which is what
+ *  they always were — one is which page you are on, the other is a lens over the
+ *  page you are on — and the tab is named for what it holds rather than being
+ *  kept clear of a word nothing else uses any more. */
 function SummaryToggle({ on, onToggle, title }: { on: boolean; onToggle: () => void; title: string }) {
   return (
     <button
@@ -1284,6 +1389,27 @@ export default function LeagueMatchupView({
    */
   const shown = showingProj && projMatchup ? asProjected(matchup, projMatchup) : matchup;
   const { home, away } = shown;
+  /**
+   * **Every team's figures for this period, under the lens the card is drawing**
+   * — which is what the category bars are scaled against. See `categorySpread`.
+   *
+   * Off `board.matchups` rather than off a fetch of its own: the page is opened
+   * from a board that already holds the whole period, and a bye is a side like
+   * any other, so a league is fully represented even in a week that is eight
+   * byes and two matchups. Projected the same way the card itself is, through
+   * the Scoreboard's own `asProjected`, so the scale and the figures on it can
+   * never come from two different lenses.
+   */
+  const catFull = useMemo(() => {
+    const sides: Record<number, number>[] = [];
+    for (const m of board.matchups) {
+      const pm = showingProj ? projection?.matchups.find((x) => x.id === m.id) ?? null : null;
+      const lensed = pm ? asProjected(m, pm) : m;
+      if (lensed.away) sides.push(lensed.away.scores);
+      if (lensed.home) sides.push(lensed.home.scores);
+    }
+    return categorySpread(board.categories, sides);
+  }, [board.matchups, board.categories, projection, showingProj]);
   const openCat =
     openStat === null ? null : board.categories.find((c) => c.statId === openStat) ?? null;
   /**
@@ -1370,8 +1496,9 @@ export default function LeagueMatchupView({
         </p>
         <p>
           Each category&rsquo;s own bar runs from its label toward whoever is ahead, and its
-          length is the gap as a share of the two figures together. A long bar is a category one
-          side is running away with; a sliver is a coin flip.
+          length is the gap measured against <strong>the whole league&rsquo;s spread</strong> in
+          that category this week. A full bar is a gap as wide as the league itself; a sliver is
+          a coin flip.
         </p>
         {/* **The gesture, third — where a line of its own over the comparison
             used to say it.** It reads here because this panel is already the
@@ -1443,7 +1570,7 @@ export default function LeagueMatchupView({
           label: teamAbbrev(teams.get(away.teamId), away.teamId),
           title: `${teams.get(away.teamId)?.name ?? `Team ${away.teamId}`} — his roster and his feed`,
         },
-        { tab: 'summary', label: 'Summary', title: 'The two teams, category by category' },
+        { tab: 'summary', label: 'Matchup', title: 'The two teams, category by category' },
         {
           tab: 'home',
           label: teamAbbrev(teams.get(home.teamId), home.teamId),
@@ -2088,7 +2215,7 @@ export default function LeagueMatchupView({
                       const l = away.scores[c.statId];
                       const r = home.scores[c.statId];
                       const w = won[i];
-                      const share = barShare(l, r);
+                      const share = barShare(l, r, catFull.get(c.statId));
                       const state = (s: 'left' | 'right') =>
                         w === null ? '' : w === s ? ' mup-win' : w === 'tie' ? ' mup-tie' : ' mup-loss';
                       return (

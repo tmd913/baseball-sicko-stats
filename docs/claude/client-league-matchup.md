@@ -418,6 +418,72 @@ KB** (22.59 → 22.69) — 0.52KB raw and 0.10KB over the wire, nearly all of it
 comments arguing the two derivations and the cascade fix. The JS is flat because
 nothing about the components moved: this is `styles.css` alone.
 
+### The bar scale needed calibration after all
+
+**Reported as "near impossible to get the bar full, especially for categories like OPS", and the report is exactly right.** The scale was `|a−b| / (|a|+|b|)` and the argument for it is two sections up: the comparison is complete — two teams, one week, one category — so the pair can be measured against itself and needs no league behind it. Every word of that is true and the bar was still unreadable, because what `|a|+|b|` measures is not how far apart the two figures are. It is **how near the category's zero they sit**.
+
+A counting category can reach its zero: a team really can hit no home runs in a week, so `HR 12–2` scores 71%. A rate category never comes near one — a lineup's OPS lives between about .650 and .850 — so the widest gap the league can produce divides by a total near 1.5 and vanishes. Measured over the **30 real matchups of periods 14–18** on the live league, bar length by category:
+
+| | R | HR | RBI | W | ERA | SB | WHIP | K | OPS | SVHD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| median | 6.9% | 17.6% | 11.1% | 14.3% | 15.5% | 25.0% | 8.3% | 17.1% | **3.9%** | 33.3% |
+| largest | 26.9% | 47.4% | 29.4% | 100% | 54.3% | 66.7% | 27.1% | 47.7% | **12.1%** | 100% |
+
+**OPS never once exceeded an eighth of its track**, and its median week was a 3.9% mark against a rail. Only `W` and `SVHD` ever filled, and both only by way of a side on nought — the degenerate case rather than the interesting one. The bar was not measuring the category at all; it was measuring whether the category *has* a reachable zero.
+
+**So it is calibrated now, against the league's own spread that week** — `categorySpread` in `LeagueMatchup.tsx`. `full` is `p95 − p05` of every team's figure in that category this period, with `max − min` as the fallback where that is zero (nine teams on 0 saves and one on 3 leaves a flat middle and a real gap). A gap as wide as the league's spread fills the bar; half of it fills half.
+
+This is **the Splits card's `full`**, which is the app's own precedent for this shape and which the old argument cited as the thing this page did not need. It turns out one week's category is the same problem as one hitter's platoon split: `OPS .812–.784` means nothing until you know that the twelve teams that week ran from .705 to .846.
+
+**Trimmed at both ends rather than `max − min`, and the trim was driven** against the same 30 matchups. The raw range clamps nothing and fills nothing either — an overall median of **30.0%** and **not one full bar in 300**, which is the complaint again one step milder. `p90 − p10` runs the other way: median **58.3%** and **26% of bars clamped**, which throws away the top of the scale. `p95 − p05` sits between them:
+
+| | R | HR | RBI | W | ERA | SB | WHIP | K | OPS | SVHD |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| median | 34.8% | 40.7% | 41.5% | 31.5% | 40.2% | 40.4% | 50.8% | 40.6% | **28.9%** | 30.6% |
+| full bars | 1/30 | 2/30 | 0/30 | 2/30 | 3/30 | 2/30 | 2/30 | 1/30 | **1/30** | 1/30 |
+
+Overall median **37.2%**, every category able to reach a full bar, and **15 of 300 (5%)** actually there. A full bar is rare and now means one thing rather than "somebody is on nought". The quantile is **linearly interpolated** rather than nearest-rank, which matters at this size: with twelve values nearest-rank makes the 5th percentile the minimum outright and the scale asymmetric at its two ends for no reason a reader could see.
+
+**It is the lens's own spread**, computed from whichever figures the card is drawing — measured against measured, projected against projected, through the Scoreboard's own `asProjected`. A projection is a whole week and a live measurement is part of one, so a projected gap over a part-week scale would clamp half the card.
+
+**And it self-scales through the week, which is a property rather than a defect.** On Tuesday every team's totals are small and so is the spread, so a two-homer lead reads as the real lead it is on Tuesday. The bar says how the category stands *now*; the figures either side of it are the reading, and `Projected` is the page's answer to the other question.
+
+**Where the scale cannot be taken, there is no bar.** Under four team values `categorySpread` declines to guess, and `barShare` returns 0 — the row keeps both figures and the green winner and claims nothing about the distance. That is also what happens to a category nobody has scored in, which was already a tie and already drew nothing.
+
+**Driven on the live league**, matchup 103 of period 18, old → new: `OPS .845–.780` **4.0% → 29.1%**, `K 83–45` **29.7% → 70.6%**, `RBI 33–28` **8.2% → 25.7%**, `W 6–3` **33.3% → 60.0%**, and the genuine near-ties stay slivers — `R 33–32` 1.5% → 5.3%, `WHIP 1.233–1.209` 1.0% → 3.2%. `SVHD 0–0` was `NaN` and is 0.
+
+### The tab is called `Matchup`, and the card reads a second size up
+
+**`Summary` named the shape rather than the subject.** The strip's middle page is the two teams category by category, and it was the one tab on a matchup page not named for what it holds — the other two are the teams. It is `Matchup` now. The internal value stays `'summary'`: it is what `mt=` and `MatchupReading` are written in, and a URL is read by links that were shared before the label changed.
+
+It also retires the two-`Summary` collision the `SummaryToggle` one section down was written around. That collision no longer exists at all; the toggle keeps its own shape for its own reasons.
+
+**And the scale-up above was not enough.** *The card reads a size up* took a scoreboard card's sizes and made them a page's; this takes a page's and makes them this page's. The wide tier, before → after: headline **26 → 32**, category figure **18 → 22** and its label **13 → 15**, the group heading **12 → 14** and its tally **13 → 15**, the head's name **17 → 20** and record **13 → 15**, the badge **44 × 34 → 54 × 42**, the Moves names **15 → 17**. The rhythm again grows with the type — a row's padding **9 → 12** and its gap **10 → 12**, the card's own padding **16 → 20** — and the two bars take the largest proportional step for the third time, a category rail **9 → 12px** and the meter **14 → 18**.
+
+**The rail's ink is held constant while its height grows.** `--border` at 32% was tuned against a 9px track; at 12 the same twenty rails cover a third more of the card, so it is **24%** now (`32 × 9/12`). The rule was always about area rather than opacity and now says so.
+
+**The card's cap is re-derived, not scaled.** The name column in the wide head is `0.5 × card − 208` — the constant was 176 and grew with the badge and the headline, swept in 20px steps: 242px at a card of 900, 312 at 1040, 322 at 1060. The longest name the live league holds inks **310px at 20px/700**, so **1060** is the width that holds it with 12px in hand. That takes the category tracks from 321 to **367px** at 1200 and up.
+
+**The name is the one thing that does not scale below 641**, which is a real cost and was found by measuring rather than reasoned about. The stacked head gives a name half a *card*; at 481 `THE BRONX FLOATERS` inks 217px at 20px against a 199px column and ellipsized — a name that had fitted at every width before. So the `≤640` block holds the name at 17, the record at 13 and the badge at 44 × 34, and everything else on the card still grows. The `≤480` phone tier is untouched: its budget was already spent to the pixel and the phone was never the complaint.
+
+**What the scale-up costs at the top is a wider ellipsis band, and it is bounded to one name.** With the longest name in the league on the page, all twelve names fit from **923px** before and from **1120px** now; below that exactly one name ellipsizes, and it ellipsized below 923 before. At 900 both builds fit seven of the league's eight distinct names. The `title` is still on the name either way.
+
+**Measured, before → after**, on matchup 103 of period 18:
+
+| | 320 | 390 | 640 | 1200 |
+| --- | --- | --- | --- | --- |
+| card | 288 → 288 | 358 → 358 | 608 → 608 | 896 → **1060** |
+| category row | 37 → **43** | 37 → **43** | 40 → **51** | 40 → **51** |
+| category track | 46 → 46 | 81 → 81 | 177 → **151** | 321 → **367** |
+| track height | 8 → 8 | 8 → 8 | 9 → **12** | 9 → **12** |
+| meter height | 14 → **18** | 14 → **18** | 14 → **18** | 14 → **18** |
+| figure / label | 16/12 → 16/12 | 16/12 → 16/12 | 18/13 → **22/15** | 18/13 → **22/15** |
+| head name | 14 → 14 | 14 → 14 | 17 → 17 | 17 → **20** |
+
+**640 loses 26px of track**, which is the tier's own larger figure and label columns paid for out of the rail — `--mup-val-w` **64 → 78** (five tabular characters at 22px/700) and `--mup-cat-w` **52 → 60** (`SVHD` at 15px/700). At 481 that leaves each track 72px against the 98 it had, which is still half as much again as the 47px the phone tier was accepted at.
+
+**Nothing else moved, checked rather than assumed.** `.mup-chrome` is **145px at 320 and 114 above it, before and after**. Page and view overflow are **0 at 320, 390, 481, 640, 900, 1200 and 1920**, and no category row overflows at any of them. The **bye page is byte-identical** — chrome 140 at 320 and 109 above it in both builds, and its head clips `Brian&Tom's Excellent Adventure` at 320 and 390 exactly as it did, that name being longer than any phone can hold. The only clipping on the comparison page is at **320**, where `The Homewreckers` (133 > 126) and `THE BRONX FLOATERS` (158 > 126) clip — **and both clip identically on `main`**, measured on the same matchup rather than inferred from the table above, which was read off a different one.
+
 ### The Projected toggle
 
 **The Summary's figures are where the week has got to, and one press swaps them
