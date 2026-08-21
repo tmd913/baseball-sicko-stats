@@ -6384,8 +6384,19 @@ button.start-line:focus-visible {
    content box. Their width is the pane's own client width — a block child of a
    scroll container sizes to its content box, not to its scroll width — so
    pinning at 0 puts them across the viewport exactly as they were. */
+/* **And the research board is the same arrangement**, which is why its own
+   children are folded onto this list rather than given rules that agree today:
+   that view is the second viewport-tall column with one scroller in it, so its
+   control set, its head, its error banner and its empty states are all block
+   children of a pane that scrolls sideways and all want the same `left: 0`. The
+   board has no date bar — nothing on it is drawn from a range — so what sticks
+   *vertically* there is the head instead, which is the rule below it. */
 .summary-scroll > .view-tools,
-.summary-scroll > .date-bar {
+.summary-scroll > .date-bar,
+.research-scroll > .view-tools,
+.research-scroll > .research-head,
+.research-scroll > .error-banner,
+.research-scroll > .empty-state {
   position: sticky;
   left: 0;
   /* The pane has already bled back out through `.app`'s gutters, so these two
@@ -6393,7 +6404,8 @@ button.start-line:focus-visible {
      it is a full-width band by design and carries its own 10px of padding, so
      it wants the edge it now has. */
 }
-.summary-scroll > .view-tools {
+.summary-scroll > .view-tools,
+.research-scroll > .view-tools {
   /* **`--table-bleed`, not `--app-gutter`** — the number is exactly how far
      this pane has already bled back out through the box that holds it, and
      there are three such boxes: `.app` at 22px, the matchup page's own at 16
@@ -6407,6 +6419,17 @@ button.start-line:focus-visible {
      No horizontal *margin*: the pane has bled once already and a second helping
      would put the row past the window's edge. */
   padding-inline: var(--table-bleed, 0px);
+}
+/* **The two boxes in the pane that are not chrome put the page's gutter back as
+   a margin**, where the tools row and the head put it back as padding. The
+   distinction is the one the band rules turn on: padding is band, and these two
+   are content — a card and a banner sitting *on* the pane's ground, which is
+   the ground either side of them. Without it they run to the edges of the
+   window, the pane having already bled out through the app's 22px: measured at
+   390, the empty state 390 wide against the 346 it is in the page. */
+.research-scroll > .error-banner,
+.research-scroll > .empty-state {
+  margin-inline: var(--table-bleed, 0px);
 }
 /* In the page it has to bleed for itself, which the pane did on its behalf. One
    pair of declarations, the same token: the band runs to the edges of the box
@@ -6455,7 +6478,8 @@ button.start-line:focus-visible {
    own pane, so the chrome's next sibling is the pane and the adjacent selector
    above cannot see it. */
 .app-chrome:has(+ .view-tools),
-.app.summary-mode .app-chrome {
+.app.summary-mode .app-chrome,
+.app.research-mode .app-chrome {
   box-shadow: none;
 }
 .mup-chrome:has(+ .view-tools),
@@ -6906,7 +6930,6 @@ button.start-line:focus-visible {
    bar take a line of its own underneath (`.date-bar` claims `flex: 1 1 100%`
    for every box it renders in — it was `.app.date-open .date-control` that
    claimed it here, back when the dates were a button and a hidden row). */
-.research-view.is-expanded > .research-count,
 .lg-rankings.is-expanded > .lg-span-detail {
   flex: none;
 }
@@ -6977,22 +7000,26 @@ button.start-line:focus-visible {
   min-height: 0;
 }
 /* Expanding is a request for the table, so everything in the box that isn't the
-   table goes. Most of the control set is no longer among them — scope, window,
-   positions and the four disclosures live up in the chrome now, which this
-   fixed box covers as it covers the header and the view tabs — but the board's
-   error banner and its empty states are still children here, and they have no
-   more business in a full-page table than the pills did. Sorting still works,
-   being a click on the header row, and the filters are one press of the button
-   that got you here away.
+   table goes. **They are all inside the pane now** — the whole page is, which
+   is what lets the control set scroll away in the ordinary mode — so this
+   names them one level down rather than as `> :not(.research-scroll)`, which
+   would match nothing at all. The set is the same three: the control set (a
+   fixed box that covers the header and the view tabs has no business leaving
+   the pills on screen inside itself), the board's error banner and its empty
+   states. Sorting still works, being a click on the header row, and the filters
+   are one press of the button that got you here away.
+
+   **The head stays**, and it is what the `.expanded-chrome` row above the pane
+   used to be: the badges say what the controls are set to and the count says
+   what they left, which is exactly the sentence a table with no controls on
+   screen is missing. One box on both surfaces now — see `.research-head`.
 
    A rule rather than a branch in the JSX, for the reason `.app.edit-mode`'s is:
    this is one statement of one idea where the equivalent is a conditional
    around each child. */
-/* The count line stays too. It is not a control — it is the table's caption,
-   and "15 of 25 pitchers" is the one number that says what the badges above it
-   add up to. It sits directly above the table in this mode for the same reason
-   it does in the ordinary one: the number describes what is under it. */
-.research-view.is-expanded > :not(.research-scroll):not(.expanded-chrome):not(.research-count) {
+.research-view.is-expanded .research-scroll > .view-tools,
+.research-view.is-expanded .research-scroll > .error-banner,
+.research-view.is-expanded .research-scroll > .empty-state {
   display: none;
 }
 /* The Rankings table's own version of the two rules above, and it needs no
@@ -7138,17 +7165,21 @@ button.start-line:focus-visible {
    `--table-bleed` reads to know how far the table may bleed back out through
    them.
 
-   Summary only, although the research board shares the flex column above it:
-   what the chrome's margin holds off there is the **count line**, which is a
-   caption rather than a bordered pane and reads as part of the bar when the two
-   touch, and the board's error banner and empty states are children of that same
-   column. The games view and the feed keep the full 80px — they are lists of
-   cards, and that padding is what stops the last one sitting on the edge of the
-   window. */
+   The `padding-bottom` is summary's alone. What the paragraph above said of the
+   **top** margin no longer is: it was summary's too, because what the chrome
+   held off on the research board was a count line rather than a pane. The board
+   has taken the same arrangement since — the tools row and the head are inside
+   its scroller, so what follows the chrome there is the pane as well — and the
+   14px was the strip of page the two views' bands were painted to remove,
+   measured at 1200 as the pane's first child at y=112 under a chrome ending at
+   102. The games view and the feed keep the full 80px at the bottom — they are
+   lists of cards, and that padding is what stops the last one sitting on the
+   edge of the window. */
 .app.summary-mode {
   padding-bottom: 0;
 }
-.app.summary-mode .app-chrome {
+.app.summary-mode .app-chrome,
+.app.research-mode .app-chrome {
   margin-bottom: 0;
 }
 /* The seam at the top goes with the margin, for the reason the sides went with
@@ -7166,7 +7197,8 @@ button.start-line:focus-visible {
    Unscoped is the honest rule — there are two callers of `SummaryTable` and
    both sit under a band — and `:not(.is-expanded)` still keeps the full-page
    box's, that one having its own padding and nothing above it to close it. */
-.summary-view:not(.is-expanded) > .summary-scroll {
+.summary-view:not(.is-expanded) > .summary-scroll,
+.research-view:not(.is-expanded) > .research-scroll {
   border-top: none;
 }
 /* A column, since the full-screen button's row sits above the table. The table
@@ -8256,6 +8288,13 @@ button.start-line:focus-visible {
    than screen. It is the same pair the expanded mode already used, which is
    what the two cases now agree on. */
 .research-scroll {
+  /* **What the header row sticks below**, the same token the summary table's
+     pane declares for the date bar and read by the same rule
+     (`.summary-table thead th`). Here it is the board's own head, and it is the
+     *measured* height of it — `--research-head-h`, published by
+     `usePublishedHeight` — because a count line beside a row of badges wraps to
+     one line, two or three with the width and the wording. */
+  --pane-bar-h: var(--research-head-h, 0px);
   flex: 0 1 auto;
   min-height: 0;
   max-height: 100%;
@@ -9479,11 +9518,50 @@ button.start-line:focus-visible {
 .research-clear:hover {
   color: var(--text);
 }
+/* ---- The head of the board ------------------------------------------------
+   **What the table is, held above the table.** The control set scrolls away
+   with the rows now (it is the pane's first child — see `ResearchTable.tsx`),
+   so this is the only box between the app's chrome and the column headings that
+   stays: the count of what survived the filters, and a badge per setting that
+   produced it. Neither is a control. The way to change any of them is a scroll
+   up, or the button in the corner cell.
+
+   **One row, wrapping**, rather than the count on a line of its own above a row
+   of badges: the count is the first thing the badges qualify — *467 of 622
+   batters · SS · free agents · last 30 days* is one sentence — and a line each
+   costs a phone 31px of table for a layout that says nothing more. Measured at
+   390 with three badges: **41px as one wrapping row against 72px as two**.
+
+   The ground is `--bg`, which is the pane's own and the tools row's above it:
+   rows pass under this box and it has to stop them, and a band that took the
+   ground of whatever it was drawn in is the fault `.view-tools` records against
+   itself. No hairline under it — the header row it holds is `--panel-2`, a
+   whole step of the palette, and that edge is already the strongest one on the
+   board. */
+.research-head {
+  /* `position: sticky` and `left: 0` come from the fold above, which is where
+     every block child of this pane gets the second axis; what is this box's own
+     is the `top`. Above the header row (2) and its top-left corner cell (3),
+     which both pass under it, and the same 4 the date bar takes over the
+     summary table's for the same reason. */
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  /* The side gutter is the pane's own bleed given back — `--table-bleed`, not
+     `--app-gutter` — for the reason `.view-tools` reads it two rules up: the
+     number is how far this pane has already come out through the box that holds
+     it, and there are three such boxes. */
+  padding: 6px var(--table-bleed, 0px) 10px;
+  background: var(--bg);
+}
 /* How many rows survived the filters, and out of how many — without it a short
-   table reads as a short league rather than a tight filter. It sits directly
-   above the table rather than up in the control bar, so it reads as that
-   table's caption: the number describes what is under it, not what the
-   controls are set to. */
+   table reads as a short league rather than a tight filter. It leads the head
+   rather than sitting up in the control bar, so it reads as the table's
+   caption: the number describes what is under it, not what the controls are set
+   to. */
 .research-count {
   font-size: 12px;
   font-weight: 600;
@@ -9874,9 +9952,17 @@ button.start-line:focus-visible {
 /* The sorted header is pinned on both axes at once — down the page with the
    rest of the header row, across the table with its own column — so it needs
    the header's `top` as well, and a layer above both the row it sits in and the
-   column it heads. */
+   column it heads.
+
+   **The header's `top`, read from the same token rather than written as `0`.**
+   It was a literal, which agreed with `.summary-table thead th` for as long as
+   `--pane-bar-h` was 0 on this board — and stopped the day the head arrived
+   above it: measured at 1200 scrolled 900 down, every other header cell held at
+   143 and this one at **102**, one column of headings sitting 41px high in the
+   middle of the head's own band. Two things that stick to the same edge share
+   the token that names it. */
 .research-table thead th.research-sort.active {
-  top: 0;
+  top: var(--pane-bar-h, 0px);
   z-index: 3;
 }
 

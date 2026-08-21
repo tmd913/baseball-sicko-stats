@@ -1416,17 +1416,6 @@ export default function App() {
    * comes back exactly as it was left.
    */
   const [researchUi, setResearchUi] = useState<ResearchUi>(freshResearchUi);
-  /**
-   * Where the board's control set renders: a box inside the pinned chrome, so
-   * the research page has **one** top section instead of the app's chrome with
-   * a second band of controls stacked under it.
-   *
-   * State rather than a ref because a portal needs the element itself, and a
-   * ref's value is not a render's to read. The callback runs in the commit
-   * phase, so the re-render it triggers lands before the browser paints and the
-   * bar is never visibly absent.
-   */
-  const [researchChrome, setResearchChrome] = useState<HTMLDivElement | null>(null);
 
   // The how-to page (settings menu → How to use, and the empty state's button).
   // In the URL like every other view, so it survives a reload and can be linked
@@ -4753,7 +4742,7 @@ export default function App() {
      which reading, then what it is drawn from. */
   const rosterTools = isRosterView(view) && showRosterViews && !editMode;
   const viewTools =
-    rosterTools || view === 'research' || (view === 'league' && espnConnected) ? (
+    rosterTools || (view === 'league' && espnConnected) ? (
       <div className="view-tools">
         {/* Scoreboard / Rankings / Transactions. */}
         {leagueTabs}
@@ -4771,22 +4760,18 @@ export default function App() {
             {projectedToggle}
           </>
         )}
-        {/* The research board's own controls. They are the same kind of
-            statement as everything else in this row — which players, which
-            span, which position, which columns of them — and they sat in the
-            tab row until the tabs became the width of the page.
-
-            The box is empty here and filled by `ResearchTable`, which portals
-            its bar into it: the controls are inseparable from the board's
-            column vocabulary and belong in the file that owns it (see the
-            portal there). `.research-chrome` and `.research-bar` are
-            `display: contents` so their groups are items of *this* flex
-            container and take part in its wrap; a box of their own would move
-            as one block or not at all. Rendered only on the research view, so
-            no other page carries an empty row of chrome. */}
-        {view === 'research' && <div className="research-chrome" ref={setResearchChrome} />}
       </div>
     ) : null;
+  /* **The research board draws this row itself**, which is why the view is not
+     in the test above and no box for it is rendered here. It is the same band
+     saying the same kind of thing — which players, which span, which position,
+     which columns of them — but it is inside the board's own scroller, and the
+     controls are inseparable from the board's column vocabulary. App kept an
+     empty `.research-chrome` here and the board portalled its bar into it,
+     which was the only way to reach the pinned chrome this row used to live in;
+     from a pane the board itself renders there is nothing to reach across, and
+     the host's one-frame delay was costing the board its scroll offset on the
+     way back in. See `ResearchTable.tsx::controls`. */
 
   /* ---------------------------------------------------------------------
      The date bar — the full-width strip under the tabs.
@@ -5692,6 +5677,14 @@ export default function App() {
           bar and the header row stick against the same scrollport, one under
           the other.
 
+          **The research board is the second page this is true of**, and the
+          only difference is that it has no dates to take with it: it is the
+          same viewport-tall column with the same one scroller, so its control
+          set is inside its pane too and scrolls away with the rows, leaving
+          the board's own head stuck at the top. It renders that row itself
+          rather than being handed one (`viewTools` is null on that view — see
+          there), so nothing about this line has to know.
+
           Everywhere else the window is the scroller and this is the plain
           arrangement: the tools row in the flow, the bar sticky under the
           pinned chrome. */}
@@ -6000,8 +5993,6 @@ export default function App() {
              back whole — see `researchUi`. */
           ui={researchUi}
           onUiChange={setResearchUi}
-          /* The chrome box above, which the board's control set renders into. */
-          controlsHost={researchChrome}
         />
       ) : view === 'summary' ? (
         /* The edit screen takes this page. It lived on the Games view until

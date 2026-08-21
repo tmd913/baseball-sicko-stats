@@ -8,7 +8,138 @@ tabs are the width of the window*. `.research-chrome` and `.research-bar` are
 still `display: contents` for the same reason and the same wrap rule applies, so
 every measurement below holds; passages saying "the tab row" mean that band.
 What did change: the band is in the page rather than in the pinned box, so it
-scrolls away with the board.)*
+scrolls away with the board — and on this view it has since moved once more,
+into the board's own scroller, which is what makes "scrolls away" true rather
+than merely intended. See **The page scrolls, and the head stays**, below.)*
+
+### The page scrolls, and the head stays
+
+*(This supersedes the arrangement the section above describes — the band is no
+longer in the page above the board, it is the first child of the board's own
+scroller. Everything that section says about the row's shape, its wrap and its
+`display: contents` groups still holds; only where it is drawn has moved.)*
+
+**The research view is a viewport-tall flex column in which only
+`.research-scroll` scrolls** (`.app.research-mode`, which is `.app.summary-mode`
+with a different name on it). A `position: sticky` box sticks to *the box that
+scrolls*, so anything left in the page above that pane is not sticky at all —
+it simply sits where it was laid out, forever. That is what the control set was
+doing: **135px of buttons on a phone that the reader could not scroll away,
+whatever they did**, on the one view in the app that is nothing but a table.
+
+So the pane takes the whole page. `ResearchTable` renders, as the scroller's own
+children and in this order: the control set, the board's error banner, **the
+head**, the empty states, the table, and the paging strip. The control set
+scrolls away with the rows; the head stops at the top of the pane and stays
+there; the column headings hold directly under the head. Measured at 1200×900,
+the chrome above the first row goes **237px → 102px** at rest and **237 → 143**
+once the reader has scrolled — the app's own pinned bar, the head, and rows. At
+390×844 it goes **283 → 100** and **283 → 172**, which is three more rows of a
+phone screen at every offset past the first.
+
+  - **The head is the count and a badge per setting, and it is one box on both
+    surfaces now.** The badges were the full-page mode's `.expanded-chrome` row,
+    written for exactly this problem one level up — a table with its controls
+    behind a fixed box is a table you cannot read, because "of 622" means
+    nothing without knowing it is the 30-day window, free agents only, and
+    shortstops. A control set that has scrolled off the top is the same
+    sentence missing, so the same row answers it, and the full-page mode no
+    longer draws one of its own.
+    - **One wrapping row, not a badge row under a count line.** The count is the
+      first thing the badges qualify — *467 of 467 batters · SS · free agents ·
+      last 30 days* is one sentence — and a line each costs the table 31px to
+      say nothing more. Measured at 390 with three badges: **41px as one
+      wrapping row against 72px as two.**
+    - **Drawn at rest as well as scrolled, and that duplication is the point of
+      the rule it obeys.** At the top of the board the badges restate five
+      buttons that are two rows above them, which is redundant — and the
+      alternative, revealing them once the control set has gone, changes the
+      height of a sticky box *while the reader is scrolling under it*: the
+      column headings would step down and every row with them, which is
+      **reserve the box, don't move the page** at its most literal. The
+      duplication costs 31px at rest on a phone and buys a head whose height is
+      the same number at every offset.
+    - **Its height is measured, not declared** — `--research-head-h`, published
+      on the root by `usePublishedHeight` (the hook `--date-bar-h` already
+      uses, floored for the reason it records), and read as `--pane-bar-h` on
+      `.research-scroll`, which is the token `.summary-table thead th` already
+      sticks below. There is no one number to write: on a checked board the
+      same head is **41px at 640 and up, 72px at 390 and 103px at 320**, and it
+      moves again with the wording — a filter built, a position picked, a
+      search string typed. A constant would be a strip of rows showing through
+      the gap at every width but the one it was written at.
+    - **`.research-table thead th.research-sort.active` had `top: 0` written
+      out**, which agreed with the rest of the header row for as long as
+      `--pane-bar-h` was 0 on this board. It stopped agreeing the moment the
+      head arrived above it: measured at 1200 scrolled 900 down, every other
+      header cell held at **143** and the sorted column's at **102**, one
+      column of headings floating 41px up in the middle of the head's own band.
+      It reads the token now. Two things that stick to the same edge share the
+      name of that edge.
+  - **Every block child of the pane is `position: sticky; left: 0`**, folded
+    onto the rule the summary pane's own two already share. This is the app's
+    widest table and a block child of a scroller is only ever as wide as the
+    pane, so without it the control set, the head, the banner and the empty
+    states all sit off the left of the screen the moment the reader is out at
+    Chase%. Measured at 390 scrolled to `scrollLeft` 1,431: the head at left 0,
+    390 wide, with the count and every badge in view. The two that are *content*
+    rather than band — the error banner and the empty state — put the page's
+    gutter back as a margin (`--table-bleed`), the pane having bled out through
+    it already: the empty state read 390 wide against the 346 it is in the page.
+  - **The board draws its own tools row, and the portal is gone.** The control
+    set used to be portalled into a `.research-chrome` box App kept for it,
+    which was the only way to reach the app's pinned chrome from this file
+    without lifting the board's whole column vocabulary into App. From a pane
+    this component renders itself there is nothing to reach across — and the
+    portal had begun to cost something real. **A host handed over by a callback
+    ref is empty for the commit that creates it and filled by the re-render
+    that ref triggers**, so the row was 28px tall for one frame and 110 the
+    next. Inside the scroller that 82px of growth is *above the viewport*,
+    which the browser's scroll anchoring answers by adding 82 to `scrollTop`,
+    which App's per-view restore then reads as the reader having taken the
+    scroll and stops placing. Measured: left at 800, back at **882**; left at
+    1,500, back at **1,582**. Rendered inline the row is its full height in its
+    first commit and there is nothing to compensate for — **back at 800 and
+    1,500 on the nose.** (`ColumnPicker`'s own dialog is still portalled to the
+    body and is unaffected; the passage below saying it must clear a host that
+    is `position: sticky` with a `z-index` is now historical, and the dialog
+    still opens at 46 in `.app-dialog`.)
+  - **The pane is rendered whatever the board holds**, where the table inside it
+    is not. Two reasons, and the second decided it: the pane is where the
+    control set lives now, so a pane that came and went with the rows would take
+    every button on the board with it — unmounting and remounting them on the
+    keystroke that narrows the board to nobody, which is a search field losing
+    the caret mid-word — and an empty state reads under the count it explains
+    rather than on the far side of a hairline from it.
+  - **The reset on a new signature goes to the top of the *table*, and never
+    downwards.** It was `scrollTop = 0` for as long as those were the same
+    place; with the control set inside the scroller, 0 is the top of the
+    *pills*, and a reader who sorted by `HR` from row 400 would have been
+    answered with a screenful of buttons and the leaders below them. The target
+    is the offset at which the head is exactly where it sticks — the table's own
+    offset in the content, less the head's height — measured as **110 at 1200
+    and 158 at 390**, with the table's top landing on the head's bottom edge
+    (143 and 172) either way. `Math.min` against the current offset is the other
+    half: every control that can change the signature is up in that row, so a
+    reader who can *see* the control they just pressed is by definition above
+    the target and scrolling to it would take that control off the screen from
+    under them. Measured: a sort from `scrollTop` 2,496 lands at 158, and a sort
+    pressed at 0 leaves it at **0**.
+  - **The chrome closes onto the band, as it does on the Roster's table
+    reading.** `.app.research-mode .app-chrome` joins the two rules
+    `.app.summary-mode .app-chrome` already carries — no bottom margin and no
+    shadow — because what follows the chrome on this view is now the pane, whose
+    first child is a band that paints its own ground. Left as they were, the
+    14px was a strip of page between two bands and the shadow was a dark wash
+    across the top of the second. Measured at every width from 320 to 1920, the
+    pane's top and the chrome's bottom are **the same number** (148 / 100 / 102)
+    and the pane's own top hairline is dropped
+    (`.research-view:not(.is-expanded) > .research-scroll`), the chrome's being
+    the one that closes the seam.
+  - **Bundle: 600.91 → 601.05 KB of JS** (178.76 → 178.80 gzipped) and **159.36
+    → 159.97 KB of CSS** (28.51 → 28.59) — 0.14KB and 0.61KB raw, 0.04KB and
+    0.08KB over the wire, for a head, a measured height, a fold and the removal
+    of a portal.
 
 ### The research board
 
