@@ -9,6 +9,7 @@ import { RESEARCH_WINDOWS, TEAM_HITTING_WINDOWS } from './types.js';
 import { getAllRosterPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
+import { revisedDates } from './revisions.js';
 import { getRosterTrend } from './espn.js';
 import { buildLeagueXwoba } from './leagueWoba.js';
 import { warmXwobaSeries } from './xwoba.js';
@@ -115,8 +116,42 @@ async function warmPlayers(): Promise<void> {
   });
 }
 
+/**
+ * Days MLB has rescored since this app last built them.
+ *
+ * **A reader must never be the one who pays for a rebuild** — the rule the
+ * research board and team hitting already follow here — and a rescoring is
+ * exactly that shape: one day, rebuilt from a schedule fetch plus a read per
+ * game, to move a play or two. Draining the list here is also what keeps the
+ * pending map from depending on whether anybody happened to open the day.
+ *
+ * Ordinarily empty, and then this is one `game/changes` request the poll would
+ * have made anyway (17KB, 148ms measured at a 14-day lookback; a few hundred
+ * bytes at the half-hour one it actually uses). Cheap enough to run in `live`
+ * mode as well as `backfill`, which is what puts a correction on screen within
+ * the warmer's own cadence rather than at the next nightly run.
+ */
+async function warmRevisions(): Promise<string[]> {
+  let dates: string[] = [];
+  try {
+    dates = await revisedDates();
+  } catch (err) {
+    console.error('reading MLB revisions failed:', err);
+    return [];
+  }
+  if (dates.length === 0) return [];
+  console.log(`MLB rescored ${dates.length} settled day(s): ${dates.join(', ')}`);
+  await warmDays(dates);
+  return dates;
+}
+
 export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates: string[] }> {
   const mode = event.mode ?? 'live';
+
+  // Before anything else: a day MLB has rescored is a day every board below is
+  // summed from, so rebuilding it first means the boards are built once, off
+  // the corrected line, instead of once now and again tomorrow.
+  const rescored = await warmRevisions();
 
   if (mode === 'backfill') {
     const dates = recentDates(Math.max(1, event.days ?? 7));
@@ -205,14 +240,14 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
         console.log(`league xwOBA ${l.xwoba} over ${l.pa} PA, ${l.days} days through ${l.through}`),
       )
       .catch((err) => console.error('league xwOBA build failed:', err));
-    return { mode, dates };
+    return { mode, dates: [...rescored, ...dates] };
   }
 
   // 'live': just today and yesterday — the dates the app actually opens on, and
   // the only ones that change minute to minute.
   const dates = recentDates(2);
   await warmDays(dates);
-  return { mode, dates };
+  return { mode, dates: [...rescored, ...dates] };
 }
 
 export const handler = async (event: WarmEvent = {}) => {
