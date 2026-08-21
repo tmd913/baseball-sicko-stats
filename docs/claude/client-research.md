@@ -12,6 +12,89 @@ scrolls away with the board — and on this view it has since moved once more,
 into the board's own scroller, which is what makes "scrolls away" true rather
 than merely intended. See **The page scrolls, and the head stays**, below.)*
 
+### The bar is three rows that scroll, and it condenses when the head sticks
+
+*(This supersedes the shape both sections below describe: one wrapping row of
+five groups. What they say about where the band is drawn and what sticks is
+unchanged.)*
+
+**Three runs, in the order the questions come in** — *which players* (Watchlist,
+Free Agents, My Roster, Other Rosters), *which slice* (span, position, Teams),
+*what to do with the board* (Search, Filters, Schedule, Columns, Ranks). Each is
+a `ScrollRow`: too wide for the window and it gives up its end to an arrow
+rather than wrapping onto a line the table pays for. Left-aligned, not centered
+— `.tool-scroll-inner`'s auto margin is right for the app's one-group band over
+a centered date bar and wrong for three stacked runs, whose left edges otherwise
+stepped in and out against each other and against the count.
+
+**Watchlist leads and the sets run widest-first.** `INCLUDE_ORDER` is a reading
+order distinct from `RESEARCH_INCLUDE_KEYS`, which stays the state's own list —
+what exists, what a URL round-trips, what `allDefault` walks. Reordering that to
+suit a row would move the vocabulary to suit the furniture.
+
+**Every button keeps its word at every width, and its mark beside it.** Six
+classes were visually hidden below 640px and the include buttons went further,
+swapping a full label for an abbreviation at 640 and a two-letter code at 480.
+All of it is gone: a row that scrolls has no line to buy back, and a `title` is
+a tooltip no touch device fires. The mark now leads the label at every width
+(`order: -1`), which is what the rest of the bar already did. **Free Agents got
+a real one** — a padlock swung open, since the closed one already means "somebody
+else has him", where it used to be the letters `FA` and `FA Free Agents` is a
+label saying itself twice.
+
+**The two dropdowns stay.** Span and position still become `<select>`s below
+640px, and they are the one width swap that survived. The other four were
+*buttons*, whose label is their name; these two are a four-pill run and an
+eleven-pill run, and eleven pills behind a horizontal scroll is a control you
+have to drag through to find `SS`.
+
+**The badges are the filters and nothing else.** The row used to carry one badge
+per setting on the argument that a control set scrolled off the top leaves
+`of 622` meaning nothing. That was right about the problem and wrong about the
+answer — it restated the controls in a row you cannot act on. The condensed run
+is the answer instead: every one of those settings is a *lit button*, on screen
+and pressable at every offset. What is left is the one setting with no button to
+be lit, a stat threshold living inside the Filters panel. One row, and it
+scrolls rather than wrapping; no arrows, because these are labels and an arrow
+is a control.
+
+**When the head sticks, it carries the whole control set again, condensed.** One
+run instead of three, marks instead of words — the shape the bar used to take on
+a phone at rest, kept for the one case that argument was always right about. The
+elements are the same consts the bar renders (`rowWho`, `rowSlice`, `rowTools`),
+from the same props and calling the same callbacks, so the two copies cannot
+disagree.
+
+**And the scroll is paid for the head's height, which is the part with the trap
+in it.** A sticky box still occupies its place in flow, so growing it pushes
+every row below down under the finger that is scrolling. Reserving the box — the
+app's usual answer — would cost the table a row of chrome at rest, on the one
+view where every pixel is a row. So a `ResizeObserver` on the head puts any
+height change onto `scrollTop` in the same frame.
+
+Two things had to be measured rather than assumed:
+
+- **Chrome compensates already.** Scroll anchoring adjusts `scrollTop` when a box
+  above the viewport resizes, so the explicit compensation landed on top of the
+  browser's: measured at 390 crossing the threshold, `scrollTop` went 160 → 265
+  where the head grew 42, and the first row moved 190 → 165. `.research-scroll`
+  takes `overflow-anchor: none`. Turning the browser's off rather than dropping
+  ours is the choice, because scroll anchoring is Chrome's and not Safari's —
+  relying on it would hold the rows still on a desktop and jump on the phone.
+- **A delta across the `stuck` flip is not enough.** The head does not reach its
+  new height in one commit — the run renders, then `ScrollRow` measures its own
+  overflow and renders again — so a before/after pair caught part of it and left
+  21px as a jump (`scrollTop` 160 → 223, first row 190 → 165). Observing the box
+  answers every change whatever caused it, which is also the honest rule: a
+  filter badge landing while the reader is scrolled must not shift the rows.
+
+**Measured after, at 390 and 1200, in both directions.** The head is **37px at
+rest and 79 stuck**. Crossing up: `scrollTop` 154 → 162 becomes 154 → 204,
+exactly the 42px the head grew, and the first row moves **192 → 184** — the 8px
+the reader asked for and nothing else. Crossing back down: 162 → 154 becomes
+162 → 112, and the row moves 226 → 234. Page-body overflow **0** throughout, the
+three rows 36px each, the chrome 146px at 390 and 142 at 1200.
+
 ### The page scrolls, and the head stays
 
 *(This supersedes the arrangement the section above describes — the band is no

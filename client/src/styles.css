@@ -7632,6 +7632,20 @@ button.start-line:focus-visible {
 .summary-view:not(.is-expanded) > .summary-scroll,
 .lg-rankings:not(.is-expanded) > .league-scroll,
 .research-view:not(.is-expanded) > .research-scroll {
+  /* **Scroll anchoring off, because this pane compensates its own.**
+
+     The head grows when it sticks (the condensed run appears inside it), and
+     Chrome's scroll anchoring already adjusts `scrollTop` when a box above the
+     viewport changes size — so the explicit compensation in `ResearchTable`
+     landed *on top of* the browser's and the rows jumped twice as far as they
+     should have. Measured at 390 crossing the threshold: `scrollTop` 160 → 265
+     where the head grew 42, and the first row moved 190 → 123.
+
+     Turning the browser's off rather than dropping ours is the choice, because
+     scroll anchoring is Chrome's and not Safari's: relying on it would hold the
+     rows still on a desktop and jump on the phone, which is the device this
+     whole row of work is about. One mechanism, the same on both. */
+  overflow-anchor: none;
   border-top: none;
 }
 /* A column, since the full-screen button's row sits above the table. The table
@@ -9609,19 +9623,13 @@ button.start-line:focus-visible {
    `Teams`, `Search`, `Filters` against a row that also carries the position
    pills and the count badges, and its head height is measured and load-bearing
    (`--research-head-h`) — a different row, a different answer. */
-@media (max-width: 640px) {
-  .research-toggle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-}
+/* *(The block that stood here is gone. It visually hid `.research-toggle-label`
+   below 640px, the last of six classes that did — the other five went when the
+   app's tools row learned to scroll. The board's row scrolls now too, in three
+   runs of its own (`.research-row`), so the words stay at every width here as
+   well and there is nothing left for this media query to do. The rule survives
+   in one place only: `.research-condensed`, where the run is deliberately
+   glyphs — and that is a *scroll state*, not a width.)* */
 
 /* ---- The roster row's mode toggles on a phone --------------------------------
    **This block squared these four to 36px under 640px and no longer does.**
@@ -9669,12 +9677,6 @@ button.start-line:focus-visible {
    **The League Rankings span was the third of them and is gone**, strip and
    dropdown together: its five cuts are the first group of that tab's own date
    bar list. See `.lg-span-row`, below. */
-@media (max-width: 640px) {
-  .research-bar .research-window-row,
-  .research-bar .research-positions {
-    display: none;
-  }
-}
 
 /* Which players the board includes — three buttons, ahead of the position
    pills. They are `.research-toggle`s rather than a segmented switch, and that
@@ -9710,8 +9712,34 @@ button.start-line:focus-visible {
    above a column of locked rows needs no explaining. Free agency is the set with
    no mark, and it stays text (`FA`) in the same slot, which is what keeps the
    three buttons one shape. */
-.research-inc-abbr,
+/* **The mark stands beside the word, not instead of it.** The three include
+   buttons were text alone until they were narrow enough to become marks alone;
+   they carry both now, which is what the rest of this bar's buttons already do
+   (a funnel and `Filters`, a star and `Watchlist`). The abbreviation is the one
+   form with nothing left to do — a middle size between "word" and "mark" was
+   only ever needed by a row that had to fit, and this row scrolls. */
 .research-inc-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* **The mark leads the label**, which is what every other button in this bar
+     does — a magnifier before `Search`, a funnel before `Filters`, a crest
+     before `Teams`. Ordered rather than moved in the JSX so the full label
+     stays the first text node in the button, which is what a screen reader
+     reads; the mark is `aria-hidden` and contributes nothing to the name
+     either way. */
+  order: -1;
+  /* The trap `.research-toggle svg`'s rule documents: an svg in a flex row is a
+     flex item and shrinks below its own `width` the moment the line is tight. */
+  flex: none;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.research-inc-code svg {
+  flex: none;
+}
+.research-inc-abbr {
   display: none;
 }
 /* On a phone the three go to their short labels — and to a tighter box with
@@ -9728,101 +9756,19 @@ button.start-line:focus-visible {
    to somebody who actually uses the app, the group has been on a line of its own
    all along, and the row this width class was tuned to save was already lost.
    The block below is where it comes back. */
-@media (max-width: 640px) {
-  .research-inc-full {
-    display: none;
-  }
-  .research-inc-abbr {
-    display: inline;
-  }
-  .research-include {
-    gap: 6px;
-  }
-  .research-inc {
-    padding: 0 8px;
-  }
-}
+/* *(The two width blocks that stood here are gone.* They swapped the include
+   buttons' full label for an abbreviation at 640 and for a two-letter code at
+   480, and squared the button at 480 — the same trade the disclosure buttons'
+   labels made at the same widths, made three times over for one group. **The
+   board's bar scrolls now** (`.research-row`), so there is no line to save and
+   the full word stays at every width. What the abbreviation and the code were
+   for survives in one place: `.research-condensed`, which is a *scroll state*
+   rather than a width, and is the one place the run is deliberately marks.)
 
-/* Narrower still, the three go to their marks: the baseball, the padlock, `FA`.
-   The group is 116px where the short labels are 170, and what those 54px buy is
-   a row — 216 (the three view pills) + 12 + 116 is 344 against the 346 a 390px
-   phone leaves, so the include group rejoins the first row and the chrome goes
-   four rows to three. That is 48px, more than a row of the table, on the page
-   where every pixel of height is one.
-
-   **480 rather than 640**, and the reason is that the icons only *pay* below
-   about 440: measured at 480, 520, 560 and 640 the bar wraps identically with
-   the words and with the marks, so replacing them there would spend legibility
-   and buy nothing. Between 481 and 640 there is room for `Mine · Others · Free`
-   and three small glyphs would be the harder read; below it there is not. It is
-   also the app's other established narrow threshold — `.player-card`'s own phone
-   layout turns at the same width.
-
-   **A 4px gap, not 6.** The margin is measured and it is thin: 344.1 against
-   346, under two pixels, and at 6px the group is 120 and misses the row by two
-   instead. The failure mode of getting it wrong is benign — it wraps as it did
-   before — which is what makes a two-pixel margin worth taking here and would
-   not make it worth taking somewhere a miss showed as an overflow. Three 36px
-   squares 4px apart also read more plainly as one run than as three buttons,
-   which is what these are.
-
-   The label goes *visually* hidden rather than away, the rule
-   `.research-toggle-label` sets for the disclosure buttons at 640: a button
-   whose only content is an `aria-hidden` mark has no name at all. The full
-   label rather than the abbreviation, since with nothing on screen to read there
-   is no reason to give a screen reader the terser of the two. The `title` a
-   pointer gets is untouched and is still the sentence explaining the set. */
-@media (max-width: 480px) {
-  .research-inc-abbr {
-    display: none;
-  }
-  .research-inc-full {
-    /* `display` has to be restated, and that is the whole of what makes this
-       rule work: the 640px block above has already set `display: none` on this
-       span, and a visually-hidden box that is still `none` is not hidden — it is
-       *gone*, and the button then has no text at all. Measured before this line
-       existed: the accessible name of each button came back as the `title`,
-       which browsers fall back to only when there is nothing else, so the run
-       read as three buttons named by a tooltip rather than by a label. */
-    display: block;
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  .research-inc-code {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    /* The trap `.research-toggle svg`'s rule already documents: an svg in a
-       flex row is a flex item, and its `width` is a basis it will shrink below
-       the moment the line is tight — on a button that is nothing but the glyph,
-       that is the whole of the button. */
-    flex: none;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-  .research-inc-code svg {
-    flex: none;
-  }
-  /* The app's own 36px square, the shape every icon button in the header and
-     both of the roster row's filters already take, so the run reads as chrome
-     rather than as three buttons that happen to be small. */
-  .research-inc {
-    width: var(--control-h);
-    padding: 0;
-    justify-content: center;
-  }
-  .research-include {
-    gap: 4px;
-  }
-}
+   The full label is the one that stays in the accessibility tree wherever the
+   button is down to its mark — visually hidden rather than dropped, since a
+   button whose only content is an `aria-hidden` glyph has no name at all. That
+   rule moved into the condensed block with the rest. */
 
 /* The watchlist star on a board row — the control that puts a player on it.
    After the name, and 19px of a fluid column: the name column absorbs the
@@ -10097,11 +10043,150 @@ button.start-line:focus-visible {
    finger that pressed it" the app forbids: nothing in this box is pressable,
    and the box it moves — the header row — reads its offset from the
    measurement rather than from a number written down. */
+/* **One row that scrolls, where it was a run that wrapped.**
+
+   Wrapping is what made this row cost the table a second line and then a third
+   as the filters mounted up, on the one view where a line of chrome is a row of
+   the table. It carries only the stat filters now — everything else it used to
+   restate is a lit button in the condensed run directly above it — so it is a
+   short row most of the time and a scroller when it is not.
+
+   **No arrows, unlike the button rows beside it.** These are labels: the app's
+   round pill is the shape it reserves for things you read, and an arrow is a
+   control. A row of chips that offered a press would be promising something the
+   chips themselves do not do — the way to change one is the funnel it came
+   from. The finger scrolls it; nothing else needs to. */
 .research-badges {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px 10px;
+  overflow-x: auto;
+  /* The axis this box genuinely scrolls, and `none` rather than `contain` —
+     the app's standing rule. */
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+  /* A flex item's automatic minimum is its `min-content`; without this the row
+     grows to the widest chip run and the head goes past the pane's edge instead
+     of scrolling inside it. */
+  min-width: 0;
+}
+.research-badges::-webkit-scrollbar {
+  display: none;
+}
+
+/* **The bar's three runs.** `ScrollRow`'s own box (`.tool-scroll`) with one
+   thing taken back: it pulls out to the date bar's inner edge, which is right
+   in the app's tools row where a bar sits directly under it, and wrong here —
+   this view has no date bar, and the run's own edge should be the head's and
+   the count's. Measured, that is `--table-bleed`, which is exactly what
+   `.view-tools` and `.research-head` already pad by. */
+.research-row {
+  margin-inline: 0;
+}
+/* **Left-aligned, where the app's tools row centers.** `.tool-scroll-inner`
+   takes `margin: 0 auto`, which centers a run while it fits and collapses the
+   moment it does not — right for a band of one or two groups sitting over a
+   centered date bar, wrong for three stacked runs of different widths. Centered,
+   each row found its own middle and the three left edges stepped in and out
+   against each other and against the count below them; the board's gutter is a
+   line every other thing on this view starts on. */
+.research-row .tool-scroll-inner {
+  margin-inline: 0;
+}
+
+/* **The span and the position give way to their dropdowns on a phone.** The
+   one width swap on this bar that survived the move to scrolling rows: the
+   other four were *buttons*, whose label is their name, and a run that scrolls
+   has no line to buy back — but these two are a four-pill run and an
+   eleven-pill run, and eleven pills behind a horizontal scroll is a control you
+   have to drag through to find `SS`. A closed select states the one that is set
+   and opens the rest in a list the platform draws.
+
+   Two classes deep because the shared `.view-switch` rule sets
+   `display: inline-flex` and comes later in the file — without the extra
+   specificity a row and its dropdown would both be on screen. And after every
+   rule it overrides, a media query adding no specificity, which is the trap
+   this file records five times. */
+@media (max-width: 640px) {
+  .research-row .research-window-row,
+  .research-row .research-positions {
+    display: none;
+  }
+}
+
+/* The mark the head's stickiness is read off. A pixel with its own height
+   given straight back, so it is a *position* in the flow and costs the pane
+   nothing: `height: 0` is not reliably observable, and anything taller is a
+   gap above the head. */
+.research-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+  flex: none;
+}
+
+/* **The condensed run, inside the stuck head.**
+
+   The whole control set again — all three rows on one line — once the bar has
+   scrolled away. It is the shape the bar used to take on a phone at rest, kept
+   for the one case that argument was always right about: a reader who has
+   scrolled into the table wants the table, and a control that is still
+   *pressable* beats a badge that only says what it was set to. That is what
+   let the badge row below it come down to the filters alone.
+
+   Marks rather than words here, and this is the one place in the app where
+   that is a *scroll state* rather than a width. The label stays in the
+   accessibility tree — visually hidden, never dropped — because a button whose
+   only content is an `aria-hidden` glyph has no name at all. */
+.research-condensed {
+  margin-inline: 0;
+}
+.research-condensed .research-toggle-label,
+.research-condensed .research-inc-full {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.research-condensed .research-inc-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* The trap `.research-toggle svg`'s rule already documents: an svg in a flex
+     row is a flex item and will shrink below its own `width` the moment the
+     line is tight — on a button that is nothing but the glyph, that is the
+     whole of the button. */
+  flex: none;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.research-condensed .research-inc-code svg {
+  flex: none;
+}
+/* The app's own 36px square, the shape every icon button in the header takes,
+   so the condensed run reads as chrome rather than as buttons that happen to
+   be small. */
+.research-condensed .research-inc,
+.research-condensed .research-toggle {
+  width: var(--control-h);
+  padding: 0;
+  justify-content: center;
+}
+/* Except the ones that carry a count: a funnel with `3` beside it is the one
+   thing in this run saying how much is set, and squaring it would clip the
+   number it exists to show. */
+.research-condensed .research-toggle:has(.research-toggle-count) {
+  width: auto;
+  padding: 0 8px;
+}
+.research-condensed .research-include {
+  gap: 4px;
 }
 /* How many rows survived the filters, and out of how many — without it a short
    table reads as a short league rather than a tight filter. It is the **last**

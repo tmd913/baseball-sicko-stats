@@ -52,7 +52,21 @@ export function LockMark({
 
 /** The padlock alone, in `currentColor` and saying nothing — for a caller that
  *  supplies its own name and its own color. */
-export function LockGlyph({ size = 13, width = 2 }: { size?: number; width?: number }) {
+export function LockGlyph({
+  size = 13,
+  width = 2,
+  open = false,
+}: {
+  size?: number;
+  width?: number;
+  /** **The shackle swung clear** — the mark for a player *nobody* has, which is
+   *  the same statement as the closed one with its subject negated. The board's
+   *  Free Agents button is the only caller: it had a two-letter `FA` where the
+   *  two beside it had glyphs, and `FA Free Agents` is a label saying itself
+   *  twice. Drawn from the same body so the set of three reads as one
+   *  vocabulary — a ball, a lock, and that lock undone. */
+  open?: boolean;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -71,7 +85,11 @@ export function LockGlyph({ size = 13, width = 2 }: { size?: number; width?: num
           stands beside and needs no nudge of its own — it takes the
           `.research-watched` alignment wholesale. */}
       <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
-      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+      {/* Closed, the shackle comes down on both sides of the body; open, its
+          right leg is missing and the arc stops at the top. Same start point
+          and same radius either way, so the two marks share a silhouette and
+          differ only where it matters. */}
+      <path d={open ? 'M8 10.5V7a4 4 0 0 1 7.9-0.9' : 'M8 10.5V7a4 4 0 0 1 8 0v3.5'} />
     </svg>
   );
 }
