@@ -172,6 +172,68 @@ the width of its container, so it takes the declaration where it stands, where
 its intrinsic contribution to nought (measured then: the whole tab row **1356 →
 0px** at 1400, every tab still painted).
 
+### The readings scroll sideways rather than dropping their words
+
+**Below 640px this row used to take its buttons' labels away.** `Feed`,
+`Schedule`, `Projected` and `Summary` were visually hidden and each button was
+squared to the app's 36px icon shape, so the run fitted on one line — three
+squares and their gaps against three labeled pills, and the measurement behind
+it was real (the League lens is a 145px group with its word, and the Rankings
+row took a *third* line at 320 and 640: 132 → 180 and 84 → 132, i.e. 48px of
+pinned chrome off the one tab that is a table).
+
+**What it bought was a line. What it cost was the buttons' names on the one
+device that cannot read a `title`.** The labels were *visually* hidden rather
+than removed precisely so the buttons still named themselves — to a screen
+reader. A sighted phone reader got a glyph and a tooltip that never fires,
+which is the same fault the app records against hover-only affordances
+everywhere else.
+
+**So the run scrolls instead** — `ScrollRow` in `TabStrip.tsx`, wrapping
+everything in `.view-tools` except the League tabs' own line. It is the player
+page's tab strip generalized rather than copied: `useOverflowArrows` is the
+measuring both share, and the two arrows are literally `.tabstrip-arrow`, down
+to the 30px of solid ground and 14 of fade that keeps a chevron off a gradient.
+`.view-tools` is `background: var(--bg)`, the value that fade is written
+against, so the fold cost nothing.
+
+**`width: max-content` with an auto margin, not `justify-content: center`.**
+Centering a scroller's content is the standard way to lose the start of it: the
+overflow goes both ways and `scrollLeft` cannot go negative, so the first
+control becomes unreachable. An auto margin centers the run while it fits and
+collapses the moment it does not.
+
+**Measured on the live app, before → after, at 320 and 390:**
+
+| | label widths | row height |
+| --- | --- | --- |
+| Roster, before | 1 / 1 / 1 (clipped) | 50 |
+| Roster, after | **31.6 / 60.1 / 62.5** | **50** |
+| Rankings, before | 1 (clipped) | 98 |
+| Rankings, after | **62.5** | **98** |
+| Matchup, before | 1 / 1 / 1 / 1 (clipped) | 50 |
+| Matchup, after | **31.6 / 60.1 / 62.5 / 61.9** | **50** |
+
+**The row height does not move at any of them**, which is the whole argument:
+the line the hiding rule was protecting is still one line. The run's natural
+width is 331px on the Roster and 456 on a matchup, so it overflows at 320 on
+the Roster and at 320 and 390 on a matchup, and nowhere else; the Rankings lens
+is 111px and never overflows at all. Page-body overflow is **0** throughout.
+
+Driven with real mouse events on a matchup at 390: at rest `scrollLeft` 0 with
+the left arrow `hidden` and `Summary`'s right edge at **478** — off a 390px
+screen. One press of the right arrow puts `scrollLeft` at its maximum of 110
+and that edge at **368**, fully on screen, with the right arrow now hidden; one
+press of the left returns it to 0. A hidden arrow does not hit-test, so the end
+a reader has reached is all control and no dead band.
+
+**The research board keeps the old rule and is untouched.** Its row is a
+different control set with a measured, load-bearing head height, and its
+labels — `Columns`, `Ranks`, `Teams`, `Search`, `Filters` — are the case the
+hiding was actually written for. Checked after the change: `--research-head-h`
+is **93px at 390 and 62 at 1200**, its labels still clip to 1px at 390, and it
+has no `.tool-scroll` in it.
+
 **And the band scrolls away, where the tabs do not.** That is the whole of what
 the split buys and it is what was asked for: which page you are on is the last
 thing that should leave the screen, and which reading is a thing set on arrival.

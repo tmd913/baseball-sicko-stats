@@ -2,6 +2,169 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
 /**
+ * **Whether a scrolling row overflows, and which way there is more of it.**
+ *
+ * Lifted out of `TabStrip` when a second caller wanted the same three
+ * questions answered — the app's tools row, which had been *hiding its
+ * buttons' labels* below 640px to make them fit. Both are a row of controls
+ * too wide for a phone, so both get the same answer rather than two rules that
+ * agree today; `ScrollRow` below is the general one and `TabStrip` is the
+ * tablist-shaped one.
+ *
+ * The caller owns the two refs and the markup. This owns only the measuring,
+ * because the measuring is the part with the traps in it:
+ *
+ * - **A pixel of slack in each test.** These are fractional widths rounded
+ *   into integer scroll positions, and a row that fits exactly must not draw
+ *   an arrow for the 0.4px it is over by.
+ * - **The layout effect has no dependency list**, for the reason the research
+ *   board's pinned-column measurement has none: the *content* can change
+ *   without the box doing so — a pitcher's page has an Arsenal tab and a
+ *   batter's has not, and a roster row gains `Projected` only with a league
+ *   connected — and a `ResizeObserver` on the box hears nothing when the
+ *   content is what moved.
+ * - **State, not a class written onto the DOM by hand**, because all three
+ *   answers decide what is *rendered*.
+ */
+export function useOverflowArrows(
+  boxRef: RefObject<HTMLDivElement | null>,
+  wrapRef: RefObject<HTMLDivElement | null>,
+  /** Anything else the caller wants measured off the same pass. */
+  publish?: (box: HTMLElement, wrap: HTMLElement) => void,
+) {
+  const [state, setState] = useState({ over: false, left: false, right: false });
+  const measure = useCallback(() => {
+    const box = boxRef.current;
+    const wrap = wrapRef.current;
+    if (!box || !wrap) return;
+    publish?.(box, wrap);
+    const max = box.scrollWidth - box.clientWidth;
+    setState((s) => {
+      const next = {
+        over: max > 1,
+        left: box.scrollLeft > 1,
+        right: box.scrollLeft < max - 1,
+      };
+      return s.over === next.over && s.left === next.left && s.right === next.right
+        ? s
+        : next;
+    });
+  }, [boxRef, wrapRef, publish]);
+
+  useLayoutEffect(() => {
+    measure();
+    const box = boxRef.current;
+    if (!box) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  });
+
+  /** A press moves the row by most of a pane — enough to be a page rather than
+   *  a nudge, and short of a whole one so the control at the edge stays on
+   *  screen and the reader keeps their place. */
+  const nudge = useCallback(
+    (dir: -1 | 1) => {
+      const box = boxRef.current;
+      if (!box) return;
+      box.scrollBy({ left: dir * box.clientWidth * 0.8, behavior: 'smooth' });
+    },
+    [boxRef],
+  );
+
+  return { state, measure, nudge };
+}
+
+/** The two arrows, which are the same object wherever a row scrolls. Drawn
+ *  only while the row overflows; the one with nothing behind it is
+ *  `visibility: hidden` rather than absent — *reserve the box, don't move the
+ *  page*, and a hidden box does not hit-test, so the end a reader has reached
+ *  is all control and no dead band. */
+function ScrollArrow({
+  dir,
+  shown,
+  label,
+  onPress,
+}: {
+  dir: 'l' | 'r';
+  shown: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`tabstrip-arrow tabstrip-arrow-${dir}`}
+      style={{ visibility: shown ? 'visible' : 'hidden' }}
+      disabled={!shown}
+      aria-label={label}
+      onClick={onPress}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={dir === 'l' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * **A row of controls that scrolls only when it has to, and says which way.**
+ *
+ * This is the app's tools row on the Roster, the matchup page and the League
+ * Rankings tab — `.view-tools` — and it exists because of what that row used
+ * to do instead. Below 640px it **took its buttons' words away**: `Feed`,
+ * `Schedule`, `Projected` and `Summary` were visually hidden and the buttons
+ * became lone glyphs with a `title`, which is a tooltip no touch device will
+ * ever show. A row of unlabeled icons on the one device that cannot hover is
+ * the reading that was traded away, and the thing bought with it was a row
+ * that did not wrap to a third line.
+ *
+ * **Scrolling buys the same line count without the trade.** The words stay at
+ * every width and the row gives up only what is off the end — which the arrows
+ * then say is there, and reach.
+ *
+ * **The inner box is `width: max-content; margin: 0 auto`,** and that is
+ * load-bearing rather than tidy: `justify-content: center` on a scroller is
+ * the standard way to lose the start of the content, because overflow goes
+ * both ways and `scrollLeft` cannot go negative — the first control becomes
+ * unreachable. An auto margin centers the row while it fits and collapses to
+ * zero the moment it does not, which is the same behavior with a start you can
+ * still scroll back to.
+ *
+ * The research board keeps its own `.view-tools` and does **not** take this:
+ * its row is a different set of controls with its own measured head height,
+ * and its two-character labels are the case the hiding rule was actually
+ * written for.
+ */
+export function ScrollRow({
+  children,
+  label,
+  className,
+}: {
+  children: ReactNode;
+  /** What the row is, for the arrows' own labels. */
+  label: string;
+  className?: string;
+}) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const { state, measure, nudge } = useOverflowArrows(boxRef, wrapRef);
+  return (
+    <div ref={wrapRef} className={`tool-scroll${className ? ` ${className}` : ''}`}>
+      {state.over && (
+        <ScrollArrow dir="l" shown={state.left} label={`Scroll ${label} left`} onPress={() => nudge(-1)} />
+      )}
+      <div className="tool-scroll-box" ref={boxRef} onScroll={measure}>
+        <div className="tool-scroll-inner">{children}</div>
+      </div>
+      {state.over && (
+        <ScrollArrow dir="r" shown={state.right} label={`Scroll ${label} right`} onPress={() => nudge(1)} />
+      )}
+    </div>
+  );
+}
+
+/**
  * **A row of tabs that scrolls only when it has to, and says which way.**
  *
  * The player page's nine tabs and the outing page's four are one control drawn
@@ -78,17 +241,11 @@ export function TabStrip({
 }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  /** Whether the strip overflows, and — when it does — whether there is
-   *  anything left in each direction. Held in state rather than written onto
-   *  the DOM by hand because both decide what is rendered. */
-  const [state, setState] = useState({ over: false, left: false, right: false });
-
-  const measure = useCallback(() => {
-    const box = boxRef.current;
-    const wrap = wrapRef.current;
-    if (!box || !wrap) return;
-    // The tabs' own widths plus the gaps between them — see the header for why
-    // this is not `scrollWidth`.
+  /* The tabs' own widths plus the gaps between them, published as the grow
+     var — see the header for why this is not `scrollWidth`. It is the one
+     thing this strip needs that a plain scroller does not, which is why it
+     rides in as a callback rather than living in the hook. */
+  const publish = useCallback((box: HTMLElement, wrap: HTMLElement) => {
     const tabs = Array.from(box.children) as HTMLElement[];
     const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
     const natural = tabs.reduce(
@@ -96,60 +253,13 @@ export function TabStrip({
       0,
     );
     wrap.style.setProperty('--tabstrip-grow', `${Math.ceil(natural)}px`);
-    // A pixel of slack in each test: these are fractional widths rounded into
-    // integer scroll positions, and a strip that fits exactly must not draw an
-    // arrow for the 0.4px it is over by.
-    const max = box.scrollWidth - box.clientWidth;
-    setState((s) => {
-      const next = {
-        over: max > 1,
-        left: box.scrollLeft > 1,
-        right: box.scrollLeft < max - 1,
-      };
-      return s.over === next.over && s.left === next.left && s.right === next.right
-        ? s
-        : next;
-    });
   }, []);
-
-  // Every render, and on any resize of the strip. No dependency list on the
-  // layout effect for the reason the research board's pinned-column measurement
-  // has none: the labels can change without the box doing so — a pitcher's page
-  // has an Arsenal tab and a batter's has not — and a `ResizeObserver` on the
-  // box hears nothing when the *content* is what moved.
-  useLayoutEffect(() => {
-    measure();
-    const box = boxRef.current;
-    if (!box) return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(box);
-    return () => ro.disconnect();
-  });
-
-  /** A press moves the strip by most of a pane — enough to be a page rather
-   *  than a nudge, and short of a whole one so that the tab at the edge stays
-   *  on screen and the reader keeps their place. */
-  const nudge = (dir: -1 | 1) => {
-    const box = boxRef.current;
-    if (!box) return;
-    box.scrollBy({ left: dir * box.clientWidth * 0.8, behavior: 'smooth' });
-  };
+  const { state, measure, nudge } = useOverflowArrows(boxRef, wrapRef, publish);
 
   return (
     <div ref={wrapRef} className={`details-tabstrip${className ? ` ${className}` : ''}`}>
       {state.over && (
-        <button
-          type="button"
-          className="tabstrip-arrow tabstrip-arrow-l"
-          style={{ visibility: state.left ? 'visible' : 'hidden' }}
-          disabled={!state.left}
-          aria-label={`Scroll ${label} left`}
-          onClick={() => nudge(-1)}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-        </button>
+        <ScrollArrow dir="l" shown={state.left} label={`Scroll ${label} left`} onPress={() => nudge(-1)} />
       )}
       <div
         className="details-tabs"
@@ -164,18 +274,7 @@ export function TabStrip({
         {children}
       </div>
       {state.over && (
-        <button
-          type="button"
-          className="tabstrip-arrow tabstrip-arrow-r"
-          style={{ visibility: state.right ? 'visible' : 'hidden' }}
-          disabled={!state.right}
-          aria-label={`Scroll ${label} right`}
-          onClick={() => nudge(1)}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        <ScrollArrow dir="r" shown={state.right} label={`Scroll ${label} right`} onPress={() => nudge(1)} />
       )}
     </div>
   );

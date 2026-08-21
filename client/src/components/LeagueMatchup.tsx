@@ -13,6 +13,7 @@ import { api } from '../api';
 import { BackButton } from './BackButton';
 import { InfoKey } from './InfoKey';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
+import { ScrollRow } from './TabStrip';
 import type { DateBarReading, DatePreset } from './DateControls';
 import LeagueTeam from './LeagueTeam';
 import { FeedToggle } from './FeedFilters';
@@ -1670,6 +1671,14 @@ export default function LeagueMatchupView({
        container query of its own) was all in service of a card-column cap and
        a pinned band, and both are gone. */
     <div className="view-tools">
+      {/* **The four readings scroll rather than shedding their words.** Below
+          640px this row used to visually hide `Feed`, `Schedule`, `Projected`
+          and `Summary`, leaving four glyphs whose only self-description was a
+          `title` — a tooltip a touch device never shows, on the width where
+          almost all the touch is. `ScrollRow` is the app's own answer and the
+          Roster's row takes it too; the fold is the same one `.view-tools`
+          already is. */}
+      <ScrollRow label="the readings" className="view-tools-scroll">
       <FeedToggle
         on={reading === 'feed'}
         onToggle={() => {
@@ -1761,6 +1770,7 @@ export default function LeagueMatchupView({
           alone. It is gone from the app — see `FeedFilters.tsx` — so this run
           is four readings at every one of them, which is what the ghosts this
           row used to carry were trying to buy. */}
+      </ScrollRow>
     </div>
   );
 
