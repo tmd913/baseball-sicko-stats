@@ -1029,9 +1029,54 @@ async function scrape(
     throw new Error(`Baseball Savant returned ${res.status} ${res.statusText}`);
   }
   const html = await res.text();
+  /**
+   * **A player with no card at all is an answer, not a failure** — and telling
+   * that apart from a page we could not read is the whole of what these two
+   * lines do.
+   *
+   * Measured on four pages. Aaron Judge's *hitting* page carries `statcast: [`
+   * with thirteen entries in it, 2016 through 2026. **Kade Anderson's pitching
+   * page and Judge's own *pitching* page carry no `statcast: [` marker at
+   * all** — both 200, both an ordinary Savant player page (233KB and 720KB).
+   * So an absent payload is the normal shape of "this man has no major-league
+   * Statcast of this kind", which is reachable from every corner of this app
+   * now: a fantasy league can roster a prospect, and the player page opens on
+   * anybody.
+   *
+   * It used to throw, which put a raw upstream sentence with a numeric id in it
+   * (`No Statcast percentile data for 807739 in 2026`) on screen under
+   * `Couldn’t load percentile rankings` — a fact about a person dressed as a
+   * failure, and the one shape the app's empty-state rule forbids.
+   *
+   * The `metricSummaryStats:` **marker** is what separates the two, and the
+   * marker rather than what it holds: measured, a page with no card carries
+   * `metricSummaryStats: {}` — present and empty — where Judge's hitting page
+   * carries a season-keyed map from 2015 on. So the *parsed* map is `{}` either
+   * way and cannot be the test; its presence in the HTML can. A page that is not a
+   * Savant player page carries no marker at all (`x-1`, an id nobody has, comes
+   * back 200 with 1.9MB of something else and none of it), and that goes on
+   * throwing. *A dead upstream must not state a fact about a person*, so the
+   * honest reading of "no rows and no marker either" is that the read failed,
+   * not that he never played.
+   */
+  const isPlayerPage = html.includes('metricSummaryStats:');
   const row = pickRow(extractStatcast(html), year);
   if (!row) {
-    throw new Error(`No Statcast percentile data for ${playerId} in ${year}`);
+    if (!isPlayerPage) {
+      throw new Error(`Baseball Savant returned a page with no Statcast card on it`);
+    }
+    // No sections, and the client's own empty state says what that means. It is
+    // cached like any other card — the same 6h for the current season, forever
+    // for a past one, which is right in both directions: a prospect who debuts
+    // today is a card six hours from now, and a season he never played in is
+    // never going to grow one.
+    return {
+      playerId,
+      year,
+      version: CARD_VERSION,
+      sections: [],
+      updatedAt: new Date().toISOString(),
+    };
   }
   const dist = extractMetricSummary(html)[String(year)] ?? {};
   const defs = kind === 'pitcher' ? PITCHER_SECTIONS : SECTIONS;

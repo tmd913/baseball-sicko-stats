@@ -532,6 +532,94 @@ deliberate unmark-on-failure is argued where it sits.
 **Bundle: 549.91 → 549.74 KB of JS** (162.93 → 162.96 gzipped), CSS unchanged —
 seven cleanups removed and a guard put back, which nets to nothing.
 
+### An empty percentile card had one message, and it needed three causes told apart
+
+**A percentile card is a rank against a population, and there is more than one
+way for one to come back with nothing in it.** The tab drew two states between
+them: `Couldn’t load percentile rankings: <whatever the upstream said>` for
+anything thrown, and `No Statcast data for this player.` inside the card for a
+card whose `sections` were empty. Four causes were plausible on the face of it.
+**Only two are reachable, and the check was measurement rather than reading:**
+
+| cause | reachable? | how it was checked |
+| --- | --- | --- |
+| the leaderboard read failed | **no**, not as an empty card | a failed board costs its own bars a percentile and nothing else — `scrape` catches per board |
+| he has not qualified | **no** | Jack Brannigan, **1 PA** on the 2026 board, draws **6 sections and 25 bars, 23 of them `estimated: true`** — the dotted bubble. Un-ranked is what the estimator is *for* |
+| he has no major-league season of this kind | **yes** | Kade Anderson (`pitcher-807739`) and Aaron Judge asked for a *pitcher's* card |
+| the read itself failed | **yes** | a 502 from Savant, or a 200 carrying a page we cannot read |
+
+**The unqualified row is the one worth naming**, because it is the case this
+card was most likely to be blamed for and it is not a case at all: the estimator
+fills a blank `percent_rank_` from the season's own league distribution, so a man
+with one plate appearance gets bars, marked broken because they are ours. *An
+estimate never wears the same clothes as a measurement* is doing the work here
+that an empty state would otherwise have to.
+
+**The third cause is new, and it is new because the app grew a door to it.** A
+fantasy league can roster a prospect, and the player page opens on anybody — so
+`pitcher-807739` is a real page with a real Overview, which already says *Kade
+Anderson has not appeared in a major-league game this season*. The Percentile
+tab beside it said `Couldn’t load percentile rankings: No Statcast percentile
+data for 807739 in 2026`: **a fact about a person, dressed as a failure, wearing
+his database id.**
+
+**So the two are told apart on the server, not by reading the upstream's
+sentence on the client.** `percentiles.ts::scrape` answers a player Savant holds
+no card for with an **empty card** — a 200, `sections: []` — and keeps the throw
+for a page it could not read. The discriminator is measured: a page with no card
+carries `metricSummaryStats: {}`, *present and empty*, where Judge's hitting page
+carries a season-keyed map and thirteen `statcast:` entries; a page that is not a
+player page at all (`x-1`, 200, 1.9MB) carries no `metricSummaryStats:` marker.
+So the **marker** is the test and the parsed map cannot be — it is `{}` in both.
+Measured on four requests through the running server:
+
+| request | before | after |
+| --- | --- | --- |
+| `807739?type=pitcher` (a prospect) | 502 `No Statcast percentile data for 807739 in 2026` | 200 `{"sections":[]}` |
+| `592450?type=pitcher` (Judge, wrong kind) | 502, same sentence | 200 `{"sections":[]}` |
+| `1?type=batter` (no such player) | 502, same sentence | 502 `Baseball Savant returned a page with no Statcast card on it` |
+| `592450?type=batter` | 200, 8 sections / 41 bars | 200, 8 sections / 41 bars |
+
+**No cache version bump, and the rule's own test says why.** `CARD_VERSION`
+guards the meaning of what is *stored*, and nothing stored today can be an empty
+card — the case used to throw, so no blob has ever held one. What is new is a
+state that can now be written, not a state that changes meaning; the shape is
+untouched and every v5 card on disk still means what it meant. The empty card is
+cached like any other — six hours for the current season, forever for a past one,
+which is right in both directions: a prospect who debuts today is a card six
+hours later, and a season he never played in is never going to grow one.
+
+**The two wordings, measured in the running app** (`?player=pitcher-807739` and a
+stubbed 502 on `?player=batter-592450`, tab pressed, read off the rendered page):
+
+- **He has no card**, and it says the same thing the Overview says, in the same
+  words, because it is the same fact — *Kade Anderson has not appeared in a
+  major-league game this season, so there is nothing to rank him against.* The
+  pitcher's wording narrows the first clause to the half this card is about
+  (*has not pitched*): a man who has only ever batted **has** appeared, and only
+  that sentence is true of him. The second clause is what makes it an empty
+  state rather than a note — the card *is* a rank against the men who did play.
+- **The read failed**, and it claims nothing about him — *Couldn’t read the
+  percentile card: Baseball Savant returned 503 Service Unavailable. That is this
+  read failing rather than anything about Aaron Judge — leave the tab and come
+  back to try it again.* The reason is quoted because it is the useful half; the
+  sentence round it exists because the raw upstream line read as a verdict on a
+  player. And it **names the control**, which the rule asks for: leaving the tab
+  and coming back is the retry, because the error path nulls `pctReq.current` —
+  the same line the hang above turns on.
+
+**The empty state moved out of `.pct-card`.** It used to draw inside the card,
+under a head reading `2026 MLB Percentile Rankings` — a title over a card with
+no rankings in it. The card is now gated on `sections.length > 0` and the message
+is a `.details-status` beside it, which is where the other tabs' empty states
+already are.
+
+**One case is indistinguishable and is written down rather than guarded**: a
+Savant row that exists but yields no metric in any section would also arrive as
+`sections: []` and be reported as "has not appeared". It has not been observed —
+a 1-PA batter draws 25 bars — and the guard would be a second field on the
+wire to separate two states that have never differed.
+
 ### The player page's Overview tab: the player as a summary page
 
 **It was his day and nothing else, and one thing is not what a page opened on a stranger is opened for.** A research-board row is a man you are deciding about, and the three questions under that decision are *how good is he*, *what is he doing* and *how has he been going* — of which the tab answered the middle one and left the other two behind two more tabs. So it is three blocks in that order (`PlayerOverview.tsx`), each a summary with a door to the tab that holds it whole:

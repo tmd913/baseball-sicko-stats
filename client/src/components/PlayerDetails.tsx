@@ -1917,12 +1917,30 @@ export function PlayerDetails({
       )}
 
       {tab === 'percentiles' && pctWait && <LoadingBlock>Reading the percentile card</LoadingBlock>}
+      {/* **The read failed, which is a fact about the read and about nothing
+          else.** A percentile card is a population, and there is more than one
+          way for one to come back with nothing in it; the two that are actually
+          reachable are told apart on the *server* rather than by reading the
+          upstream's own sentence here — see `percentiles.ts::scrape`, which
+          answers a player Savant holds no card for with an empty card and
+          reserves a thrown error for a page it could not read at all.
+
+          So this branch is only ever the second of those, and it says so: the
+          reason is quoted because it is the useful half, and the sentence round
+          it is there because the alternative — the raw
+          `No Statcast percentile data for 807739 in 2026` this used to print
+          under `Couldn’t load percentile rankings` — read as a verdict on a
+          player rather than as our own read falling over. The way to try again
+          is the tab, which drops its mark on failure so re-entering re-reads
+          (`pctReq.current = null` in the effect above), and an empty state
+          names the control that answers it. */}
       {tab === 'percentiles' && error && !loading && (
         <div className="details-status details-error">
-          Couldn’t load percentile rankings: {error}
+          Couldn’t read the percentile card: {error}. That is this read failing rather than
+          anything about {name} — leave the tab and come back to try it again.
         </div>
       )}
-      {tab === 'percentiles' && data && !loading && (
+      {tab === 'percentiles' && data && !loading && data.sections.length > 0 && (
         <div className="pct-card" ref={cardRef}>
           <div className="pct-card-head">
             <span className="pct-card-title">{data.year} MLB Percentile Rankings</span>
@@ -1933,9 +1951,30 @@ export function PlayerDetails({
               {renderMetricRows(sec.metrics, overlapPct)}
             </div>
           ))}
-          {data.sections.length === 0 && (
-            <div className="details-status">No Statcast data for this player.</div>
-          )}
+        </div>
+      )}
+      {/* **A card that came back empty, which is the new case and a real
+          answer.** Savant has no major-league Statcast season for him of this
+          kind — measured on a prospect a fantasy league has rostered (Kade
+          Anderson, whose pitching page carries no `statcast:` payload at all)
+          and on a batter asked for a pitcher's card.
+
+          It says the same thing the Overview tab says two tabs over, in the
+          same words, because it is the same fact: *has not appeared in a
+          major-league game this season*. The pitcher's wording narrows it to
+          the half this card is about — a man who has only ever batted has
+          appeared, and only "has not pitched" is true of him — and the second
+          clause is what makes it an empty state rather than a note: the card
+          *is* a rank against the players who did.
+
+          It is not drawn inside `.pct-card`, where it used to sit under a
+          heading reading `2026 MLB Percentile Rankings` — a title over a card
+          with no rankings in it. */}
+      {tab === 'percentiles' && data && !loading && data.sections.length === 0 && (
+        <div className="details-status">
+          {isPitcher
+            ? `${name} has not pitched in a major-league game this season, so there is nothing to rank him against.`
+            : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
         </div>
       )}
     </div>
