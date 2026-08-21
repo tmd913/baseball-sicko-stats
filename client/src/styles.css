@@ -763,7 +763,6 @@ body {
 .research-window-select,
 .research-pos-select,
 .schedule-span-select,
-.lg-span-select,
 .mup-select {
   display: none;
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
@@ -790,7 +789,6 @@ body {
 .research-window-select:hover,
 .research-pos-select:hover,
 .schedule-span-select:hover,
-.lg-span-select:hover,
 .mup-select:hover {
   border-color: var(--accent);
 }
@@ -811,8 +809,7 @@ body {
   }
   .research-window-select,
   .research-pos-select,
-  .schedule-span-select,
-  .lg-span-select {
+  .schedule-span-select {
     display: block;
     /* In a wrapping flex bar rather than the header's grid — each must be only
        as wide as its own widest option, so the three share a line and the four
@@ -6871,6 +6868,68 @@ button.start-line:focus-visible {
 .date-bar-fixed .date-face {
   cursor: default;
 }
+/* **And where the bar carries one control at its right-hand end** — the League
+   Rankings tab's ⓘ, the key to `OVR`/`BAT`/`PIT` — the row goes from three
+   tracks to **five**, with an empty one of the same width at the *left* end.
+
+   **A fourth thing in this row was rejected once, in as many words**: it "would
+   either break the centering the bar's own grid exists for or take a third of
+   the middle column on a 320px phone". Both halves were right and each is
+   answered separately.
+
+   *The centering* is the ghost. The two arrows are equal, which is why the
+   middle column sits on the bar's own center line; a control at one end and
+   nothing at the other breaks exactly that, so the other end is held open to
+   the same width. It is `reserve the box, don't move the page` spent
+   sideways — a hidden peer sharing the grid rather than a magic number.
+   Measured on the live 12-team league, `face.center − bar.center` is **0.00px
+   at 320, 390, 640, 1200 and 1920**, with the slot filled and empty alike.
+
+   *The 320px phone* is not answered and cannot be, so the rule is a width. Each
+   end slot costs **38px** (a 30px `.info-key-btn` and the row's 8px gap) and
+   the widest face this bar prints is the projected reading's **247.48px**;
+   247.48 + 2×38 + 2×44 (the arrows and their gaps) + 20 (the bar's own side
+   padding) is **431.48**. So from **432px** up the slot costs the face nothing
+   at all, and below it the ends collapse and the caller's own copy of the
+   control is what is on screen — the swap this file already makes for every
+   pill row that becomes a `<select>`, one media query, both rendered, neither
+   chosen in JS. The narrow block is at the foot of this section, after
+   everything it overrides. */
+.date-bar-ends .date-bar-row {
+  grid-template-columns:
+    var(--bar-end-w) var(--control-h) minmax(0, 1fr) var(--control-h)
+    var(--bar-end-w);
+}
+/* The app's own icon-button width, which is what `.info-key-btn` takes from
+   `.app-dialog-close`. Named rather than repeated, the ghost and the slot
+   having to be the same number or the face is off center by the difference. */
+.date-bar-ends {
+  --bar-end-w: 30px;
+}
+/* The slot itself, and **nothing here positions it**, which is the load-bearing
+   half: `InfoKey`'s panel hangs off the nearest positioned ancestor, so leaving
+   this box static makes that the bar (`.date-bar-anchored`, already
+   `position: relative` for its own popover) rather than a 30px button at the
+   far right edge of it. See `.lg-rank-key .info-key-panel`, which is that
+   caller's own half of the arrangement. */
+.date-bar-end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* Below the width the fifth and first tracks are free at (see above), the row
+   is the three it always was and the slot is not drawn — the caller keeps its
+   own copy where it was. **After** the two rules it overrides, a media query
+   adding no specificity, which is the trap this file records five times. */
+@media (max-width: 431px) {
+  .date-bar-ends .date-bar-row {
+    grid-template-columns: var(--control-h) minmax(0, 1fr) var(--control-h);
+  }
+  .date-bar-ghost,
+  .date-bar-end {
+    display: none;
+  }
+}
 /* Edit carries its label, so it overrides the square the shared list gives it —
    everything else in that rule (the panel fill, the border, the hover, the
    accent when active) is what it is there for. It renders in one place now, as
@@ -9398,24 +9457,22 @@ button.start-line:focus-visible {
   }
 }
 
-/* On a phone all three of the bar's tab groups give way to dropdowns (styled
-   with the header's preset dropdown, up at the top of the file). Three rows of
-   pills — whose players, the time span, and eleven positions that scroll
-   sideways — were the best part of a phone's screen spent before the first
-   name, and on this page of all pages every pixel of height is a row of the
-   table. Two classes deep because the shared `.view-switch` rule sets `display:
-   inline-flex` and comes later in the file — the same reason `.date-row
-   .date-presets` was written that way, before it went with the preset row — and
-   without the extra specificity a row
-   and its dropdown would both be on screen at once. */
+/* On a phone the board's two tab groups give way to dropdowns (styled with the
+   header's preset dropdown, up at the top of the file). Rows of pills — whose
+   players, the time span, and eleven positions that scroll sideways — were the
+   best part of a phone's screen spent before the first name, and on this page
+   of all pages every pixel of height is a row of the table. Two classes deep
+   because the shared `.view-switch` rule sets `display: inline-flex` and comes
+   later in the file — the same reason `.date-row .date-presets` was written
+   that way, before it went with the preset row — and without the extra
+   specificity a row and its dropdown would both be on screen at once.
+
+   **The League Rankings span was the third of them and is gone**, strip and
+   dropdown together: its five cuts are the first group of that tab's own date
+   bar list. See `.lg-span-row`, below. */
 @media (max-width: 640px) {
   .research-bar .research-window-row,
-  .research-bar .research-positions,
-  /* The League Rankings span, same swap and the same specificity problem: the
-     shared `.view-switch` rule sets `display: inline-flex` later in the file,
-     so without a second class both the pills and their dropdown would be on
-     screen at once. */
-  .view-tools .lg-span-row {
+  .research-bar .research-positions {
     display: none;
   }
 }
@@ -10317,13 +10374,11 @@ button.start-line:focus-visible {
    rather than restyling. */
 .view-switch,
 .research-window-row,
-/* The League page's three tabs, and the Rankings tab's four spans. Folded here
-   rather than restyled to resemble the row above them: the first is the view
-   switch one tier down and the second is the research board's window tabs
-   asking the same shape of question about a different thing — see
-   `docs/claude/client-league.md`. */
-.lg-tabs,
-.lg-span-row {
+/* The League page's three tabs. Folded here rather than restyled to resemble
+   the row above them: it is the view switch one tier down — see
+   `docs/claude/client-league.md`. (`.lg-span-row`, the Rankings tab's five
+   spans, was folded on here too and is gone with the strip itself.) */
+.lg-tabs {
   display: inline-flex;
   align-items: center;
   min-height: var(--control-h);
@@ -10335,8 +10390,7 @@ button.start-line:focus-visible {
 }
 .view-tab,
 .research-window-tab,
-.lg-tab,
-.lg-span-tab {
+.lg-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -10352,21 +10406,18 @@ button.start-line:focus-visible {
 }
 .view-tab:hover,
 .research-window-tab:hover,
-.lg-tab:hover,
-.lg-span-tab:hover {
+.lg-tab:hover {
   color: var(--text);
 }
 .view-tab.active,
 .research-window-tab.active,
-.lg-tab.active,
-.lg-span-tab.active {
+.lg-tab.active {
   color: var(--on-accent);
   background: var(--accent);
 }
 .view-tab:focus-visible,
 .research-window-tab:focus-visible,
-.lg-tab:focus-visible,
-.lg-span-tab:focus-visible {
+.lg-tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -15341,14 +15392,18 @@ span.mup-move-name:hover {
      strip's content and takes the page with it. */
   min-width: 0;
 }
-/* The span strip breaks **between** two pills rather than inside one, which is
-   the rule `.view-tools` states one tier up. Without it `Current matchup`
-   wraps inside its own button on a phone — a two-line pill in a row of
-   one-line ones, which `align-items: center` then leaves at a different top
-   from its neighbors. */
-.lg-span-row {
-  flex-wrap: wrap;
-}
+/* **`.lg-span-row` is gone**, and with it the `flex-wrap: wrap` that kept
+   `Current matchup` from wrapping inside its own pill on a phone, its fold onto
+   `.view-switch`/`.view-tab`, its `white-space: nowrap` and its `<select>`.
+   The five spans it named are the first group of that tab's own date bar list,
+   off the same `rankings.spans`, so the strip was a second door to one room —
+   and on the four spans that draw no `Projected` toggle it *was* the second
+   line of the tools row. Measured, `.view-tools` 96 → **50** at 1200/1440/1920,
+   98 → **50** at 640 and 98 → **92** at 320/390 (where the narrow copy of the
+   ⓘ takes the line it leaves); unchanged on `Current matchup`, where
+   `ProjectedTools` is on that line anyway. Five selector names out; nothing
+   replaces them, the pills having been a fold onto `.view-switch`/`.view-tab`
+   all along. */
 /* **The League strip scrolls on a phone where it used to wrap**, which is the
    answer the app already gives every other strip of pills that outgrows its
    width: the research board's position row, the window tabs, the player page's
@@ -15402,8 +15457,7 @@ span.mup-move-name:hover {
     overscroll-behavior-x: none;
   }
 }
-.lg-tab,
-.lg-span-tab {
+.lg-tab {
   white-space: nowrap;
 }
 /* ---- The Rankings tab's span, as the app's own date bar ------------------
@@ -15420,29 +15474,54 @@ span.mup-move-name:hover {
    four boxes rather than three. Where this one sits and what it sticks to is
    `.league-scroll > .date-bar`, up beside the other three placements.
 
-   The ⓘ went up to `.view-tools` with the other buttons (see `.lg-rank-key`
-   below, whose anchor rule changed with it). */
+   The ⓘ went up to `.view-tools` with the other buttons, and has since come
+   back down **into the bar itself**, at its right-hand end — see
+   `.date-bar-ends` for the ghost that keeps the face centered with it there,
+   and `.lg-rank-key` below for the anchor. */
 
 /* This caller's own half of `InfoKey`, which is one anchor rule per caller by
    that component's own design, and **the box it hands the panel to has changed
-   with the button**: the ⓘ stood in the table's caption row and stands in the
-   app's tools row, beside the projection's own key.
+   twice with the button**: the ⓘ stood in the table's caption row, then in the
+   app's tools row beside the projection's own key, and is now at the right-hand
+   end of the bar that replaced the caption. It is drawn in **both** of the last
+   two places and one media query decides which — the bar from 432px up, the
+   tools row below it (`.date-bar-ends`, which carries the measurement) — so
+   this rule has to hold for both, and `static` is what makes that possible.
 
-   `static` is unchanged and is the whole trick — the panel's containing block
-   becomes the nearest positioned ancestor, which is `.view-tools` (it declares
-   `position: relative` for exactly this, as `.lg-head` and `.mup-bar` do one
-   view over) rather than the 30px button. That matters more up here than it did
-   down there: the button now sits *after* two tab strips, so at 390 it starts
-   about 250px along the row, and a 320px panel opening from it would put half
-   of itself off the screen. Against a row that is the full content width at
-   every size, `left: 0` is the app's own left gutter.
+   `static` is the whole trick and is unchanged through all three: the panel's
+   containing block becomes the nearest positioned ancestor, which is
+   `.view-tools` in the one place and `.date-bar-anchored` in the other (both
+   declare `position: relative`, the second for its own popover) rather than the
+   30px button. That matters wherever the button ends up: in the tools row it
+   sits after a tab strip and at 390 starts about 250px along, and in the bar it
+   is hard against the right edge — a 320px panel opening from either would put
+   half of itself off the screen. Against a box that is the full content width
+   at every size, `left: 0` is the app's own left gutter.
 
-   `.lg-proj-key` beside it opens the other way (`right: 0`) for the mirrored
-   reason, and the two are deliberately not the same: two 320px panels opening
-   from the same edge would be one panel's worth of screen shared by two. */
+   `.lg-proj-key` beside it in the tools row opens the other way (`right: 0`)
+   for the mirrored reason, and the two are deliberately not the same: two 320px
+   panels opening from the same edge would be one panel's worth of screen shared
+   by two. */
 .lg-rank-key .info-key-panel {
   left: 0;
   right: auto;
+}
+/* **And the tools row's copy is the narrow one.** Both are rendered and a media
+   query picks — the swap this file makes for every pill row that becomes a
+   `<select>`, rather than a JS media test that could drift from the CSS. The
+   default is hidden and the narrow block below restores it, so the wide case
+   needs no override and the two can never both be on screen.
+
+   `.view-tools` two classes deep, because `.info-key` is a bare `<span>` and
+   an unscoped `.lg-rank-key { display: none }` would take the bar's copy with
+   it. */
+.view-tools .lg-rank-key {
+  display: none;
+}
+@media (max-width: 431px) {
+  .view-tools .lg-rank-key {
+    display: inline;
+  }
 }
 
 /* ---- Rankings -------------------------------------------------------------

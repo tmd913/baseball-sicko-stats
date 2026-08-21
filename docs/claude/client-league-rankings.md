@@ -1495,3 +1495,151 @@ Rankings key paints over the header row and the badges it is about.
 159.63 KB of CSS** (28.51 → 28.54) — 0.41KB and 0.27KB raw, 0.12KB and 0.03KB
 over the wire, and that carries the default sort, the pane chrome and the
 stacking fix together.
+
+### And then the span strip went, and the ⓘ came down into the bar
+
+**Two reversals in one breath, and they are the same reversal.** The sections
+above argue the strip into the tools row (*The span strip is in the tab row*)
+and the ⓘ up into it beside the projection's key (*The two ⓘs are in the tools
+row*), and the second of those carries the sentence this change had to answer:
+a fourth thing in the bar's row "would either break the centering the bar's own
+grid exists for or take a third of the middle column on a 320px phone, where the
+days already want 175px". Both arguments are left as written. What overturns
+them is a fact that arrived after both: **the bar's own list opens with `Spans`
+as its first group**, off the same `rankings.spans` the strip was drawn from.
+
+#### The strip was a second door to one room
+
+It was argued as a fast path — "one door, two ways in", the rule the
+Scoreboard's week list already follows. Against that, three things:
+
+- **It offered nothing the face did not.** Five pills naming five cuts, over a
+  list whose first group is those five cuts with a detail line each
+  (`spanDetail`, which was the pills' `title`).
+- **It had to be kept in step about which of them was lit**, and that rule is
+  written twice in the file it was removed from: `aria-selected` off
+  `rankings.week` rather than `rankWeek`, because the *response* is what is on
+  screen — the paragraph *It is read off the response, not off the request*,
+  above, is that lesson, and it had to be learned in the strip and in the bar
+  separately. One control, one rule.
+- **It could not name the thing the bar could.** A week is not one of five, so
+  the strip lit nothing while a week was in force on a desktop and grew an
+  option of its own at the head of its phone `<select>` — a control saying "not
+  me" in two different ways.
+
+**What it cost the page, measured on the live 12-team league** (`.view-tools`
+height and the table's first row, before → after):
+
+| span | width | `.view-tools` | first row |
+| --- | --- | --- | --- |
+| `Season` (and the halves, and a picked week) | 1200 / 1440 / 1920 | 96 → **50** | 299 → **253** |
+| | 640 | 98 → **50** | 299 → **251** |
+| | 390 | 98 → **92** | 299 → **293** |
+| | 320 | 98 → **92** | 347 → **341** |
+| `Current matchup` | every width | 98 / 96 → **unchanged** | 347 / 299 → unchanged |
+
+**Four spans out of five, and the fifth is honest rather than smoothed over.**
+On the four that draw no `Projected` toggle the strip *was* the second line of
+the tools row, so removing it removes the line — 46 to 48px of pinned-tall page
+given back above 640, and 6px at 320 and 390, where the narrow copy of the ⓘ
+takes the line it leaves. On `Current matchup` `ProjectedTools` is on that line
+anyway, so the row does not move at all.
+
+Out of the stylesheet went `.lg-span-row`, `.lg-span-tab` and `.lg-span-select`
+— **three selector names and no declarations**, the pills having been a fold
+onto `.view-switch` / `.view-tab` and the dropdown a fold onto
+`.research-window-select` all along — plus the `flex-wrap: wrap` and
+`white-space: nowrap` that were genuinely theirs and the narrow block that hid
+the pill row. `spanDetail` lost its `export` with its second caller.
+
+#### The ⓘ is at the bar's right-hand end, and the bar's left end is held open to match
+
+**The centering is a ghost, not a number.** The row's two arrows are equal
+width, which is the whole reason the middle column sits on the bar's own center
+line; a control at one end and nothing at the other breaks exactly that. So
+`DateBar` gained an `endSlot`, and with it a **five-track grid** — an empty
+`aria-hidden` span, a step, the face, a step, the slot — where the first and
+last tracks are the same `--bar-end-w`. It is *reserve the box, don't move the
+page* spent sideways: a hidden peer sharing the grid rather than a magic number
+in a stylesheet.
+
+Measured on the live league, `face.center − bar.center`:
+
+| | 320 | 390 | 640 | 1200 | 1920 |
+| --- | --- | --- | --- | --- | --- |
+| before | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| after | **0.00** | **0.00** | **0.00** | **0.00** | **0.00** |
+
+and the face's own width is **212 / 221.16 / 221.16 / 221.16 / 221.16** before
+and after, with the lead line ellipsized by the same 9px at 320 and by 0
+everywhere else. The bar is 54px at every width, the header row's seam
+(`thead.top − bar.bottom`) is **0.00px** at all five, and page-body overflow is
+**0**.
+
+#### The 320px phone is not answered, so it is a width
+
+**The other half of the old objection stands and cannot be argued away.** Each
+end slot costs **38px** — a 30px `.info-key-btn` and the row's 8px gap — and the
+widest face this bar prints is the projected reading's, measured at **247.48px**
+(`WEEK 19 · PROJECTED` over `to Aug 23 · 3 days still to play`; the live reading
+is 221.16, `Season` 207.09, a picked week 200). Add the two arrows and their
+gaps (44 each) and the bar's own 20px of side padding and the row wants
+**431.48px** before the fourth thing costs the face a pixel. Below that the face
+is clamped, and at 320 it would go **212 → 136** — content 102px against the
+169px the range line alone needs, so `Aug 10 – Aug 21 · so far` would read
+`Aug 10 – Aug 2…`. That is the bar failing at its one job.
+
+So the rule is a measured width. **From 432px up the ⓘ is in the bar; below it
+the ends collapse to three tracks and App's own copy stays in the tools row** —
+one media query, both rendered, neither chosen in JS, which is the swap this
+stylesheet already makes for every pill row that becomes a `<select>`. It is the
+**same `RankKey` component** in both places, so the two cannot come to explain
+the table differently; what differs is only which row has the width for it.
+Driven at 320 / 390 / 431 / 432 / 480 / 640 / 1200 / 1920: the bar's copy is
+drawn at the last five and the tools row's at the first three, never both.
+
+**The anchor did not change and that is what made the move cheap.**
+`.lg-rank-key` is `position: static`, so the panel's containing block is
+whichever positioned box it lands in — `.view-tools` in the one place,
+`.date-bar-anchored` in the other, both of which declare `position: relative`
+for their own reasons. `left: 0` is the app's own gutter against either.
+Measured open at 1200: **320 × 241.3 at x=0**, with `elementFromPoint` 30px in
+and 40px down returning a `<P>` of the panel rather than a table cell.
+
+#### Two disclosures on one bar, and only one of them open
+
+The face opens a list over the page and the slot opens a key; both hang off the
+bar. Measured at 640 the list is **260 → 320 wide at x=160** and the key panel
+**320 at x=0** — they share screen from 432 up to about 900, where the list's
+centered anchor finally clears the key's left one (at 1200 the list is at x=440
+and there is no overlap at all). A reader could have had both.
+
+**The press is not spent on the closing**, which is the one place this parts
+from `useDismissable`'s rule. That rule is about a press *aimed past* an open
+panel at a control the panel was covering — "a control that fires as a side
+effect of tidying up is one the reader never chose". This control is in the
+bar's own row, above the panel and never covered by it, so a press on it is
+aimed at it. It gets what it aimed at, and the bar's other panel closes because
+a bar holding two is a bar holding one too many. Driven at 640 and 1200: with
+the list open, one press of the ⓘ leaves `listOpen: false` and `keyOpen: true`.
+
+#### Expanded, the bar's key is the only one there is
+
+The full-page box covers the app's chrome, so the tools row is not drawn in that
+mode at all — which means the ⓘ was **unreachable there** for as long as it
+lived in that row. In the bar it travels in with the bar, and the expanded box
+is where that matters most: fifteen columns of `OVR`/`BAT`/`PIT` with nothing on
+screen to say what they are. Driven at 1200: expanded, the key opens **320 ×
+241.3 at x=12** inside the box, and **Escape unwinds one rung per press** — the
+key first, the box second.
+
+Below 432 the expanded box still has no key, which is exactly what it had
+before; stated rather than fixed, because the fix would be the truncated face
+the width was chosen to avoid.
+
+**Bundle over the whole branch** (this change and the four date scopes beside
+it): **JS 612.64 → 612.09 KB** raw and **182.55 → 182.43** gzipped — down on
+both, which a change that deletes a control, a component's export and a
+`useRef` should be — and **CSS 160.79 → 161.09 KB** raw and **28.76 → 28.87**
+gzipped, up 0.30KB raw and 0.11 over the wire for the five-track grid, the
+narrow block and the two `display` swaps, against three selector names deleted.

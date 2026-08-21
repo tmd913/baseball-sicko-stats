@@ -283,6 +283,7 @@ export function DateBar({
   popoverLabel,
   fixed = false,
   measure = false,
+  endSlot,
 }: {
   reading: DateBarReading;
   start: string;
@@ -374,6 +375,36 @@ export function DateBar({
    * under a 104px bar is a column heading behind a control.
    */
   measure?: boolean;
+  /**
+   * **One control at the bar's right-hand end**, drawn in the collapsed row
+   * beside the two steps rather than inside anything the face opens.
+   *
+   * **A fourth thing in this row was rejected once**, in as many words: it
+   * "would either break the centering the bar's own grid exists for or take a
+   * third of the middle column on a 320px phone". Both halves of that are
+   * answered here rather than argued away.
+   *
+   * *The centering* — the slot is **mirrored by an empty one of the same width
+   * at the left end**, so the row goes from three tracks to five and the middle
+   * one stays on the bar's own center line by construction, exactly as it does
+   * with the two equal arrows. That is this file's own *reserve the box* rule:
+   * a ghost sharing the grid rather than a number in a stylesheet. Measured,
+   * `face.center − bar.center` is **0.00 at 320, 390, 640, 1200 and 1920**,
+   * with the slot filled and empty alike.
+   *
+   * *The 320px phone* — the two end slots cost **38px each** (a 30px icon
+   * button and the row's 8px gap), and the widest face this bar prints is the
+   * Rankings tab's projected reading at **247.48px**. 247.48 + 2×38 + 2×44
+   * (the arrows and their gaps) + 20 (the bar's own padding) is **431.48**, so
+   * 432 is the narrowest window where the fourth thing costs the face nothing
+   * at all. Below it the ends collapse to three tracks again and the caller's
+   * control stays where it was — one media query, both rendered, neither
+   * chosen in JS, which is the swap this stylesheet already makes for every
+   * pill row that becomes a `<select>`.
+   *
+   * Ignored on a `fixed` bar, which has no row of controls to end.
+   */
+  endSlot?: ReactNode;
 }) {
   const { lead, range } = dateBarFace(reading, start, end);
   const asPopover = popover != null;
@@ -406,12 +437,20 @@ export function DateBar({
   }
   return (
     <div
-      className={`date-bar${shown ? ' open' : ''}${asPopover ? ' date-bar-anchored' : ''}`}
+      className={`date-bar${shown ? ' open' : ''}${asPopover ? ' date-bar-anchored' : ''}${
+        endSlot ? ' date-bar-ends' : ''
+      }`}
       role="group"
       aria-label="Dates"
       ref={barRef}
     >
       <div className="date-bar-row">
+        {/* The ghost. It holds the left end open to exactly the width the
+            control at the right end takes, which is what keeps the face on the
+            bar's own center line — the same trick the two equal arrows already
+            play, one track further out. `aria-hidden` and empty: it is a
+            reservation, not a thing. */}
+        {endSlot && <span className="date-bar-ghost" aria-hidden="true" />}
         <button
           type="button"
           className="date-step"
@@ -455,6 +494,32 @@ export function DateBar({
         >
           <Chevron back={false} />
         </button>
+        {endSlot && (
+          <span
+            className="date-bar-end"
+            /* **Two disclosures on one bar, and only one of them open.** The
+               face opens a list over the page and this slot opens a key; both
+               hang off the bar, so at the widths where they overlap (measured,
+               the list is centered and this panel is `left: 0`, so they share
+               screen from 432 to about 900) a reader could have had both.
+
+               **The press is not spent on the closing**, which is the one place
+               this parts from `useDismissable`'s rule — and it parts from it
+               because the rule's own reasoning does not reach here. That rule
+               is about a press *aimed past* an open panel at a control the
+               panel was covering: "a control that fires as a side effect of
+               tidying up is one the reader never chose". This control is in the
+               bar's own row, above the panel and never covered by it, so a
+               press on it is aimed at it. It gets what it aimed at, and the
+               bar's other panel closes because a bar holding two is a bar
+               holding one too many. */
+            onPointerDown={() => {
+              if (shown) onClose?.();
+            }}
+          >
+            {endSlot}
+          </span>
+        )}
       </div>
       {shown &&
         (asPopover ? (
