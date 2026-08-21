@@ -1246,6 +1246,19 @@ matchup card can round to whole numbers because a side's week is twenty of these
 added together. A whole number stays whole, so a range wholly in the past reads
 identically to the ordinary table.
 
+**And a count is only rounded where it *is* a column.** The `OPS` cell is derived
+from six numbers and this table prints two of them (`H` and `AB`); the other four
+— `1B`, `2B`, `3B` and the `TB` built out of them, along with `HBP` and `SF` —
+have no column to be added down, so rounding them bought nothing and cost the
+rate. Over a short span it cost it a great deal: a home run projected at 0.163
+prints as `0.2` and `TB` multiplies that error by four, which on a one-day
+projection is 48 thousandths of OPS and was enough to put a range figure *below
+every day in it*, which is not a thing a weighted mean can do. Those four now ride
+at four decimal places and the rate is the projection's rather than the
+rounding's. **Not one printed count changed** — the whole of the fix is in cells
+this table has never drawn. See *A component is rounded where it is a column* in
+**The league scoreboard** for the measurement.
+
 **Innings are `5.8`, not `5.2`.** `formatIp`'s form is *thirds* — `6.2` is two
 thirds of an inning — and it takes a whole out count, which a projection has not
 got; a projected decimal read as one would be off by a factor of five. So the

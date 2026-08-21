@@ -1784,6 +1784,66 @@ its own message and names `Roster` as the control that has the rest — the rule
 every empty state in this app follows, and the one thing it must not do is claim
 a fact about the days.
 
+#### The bench came back below the line, because a table that forgets a player says nothing about it
+
+**`The bench is out of the table, not moved below a line` above is superseded**,
+and the paragraph is left standing because the *divider* half of it is still
+exactly right — what was wrong was the sentence's other half, that the men the
+lineup cut had no business on the page at all.
+
+Reported as *"in summary mode I don't see Kyle Stowers"*. He is on the reader's
+own roster; he was on it every day of the range; the reading simply did not draw
+him. And he was not alone — measured on team 6 over `Aug 10 – Aug 21`, `Summary`
+listed **29 rows against the 34 players `/api/report` answered with**, the five
+missing being **Kyle Stowers, Shea Langeliers, Garrett Crochet, Nick Pivetta and
+Hunter Greene**. Three of them are on the roster *now*, in an `IL` slot, and have
+been for the whole period; two are men this manager dropped mid-week. Nothing on
+screen said any of them had been left out, which is the fault: **a mark that
+would be on every row marks nothing, but a row that is on no page says nothing at
+all.**
+
+The cut itself is right and is not touched. `projectStarters` drops a man who
+held an accruing slot on none of the days in view, and it should — he contributed
+nothing to the categories this reading exists to add up. What was wrong is
+drawing its output *as the table*. So the table is the roster again with the
+lineup's arithmetic on it: a man the filter kept keeps his cut games, and a man
+it dropped is kept with **no games** rather than removed. That distinction is
+`projectStarters`' own and is stated in as many words there — *a player kept with
+no games left is not the same as one dropped* — and it is the same argument the
+app's own roster settled years earlier, that a table which quietly omits a player
+you watch is a worse thing than a sparse one.
+
+**The total is untouched, which is the whole test of the change.** Those men are
+not in `starterKeys`, so `splitStarters` puts them under the line and the figure
+on it is over `top` alone: team 6 over `Aug 10 – Aug 21` still reads **`99/384 ·
+55 R · 22 HR · 67 RBI · 7 SB · .822 · 41 BB · 95 K`** and the pitching foot
+**`78.1 IP · 2.87 ERA · 1.02 WHIP`** — the same figures the table above measures
+against ESPN's own scoreboard. What changed is the label: **`Total · 13` became
+`Total · 13 of 15`** on the batters and **`Total · 16` became `Total · 16 of
+19`** on the pitchers, which is the app's own `n of m` and is a count that now
+has something to be a fraction of.
+
+**The empty state moved with it, from `shownCards` to `starterCards`.** The
+table is the whole roster now, so it empties only when the *team* does — which
+the branch above it already answers for. The lineup message is about the lineup,
+so it asks about the lineup: a manager who started nobody gets the sentence
+rather than twenty-eight rows of noughts under a `Total · 0 of 28`, which states
+the same fact and states it as a table.
+
+**What ESPN cannot answer, and where this reading stops.** *Who was on the team
+then* is reconstructed from one roster read per day of the range
+(`espn.ts::getTeamRosters`, and see **ESPN fantasy** — *A range is a range of
+rosters*), so membership is exact to the **scoring period**, which is the finest
+grain ESPN publishes. Two things fall outside it and neither is guessed at: a man
+added and dropped **inside one day** never appears on a day's roster and so
+cannot be recovered at all, and a move made after about 1pm ET is booked by ESPN
+against the *next* period — which is why `fantasyWatchlist` carries a `nowOnly`
+set of men on the team now and on no day in view, with an empty held-days set so
+their row is honest rather than a week of somebody else's. Where the per-day read
+fails outright the whole page degrades to today's roster over the range, which is
+what the app did before per-day rosters existed and is the direction it should
+fail in.
+
 #### The dates bar is the band's next line, not the content after it
 
 **The bar was folded onto the roster's rules and still read as too much
@@ -2306,6 +2366,83 @@ the stat *columns* with days and this replaces the *figures* in them, so they
 are two readings of one set of cells; each toggle turns the other off, and the
 range the lens moved the reader to stays when Schedule takes over, the days
 ahead being exactly what a schedule is for.
+
+#### The lens's days leaked into every other reading, and each reading has its own now
+
+**`turning the lens off puts the span back` above is superseded**, along with the
+sentence beside it about what stays when Schedule takes over. Both described
+`beforeProjection`, a ref holding the range the reader was on when they pressed
+the lens so that pressing it again could put them back. It is gone.
+
+Reported as *"projected mode date range affects others in matchup page"*, and the
+mechanism is that the return ticket was only ever punched by one of the four
+controls that can put the lens away. `toggleTeamProjected` consumed the ref;
+`FeedToggle`, `ScheduleToggle` and `SummaryToggle` each clear the lens with a
+bare `setTeamProjected(false)`, so on those three paths the ref was never read
+and the days the lens had moved the reader to simply became the page's days.
+There was no second entry to move back to, every reading of this page sharing one
+`span`.
+
+**Driven on team 6 on 2026-08-21** (`?view=matchup&mt=6`), reading the date bar
+off the rendered page at each step:
+
+| | before | after |
+| --- | --- | --- |
+| the table, on opening | `Today · Fri, Aug 21` | `Today · Fri, Aug 21` |
+| press `Projected` | `Projected · Aug 21 – Aug 23` | `Projected · Aug 21 – Aug 23` |
+| cross to `Feed` | **`Custom range · Aug 21 – Aug 23`** | **`Today · Fri, Aug 21`** |
+| cross to `Summary` | `Matchup to date · Aug 10 – Aug 21` | `Matchup to date · Aug 10 – Aug 21` |
+| back to the table | **`Custom range · Aug 21 – Aug 23`**, lens off | **`Today · Fri, Aug 21`**, lens off |
+
+The `Feed` row is the plainest of the four: a stream over three days, two of them
+in the future, arrived at by a reader who pressed a control on the *table* and
+then pressed `Feed`. `Summary` was never affected — it is the matchup's own days
+held rather than picked — which is what made the fault look like a Feed problem
+rather than a lens one.
+
+**So a reading keeps its own days**, which is the arrangement App's roster views
+already have (`DateScope`, and see `client-dates.md`, *And the range is one per reading, not one per view*) arrived at
+from the same direction and for the same reason. `MatchupSpanScope` is three
+entries rather than four, and the difference is which readings here let a reader
+*pick* days: the plain table, the stream, and the lens. `summary` is a span this
+page holds — its bar is drawn `fixed`, with no arrows and a face that is not a
+button — and the Schedule view has `scheduleSpan`, a run of days rather than a
+pair of them; neither owns an entry and neither can have one moved out from
+under it. `summary` maps onto `roster` for the one purpose it needs a range at
+all, which is `summarySpan`'s fallback where the period publishes no dates.
+
+**The lens's entry remembers nothing and for no time at all**, which is the one
+place "each reading keeps its own days" is deliberately not carried through, and
+it is App's own rule one file over. It is re-derived on every press, because *the
+days there are still games in* is what the toggle promises in its own tooltip and
+is an answer that goes stale — the rest of this period derived on Tuesday is
+three played days by Friday. What the entry buys is the other half: while the
+lens is on, the days are its own.
+
+**Measured across a fuller round trip on the same page**, moving each reading's
+days by hand:
+
+| step | bar reads |
+| --- | --- |
+| move the table to the 19th | `Custom range · Wed, Aug 19` |
+| press `Projected` | `Projected · Aug 21 – Aug 23` |
+| move the lens to the 22nd | `Projected · Sat, Aug 22` |
+| cross to `Feed` | `Today · Fri, Aug 21` |
+| back to the table | `Custom range · Wed, Aug 19` |
+| press `Projected` again | `Projected · Aug 21 – Aug 23` |
+| press it off | `Custom range · Wed, Aug 19` |
+
+Three readings, three ranges, and the lens re-derived on the second press rather
+than remembering the 22nd.
+
+**Bundle over both client changes on this branch** (the three spans here and the
+bench coming back below the line in the `Summary` reading): **JS 613.34 → 613.54
+KB** raw and **182.96 → 183.03** gzipped, **CSS unchanged** at 162.31 / 29.15 —
+two entries and a `useMemo` against a ref and its two restores, which is +0.20 KB
+raw and +0.07 gzipped. The server half adds no field and no route; what it costs
+the wire is four decimal places on six components that used to carry one, and
+capping them there rather than sending the float whole takes **1,108 bytes off a
+20,261-byte** projection response for team 6 over `Aug 21 – Aug 23`.
 
 **The overlay owns the flag and the read**, for the reason it owns the reading,
 the kind and the dates: they are chrome above *both* team pages and

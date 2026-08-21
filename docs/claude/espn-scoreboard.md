@@ -1614,6 +1614,70 @@ there rather than to a whole number**, and rounded on the *server* so the client
 and rounds to an integer honestly, where a per-player 0.4 home runs over three
 days is a real answer and `0` is not.
 
+#### A component is rounded where it is a column, and left alone where it is only an input to a rate
+
+**Every component was rounded, and the projected OPS a short span printed was the
+OPS of the rounding rather than of the projection.** Reported as *"his OPS for
+each individual day is higher than his OPS for the remaining matchup date
+range"*, which is not a thing that can be true: `OBP` and `SLG` are each a
+weighted mean of the daily figures — the weights being that day's share of the
+on-base denominator and of the at-bats — so a range figure has to land between
+the lowest and the highest day's, and a projection that is *below all of them* is
+arithmetically impossible.
+
+The engine was not the fault. It is additive by construction (`projectBatter`
+loops over one multiplier per game and adds into a bucket), and the unrounded
+answers say so to the last digit: team 6's Trent Grisham on 2026-08-21, projected
+one day at a time, comes to **0.704 + 0.717 + 0.831 = 2.252 hits** against the
+three-day range's **2.252**, and **3.625 + 3.619 + 3.561 = 10.805 at-bats**
+against **10.805**.
+
+What broke it was `round1` reaching quantities a tenth cannot describe. Over one
+day this man's home runs are **0.163** and his doubles **0.160**; a tenth prints
+both as `0.2`, and `totalBases` — derived from the *rounded* components — then
+multiplies the home-run error by four. Four readings of the same three days:
+
+| | Aug 21 | Aug 22 | Aug 23 | Aug 21–23 |
+| --- | --- | --- | --- | --- |
+| every component rounded (shipped) | .692 | .692 | **.744** | **.681** |
+| unrounded | .644 | .657 | .767 | .689 |
+| columns rounded, rate's own inputs kept (now) | .655 | .662 | .748 | **.690** |
+
+The middle row is what the projection actually says; the top row is the fault —
+the range under all three days, and two genuinely different days (.644 and .657)
+printing the same figure because a tenth swallowed the difference.
+
+**So `battingOf` rounds a component where the table prints it and leaves it alone
+where it does not.** `SummaryTable.tsx::StatCells` draws `H/AB`, `R`, `HR`, `RBI`,
+`SB`, `BB` and `K`; it never draws `1B`, `2B`, `3B`, `HBP`, `SF` or `TB`. Rounding
+the first set is what the `Total` row's "add a column up and get the figure at the
+foot of it" rests on and it is untouched — **not one printed count moved**, on any
+row, at any span. Rounding the second set bought a reader nothing, there being no
+column to add, and cost the one rate on the row. `PA` is rounded with the columns
+although it is not one: it is the row's blank test (`pa === 0` is the man drawn as
+dashes), and an exact `0.0001` would draw him a line of noughts.
+
+**This is the rule `categoryScores` already followed**, one section down — *the
+rates are derived before the rounding* — arrived at there by the same
+measurement (deriving OPS from a rounded home-run count moved it by up to 3.1
+thousandths on a *week*; on a day it moves it by 48). The two entry points now
+agree.
+
+**The unprinted components ride at four decimal places, not full precision**
+(`round4`). `0.15960384659945423` is seventeen characters of wire for a number
+nobody prints, and six such fields ride on every player twice over — the line and
+the lineup's half of it. Four rather than three because the only reader is a rate
+written to three, and rounding an input to the width of its own answer is how a
+thousandth comes to move: measured, identical to the last digit of `.655 / .662 /
+.748` against `.690`, and **1,108 bytes off a 20,261-byte response**.
+
+**`pitchingOf` is deliberately untouched.** ERA and WHIP divide `earnedRuns`,
+`hits` and `walks` by `outs`, and the pitching run prints every one of those four
+— so there is no unprinted input to leave exact, and the rate on screen is
+already the rate of the numbers beside it. Where a batter's `TB` was a hidden
+component multiplied by four, a pitcher's worst case is his own `ER` over his own
+`IP`, both on the row.
+
 **It needs no league at all.** `getOwnership` is the matchup path's alone — every
 input to the context is league-wide — so a reader with a saved roster and no ESPN
 connection gets the same engine. The context is memoized per span on the same

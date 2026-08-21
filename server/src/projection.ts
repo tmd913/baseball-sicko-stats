@@ -2124,25 +2124,63 @@ export interface RosterProjection {
  *  real answer and `0` is not. */
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
+/** The precision an unprinted component keeps — see `battingOf`. Four places
+ *  rather than none: `0.15960384659945423` is seventeen characters of wire for a
+ *  number nobody prints, and six of them ride on every player twice over (the
+ *  line and the lineup's half of it). It is four rather than three because the
+ *  only reader is a rate written to three, and rounding an input to the width of
+ *  its own answer is how a thousandth comes to move. Measured on the same
+ *  Grisham row: identical to the last digit of `.655 / .662 / .748` against
+ *  `.690`, and 1,108 bytes off a 20KB response. */
+const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+
+/**
+ * **A component is rounded where it is a column and left exact where it is only
+ * an input to a rate**, and that split is the whole of this function's
+ * arithmetic.
+ *
+ * The table prints `H/AB`, `R`, `HR`, `RBI`, `SB`, `BB` and `K`
+ * (`SummaryTable.tsx::StatCells`); it never prints `1B`, `2B`, `3B`, `HBP`, `SF`
+ * or `TB`. Rounding the first set is what `round1` above is for. Rounding the
+ * second set buys a reader nothing — there is no column to add up — and it
+ * costs the one *rate* on the row, because over a short span a tenth is an
+ * enormous quantum next to the values it is applied to and `TB` multiplies the
+ * worst of them by four.
+ *
+ * **Measured, on the live league, team 6's Trent Grisham on 2026-08-21 with the
+ * matchup running to the 23rd.** The projection is exactly additive — the three
+ * days' unrounded hits are 0.704 + 0.717 + 0.831 and the range's are 2.252, to
+ * the last digit — so a range OPS must land between the lowest and the highest
+ * day's, `OBP` and `SLG` each being a weighted mean of the daily figures. With
+ * every component rounded it did not: the days printed **.692 / .692 / .744**
+ * against a range of **.681**, *below all three*, which is arithmetically
+ * impossible and is what was reported. The unrounded figures are .644 / .657 /
+ * .767 against .689. Leaving `TB`, `HBP` and `SF` exact prints **.655 / .662 /
+ * .748** against **.690** — the range back between its days, and not one
+ * printed count changed.
+ *
+ * `PA` is rounded with the columns although it is not one: it is the row's own
+ * blank test (`line.pa === 0` is the man with nothing to project, drawn as
+ * dashes rather than noughts), and an exact 0.0001 would draw him a line of
+ * zeroes claiming he plays and does nothing.
+ */
 function battingOf(b: Bucket): BattingLine {
-  const hits = round1(b[BAT.h] ?? 0);
-  const doubles = round1(b[BAT.d2] ?? 0);
-  const triples = round1(b[BAT.d3] ?? 0);
-  const hr = round1(b[BAT.hr] ?? 0);
-  // Derived from the **rounded** components, so the slash line the client
-  // computes off this is the slash line of the numbers it printed.
-  const singles = round1(Math.max(0, hits - doubles - triples - hr));
+  const hitsExact = b[BAT.h] ?? 0;
+  const doubles = round4(b[BAT.d2] ?? 0);
+  const triples = round4(b[BAT.d3] ?? 0);
+  const hrExact = b[BAT.hr] ?? 0;
+  const singles = round4(Math.max(0, hitsExact - doubles - triples - hrExact));
   return {
     pa: round1(b[BAT.pa] ?? 0),
     ab: round1(b[BAT.ab] ?? 0),
-    hits,
+    hits: round1(hitsExact),
     singles,
     doubles,
     triples,
-    hr,
+    hr: round1(hrExact),
     bb: round1(b[BAT.bb] ?? 0),
     so: round1(b[BAT.k] ?? 0),
-    hbp: round1(b[BAT.hbp] ?? 0),
+    hbp: round4(b[BAT.hbp] ?? 0),
     // **The sacrifice residue, not sacrifice flies alone**, and that is what
     // makes a projected OPS honest rather than a lie of a thousandth: this
     // function's own `projectBatter` splits `1 − AB% − BB%` into `hbp` and this,
@@ -2151,12 +2189,12 @@ function battingOf(b: Bucket): BattingLine {
     // (`lib.ts::lineOps`), so a projected slash line now recomputes to the OBP
     // it was built from instead of running a hair high the way a measured one
     // used to.
-    sf: round1(b[BAT.sf] ?? 0),
+    sf: round4(b[BAT.sf] ?? 0),
     runs: round1(b[BAT.r] ?? 0),
     rbi: round1(b[BAT.rbi] ?? 0),
     sb: round1(b[BAT.sb] ?? 0),
     cs: round1(b[BAT.cs] ?? 0),
-    totalBases: round1(singles + 2 * doubles + 3 * triples + 4 * hr),
+    totalBases: round4(singles + 2 * doubles + 3 * triples + 4 * hrExact),
     // Statcast has nothing to say about a game nobody has played, and the
     // summary table reads none of these — an absence rather than a zero, which
     // is what every other unmeasured field in this app carries.
@@ -2168,6 +2206,16 @@ function battingOf(b: Bucket): BattingLine {
   };
 }
 
+/**
+ * **The split above does not reach this line, and that is a property of the
+ * table rather than an oversight.** ERA and WHIP divide `earnedRuns`, `hits`
+ * and `walks` by `outs`, and the pitching run prints **every one of those four**
+ * (`SummaryTable.tsx::PitchStatCells` draws IP, H, R, ER, BB, K, HR and then the
+ * two rates) — so there is no unprinted input here to leave exact, and the rate
+ * on screen is the rate of the numbers beside it. Where a batting `TB` was a
+ * hidden component multiplied by four, a pitcher's worst case is his own `ER`
+ * against his own `IP`, both of them on the row.
+ */
 function pitchingOf(b: Bucket): PitchingLine {
   const walks = round1(b[PIT.bb] ?? 0);
   const hbp = round1(b[PIT.hbp] ?? 0);
