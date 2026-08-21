@@ -160,12 +160,29 @@ and takes padding alone; the page takes a negative margin and the same padding
 back). A ground that is a fact about the container is what `--cell-bg` is this
 app's standing answer to, one box larger.
 
-**The 14px under it is padding rather than margin**, so it is inside what is
-painted — as a margin it was a strip of *container* again and the two readings
-disagreed about it for the same reason. And `.app-chrome:has(+ .view-tools)` (and
-`.mup-chrome`'s) drop their bottom margin, or the 14px *above* the band would be
-the same strip one row up. `:has()` rather than a class, because nothing about
-the chrome changes — what changes is what follows it.
+**Nothing under it at all, and that took two goes.** The gap to the date bar was
+a *margin* first — a strip of container, which is how the two readings came to
+disagree about its color — then *padding*, which fixed the color and left 14px
+of band doing nothing: buttons, then a dead band, then the bar's own 7px of
+padding before its arrows, against 14px above the buttons. Read as a gap,
+reported as one. There is no third thing between the readings and the days to be
+spaced apart — they are two rows of one band — so the band closes on the bar's
+own edge and the only separation is the bar's padding. Measured on all four
+surfaces: **14px above the buttons, 0 of band below them, 9px from a button's
+foot to an arrow's**, where it was 14 / 14 / 23.
+
+**But the gap comes back where no bar follows**, as a margin
+(`.view-tools:not(:has(+ .date-bar))`). The research board and the League view
+have nothing to continue the band with, so what follows is *content* — the
+board's count line and the Rankings caption, which without it sit on the band's
+own bottom edge (measured, both flush at y=198 and y=152). Padding is band and
+margin is the space between two different things, which is exactly the
+distinction the two rules turn on.
+
+**And `.app-chrome:has(+ .view-tools)` (and `.mup-chrome`'s) drop their bottom
+margin**, or the 14px *above* the band would be the same strip of container one
+row up. `:has()` rather than a class, because nothing about the chrome changes —
+what changes is what follows it.
 
 **Measured after, reading a vertical line down the middle of the two rendered
 pages and differencing them pixel by pixel**: identical at every sampled row

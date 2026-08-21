@@ -6017,13 +6017,15 @@ button.start-line:focus-visible {
      is the app's standing answer to; this row is *chrome*, so it carries the
      chrome's own bottom stop wherever it is drawn.
 
-     **And the gap below it is padding rather than margin**, so it is inside
-     what is painted: with a margin the 14px between this row and the date bar
-     was a strip of *container* again, and the two surfaces disagreed about it
-     for the same reason. Band, then bar, then the page — no ground of anybody
-     else's in between. The height is unchanged either way. */
+     **Nothing under it.** The gap it used to keep to the date bar was first a
+     margin — a strip of *container*, which is how the two readings came to
+     disagree about it — then padding, which fixed the color and left 14px of
+     band doing nothing. There is no third box between the readings and the days
+     to be spaced apart: they are two rows of one band, and the band closes on
+     the bar's own edge. The 14 above stays, that one being the gap to the
+     chrome's hairline. */
   background: var(--bg-2);
-  padding-block: 14px;
+  padding-block: 14px 0;
   /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
      on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
      reason: that key is `position: static` so its 340px panel hangs off a *row*
@@ -6348,6 +6350,17 @@ button.start-line:focus-visible {
 .mup-view > .view-tools {
   margin-inline: calc(-1 * var(--table-bleed, 0px));
   padding-inline: var(--table-bleed, 0px);
+}
+/* **Where no date bar follows, the gap comes back — as a margin.** The band has
+   nothing under it on the research board or the League view, so what follows is
+   *content*: the board's count line and the Rankings caption, which without this
+   sit on the band's own bottom edge (measured, both at y=198 and y=152 against a
+   band ending exactly there). A margin rather than padding, and the distinction
+   is the one the rule above turns on: padding is band, and there is no band to
+   continue here — this is the space between two different things, which is what
+   a margin is for. */
+.view-tools:not(:has(+ .date-bar)) {
+  margin-bottom: 14px;
 }
 /* **The band starts where the chrome ends.** The bar above closes itself with a
    hairline and its own shadow, and 14px of page between the two would be the
