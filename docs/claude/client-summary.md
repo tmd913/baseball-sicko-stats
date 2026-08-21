@@ -393,6 +393,75 @@ lens on `Today`, `Lineup · 11` over eleven rows with three injured below. The
 title says the split is there, since the count alone cannot: nine of sixteen and
 nine of nine read identically.
 
+#### The count says how many it left out, and nothing under the line was ever dropped
+
+*(Which supersedes the sentence directly above — the title is no longer the only
+place the split is stated. The paragraph is left as written, this file's rule
+for its own superseded reasoning, and it is the paragraph this one answers.)*
+
+**It reads `Lineup · 11 of 14`.** *Nine of sixteen and nine of nine read
+identically* is a correct diagnosis with the wrong remedy attached: it sends the
+fact to a `title`, and the argument two paragraphs up — the one that made the
+word `Total` change to `Lineup` — is that **half this app's traffic has no
+hover**, so a figure a reader can misread has to be corrected *where it is
+read*. The denominator is the correction, and it is the app's own `n of n`, the
+form the projected slot chip and the `Starts` column's title already say a span
+in. **`Lineup · 11` where the line has nobody under it**, since `11 of 11` is a
+fraction that divides nothing — and that is also what keeps a table with no
+split reading exactly as it did.
+
+**Measured under the lens on the live fantasy roster over 8/21–8/23**, at 1400,
+390 and 320: the label goes **69.1 → 104.8px** on the batting table
+(`Lineup · 11` → `Lineup · 11 of 14`) and **71.3 → 107.1** on the pitching one,
+the same width at all three, and the name column is **292.1 / 205.9px at 1400,
+226.2 / 167.5 at 390 and 221.0 / 164.9 at 320 before and after** — it absorbs
+the string whole. Every invariant the table is measured against is where it was
+at all three widths and in the full-page box: table **1472.6 / 857.5 / 814.6**,
+divider **48.00px**, rows **58.00**, header **51.00**, the pinned headshot column
+at **left: 0**, page-body overflow **0**, and the label **16.0px tall**, which is
+one line. **The totals cells are identical to the character** either side of the
+change — batting `30.7 · 33 · 30.3/114.2 · 17.9 · 5.7 · 18.1 · 2.4 · .822 ·
+14.3 · 28.1`, pitching `11.5 · 18 · 40.0 · 31 · 14.7 · 13.4 · 9.9 · 44.3 · 2.6 ·
+2.9 · 1.2 · 1.7 · 3.02 · 1.02` — which is the point: this changes what the row
+*says about itself*, never what it adds. **Both branches on one page**: with the
+injured hidden (`hideil=1`) the batting table has nobody left below the line and
+prints **`Lineup · 11` at 69.1px** again, while the pitching table keeps two
+below and reads **`Lineup · 10 of 12`**.
+
+**Bundle: 612,641 → 612,654 bytes of JS** (180,129 → 180,157 gzipped), 13 bytes
+raw and 28 over the wire, and **CSS byte-identical** (160,799 / 28,501, same
+content hash).
+
+**And the request this answers was that the projected reading *drops* the bench,
+which it does not and did not.** Worth writing down, because it is the reading
+the page invites: driven under the lens on the reader's own roster over
+8/21–8/23, the ESPN roster's **27 entries render as 28 rows** (Ohtani being two),
+**11 batters above the line and 3 below, 10 pitchers above and 4 below**, in the
+pane and in the full-page box alike — `splitStarters` partitions, and the second
+`<tbody>` under the divider has drawn `rest` since the divider was written. What
+the reader was looking at is that **every man below his line reads as a row of
+dashes**: all six are on the IL, and the seventh, a starter whose turn falls the
+day after the span, has nothing to project either. That is honest — *A row is
+what he would do if he plays* only has numbers where he can play — and the two
+bench arms he does have (`BE` on ESPN, McLean and Bennett) are **above** the
+line, seated by the plan on the days their turns fall, which is the rule
+*Under the lens the plan answers* sets out and which this user's own question
+drove. So what was missing was never a row. It was the arithmetic: the label
+counted 11 and said nothing about the 3.
+
+**Two other ways of saying it were rejected.** Muting the group below the line
+(`color: var(--muted)` on its `<tbody>`) is the app's mark for **a guess** —
+`.start-row--projected` and `.start-row--estimated` are that rule and this file
+argues it as *solid means measured, broken means ours* — and under this lens
+**every** row is a projection, so muting three of them would say the wrong word
+in the one reading where the word is already spoken. A named head row over the
+group (`Bench · 3`, the Feed's section device) says the most and costs the most:
+a row of the pane's height on a view whose whole geometry is *a fixed-height
+column where every pixel under the table is a row of players off the bottom of
+it* — the 37px the legend gave back, spent twice over, to name a group whose
+rows already say what they are one by one (the `BE` chip, the `IL10` badge, the
+`Starts · 0`). The label was already there and already carried a count.
+
 **The divider is a `<tbody>` of its own**, which is what keeps the stripe
 honest. `tbody tr:nth-child(even)` counts inside its own body, so the row is
 always the first of its and takes no stripe, and the group under it stripes from
