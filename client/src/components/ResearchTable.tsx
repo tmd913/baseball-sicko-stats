@@ -1,4 +1,5 @@
-import { useContext, useLayoutEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ScrollRow } from './TabStrip';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
@@ -11,9 +12,7 @@ import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } f
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import {
   defaultScheduleSpan,
-  effectiveSpan,
   scheduleColumns,
-  spanLabel,
 } from './schedule';
 import type { ScheduleIndex, ScheduleSpan } from './schedule';
 import {
@@ -311,9 +310,6 @@ interface PositionOption {
   codes?: string[];
 }
 
-/** A pill that filters at all — anything but the two whole-board entries. */
-const filtersRows = (p: PositionOption) => Boolean(p.codes);
-
 /** One pill's test. */
 function positionMatcher(pos: ResearchPos): ((r: ResearchRow) => boolean) | undefined {
   const codes = POSITION_BY_KEY.get(pos)?.codes;
@@ -383,16 +379,6 @@ const TEAM_SIDES: PositionOption[] = [
   },
 ];
 
-/**
- * The same eleven, in the same order, cut into the three runs they already read
- * as. Only the phone's dropdown uses them: a row of pills shows the whole set
- * at once and needs no headings, where a closed select shows one.
- */
-const POSITION_GROUPS: { label: string; positions: PositionOption[] }[] = [
-  { label: 'Board', positions: POSITIONS.filter((p) => !filtersRows(p)) },
-  { label: 'Batting', positions: POSITIONS.filter((p) => filtersRows(p) && p.kind === 'batter') },
-  { label: 'Pitching', positions: POSITIONS.filter((p) => filtersRows(p) && p.kind === 'pitcher') },
-];
 
 /** The group a row's position belongs to, for the Pos cell's tooltip — the
  *  Stats API's own `position.type` less its two unhelpful spellings (it calls
@@ -540,8 +526,30 @@ const INCLUDE_META: Record<ResearchIncludeKey, IncludeWording & { solo?: Include
 function IncludeCode({ code }: { code: string }) {
   if (code === 'baseball') return <BaseballMark size={17} width={2} />;
   if (code === 'lock') return <LockGlyph size={17} width={2} />;
-  return <>{code}</>;
+  /* **Free agents is a lock swung open**, where it used to be the letters `FA`.
+     The two-letter form was right while this mark was the button's *whole*
+     content on a phone; now the mark stands beside the word at every width, and
+     `FA Free Agents` is a label saying itself twice. The open lock says the same
+     thing in the vocabulary the other two are already in — the closed one is
+     "somebody else has him", so its undone form is "nobody has". `Rest`, the
+     wording with no league connected, takes it too: there is no ownership to
+     read there, which is the same fact from the other end. */
+  return <LockGlyph size={17} width={2} open />;
 }
+
+/**
+ * **The order the three are read in, which is not the order they are stored
+ * in.** `RESEARCH_INCLUDE_KEYS` is the state's own list — what exists, what a
+ * URL round-trips, what `allDefault` walks — and reordering it to suit a row
+ * would move the vocabulary to suit the furniture.
+ *
+ * The row runs widest-set-first: free agents is nearly the whole league, then
+ * the two rosters that are a few dozen players each. Watchlist sits ahead of
+ * all of them (see `rowWho`) because it is the reader's own list rather than a
+ * cut of the league's, and because it is the one of the four that says *these
+ * are the players I already care about*.
+ */
+const INCLUDE_ORDER: ResearchIncludeKey[] = ['fa', 'mine', 'others'];
 
 const includeMeta = (k: ResearchIncludeKey, connected: boolean) =>
   (!connected && INCLUDE_META[k].solo) || INCLUDE_META[k];
@@ -1443,6 +1451,72 @@ export function ResearchTable({
    */
   const headRef = useRef<HTMLDivElement | null>(null);
   usePublishedHeight(headRef, '--research-head-h');
+  /**
+   * **Whether the head has stuck**, which is what swaps the control set for the
+   * condensed run inside it.
+   *
+   * A sentinel directly above the head rather than a scroll listener on the
+   * pane: the question is "has this box reached the top", and an
+   * `IntersectionObserver` answers it off the compositor instead of on every
+   * scroll event. The root is the scroller, not the window — this pane is the
+   * only thing on this view that scrolls.
+   */
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const mark = sentinelRef.current;
+    const box = scrollRef.current;
+    if (!mark || !box) return;
+    const io = new IntersectionObserver(
+      ([e]) => setStuck(!e.isIntersecting),
+      { root: box, threshold: 0 },
+    );
+    io.observe(mark);
+    return () => io.disconnect();
+  }, []);
+  /**
+   * **The head resizes under the reader, so the scroll is paid the difference.**
+   *
+   * The condensed run appears *inside* a `position: sticky` box, and a sticky
+   * box still occupies its place in flow — so growing it pushes every row below
+   * down by that much, under the finger that is scrolling. That is the fault
+   * *reserve the box, don't move the page* exists to stop, and the usual answer
+   * — lay the worst case out and hide it — is wrong here: it would cost the
+   * table a row of chrome at rest, on the one view where every pixel is a row.
+   *
+   * So the box is not reserved, the scroll is compensated: whenever the head
+   * changes height while the reader is scrolled into the table, the difference
+   * goes onto `scrollTop` in the same frame and the rows stay where they were.
+   *
+   * **A `ResizeObserver` rather than a delta across the `stuck` flip**, and the
+   * difference is measured rather than theoretical. The head does not reach its
+   * new height in one commit — the run inside it renders, then `ScrollRow`
+   * measures its own overflow and renders again — so a before/after pair taken
+   * around the flip catches part of the change and leaves the rest as a jump.
+   * Measured at 390 crossing the threshold that way: `scrollTop` 160 → 223
+   * where the head grew 42, and the first row still moved 190 → 165. Observing
+   * the box answers every change whatever caused it, which is also the honest
+   * rule — a filter badge landing while the reader is scrolled must not shift
+   * the rows either.
+   *
+   * `box.scrollTop > 0` is the whole of the guard: at rest the head is in flow
+   * above the scroll position and its height is not something the reader is
+   * looking past.
+   */
+  useLayoutEffect(() => {
+    const head = headRef.current;
+    const box = scrollRef.current;
+    if (!head || !box) return;
+    let last = head.getBoundingClientRect().height;
+    const ro = new ResizeObserver(() => {
+      const next = head.getBoundingClientRect().height;
+      const delta = next - last;
+      last = next;
+      if (delta && box.scrollTop > 0) box.scrollTop += delta;
+    });
+    ro.observe(head);
+    return () => ro.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const box = scrollRef.current;
     if (!box) return;
@@ -1957,94 +2031,85 @@ export function ResearchTable({
      Labels, not controls: the app's round pill is the shape it reserves for
      things you read, and the way to change any of them is a scroll up, or the
      button that expanded the table. */
-  const badges = (
-    <>
-      {/* **Which reading, first**, and it is here for the reason every other
-          badge in this row is: expanded, the switch that set it is behind the
-          box, and "of 30" would otherwise be the only thing on screen saying
-          these are clubs. */}
-      {teams && <span className="research-badge">Teams</span>}
-      <span className="research-badge">
-        {(teams ? TEAM_SIDES.find((p) => p.kind === kind) : POSITION_BY_KEY.get(pos))?.label ?? pos}
-      </span>
-      {/* One badge per set the board is including — the watchlist among
-          them, since it is one of the sets the board is a union of rather
-          than a filter over them — or one saying it is including none,
-          which is a state the buttons can reach and a blank row would leave
-          unexplained. None of it on the team reading, where the buttons are
-          not drawn and every club is on the board: a badge saying so would be
-          a badge on every possible table, which says nothing. */}
-      {!teams &&
-        (nothingIncluded ? (
-          <span className="research-badge">Nobody included</span>
-        ) : (
-          includeKeys(include).map((k) => (
-            <span key={k} className="research-badge">
-              {includeMeta(k, espnConnected).full}
-            </span>
-          ))
-        ))}
-      {!teams && includeWatchlist && <span className="research-badge">Watchlist</span>}
-      {/* The badges under the values are a setting like any other, and one
-          the reader most needs named here: expanded there is no toggle on
-          screen to explain a second number in every cell. Two sentences,
-          because a standing among thirty and a percentile against a bar are
-          two different claims — see `RankBadge`. */}
-      {showRanks && !schedule && (
-        <span
-          className="research-badge"
-          title={
-            teams
-              ? `Every value carries this club's rank among the 30 on the ${windowLabel(
-                  statWindow,
-                )} board — 1st is best, whichever end of the column that is.`
-              : `Every value carries its percentile against the qualified players on the ${windowLabel(
-                  statWindow,
-                )} board — 100 is best. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`
-          }
-        >
-          Ranks
-        </span>
-      )}
-      {/* **What span of days the columns are**, which expanded is the one
-          thing nothing else on screen can say: the toggle and its span tabs
-          are behind this box, and a grid of dates whose header says `Fri
-          8/15` still leaves "how far does this run" unanswered. The rule
-          this row exists for — a table narrowed with nothing on screen to
-          say why — applies to a table *widened* into the future exactly as
-          it does to one narrowed to shortstops. */}
-      {scheduleSpan !== null && (
-        <span
-          className="research-badge"
-          title={
-            schedule
-              ? `Every club's games from ${schedule.dates[0]} to ${
-                  schedule.dates[schedule.dates.length - 1]
-                }`
-              : 'The days ahead, still loading'
-          }
-        >
-          {/* The span in its own words — a named one reads `Schedule ·
-              this matchup` where a numeric one reads `next 7 days`, since
-              a badge saying "next matchup days" would be nonsense and a
-              badge saying "7" over a fortnight of columns would be a lie.
-              `spanLabel` is the same wording the pills carry, lower-cased
-              into the badge's own sentence. */}
-          Schedule ·{' '}
-          {spanLabel(effectiveSpan(scheduleSpan, matchupWindow), matchupWindow)
-            .label.replace(/^Next (\d+)$/, 'next $1 days')
-            .toLowerCase()}
-        </span>
-      )}
-      <span className="research-badge">{windowLabel(statWindow)}</span>
-      {search.trim() && <span className="research-badge">“{search.trim()}”</span>}
-      {filters.map((f) => (
-        <span key={f.id} className="research-badge">
-          {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
-        </span>
-      ))}
-    </>
+  /**
+   * **Teams and Watchlist are lifted out of the tools run**, because the bar is
+   * three rows now and neither belongs in the third of them.
+   *
+   * The rows are *which players*, *which slice*, and *what to do with the
+   * board*, and they are the order the questions come in. Watchlist joins the
+   * three include buttons because it is the fourth set the board is a union of
+   * — the measurement that once kept it out of `.research-include` was about a
+   * row that had to wrap, and a row that scrolls has no such budget to defend.
+   * Teams joins the span and the position because all three name *which slice
+   * of the league the table is*, which is exactly the argument the comment on
+   * `.research-tools` already makes for keeping the span beside the position.
+   */
+  const watchlistToggle = !teams ? (
+    <button
+      type="button"
+      className={`research-toggle${includeWatchlist ? ' on' : ''}`}
+      aria-pressed={includeWatchlist}
+      onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
+      title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+        <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
+      </svg>
+      <span className="research-toggle-label">Watchlist</span>
+      {watchlistCount > 0 && <span className="research-toggle-count">{watchlistCount}</span>}
+    </button>
+  ) : null;
+  const teamsToggle = (
+    <button
+      type="button"
+      className={`research-toggle${teams ? ' on' : ''}`}
+      aria-pressed={teams}
+      onClick={() => onTeamsChange(!teams)}
+      title={
+        teams
+          ? 'Back to the players'
+          : "Read the board as thirty clubs instead — each row a club's aggregate over the span on screen"
+      }
+    >
+      {/* A crest: the one shape in this run that says *club* rather than
+          person, list or column. Distinct at 15px from the star, the calendar,
+          the funnel and the bars beside it. */}
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3.2 20 6v6.2c0 4.2-3.2 7-8 8.6-4.8-1.6-8-4.4-8-8.6V6Z" />
+      </svg>
+      <span className="research-toggle-label">Teams</span>
+    </button>
   );
+
+  /**
+   * **The badges are the filters and nothing else now.**
+   *
+   * The row used to carry one badge per *setting* — the reading, the position,
+   * each included set, Ranks, the schedule span, the window, the search — on
+   * the argument that a control set scrolled off the top leaves `of 622`
+   * meaning nothing without them. That argument was right about the problem
+   * and wrong about the answer: it restated the controls in a row you cannot
+   * act on, where what a reader wants is the control.
+   *
+   * **The condensed run is the answer instead.** Every one of those settings
+   * is a lit button, and the run sticks with the head — so the state is on
+   * screen *and* pressable at every scroll offset, which a badge never was.
+   * What is left here is the one setting with no button of its own to be lit:
+   * a stat threshold lives inside the Filters panel, and `PA ≥ 300` is a
+   * sentence the funnel's own count (`3`) cannot say.
+   *
+   * **One row, and it scrolls** rather than wrapping — see `.research-badges`.
+   * Wrapping is what made this row cost the table two lines and then three;
+   * a scroller costs it one at every count.
+   *
+   * Labels, not controls: the app's round pill is the shape it reserves for
+   * things you read, and the way to change one is the funnel it came from.
+   */
+  const badges = filters.map((f) => (
+    <span key={f.id} className="research-badge">
+      {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
+    </span>
+  ));
 
   /**
    * **The control set, as the tools row itself.** `.view-tools` is the band
@@ -2077,10 +2142,29 @@ export function ResearchTable({
    * `.research-chrome` and `.research-bar` are `display: contents`, so their
    * groups are items of the row's own flex container and take part in its wrap.
    */
-  const controls = (
-    <div className="view-tools">
-      <div className="research-chrome">
-          <div className="research-bar">
+  /**
+   * **The bar is three runs, and each of them scrolls.**
+   *
+   * It was one wrapping row of five groups, which on a phone answered its width
+   * problem twice over: the span and the position collapsed into `<select>`s,
+   * and every disclosure button dropped its word to a bare glyph. Both are
+   * gone. A row that scrolls has no line budget to defend, so the pills stay
+   * pills and the buttons keep their labels at every width.
+   *
+   * **The three are the order the questions come in** — *which players*, *which
+   * slice of them*, *what to do with the board* — and each is a `ScrollRow`, so
+   * a run too wide for the window gives up its end to an arrow rather than
+   * wrapping onto a line the table pays for.
+   *
+   * They are consts rather than JSX in place because **the head draws them a
+   * second time** once the control set has scrolled away — see
+   * `.research-condensed`. The same elements, from the same props, calling the
+   * same callbacks: two copies of a control that cannot disagree, which is only
+   * safe because every one of these is controlled from above.
+   */
+
+  const rowWho = (
+    <>
           {/* Ahead of the position pills, and a separate control from them:
               which rosters and which position both apply, so folding them into
               one row would read as a single-select where picking SS un-picks
@@ -2101,9 +2185,10 @@ export function ResearchTable({
               been swapped out is a setting lying about its own reach, which is
               the same argument that takes Columns and Ranks off the bar in
               schedule mode. */}
+          {watchlistToggle}
           {!teams && (
           <div className="research-include" role="group" aria-label="Which players">
-            {RESEARCH_INCLUDE_KEYS.filter(
+            {INCLUDE_ORDER.filter(
               // Other rosters needs a league to name a set at all. A link that
               // arrives with it on keeps the button, so the state is always
               // visible and always undoable — the courtesy the Free Agents pill
@@ -2145,6 +2230,11 @@ export function ResearchTable({
             })}
           </div>
           )}
+    </>
+  );
+
+  const rowSlice = (
+    <>
           {/* Out in the bar rather than inside the Filters panel: it decides which
               games every number on the board is drawn from, which is too large a
               thing to keep behind a disclosure — and being always visible, it needs
@@ -2168,21 +2258,6 @@ export function ResearchTable({
               </button>
             ))}
           </div>
-          {/* The same tabs as a dropdown, for a phone. It keeps the tabs' short
-              labels: a native select is as wide as its widest option, and "Last 60
-              days" would cost back the width this is here to save. */}
-          <select
-            className="research-window-select"
-            value={String(statWindow)}
-            onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
-            aria-label="Time span"
-          >
-            {RESEARCH_WINDOWS.map((w) => (
-              <option key={String(w)} value={String(w)}>
-                {windowLabel(w)}
-              </option>
-            ))}
-          </select>
           {/* **Eleven pills on the player reading, two on the team one**, and
               the run is the same run: a club has no position to be eligible at,
               so what is left of the row is the half of it that was never about
@@ -2215,13 +2290,28 @@ export function ResearchTable({
               </button>
             ))}
           </div>
-          {/* The eleven pills as one dropdown, for a phone. The pills' own labels,
-              which are two characters wide by design, are grouped under headings
-              here — a select shows one option at a time and "SS" alone in a closed
-              box says less than it does in a row with C and 1B beside it. Short
-              headings, because an optgroup label counts toward the width the same
-              way an option does. */}
-          <select
+          {/* **And the same two as dropdowns on a phone**, which is the one width
+              swap on this bar that survived the move to scrolling rows. The
+              other four went — a button's label is its name and a row that
+              scrolls has no line to buy back — but these two are not buttons:
+              they are a four-pill run and an eleven-pill run, and eleven pills
+              behind a horizontal scroll is a control you have to drag through
+              to find `SS`. A closed select shows the one that is set and opens
+              the rest in a list the platform draws. Both rendered, one media
+              query, neither chosen in JS. */}
+<select
+            className="research-window-select"
+            value={String(statWindow)}
+            onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
+            aria-label="Time span"
+          >
+            {RESEARCH_WINDOWS.map((w) => (
+              <option key={String(w)} value={String(w)}>
+                {windowLabel(w)}
+              </option>
+            ))}
+          </select>
+<select
             className="research-pos-select"
             value={teams ? (researchKindFor(pos) === 'pitcher' ? 'pitchers' : 'batters') : pos}
             onChange={(e) => onPosChange(e.target.value as ResearchPos)}
@@ -2229,22 +2319,18 @@ export function ResearchTable({
           >
             {/* Two options and no headings on the team reading — an optgroup
                 over a run of one reads as a heading with nothing under it. */}
-            {teams
-              ? TEAM_SIDES.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))
-              : POSITION_GROUPS.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.positions.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
+            {(teams ? TEAM_SIDES : POSITIONS).map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
           </select>
+          {teamsToggle}
+    </>
+  );
+
+  const rowTools = (
+    <>
 
             {/* One group, so the four buttons never split across two lines of the
                 bar. As individual flex children they wrapped one at a time, and on
@@ -2287,25 +2373,6 @@ export function ResearchTable({
              * run's third panel-less toggle, so it takes `.on` and never
              * `.active`, exactly as Watchlist and Ranks do.
              */}
-            <button
-              type="button"
-              className={`research-toggle${teams ? ' on' : ''}`}
-              aria-pressed={teams}
-              onClick={() => onTeamsChange(!teams)}
-              title={
-                teams
-                  ? 'Back to the players'
-                  : "Read the board as thirty clubs instead — each row a club's aggregate over the span on screen"
-              }
-            >
-              {/* A crest: the one shape in this run that says *club* rather
-                  than person, list or column. Distinct at 15px from the star,
-                  the calendar, the funnel and the bars beside it. */}
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 3.2 20 6v6.2c0 4.2-3.2 7-8 8.6-4.8-1.6-8-4.4-8-8.6V6Z" />
-              </svg>
-              <span className="research-toggle-label">Teams</span>
-            </button>
             {/* Search and Filters lead the run — the two disclosures you come to
                 the board with a question in. Each carries an `on` state whenever
                 its panel holds something, open or shut: a collapsed control must
@@ -2378,23 +2445,6 @@ export function ResearchTable({
                 it composes with, and for the same reason: the watchlist is a
                 list of players, and unioning players onto a board of clubs is
                 not an operation. */}
-            {!teams && (
-            <button
-              type="button"
-              className={`research-toggle${includeWatchlist ? ' on' : ''}`}
-              aria-pressed={includeWatchlist}
-              onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
-              title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
-              </svg>
-              <span className="research-toggle-label">Watchlist</span>
-              {watchlistCount > 0 && (
-                <span className="research-toggle-count">{watchlistCount}</span>
-              )}
-            </button>
-            )}
             {/**
              * **Schedule reads after the four that narrow the board and before
              * the two that dress it**, which is where it belongs in the run's
@@ -2482,6 +2532,22 @@ export function ResearchTable({
                 onChange={onScheduleSpanChange}
               />
             )}
+    </>
+  );
+
+  const controls = (
+    <div className="view-tools">
+      <div className="research-chrome">
+          <div className="research-bar">
+          <ScrollRow label="which players" className="research-row">
+            {rowWho}
+          </ScrollRow>
+          <ScrollRow label="the span and position" className="research-row">
+            {rowSlice}
+          </ScrollRow>
+          <ScrollRow label="the board's tools" className="research-row">
+            {rowTools}
+          </ScrollRow>
           </div>
 
           {searchOpen && (
@@ -2668,7 +2734,25 @@ export function ResearchTable({
             it says the count is on its way. App keeps the rows it already has
             while a re-read is in flight (`loading` is gated on the cache being
             empty), so this can only ever be a board with nothing on it yet. */}
-        <div className="research-head" ref={headRef}>
+        {/* The mark the head's stickiness is read off — see `stuck`. Zero-height
+            and inert; it is a position, not a thing. */}
+        <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
+        <div className={`research-head${stuck ? ' is-stuck' : ''}`} ref={headRef}>
+          {/* **The whole control set again, condensed, once the bar has gone.**
+              One run rather than three and glyphs rather than words — the shape
+              the bar itself used to take on a phone, kept for the one case that
+              argument was always right about: a reader who has scrolled into the
+              table wants the table, and a control they can still *press* beats
+              a badge that only says what it was set to. Which is why the badge
+              row below is down to the filters — everything else here is a lit
+              button. */}
+          {stuck && (
+            <ScrollRow label="the board's controls" className="research-row research-condensed">
+              {rowWho}
+              {rowSlice}
+              {rowTools}
+            </ScrollRow>
+          )}
           {/* **The settings first, the count last.** They were one wrapping run
               with the count leading it, which is the shorter box and was chosen
               for that; what it got wrong is which of the two the *rows* are
