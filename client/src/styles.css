@@ -7446,23 +7446,6 @@ button.start-line:focus-visible {
   position: relative;
 }
 
-/* One setting, stated. Round because it is a label — the shape this app
-   reserves for things you read — which is also what keeps a row of them from
-   reading as the control set they stand in for. The way to change any of them
-   is the button that expanded the table. */
-.research-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
 /* Who the game log is about, at the size of a row label rather than the page
    header it stands in for. */
 .glog-id {
@@ -10046,11 +10029,58 @@ button.start-line:focus-visible {
   flex: none;
 }
 
+/* **One row that scrolls, where it was a run that wrapped** — the measurement
+   the badge row leaves behind, on the row that replaced it.
+
+   That row was made a scroller because wrapping cost the table a second line
+   and then a third as the filters mounted up, on the one view where a line of
+   chrome is a row of the table. Everything about that is now true of this one
+   and more so: the chips used to wrap inside the control set, which scrolls
+   away, and they are in the sticky head now, so what they cost they cost at
+   every offset. Measured at 390 with six filters built, wrapping: **three lines,
+   93px**, held over the rows the whole way down the board. Nowrap, it is one
+   27px line at 390 and at 1200 alike.
+
+   **No arrows, unlike the three button runs in the bar**, and the reason is not
+   the badge row's (these *are* controls, so that argument does not carry). It
+   is that nothing here is undiscoverable: the reader built every chip in this
+   row a moment ago from the panel directly above it, where the bar's runs are a
+   fixed vocabulary somebody has to be able to find the end of. `Clear all` is
+   the last chip and one flick away, and the row is a single line at every width
+   until the sixth filter.
+
+   `min-width: 0` because a flex item's automatic minimum is its `min-content`:
+   without it the row grows to the widest chip run and the head goes past the
+   pane's edge instead of scrolling inside it — the same line the badge row
+   needed for the same reason. */
 .research-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+  overflow-x: auto;
+  /* The axis this box genuinely scrolls, and `none` rather than `contain` —
+     the app's standing rule. */
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+  min-width: 0;
+}
+.research-chips::-webkit-scrollbar {
+  display: none;
+}
+/* **And every chip in it holds its own width**, which is the whole of what
+   `nowrap` costs if it is left out: a flex item's default is `flex-shrink: 1`,
+   so the moment the run is wider than the row the chips are squeezed *below
+   their content* and their labels wrap inside them. Measured at 390 with six
+   built, before this line: every chip 57px tall and `HR ≥ 10 ×` broken over
+   three lines in a 53px box, which is a taller row than the wrapping run it
+   replaced. This is the trap `.research-toggle svg` already records one
+   argument along — an item in a tight flex row shrinks past its own size — and
+   the answer is the same one. Written on the children rather than on each
+   class: `Clear all` is the last item in this row and is exactly as
+   unsqueezable as the chips beside it. */
+.research-chips > * {
+  flex: none;
 }
 /* A chip is a label you can dismiss rather than a control you operate, but it
    is still clicked — so it takes the control radius, per the app-wide rule that
@@ -10181,50 +10211,16 @@ button.start-line:focus-visible {
   padding: 6px var(--table-bleed, 0px) 10px;
   background: var(--bg);
 }
-/* **Every setting the board is on, as one wrapping run** — the shape the head
-   itself used to be, moved down one level so that the head can be the column of
-   badges-then-count. Nothing here changed but the selector it is written on:
-   the run wraps at a phone's width and each row of it is a row of labels, and a
-   badge is `white-space: nowrap` so the wrap happens between them.
-
-   No reserved height. The run is what it wraps to, the head is what the run
-   plus the count come to, and `--research-head-h` is measured off the head —
-   which is the same rule the head has always been under, and the reason a
-   wrapping band above a count is not the "control that changes size under the
-   finger that pressed it" the app forbids: nothing in this box is pressable,
-   and the box it moves — the header row — reads its offset from the
-   measurement rather than from a number written down. */
-/* **One row that scrolls, where it was a run that wrapped.**
-
-   Wrapping is what made this row cost the table a second line and then a third
-   as the filters mounted up, on the one view where a line of chrome is a row of
-   the table. It carries only the stat filters now — everything else it used to
-   restate is a lit button in the condensed run directly above it — so it is a
-   short row most of the time and a scroller when it is not.
-
-   **No arrows, unlike the button rows beside it.** These are labels: the app's
-   round pill is the shape it reserves for things you read, and an arrow is a
-   control. A row of chips that offered a press would be promising something the
-   chips themselves do not do — the way to change one is the funnel it came
-   from. The finger scrolls it; nothing else needs to. */
-.research-badges {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px 10px;
-  overflow-x: auto;
-  /* The axis this box genuinely scrolls, and `none` rather than `contain` —
-     the app's standing rule. */
-  overscroll-behavior-x: none;
-  scrollbar-width: none;
-  /* A flex item's automatic minimum is its `min-content`; without this the row
-     grows to the widest chip run and the head goes past the pane's edge instead
-     of scrolling inside it. */
-  min-width: 0;
-}
-.research-badges::-webkit-scrollbar {
-  display: none;
-}
+/* **The badge row stood here and is gone**, with `.research-badge` above it.
+   It was every setting the board is on as one run of labels, then — once the
+   condensed run made every other setting a lit button that sticks — the stat
+   thresholds alone. The chips row moved into this head under it and says the
+   identical sentence off the identical array with a press attached, so the two
+   were the same filter printed twice, 33px apart, the badge row costing the
+   head 25px at every width to restate a control one line above it. Reported as
+   exactly that. What it leaves behind is its one measurement, which
+   `.research-chips` has taken over: a row of these in the head is a row the
+   *table* pays for, so it scrolls rather than wrapping. */
 
 /* **The bar's three runs.** `ScrollRow`'s own box (`.tool-scroll`) with one
    thing taken back: it pulls out to the date bar's inner edge, which is right
