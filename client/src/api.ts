@@ -37,6 +37,7 @@ import type {
   TeamHitting,
   TeamHittingWindow,
   TeamInfo,
+  TeamSplitSide,
   EspnRosterPlayer,
 } from './types';
 
@@ -661,8 +662,22 @@ export const api = {
   ): Promise<{ date: string; rosters: Record<string, EspnRosterPlayer[] | null> }> {
     return request(`/api/espn/rosters?teams=${teamIds.join(',')}&date=${date}`);
   },
-  async teamHitting(teamId: number, window: TeamHittingWindow): Promise<TeamHitting | null> {
-    return request(`/api/teams/${teamId}/hitting?window=${window}`);
+  /**
+   * One club's nine cuts over a window, on either side of the ball — the
+   * opponent table on a pitcher's game, and the team page's Splits tab.
+   *
+   * `side` defaults to `batting`, which is what the opponent table has always
+   * meant; `pitching` is the same nine cuts of the line opposing batters have
+   * put up against them, cut by the *batter's* hand. One route, because a
+   * club's pitching line is its opponents' batting line — see `teamHitting.ts`.
+   */
+  async teamSplits(
+    teamId: number,
+    window: TeamHittingWindow,
+    side: TeamSplitSide = 'batting',
+  ): Promise<TeamHitting | null> {
+    const q = side === 'pitching' ? '&side=pitching' : '';
+    return request(`/api/teams/${teamId}/splits?window=${window}${q}`);
   },
   // The season line plus the platoon splits — the platoon card at the foot of
   // the details view's **Stats** tab. Still the only reader of that route.

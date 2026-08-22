@@ -699,6 +699,20 @@ export interface TeamInfo {
   abbreviation: string;
 }
 
+/** Which side of the ball a club's splits are read from.
+ *
+ * **`batting` is the club at the plate** — how they have hit, cut by the hand
+ * on the mound. That is what a watched pitcher's opponent table has always
+ * asked for, and it is the default everywhere for that reason.
+ *
+ * **`pitching` is the same club in the field**, which is to say the line
+ * *opposing batters* have put up against them, cut by the batter's own hand.
+ * It is the exact mirror off the exact same rows of the same day export — see
+ * `teamHitting.ts` — which is why it is a parameter rather than a second table:
+ * a club's pitching line **is** its opponents' batting line.
+ */
+export type TeamSplitSide = 'batting' | 'pitching';
+
 export interface TeamHittingRanks {
   runsPerGame: number | null;
   avg: number | null;
@@ -755,6 +769,18 @@ export type TeamHittingVenue = 'all' | 'home' | 'away';
 export interface TeamHitting {
   teamId: number;
   window: TeamHittingWindow;
+  /**
+   * **Which side of the ball these nine cuts are**, on the wire so the answer
+   * says what it is an answer to — the rule `PlayerWindows.cut` follows, and
+   * for the identical reason: the team page re-reads this table when the reader
+   * presses the side switch, and a stale answer landing on a fresh one would
+   * otherwise be a club's *hitting* under three rows headed `vs RHB`.
+   *
+   * Optional, because a blob stored before the pitching side existed
+   * deserializes without it; absent means `batting`, which is what every one of
+   * those blobs holds.
+   */
+  side?: TeamSplitSide;
   all: TeamHittingSplit;
   home: TeamHittingSplit;
   away: TeamHittingSplit;

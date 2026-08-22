@@ -1,12 +1,12 @@
 ---
 name: sicko-team-page
-description: The team page (TeamDetails) — a club's own full-screen page and its five tabs (Overview, Schedule, Roster, Hitting, Stats), the side switch, the crest and record in its head, the three doors into it (the research board's team rows, a player's Overview, the header search), and DetailsShell, the overlay shell it shares with the player page. Use when editing TeamDetails.tsx or DetailsShell.tsx, when changing what a club's page shows, when adding a tab to either details page, or when touching the team=/tside= URL params or the /api/teams and /api/teams/:id/windows routes.
+description: The team page (TeamDetails) — a club's own full-screen page and its five tabs (Overview, Schedule, Roster, Splits, Stats), the side switch and the three tabs that follow it, the crest and record in its head, the three doors into it (the research board's team rows, a player's Overview, the header search), and DetailsShell, the overlay shell it shares with the player page. Use when editing TeamDetails.tsx or DetailsShell.tsx, when changing what a club's page shows, when adding a tab to either details page, or when touching the team=/tside= URL params or the /api/teams and /api/teams/:id/windows routes.
 ---
 
 # The team page
 
 `TeamDetails.tsx` — a club's page, and the second thing in this app to be one.
-Five tabs (**Overview · Schedule · Roster · Hitting · Stats**), reachable from
+Five tabs (**Overview · Schedule · Roster · Splits · Stats**), reachable from
 the research board's team rows, from a player's Overview and from the header
 search.
 
@@ -25,8 +25,8 @@ player page too.
   (and why each refusal is about the club rather than the work); the crest and
   the record folded onto the hand token; the side switch and `tside=`; the
   fixture row and why it is not `UpcomingGames`; the Roster tab's join on
-  `SeasonPlayer.teamId`; the Hitting tab's one-word difference from a pitcher's
-  opponent table; the Stats tab's `teams` prop, its population and its missing
+  `SeasonPlayer.teamId`; the Splits tab, which follows the side switch and is the
+  same nine cuts of a club at the plate or in the field; the Stats tab's `teams` prop, its population and its missing
   cut control; the two server routes; the three doors; and the rule that
   `team=` and `player=` are one page at a time rather than a stack.
 

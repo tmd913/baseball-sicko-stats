@@ -31,6 +31,7 @@ import type {
   ResearchWindow,
   SeasonArsenalPitch,
   TeamHittingWindow,
+  TeamSplitSide,
 } from './types.js';
 import {
   getGameClipPlayIds,
@@ -1773,33 +1774,44 @@ app.get(
 );
 
 /**
- * How one team has hit over a window — whole, at home, on the road, and each of
- * those by the hand on the mound. The opponent table on a pitcher's game.
+ * How one team has **hit or pitched** over a window — whole, at home, on the
+ * road, and each of those by the other man's hand. The opponent table on a
+ * pitcher's game, and the team page's Splits tab.
  *
- * The report already carries the **season, all games** cut for every opponent a
- * watched pitcher has in view, so the table draws its opening state with no
- * request at all; this serves the four other windows, and it serves all nine
- * cuts of whichever one is asked for so that changing the *venue* costs nothing.
- * `window` is shape-checked against the board's own five and anything else is
- * the season, the rule `/api/research` follows for the same parameter: it is a
- * view preference in a shareable URL, and an older link should still open.
+ * The report already carries the **season, all games, batting** cut for every
+ * opponent a watched pitcher has in view, so that table draws its opening state
+ * with no request at all; this serves the four other windows, and it serves all
+ * nine cuts of whichever one is asked for so that changing the *venue* costs
+ * nothing. `window` is shape-checked against the board's own five and anything
+ * else is the season, the rule `/api/research` follows for the same parameter:
+ * it is a view preference in a shareable URL, and an older link should still
+ * open. `side` falls back the same way, to `batting`.
+ *
+ * **`/hitting` is registered beside `/splits` and answers the batting side
+ * whatever it is asked** — the rule `/api/watchlist` follows for its own name
+ * and `?start=1` for its parameter: a tab open at the moment of a deploy is
+ * still asking for the old path, and it still gets the right answer. What the
+ * path may not do is answer `side=pitching`, which would be a route called
+ * `hitting` returning a club's pitching line — the kind of drift the whole
+ * codebase spends its comments on. The new name is the honest one because the
+ * table is not about hitting any more; it is about a split.
  */
-app.get(
-  '/api/teams/:teamId/hitting',
-  requireUser,
-  asyncRoute(async (req, res) => {
-    const teamId = Number(req.params.teamId);
-    if (!Number.isInteger(teamId) || teamId <= 0) {
-      res.status(400).json({ error: 'invalid teamId' });
-      return;
-    }
-    const asked = Number(req.query.window);
-    const window: TeamHittingWindow = TEAM_HITTING_WINDOWS.includes(asked as TeamHittingWindow)
-      ? (asked as TeamHittingWindow)
-      : 'season';
-    res.json(await getTeamHitting(teamId, window));
-  }),
-);
+const teamSplitsRoute = asyncRoute(async (req, res) => {
+  const teamId = Number(req.params.teamId);
+  if (!Number.isInteger(teamId) || teamId <= 0) {
+    res.status(400).json({ error: 'invalid teamId' });
+    return;
+  }
+  const asked = Number(req.query.window);
+  const window: TeamHittingWindow = TEAM_HITTING_WINDOWS.includes(asked as TeamHittingWindow)
+    ? (asked as TeamHittingWindow)
+    : 'season';
+  const side: TeamSplitSide =
+    req.path.endsWith('/hitting') || req.query.side !== 'pitching' ? 'batting' : 'pitching';
+  res.json(await getTeamHitting(teamId, window, side));
+});
+app.get('/api/teams/:teamId/splits', requireUser, teamSplitsRoute);
+app.get('/api/teams/:teamId/hitting', requireUser, teamSplitsRoute);
 
 // A player's season line and platoon splits (vs LHP / vs RHP), for the details
 // view. The report already carries these for watchlisted players; this serves the

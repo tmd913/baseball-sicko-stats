@@ -58,9 +58,10 @@ import type {
  * - Savant publishes percentile bars and a rolling xwOBA series **per player**;
  *   there is no club scrape behind either, and inventing one from the team
  *   board would be this app's own ranking wearing Savant's clothes.
- * - A club's platoon reading is the **Hitting** tab, which is nine cuts rather
- *   than two and is the same `OpponentSection` a pitcher's opponent draws. A
- *   `PlatoonSplits` bar beside it would be the same fact at lower resolution.
+ * - A club's platoon reading is the **Splits** tab, which is nine cuts rather
+ *   than two, on **either side of the ball**, and is the same `OpponentSection`
+ *   a pitcher's opponent draws. A `PlatoonSplits` bar beside it would be the
+ *   same fact at lower resolution.
  * - A club's news is thirty men's news, which is the app's `recentNews` map
  *   already drawn where it belongs — beside each of their names.
  * - A club's game log is its schedule with scores in it, and the scores are not
@@ -77,7 +78,7 @@ import type {
  *  `team=` and `tside=` are which subject and which of its two halves. A link
  *  carrying the tab as well would describe a scroll position of the page rather
  *  than the page. */
-type TeamTab = 'overview' | 'schedule' | 'roster' | 'hitting' | 'stats';
+type TeamTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'stats';
 
 /** How many days of fixtures the Schedule tab draws, and the preview's five.
  *  The player page's own `HORIZON` — one fortnight means one thing in this
@@ -246,46 +247,49 @@ export function TeamDetails({
   );
 
   /**
-   * **The club's hitting, all nine cuts** — the Hitting tab, lazy on first open
-   * of it, and keyed by club and window so the span control costs one read per
-   * span and never a second of the same one.
+   * **The club's nine cuts on the side the page is reading** — the Splits tab,
+   * lazy on first open of it, and keyed by club **and side** so a switch between
+   * the two is a read of its own and never one side's numbers under the other's
+   * heading.
    *
-   * The venue is *not* in the key, and that is the route's own bargain: it
-   * answers with all three at once so that changing venue costs nothing. See
-   * `/api/teams/:teamId/hitting`.
+   * The venue and the span are *not* in the key, and that is the route's own
+   * bargain: it answers with all three venues at once so that changing that
+   * control costs nothing, and `OpponentBody` reads the other four spans itself
+   * (keyed by side there too).
    */
-  const [hitting, setHitting] = useState<TeamHitting | null>(null);
-  const [hittingError, setHittingError] = useState(false);
+  const [splits, setSplits] = useState<TeamHitting | null>(null);
+  const [splitsError, setSplitsError] = useState(false);
   /* **A state flag rather than the request ref**, and the difference is one the
      app's loading rules make explicit: the ref is not reactive, so a wait
      tested against it is tested on a render that has already happened — the
      effect runs *after* the first paint, and the next render is the answer
      landing. Read off the ref, the block wait could never appear at all. */
-  const [hittingLoading, setHittingLoading] = useState(false);
-  const hittingReq = useRef<number | null>(null);
+  const [splitsLoading, setSplitsLoading] = useState(false);
+  const splitsReq = useRef<string | null>(null);
   useEffect(() => {
-    if (tab !== 'hitting' || hittingReq.current === team.id) return;
-    hittingReq.current = team.id;
-    setHittingError(false);
-    setHittingLoading(true);
-    api.teamHitting(team.id, 'season').then(
+    const req = `${team.id}:${side}`;
+    if (tab !== 'splits' || splitsReq.current === req) return;
+    splitsReq.current = req;
+    setSplitsError(false);
+    setSplitsLoading(true);
+    api.teamSplits(team.id, 'season', side === 'pitcher' ? 'pitching' : 'batting').then(
       (b) => {
-        if (hittingReq.current !== team.id) return;
-        setHitting(b);
-        setHittingLoading(false);
+        if (splitsReq.current !== req) return;
+        setSplits(b);
+        setSplitsLoading(false);
       },
       () => {
-        if (hittingReq.current !== team.id) return;
-        hittingReq.current = null;
-        setHittingError(true);
-        setHittingLoading(false);
+        if (splitsReq.current !== req) return;
+        splitsReq.current = null;
+        setSplitsError(true);
+        setSplitsLoading(false);
       },
     );
-  }, [tab, team.id]);
+  }, [tab, team.id, side]);
   /* Rule 2 of the loading system: a block wait only where there is nothing to
      show yet, and only past `WAIT_DELAY` — a club already read comes back in a
      tick, and a wait that flashes reads as the page breaking. */
-  const hittingWait = useDelayedFlag(hittingLoading);
+  const splitsWait = useDelayedFlag(splitsLoading);
 
   /** The board this club's percentiles are ranked in is the **team** board, and
    *  the tab asks for it the way the player page's does — through App, which
@@ -383,12 +387,22 @@ export function TeamDetails({
           <DetailsTabButton id="roster" tab={tab} onPick={setTab}>
             Roster
           </DetailsTabButton>
-          {/* The picture before the numbers, the order the player page's tabs
-              run in: how this lineup hits is what a reader deciding about a
-              *pitcher* has come for, and it is a comparison rather than a table
-              of totals. */}
-          <DetailsTabButton id="hitting" tab={tab} onPick={setTab}>
-            Hitting
+          {/* **`Splits`, where this read `Hitting`.** The strip names the *kind*
+              of reading a tab holds — Overview, Schedule, Roster, Stats — and
+              `Hitting` named its content instead, which is the fault the player
+              page's own strip corrected when `Rolling xwOBA` became `Charts`.
+              It also stopped being true the moment the tab began following the
+              side switch: on `Pitching` it is the club in the field, and a tab
+              headed `Hitting` over a table of runs *allowed* lies about what is
+              under it. What is invariant is that the table is a **split** — by
+              the other man's hand and by the ballpark — and that is what the
+              strip says now; the table's own heading names the side.
+
+              It sits before Stats for the reason the player page runs pictures
+              before numbers: a split is a comparison, where Stats is the
+              record. */}
+          <DetailsTabButton id="splits" tab={tab} onPick={setTab}>
+            Splits
           </DetailsTabButton>
           <DetailsTabButton id="stats" tab={tab} onPick={setTab}>
             Stats
@@ -435,40 +449,48 @@ export function TeamDetails({
       {tab === 'roster' && (
         <TeamRoster
           team={team}
+          side={side}
           players={players}
           loading={playersLoading}
           onOpenDetails={onOpenDetails}
         />
       )}
 
-      {tab === 'hitting' && (
+      {tab === 'splits' && (
         <div className="details-overview">
-          {hitting ? (
+          {splits ? (
             /* The same nine cuts a pitcher's opponent table draws, drawn by the
                same component — see `OpponentTable.tsx`, which records why the
                alternative (a second, thinner club table) is exactly the drift
                this codebase spends its comments avoiding. `hand` is null: that
                argument accents the row for the man on the mound, and there is
-               no man here. */
+               no one man here. */
             <OpponentSection
-              hitting={hitting}
+              hitting={splits}
               opponent={team.abbreviation}
               hand={null}
-              /* `Opponent` is what every other caller means and would be flatly
-                 false here — a club is not its own opponent. See there. */
-              title="Hitting"
+              side={side === 'pitcher' ? 'pitching' : 'batting'}
+              /* **The heading names the side, where the tab names the kind of
+                 reading.** `Opponent` is what every other caller means and would
+                 be flatly false here — a club is not its own opponent — and
+                 `Splits` is already on the tab above it, so the one thing left
+                 for this line to say is which half of the club's season the
+                 three rows are. */
+              title={side === 'pitcher' ? 'Pitching' : 'Hitting'}
             />
-          ) : hittingError ? (
+          ) : splitsError ? (
             <div className="details-status details-error">
-              Couldn&rsquo;t read how {team.name} have hit.
+              Couldn&rsquo;t read {team.name}&rsquo;s splits.
             </div>
-          ) : hittingWait ? (
-            <LoadingBlock>Reading how {team.name} have hit</LoadingBlock>
-          ) : hittingLoading ? null : (
+          ) : splitsWait ? (
+            <LoadingBlock>Reading {team.name}&rsquo;s splits</LoadingBlock>
+          ) : splitsLoading ? null : (
             /* The server's honest "no board for that club" — a `null` answer
                rather than a failed read, which is a different fact and gets a
                different sentence. */
-            <p className="ovw-none">No hitting line for {team.name}.</p>
+            <p className="ovw-none">
+              No {side === 'pitcher' ? 'pitching' : 'hitting'} splits for {team.name}.
+            </p>
           )}
         </div>
       )}
@@ -856,103 +878,119 @@ function StarterName({
  * the tab costs no request at all, which is why it can afford to be a plain
  * list rather than a board.
  *
- * Batters then pitchers, which is the roster view's own order and the reorder
- * screen's; within each, alphabetical, because nothing else here ranks them and
- * a list a reader is *scanning for a name* wants the order names come in. (The
- * Stats tab is where ranking lives, and the research board is where ranking
- * *players* lives — this is an index, not a leaderboard.)
+ * **One kind at a time, and the side switch is what picks it.** It drew both
+ * lists under two headings at first, which made this the one tab on the page
+ * the switch in the chrome did nothing to — a control pinned above every tab
+ * that four of the five obey and the fifth ignores is a control that has
+ * stopped meaning anything. It is also the app's own rule for a *roster*: the
+ * Roster view has two tables and a kind tab over them, and the reorder screen
+ * splits the same way. So `Batting` is the club's hitters and `Pitching` is its
+ * arms, and the heading says which.
+ *
+ * That leaves the tab strip and the switch answering two different questions,
+ * which is exactly what they should: the strip is *which reading of this club*,
+ * and the switch is *which half of it*.
+ *
+ * Alphabetical, because nothing else here ranks them and a list a reader is
+ * *scanning for a name* wants the order names come in. (The Stats tab is where
+ * ranking lives, and the research board is where ranking *players* lives — this
+ * is an index, not a leaderboard.)
  *
  * A two-way player is two rows under one id, here as everywhere: `SeasonPlayer`
  * carries one entry per kind and each is a different half of him with a page of
- * its own.
+ * its own — so he is on both sides of the switch, correctly, once each.
  */
 function TeamRoster({
   team,
+  side,
   players,
   loading,
   onOpenDetails,
 }: {
   team: TeamInfo;
+  side: PlayerKind;
   players: SeasonPlayer[];
   loading: boolean;
   onOpenDetails: (key: string) => void;
 }) {
   const wait = useDelayedFlag(loading);
-  const { batters, pitchers } = useMemo(() => {
+  const list = useMemo(() => {
     // **Joined on the id, not on the printed name.** `SeasonPlayer.teamId` is
     // MLB's own, which is the whole reason it was put on that row; matching
     // `team` would be a join on a display string, and a club whose name this
     // list spells differently would come back empty rather than wrong — which
     // is worse, being indistinguishable from a club with nobody on it.
-    const mine = players.filter((p) => p.teamId === team.id);
-    const byName = (a: SeasonPlayer, b: SeasonPlayer) => a.name.localeCompare(b.name);
-    return {
-      batters: mine.filter((p) => p.kind !== 'pitcher').sort(byName),
-      pitchers: mine.filter((p) => p.kind === 'pitcher').sort(byName),
-    };
-  }, [players, team.id]);
+    //
+    // The kind test is `!== 'pitcher'` rather than `=== 'batter'`, which is the
+    // app's own reading of that field everywhere: a two-way player's batting
+    // entry is `batter`, and anything MLB files as neither belongs with the
+    // hitters rather than nowhere.
+    return players
+      .filter((p) => p.teamId === team.id && (side === 'pitcher') === (p.kind === 'pitcher'))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [players, team.id, side]);
 
-  if (loading && batters.length === 0 && pitchers.length === 0) {
+  const heading = side === 'pitcher' ? 'Pitchers' : 'Batters';
+
+  if (loading && list.length === 0) {
     return wait ? <LoadingBlock>Reading the league&rsquo;s players</LoadingBlock> : null;
   }
-  if (batters.length === 0 && pitchers.length === 0) {
+  if (list.length === 0) {
     return (
       <div className="details-overview">
+        {/* An empty state names its own cause **and the control that caused
+            it**: with the switch deciding which half is on screen, "nobody is
+            filed under this club" would be the wrong sentence for a club whose
+            hitters are all there and whose arms are missing. */}
         <p className="ovw-none">
-          Nobody on the season&rsquo;s player list is filed under {team.name}.
+          No {side === 'pitcher' ? 'pitchers' : 'batters'} on the season&rsquo;s player list are
+          filed under {team.name}.
         </p>
       </div>
     );
   }
   return (
     <div className="details-overview">
-      {([
-        ['Batters', batters],
-        ['Pitchers', pitchers],
-      ] as const).map(([heading, list]) =>
-        list.length === 0 ? null : (
-          <section className="ovw-block ovw-starts" key={heading}>
-            <div className="ovw-head-row">
-              <h2 className="ovw-head">{heading}</h2>
-              {/* The count, in the head, because it is the answer to the
-                  question the heading asks — and because a list of forty names
-                  is one a reader scrolls past rather than counts. */}
-              <span className="start-note">{list.length}</span>
-            </div>
-            <ol className="start-list team-roster-list">
-              {list.map((p) => (
-                <li className="start-row" key={`${p.kind}-${p.id}`}>
-                  <div className="start-line team-roster-line">
-                  <button
-                    type="button"
-                    className="team-roster-name"
-                    onClick={() => onOpenDetails(`${p.kind}-${p.id}`)}
-                  >
-                    {p.name}
-                  </button>
-                  <span className="team-roster-pos">{p.position}</span>
-                  {/* His hand, in the tables' own token and off the same field
-                      — `LHB`/`RHP` is what every row of the app says, and a
-                      roster is exactly the list where the reader is looking for
-                      the left-handers. */}
-                  <span className="team-roster-hand">
-                    {p.kind === 'pitcher'
-                      ? p.throws === 'L' || p.throws === 'R'
-                        ? `${p.throws}HP`
-                        : ''
-                      : p.bats === 'L' || p.bats === 'R'
-                        ? `${p.bats}HB`
-                        : p.bats === 'S'
-                          ? 'SH'
-                          : ''}
-                  </span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        ),
-      )}
+      <section className="ovw-block ovw-starts">
+        <div className="ovw-head-row">
+          <h2 className="ovw-head">{heading}</h2>
+          {/* The count, in the head, because it is the answer to the question
+              the heading asks — and because a list of forty names is one a
+              reader scrolls past rather than counts. */}
+          <span className="start-note">{list.length}</span>
+        </div>
+        <ol className="start-list team-roster-list">
+          {list.map((p) => (
+            <li className="start-row" key={`${p.kind}-${p.id}`}>
+              <div className="start-line team-roster-line">
+                <button
+                  type="button"
+                  className="team-roster-name"
+                  onClick={() => onOpenDetails(`${p.kind}-${p.id}`)}
+                >
+                  {p.name}
+                </button>
+                <span className="team-roster-pos">{p.position}</span>
+                {/* His hand, in the tables' own token and off the same field —
+                    `LHB`/`RHP` is what every row of the app says, and a roster
+                    is exactly the list where the reader is looking for the
+                    left-handers. */}
+                <span className="team-roster-hand">
+                  {p.kind === 'pitcher'
+                    ? p.throws === 'L' || p.throws === 'R'
+                      ? `${p.throws}HP`
+                      : ''
+                    : p.bats === 'L' || p.bats === 'R'
+                      ? `${p.bats}HB`
+                      : p.bats === 'S'
+                        ? 'SH'
+                        : ''}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 }

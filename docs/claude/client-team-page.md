@@ -62,7 +62,7 @@ behavior it had, from a different file.
 
 ## What the page is, and what it is not
 
-Five tabs: **Overview · Schedule · Roster · Hitting · Stats**.
+Five tabs: **Overview · Schedule · Roster · Splits · Stats**.
 
 Every per-player mark is gone, each for the reason the research board's team
 rows already give: the roster baseball and the padlock say who owns him, which
@@ -72,7 +72,7 @@ the status code an injury designation. Each would be a mark on every club or on
 none, which is the rule `RULES.md` states — *a mark that would be on every row
 marks nothing*.
 
-**Five of the player page's nine tabs are absent and none of them is an
+**Four of the player page's nine tabs are absent and none of them is an
 omission.** Each was refused for a reason about the club rather than about the
 work:
 
@@ -82,8 +82,8 @@ work:
   app's own ranking wearing Savant's clothes — the exact failure the estimate
   rule exists to prevent (*an estimate never wears the same clothes as a
   measurement*).
-- **Splits** is subsumed by **Hitting**, which is nine cuts where the platoon
-  card is two, and is the same `OpponentSection` a pitcher's opponent draws. A
+- **Splits** is a tab here, and it is nine cuts where the player page's platoon
+  card is two — the same `OpponentSection` a pitcher's opponent draws. A
   diverging bar beside it would be the same fact at lower resolution.
 - **News** for a club is thirty men's news, which the app already draws where it
   belongs — the newspaper mark beside each of their names.
@@ -223,30 +223,83 @@ and a club whose name the list spells differently would come back *empty* rather
 than wrong — which is worse, being indistinguishable from a club with nobody on
 it.
 
-Batters then pitchers, which is the roster view's order and the reorder screen's;
-within each, **alphabetical**, because nothing else here ranks them and a list a
-reader is scanning for a name wants the order names come in. Ranking lives on the
-Stats tab, and ranking *players* lives on the research board — this is an index,
-not a leaderboard. Each row is a name (a door to his page), his listed position,
-and his hand in the tables' own token (`LHB` / `RHP` / `SH`), pushed to the far
-end by an auto margin because a roster is exactly the list a reader scans for the
+**One kind at a time, and the side switch picks it.** It drew both lists under
+two headings at first, which made this the one tab on the page the switch did
+nothing to — a control pinned above every tab that four of the five obey and the
+fifth ignores is a control that has stopped meaning anything. It is also the
+app's own rule for a *roster*: the Roster view has two tables with a kind tab
+over them, and the reorder screen splits the same way. So `Batting` is the club's
+hitters and `Pitching` its arms, and the heading says which. The strip and the
+switch then answer two different questions, which is what they are for — *which
+reading of this club* and *which half of it*.
+
+**Alphabetical**, because nothing else here ranks them and a list a reader is
+scanning for a name wants the order names come in. Ranking lives on the Stats
+tab, and ranking *players* lives on the research board — this is an index, not a
+leaderboard. Each row is a name (a door to his page), his listed position, and
+his hand in the tables' own token (`LHB` / `RHP` / `SH`), pushed to the far end
+by an auto margin because a roster is exactly the list a reader scans for the
 left-handers.
 
-A two-way player is two rows under one id, here as everywhere.
+A two-way player is two rows under one id, here as everywhere — so he is on both
+sides of the switch, correctly, once each.
 
-### Hitting
+The empty state names the control as well as the cause: *no **pitchers** on the
+season's player list are filed under this club*, since with the switch deciding
+which half is on screen, "nobody is filed under this club" would be the wrong
+sentence for a club whose hitters are all there.
+
+### Splits
 
 `OpponentSection` at nine cuts — five spans × three venues × three hands — off
-`/api/teams/:teamId/hitting`, the route a pitcher's opponent table already reads.
+`/api/teams/:teamId/splits`, the route a pitcher's opponent table already reads.
 The same component, for the reason that file records at length: nine cuts, three
 rows, ten columns, a span control, a venue control and the accented hand row are
 a lot of decisions to keep two copies of.
 
-Two things differ and both are one word. `hand` is **null** — that argument
-accents the row for the man on the mound, and there is no man here. And the
-heading is **`Hitting`**, not `Opponent`, which would be flatly false: the
-Brewers are not the Brewers' opponent. `OpponentSection` grew a `title` prop for
-it, defaulting to `Opponent`, which is what every other caller means.
+**It follows the side switch, which is what makes it two tabs' worth of reading
+in one.** On `Batting` it is how the club has hit, by the hand on the mound; on
+`Pitching` it is the line opposing batters have put up against them, by the hand
+at the plate. That is the same table off the same rows — a club's pitching line
+*is* its opponents' batting line, summed under the fielding club instead of the
+batting one (`data-sources.md`, *Both sides of the ball*).
+
+**It is `Splits` on the strip and `Hitting` / `Pitching` on the table's own
+heading**, and the split of labour is deliberate. The strip names the *kind* of
+reading a tab holds — the rule the player page applied when `Rolling xwOBA`
+became `Charts` — and this tab held `Hitting`, which named its content instead.
+That label also stopped being *true* the moment the tab followed the switch: a
+tab headed `Hitting` over a table of runs allowed lies about what is under it.
+What is invariant is that the table is a split, by the other man's hand and by
+the ballpark; which half of the club it splits is what the heading says.
+
+`hand` is **null** on both sides — that argument accents the row for the man on
+the mound, and there is no one man here.
+
+**Three things in the table are read off the side and nothing else is.**
+
+- **The row labels.** `vs RHP` / `vs LHP` batting, `vs RHB` / `vs LHB` pitching
+  — one letter, appended rather than the label being written out twice, so the
+  two rows cannot come to disagree about which hand they are. The *field* behind
+  them is one field: `vsLeft` is the left-handed **other man** on both sides,
+  which is the economy `SplitCut` already makes on a player's page (`vsr` reads
+  as *vs RHP* on a batter's and *vs RHB* on a pitcher's).
+- **The tooltips.** The ten column labels are the same ten on both sides and the
+  titles are not: `AVG` on a pitching row is the average against, `R/G` is runs
+  allowed. Relabelling the headers (`oAVG`, `RA/G`) would be a second vocabulary
+  for one set of figures on a table whose whole shape exists so a reader can run
+  their eye *down* a column; what the side changes is what a number **means**,
+  and a meaning is what a tooltip is for.
+- **The direction of every rank.** Handled on the server (`rankedFor`), because
+  the ranks ride on the line. *1st is best* holds on both sides — the fewest
+  runs allowed, the lowest OPS against, and the **most** strikeouts.
+
+Everything else is the component untouched, including the span control: the
+spans are cached **by side and span together**, so switching sides costs one
+read of what has not been read and never shows one side's `15d` under the
+other's lit tab. Measured — `15d` batting is 552 plate appearances over 14
+games, `15d` pitching 523 over the same 14, and crossing back and forth is
+instant.
 
 ### Stats
 
@@ -402,13 +455,31 @@ figures — and five fixtures with both starters where both are named.
 
 **Schedule**: 13 rows over the fortnight.
 
-**Roster**: 49 rows, `Batters 23` and `Pitchers 26`, alphabetical within each,
-hands at the right edge.
+**Roster**: `Batters 23` on the batting side and `Pitchers 26` on the pitching
+one, one heading at a time, alphabetical, hands at the right edge.
 
-**Hitting**: the nine cuts under a `Hitting` heading, `Overall / vs RHP / vs LHP`
-with the club ranks (`3rd`, `5th`, `1st` …) the table already draws. It landed
-inside 150ms from the server's cache, so no wait was drawn — which is rule 1 of
-the loading system working, not a missing state.
+**Splits**, both sides, MIL, season, all games:
+
+- **Batting** — heading `Hitting`, rows `Overall / vs RHP / vs LHP`, the Overall
+  line `G 128 · PA 4967 · R/G 5.02 (3rd) · AVG .253 (5th) · OBP .337 (1st) · SLG
+  .397 (19th) · OPS .734 (7th) · HR 119 (30th) · K% 21.6% (11th) · BB% 10.8%
+  (1st)`.
+- **Pitching** — heading `Pitching`, rows `Overall / vs RHB / vs LHB`, the
+  Overall line `G 128 · PA 4717 · R/G 3.77 (2nd) · AVG .219 (2nd) · OBP .294
+  (3rd) · SLG .357 (1st) · OPS .651 (1st) · HR 129 (7th) · K% 26.4% (1st) · BB%
+  8.6% (12th)` — every rank the other way up, which is `rankedFor` working: the
+  *lowest* OPS against is 1st and the *most* strikeouts is 1st. `vs LHB` reads
+  `.209`, which is `.209` at MLB.
+- **The span control survives the switch and keeps the two apart**: `15d` is 552
+  plate appearances batting and 523 pitching over the same 14 games, and
+  crossing back and forth redraws instantly off each side's own cache.
+
+It landed inside 150ms from the server's cache, so no wait was drawn — which is
+rule 1 of the loading system working, not a missing state.
+
+**The pitcher's opponent dialog is untouched**, which is the other caller of the
+same component: a projected start on Logan Gilbert's page opens the `Opponent`
+heading, `Overall / vs RHP / vs LHP`, with the row for his hand still accented.
 
 **Stats**: five spans down the side with percentile badges against the **thirty
 clubs** — season `G 129` at the 53rd, `R 644` at the 88th — and no cut control.
@@ -424,9 +495,11 @@ param untouched; a player's Overview chip opens `?team=158` from
 `?player=batter-683734` with `team=` gone — the two params never coexisting at
 any step. Escape closes the page and leaves the view behind it exactly as it was.
 
-**Bundle**: JS **610,768 → 623,143** bytes raw (180,191 → 183,704 gzipped), CSS
-**163,306 → 165,315** (29,379 → 29,654 gzipped) — +12,375 of JS and +2,009 of
-CSS for a page, a shell, two routes' worth of client, a search that finds clubs
-and the stylesheet's own thirty-odd lines. The shell is the reason it is not
-more: the box, the chrome, the strip's scrolling and the Escape ladder are the
-same code the player page was already carrying.
+**Bundle**: JS **610,768 → 623,989** bytes raw (180,191 → 183,900 gzipped), CSS
+**163,306 → 165,315** (29,379 → 29,654 gzipped) — +13,221 of JS and +2,009 of
+CSS for a page, a shell, three routes' worth of client, a search that finds
+clubs, both sides of the splits table and the stylesheet's own thirty-odd lines.
+The shell is the reason it is not more: the box, the chrome, the strip's
+scrolling and the Escape ladder are the same code the player page was already
+carrying — and the pitching side of the Splits tab cost **846 bytes** (196
+gzipped), being three labels and a tooltip on a table that already existed.

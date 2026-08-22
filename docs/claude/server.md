@@ -172,7 +172,21 @@ Savant's), and the team boards are summed a day at a time from exports that
 carry no club-level split at all. Offering the parameter and ignoring it is
 precisely what `teamResearch.ts`' own header warns about — an endpoint that
 accepts a selection and answers something else. A club's platoon reading has a
-home, and it is the nine cuts of `/api/teams/:teamId/hitting`.
+home, and it is the route below.
+
+**`GET /api/teams/:teamId/splits?window=&side=`** — the nine cuts of a club at
+the plate or in the field, and **`/hitting` is registered beside it** answering
+the same handler with `side` forced to `batting`. That is the rule
+`/api/watchlist` follows for its own name and `?start=1` for its parameter: a
+tab open at the moment of a deploy is still asking for the old path, and it
+still gets the right answer. What the old path may *not* do is answer
+`side=pitching`, which would be a route called `hitting` returning a club's
+pitching line. The new name is the honest one because the table stopped being
+about hitting: it is about a **split**, and which half of the club it splits is
+the parameter. Both parameters fall back rather than 400 on a value they do not
+know — `window` to the season, `side` to `batting` — the rule every view
+parameter in a shareable URL follows here. What is behind it, and the mirror
+invariant that checks it, is `data-sources.md`, *Both sides of the ball*.
 
 **`SeasonPlayer` gained `teamId`** in the same change: one number per row on a
 list of ~1,400 the client holds from boot, off `p.currentTeam.id`, which was

@@ -10,12 +10,20 @@ import type {
   TeamHittingLine,
   TeamHittingVenue,
   TeamHittingWindow,
+  TeamSplitSide,
 } from '../types';
 
 /**
- * Who a watched pitcher is up against — the opposing lineup's batting line,
- * whole and by the hand on the mound, over a span the reader picks and cut to
- * home games, road games or both.
+ * How a club's plate appearances have gone, whole and by the other man's hand,
+ * over a span the reader picks and cut to home games, road games or both.
+ *
+ * **Two callers and two sides of the ball, one table.** A watched pitcher's
+ * opponent table asks for the lineup he is facing — how *they* have hit, by the
+ * hand on the mound — and the team page's Splits tab asks the same nine cuts of
+ * a club at the plate *or* in the field. The second is the first read from the
+ * other end: a club's pitching line **is** its opponents' batting line, off the
+ * identical rows of the identical export (see `teamHitting.ts`), so what changes
+ * here is three labels and a tooltip, not a table.
  *
  * **A table where this was three stat strips**, and the shape is the point. The
  * three rows are the same nine categories asked three ways, so a reader wants
@@ -28,19 +36,34 @@ import type {
  * — the research board's own percentile badge folded onto rather than
  * restyled, so a second line under a number is one object in this app. A rank
  * is what makes a team line readable at all: `.231` says nothing until you know
- * it is 28th. **1st is always the best offense**, so the fewest strikeouts
- * ranks 1st rather than 30th, and every cut ranks within **its own**
- * population — a 30-day home line against the other 29 teams' 30-day home
- * lines, never against the season board.
+ * it is 28th. **1st is always the best club**, whichever end of the column that
+ * is: on the batting side the fewest strikeouts ranks 1st rather than 30th, and
+ * on the pitching side every one of the eight flips — fewest runs allowed,
+ * lowest average against, *most* strikeouts. Every cut ranks within **its own**
+ * population, a 30-day home line against the other 29 teams' 30-day home lines,
+ * never against the season board and never against the other side of the ball.
  */
 
-/** The rows, in the order the reader asked for them: everyone, then the hand
- *  on the mound. */
+/**
+ * The rows, in the order the reader asked for them: everyone, then the other
+ * man's hand.
+ *
+ * **`vsLeft` is the left-handed *other man* on both sides** — the hand on the
+ * mound when this club is batting, the hand at the plate when it is pitching —
+ * so the field is one field and the label is a fact about whose side of the ball
+ * it is. That is the economy `SplitCut` already makes on a player's page, where
+ * `vsr` reads as *vs RHP* on a batter's and *vs RHB* on a pitcher's; the
+ * alternative is two more fields on the wire saying the same thing twice.
+ */
 const ROWS: { key: 'all' | 'vsRight' | 'vsLeft'; label: string; hand: 'L' | 'R' | null }[] = [
   { key: 'all', label: 'Overall', hand: null },
-  { key: 'vsRight', label: 'vs RHP', hand: 'R' },
-  { key: 'vsLeft', label: 'vs LHP', hand: 'L' },
+  { key: 'vsRight', label: 'vs RH', hand: 'R' },
+  { key: 'vsLeft', label: 'vs LH', hand: 'L' },
 ];
+
+/** `P` on the batting side and `B` on the pitching one — the other man, which
+ *  is what the row is a split by. */
+const otherMan = (side: TeamSplitSide) => (side === 'batting' ? 'P' : 'B');
 
 const VENUES: { key: TeamHittingVenue; label: string; title: string }[] = [
   { key: 'all', label: 'All Games', title: 'Every game' },
@@ -52,34 +75,84 @@ const WINDOW_LABEL: Record<string, string> = {
   season: 'Season', 7: '7d', 15: '15d', 30: '30d', 60: '60d',
 };
 
-/** The columns. `rank` names the entry in `TeamHittingRanks` the cell's badge
- *  reads, and the four that have none are counts a rank would say nothing
- *  about — games played, and the plate appearances behind the rates. */
+/**
+ * The columns. `rank` names the entry in `TeamHittingRanks` the cell's badge
+ * reads, and the four that have none are counts a rank would say nothing about
+ * — games played, and the plate appearances behind the rates.
+ *
+ * **The labels are the same ten on both sides and the tooltips are not.** A
+ * club's pitching line is its opponents' batting line, so the *numbers* are
+ * batting numbers whichever side you are reading — `AVG` on a pitching row is
+ * the average against, `R/G` is runs allowed. Relabelling them (`AVG A`, `oAVG`,
+ * `RA/G`) would be a second vocabulary for one set of figures, on a table whose
+ * whole shape exists so a reader can run their eye *down* a column; what the
+ * side genuinely changes is what the number *means*, and a meaning is what a
+ * tooltip is for. The `title` is therefore a function of the side, and the two
+ * that also change which end is best say so in it.
+ */
 const COLUMNS: {
   key: string;
   label: string;
-  title: string;
+  title: (side: TeamSplitSide) => string;
   of: (l: TeamHittingLine) => string;
   rank?: keyof NonNullable<TeamHittingLine['ranks']>;
 }[] = [
-  { key: 'g', label: 'G', title: 'Games in this cut', of: (l) => String(l.games) },
-  { key: 'pa', label: 'PA', title: 'Plate appearances in this cut', of: (l) => String(l.pa) },
+  { key: 'g', label: 'G', title: () => 'Games in this cut', of: (l) => String(l.games) },
+  {
+    key: 'pa', label: 'PA',
+    title: () => 'Plate appearances in this cut',
+    of: (l) => String(l.pa),
+  },
   {
     key: 'rg', label: 'R/G',
-    title: 'Runs per game — on a hand row, runs scored off that hand over the games they faced one',
+    title: (side) =>
+      side === 'batting'
+        ? 'Runs per game — on a hand row, runs scored off that hand over the games they faced one'
+        : 'Runs allowed per game — on a hand row, runs allowed to that hand over the games they pitched to one',
     of: (l) => l.runsPerGame ?? '—', rank: 'runsPerGame',
   },
-  { key: 'avg', label: 'AVG', title: 'Batting average', of: (l) => l.avg, rank: 'avg' },
-  { key: 'obp', label: 'OBP', title: 'On-base percentage', of: (l) => l.obp, rank: 'obp' },
-  { key: 'slg', label: 'SLG', title: 'Slugging', of: (l) => l.slg, rank: 'slg' },
-  { key: 'ops', label: 'OPS', title: 'On-base plus slugging', of: (l) => l.ops, rank: 'ops' },
-  { key: 'hr', label: 'HR', title: 'Home runs', of: (l) => String(l.homeRuns), rank: 'homeRuns' },
+  {
+    key: 'avg', label: 'AVG',
+    title: (side) => (side === 'batting' ? 'Batting average' : 'Batting average against'),
+    of: (l) => l.avg, rank: 'avg',
+  },
+  {
+    key: 'obp', label: 'OBP',
+    title: (side) => (side === 'batting' ? 'On-base percentage' : 'On-base percentage against'),
+    of: (l) => l.obp, rank: 'obp',
+  },
+  {
+    key: 'slg', label: 'SLG',
+    title: (side) => (side === 'batting' ? 'Slugging' : 'Slugging against'),
+    of: (l) => l.slg, rank: 'slg',
+  },
+  {
+    key: 'ops', label: 'OPS',
+    title: (side) =>
+      side === 'batting' ? 'On-base plus slugging' : 'On-base plus slugging against',
+    of: (l) => l.ops, rank: 'ops',
+  },
+  {
+    key: 'hr', label: 'HR',
+    title: (side) => (side === 'batting' ? 'Home runs' : 'Home runs allowed'),
+    of: (l) => String(l.homeRuns), rank: 'homeRuns',
+  },
   {
     key: 'k', label: 'K%',
-    title: 'Strikeout rate — 1st is the fewest, this being a ranking of offenses',
+    title: (side) =>
+      side === 'batting'
+        ? 'Strikeout rate — 1st is the fewest, this being a ranking of offenses'
+        : 'Strikeout rate — 1st is the most, this being a ranking of pitching staffs',
     of: (l) => pct(l.kRate), rank: 'kRate',
   },
-  { key: 'bb', label: 'BB%', title: 'Walk rate', of: (l) => pct(l.bbRate), rank: 'bbRate' },
+  {
+    key: 'bb', label: 'BB%',
+    title: (side) =>
+      side === 'batting'
+        ? 'Walk rate'
+        : 'Walk rate allowed — 1st is the fewest, this being a ranking of pitching staffs',
+    of: (l) => pct(l.bbRate), rank: 'bbRate',
+  },
 ];
 
 /** A stored `.231` share as the percent this table prints — `lib.ts`'s own rule
@@ -111,6 +184,7 @@ function OpponentBody({
   hitting: season,
   opponent,
   hand,
+  side,
 }: {
   /** The **season, all games** cut — this table's opening state. The other four
    *  spans are read here, on demand; see the effect below. */
@@ -124,6 +198,9 @@ function OpponentBody({
    *  exists. Resolving that is the caller's job, since only the caller knows
    *  whether it has a game to read a `stand` off. */
   hand: string | null;
+  /** Which side of the ball these nine cuts are — what the rows and the
+   *  tooltips are labelled from, and what the spans below are read with. */
+  side: TeamSplitSide;
 }) {
   const teamId = season?.teamId ?? null;
   const [window, setWindow] = useState<TeamHittingWindow>('season');
@@ -169,15 +246,21 @@ function OpponentBody({
    * roster read; the rule is **never mark a request answered before it is
    * answered**, or unmark it in the cleanup.
    */
+  /* **Keyed by side as well as span**, which is what makes a side switch cost
+     nothing it has already read and — the half that matters — makes it
+     impossible for one side's `15d` to be served under the other's lit tab. The
+     season cut is not in here at all: it arrives as the `hitting` prop, which
+     the caller re-reads when the side changes, and it carries its own `side` on
+     the wire so it cannot be mislabelled either. */
   useEffect(() => {
     if (teamId === null || window === 'season') return;
-    const w = String(window);
+    const w = `${side}|${window}`;
     if (boards[w]) return;
     let live = true;
     setLoading(true);
     setError(null);
     api
-      .teamHitting(teamId, window)
+      .teamSplits(teamId, window, side)
       .then((board) => {
         if (!live || !board) return;
         setBoards((b) => ({ ...b, [w]: board }));
@@ -189,13 +272,13 @@ function OpponentBody({
     return () => {
       live = false;
     };
-  }, [teamId, window, attempt, boards]);
+  }, [teamId, window, side, attempt, boards]);
 
   if (!season) return null;
 
   const mine = hand === 'L' || hand === 'R' ? hand : null;
 
-  const board = window === 'season' ? season : boards[String(window)];
+  const board = window === 'season' ? season : boards[`${side}|${window}`];
   const split = board?.[venue] ?? null;
 
   return (
@@ -244,13 +327,20 @@ function OpponentBody({
         // breaking. The *content* is gated on the real flag, not the delayed
         // one, or a fast read would show a blank pane instead of a wait.
         waiting ? (
-          <LoadingBlock>Reading the opponent&rsquo;s line</LoadingBlock>
+          <LoadingBlock>Reading {opponent}&rsquo;s line</LoadingBlock>
         ) : error ? (
           <div className="details-error opp-status">
-            Couldn&rsquo;t read the opponent&rsquo;s line — press the span again to retry.
+            Couldn&rsquo;t read {opponent}&rsquo;s line — press the span again to retry.
           </div>
         ) : loading ? null : (
-          <div className="opp-status">Nobody batted in this span.</div>
+          /* Named by the club rather than as "the opponent", which was true of
+             the one caller this had and is false on a club's own page — the
+             Brewers are not the Brewers' opponent. The abbreviation is what
+             every table in the app calls them and is what the corner header of
+             this very table says. */
+          <div className="opp-status">
+            Nobody {side === 'batting' ? 'batted' : 'pitched'} for {opponent} in this span.
+          </div>
         )
       ) : (
         <div className="opp-scroll">
@@ -259,7 +349,7 @@ function OpponentBody({
               <tr>
                 <th className="glog-date opp-rowhead">{opponent}</th>
                 {COLUMNS.map((c) => (
-                  <th key={c.key} className="glog-num" title={c.title}>
+                  <th key={c.key} className="glog-num" title={c.title(side)}>
                     {c.label}
                   </th>
                 ))}
@@ -279,10 +369,17 @@ function OpponentBody({
                       title={
                         on
                           ? `${opponent} against ${row.hand === 'L' ? 'left' : 'right'}-handers — the half that applies to this game`
-                          : undefined
+                          : row.hand
+                            ? `${opponent} against ${row.hand === 'L' ? 'left' : 'right'}-handed ${side === 'batting' ? 'pitching' : 'batters'}`
+                            : undefined
                       }
                     >
-                      {row.label}
+                      {/* `vs RHP` on the batting side and `vs RHB` on the
+                          pitching one — the other man, whose hand this row is a
+                          split by. The letter is appended rather than the label
+                          being written out twice, so the two rows cannot come
+                          to disagree about which hand they are. */}
+                      {row.hand ? `${row.label}${otherMan(side)}` : row.label}
                     </th>
                     {COLUMNS.map((c) => (
                       <td key={c.key} className="glog-num">
@@ -324,10 +421,15 @@ export function OpponentSection({
   defaultOpen = false,
   bare = false,
   title = 'Opponent',
+  side = 'batting',
 }: {
   hitting: TeamHitting | null;
   opponent: string;
   hand: string | null;
+  /** Which side of the ball. `batting` — how this club has hit — is what every
+   *  caller but the team page's Splits tab means, and is what a pitcher's
+   *  opponent table has always asked for. */
+  side?: TeamSplitSide;
   collapsible?: boolean;
   defaultOpen?: boolean;
   /** No heading at all — for the outing page, whose tab strip has already said
@@ -347,7 +449,7 @@ export function OpponentSection({
   title?: string;
 }) {
   if (!hitting) return null;
-  const body = <OpponentBody hitting={hitting} opponent={opponent} hand={hand} />;
+  const body = <OpponentBody hitting={hitting} opponent={opponent} hand={hand} side={side} />;
   if (bare) return <div className="card-section">{body}</div>;
   return collapsible ? (
     <CardSection title={title} defaultOpen={defaultOpen}>
@@ -404,7 +506,10 @@ export function useOpponentBoards(key: number) {
     asked.current.add(teamId);
     setOpps((p) => ({ ...p, [teamId]: { loading: true } }));
     api
-      .teamHitting(teamId, 'season')
+      // The opposing **lineup**, which is this cache's whole subject — the side
+      // is not a parameter here because a pitcher's row has no use for the other
+      // one.
+      .teamSplits(teamId, 'season')
       .then((board) => setOpps((p) => ({ ...p, [teamId]: { board } })))
       .catch(() => {
         asked.current.delete(teamId);
