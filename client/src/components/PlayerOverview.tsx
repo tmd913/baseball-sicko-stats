@@ -27,7 +27,6 @@ import { LoadingLine } from './Loading';
 import { GameLogPreview } from './GameLog';
 import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
-import { TeamMark } from './PlayerIdentity';
 import type { OppRead } from './OpponentTable';
 import { NewsList } from './PlayerNews';
 import { PlayerDay, playerDayLine } from './PlayerDay';
@@ -104,7 +103,6 @@ export function OverviewTab({
   pitcherLookup,
   onTab,
   onOpenDetails,
-  onOpenTeam,
 }: {
   /** His day — the same `PlayerReport` the feed reads, off `/api/players/:id/day`. */
   report: PlayerReport;
@@ -143,17 +141,6 @@ export function OverviewTab({
   /** Switch the page to another tab — what each block's own link does. */
   onTab: (tab: 'news' | 'stats' | 'gamelog' | 'schedule') => void;
   onOpenDetails?: (key: string) => void;
-  /**
-   * **Open his club's page**, which is the one fact this tab knew and could not
-   * act on: the report carries `teamId` and `team` for the cap logo the summary
-   * table draws, and until there was a club page there was nowhere to send a
-   * reader who pressed it.
-   *
-   * It is the commonest route into that page in practice — you are reading a
-   * man and you want the lineup around him — which is why the link is at the
-   * head of the tab rather than folded into a block further down.
-   */
-  onOpenTeam?: (teamId: number) => void;
 }) {
   const isPitcher = report.kind === 'pitcher';
   // **The combined line only appears when there is something to combine.** A
@@ -205,37 +192,6 @@ export function OverviewTab({
     gameLog.games.length === 0;
   return (
     <div className="details-overview">
-      {/* **Who he plays for, and the door to them.** It leads the tab because
-          it is context rather than a reading — the one line here that is about
-          *where* he is rather than what he has done — and because a reader who
-          wants it wants it before anything else on the page.
-
-          It is drawn only where the report can name the club, which is the
-          join-to-null rule: a report with no `teamId` is a free agent or a man
-          the day's read could not place, and a link headed by a blank is worse
-          than no link. */}
-      {report.teamId !== null && onOpenTeam && (
-        /* The wrapper is what takes the tab's reading column, so the chip
-           starts on the same line every heading under it does — the cap is
-           `.ovw-day, .ovw-starts, .ovw-news` and this is folded onto it rather
-           than given a second `--card-column` of its own. Without it the chip
-           sat at the far left of the overlay, 200px outside the column
-           everything else on the tab is centered in. */
-        <div className="ovw-team-row">
-          <button
-            type="button"
-            className="ovw-team"
-            onClick={() => onOpenTeam(report.teamId as number)}
-            title={`${report.team ?? 'His club'} — the club’s page`}
-          >
-            <TeamMark teamId={report.teamId} team={report.team ?? ''} />
-            <span className="ovw-team-name">{report.team ?? 'His club'}</span>
-            <span className="ovw-team-go" aria-hidden="true">
-              →
-            </span>
-          </button>
-        </div>
-      )}
       {noMajorLeagueSeason && (
         <p className="ovw-note">
           {name} has not appeared in a major-league game this season, so there are no stats to

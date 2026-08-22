@@ -2009,6 +2009,87 @@ reverse. One page at one layer, one press of Escape to leave it — the same rul
 that already made a player opened from another player's Overview *replace* him.
 See `client-team-page.md`, *One page at a time*.
 
+### The club link has moved under the portrait
+
+Everything above is why the link exists and what it says; **where it sits is no
+longer the head of the Overview tab but the page's own head, in a column under
+the portrait** (`TeamDoor` in `PlayerDetails.tsx`, `.details-id-photo`). Two
+reasons, and the second is the one that decided it.
+
+It is **the same kind of fact the portrait is**. The section on the sub-line
+above rejected *"completing `.row-id-sub`'s trio with the club mark, which would
+put the team twice on a head whose portrait is a capped headshot"* — and that
+refusal still holds for a *mark*, which is what it was about. This is a **door**,
+and the cap in the picture is exactly what it is a door to: the club is a
+property of the portrait, not a line of the page. So it goes under the picture
+rather than into the run of description beside it, where a bordered pill would
+have sat among `OF/DH · RHB` and read as a third token of the same kind.
+
+And **the tab it led was one of nine**. A reader on Splits or Game Log who wanted
+the lineup around the man had to go back to the tab he had left to find the only
+door there was. In the head it is on every tab, which is what the head is for.
+
+**What it costs, measured at 1200 and 390 on Aaron Judge (`IL60`, so the tallest
+of the status badges) and Logan Gilbert.** The head is **91 → 101px** at 1200:
+the portrait column is 64 + 12 + 25 = 101 against the three lines of name,
+position and Rostered share beside it, which were 91. So `.details-id`'s own
+`align-items: center` now centers the *text* against the column rather than the
+portrait against the text, and the **portrait rises 14px, from `top: 34` to
+`top: 20`** — the ask that started this, and a consequence of the layout rather
+than a rule of its own. `.details-chrome` is 165 → 175 at 1200, the overlay's own
+pane starting under it; the Overview's first heading moves **up** 20px (`top: 213
+→ 193`), the 28px chip row having left the scroller while the head grew 10. The
+head is 160 at 390, where it takes its own row under the buttons. Page and view
+overflow **0** at both widths.
+
+**The gap under the portrait is 12px and that is a measurement.** The status code
+hangs *below* the portrait's rim (`.details-photo-status`, -6px), so the gap
+between the picture and the chip is not the gap between the two things a reader
+sees: the rim is at 84, an `IL60` ends at 91, and 12 here is **5px of clear air
+under the badge**. Measured at 6 the badge *overlapped* the chip by 1px, and at
+10 it cleared it by 3.
+
+**The box is reserved, whole, rather than drawn on arrival.** `report` is the day
+read and lands a second or so after the page opens, and this head is pinned
+chrome over a scroller — the same argument the sub-line's hidden `.player-pos`
+already makes one line over. But a *height* is not enough here, because this
+column is what sets its own **width**: with the ghost as a bare em-dash the
+column was 64 wide and became 82 when the club landed, sliding the name and
+everything under it 18px sideways. So the ghost is the whole chip — the same
+15px logo box, the same arrow, and a three-letter abbreviation, the widest MLB
+has. Sampled every 100ms through the boot: `101x87:ghost → 101x82:LAD→` on
+Ohtani and `101x87:ghost → 101x83:NYY→` on Judge, so the height never moves and
+what is left of the sideways jump is the width of two glyphs. A **free agent**,
+whom MLB files under no club, keeps the reserved space and gets no link — the
+join-to-null rule, unchanged.
+
+**And the club's `Back` now comes back here**, which is `App`'s `teamReturnKey`:
+see `client-team-page.md`, *One page at a time*, where the one step of memory is
+argued against the stack it is not.
+
+**Bundle**, for the move, the return and the trend cut together: JS **623,989 →
+624,552** raw (183,900 → **184,007** gzipped), CSS **165,315 → 165,439** (29,654
+→ **29,657**) — +563 and +124 raw, most of it comments, for a component that
+moved, a `useState` and a `filter`.
+
+### The Rostered line shows three spans, not five
+
+`1d 3d 7d`, where the research board draws all five of `TREND_WINDOWS`. `App`
+cuts the set on the way in (`w.window <= 7`), so the page and the board share one
+vocabulary and one order and differ only in how much of it they print.
+
+This line sits **under a name in pinned chrome, not in a column being scanned
+down**: `Rostered 97.8% 1d 0.0 3d ▼0.1 7d ▼0.6 12d ▼0.6 29d ▲2.1` is five
+readings of one number strung across a header, and the two long ones answer a
+question nobody has on a player's own page — a month-old share is a fact about
+the season, where what this page is opened with is whether he is being picked up
+*now*. The board keeps the long spans, which is where a season-shaped question is
+asked and where a column can be sorted on the answer.
+
+Measured on the live league: Judge reads `1d 0.0 · 3d ▼0.1 · 7d ▼0.6`, Gilbert
+`1d 0.0 · 3d ▼0.2 · 7d 0.0`. The three-way reading of the numbers is untouched —
+absent is a flat `0.0`, an explicit `null` is a dash.
+
 ### Where the rest of the player page's documentation lives
 
 This file was 215KB across eight tabs and is now three, on `CLAUDE.md`'s own

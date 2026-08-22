@@ -380,20 +380,27 @@ without one: the old rule outlives its first caller, since *a row that looks
 pressable and is not is worse than one that plainly is not* holds whatever is on
 the other side.
 
-**A player's Overview.** The report has carried `teamId` and `team` since the
+**A player's page.** The report has carried `teamId` and `team` since the
 summary table wanted a cap logo, and there was nowhere to send a reader who
-pressed it. It is a chip at the head of the tab — context rather than a reading,
-the one line there that is about *where* he is rather than what he has done — and
-it leads because a reader who wants it wants it before anything else on the page.
-Its wrapper `.ovw-team-row` is folded onto the tab's reading-column cap
-(`.ovw-day, .ovw-starts, .ovw-news`), which is not cosmetic: without it the chip
-sat at the far left of the overlay, **200px outside** the column every heading
-under it is centered in. Measured after — chip and first heading both at `left:
-200` at 1200px and both at `16` at 390.
+pressed it. It began as a chip at the head of the **Overview tab** — context
+rather than a reading, the one line there that is about *where* he is rather than
+what he has done — folded onto that tab's reading-column cap (`.ovw-day,
+.ovw-starts, .ovw-news`), which was not cosmetic: without it the chip sat at the
+far left of the overlay, **200px outside** the column every heading under it is
+centered in.
+
+**It is now in the page's own head, under the portrait** (`TeamDoor`,
+`.details-id-photo`) — the cap in the picture being exactly what the door is a
+door to, and the Overview being one tab of nine. It says the same three things,
+and the reasoning for the move and the geometry it costs are in
+`client-player-page.md`, *The club link has moved under the portrait*.
 
 Drawn only where the report can name the club, which is the join-to-null rule: a
 report with no `teamId` is a free agent or a man the day's read could not place,
-and a link headed by a blank is worse than no link.
+and a link headed by a blank is worse than no link. What is different in the head
+is that the **box is held either way**: the head is pinned chrome, so a hidden
+copy of the whole chip reserves both its height and its width until the day read
+lands.
 
 **The header search.** The app's one way of reaching a subject by typing its
 name, and a club is a subject now. Clubs are matched on the same folded haystack
@@ -431,6 +438,30 @@ club, exactly as a player opened from another player's Overview already replaces
 him — one page at one layer, and one press of Escape to leave it. Stacking would
 need a second `.details-view` above 50 and would then have to answer what happens
 when a reader walks a chain of six.
+
+**But the club page remembers the one player it was opened from**, which is
+`App`'s `teamReturnKey`, and that is a step of memory rather than the stack it is
+not: a reader on Judge's page who presses `NYY` has asked about the Yankees
+*from Judge*, and a `Back` that drops him on the roster board has undone two
+things with one press — the rule every dialog in this app already keeps. Open a
+club any other way and there is nobody behind it, so `Back` closes to the view as
+it always did. `openTeam` records who was on screen and `openPlayer` clears the
+record, so a player opened *from* the club page — a roster row, a fixture's
+starter — replaces the club rather than returning to it. `Back` and Escape are
+one door (`DetailsShell` gives both to `onClose`), so a returning press is a
+returning key.
+
+**It is not in the URL**, unlike everything about *which* page is open: it is the
+route taken rather than the page arrived at, and a link carrying it would promise
+a reader a page he was never on. A reload of `?team=147` closes to the view —
+which is what the same link handed to somebody else does, and the two agreeing is
+the point.
+
+Driven end to end: `?player=batter-592450` → press the chip → `?team=147` → `Back`
+→ `?player=batter-592450`, every other param untouched, and Escape does the same;
+`?team=147` opened cold → Escape → the view, no `player=`; and inside the club
+page a Roster row opens `player=` with `team=` gone, whose own `Back` closes to
+the view rather than bouncing back to the club.
 
 The page draws only for a club `teams` can name; an id nobody has heard of opens
 nothing, which is `detailsPlayer`'s standing rule for an unresolvable `player=`

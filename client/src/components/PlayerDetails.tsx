@@ -30,6 +30,7 @@ import { MovementChart, PitchUsageChart } from './ArsenalCharts';
 import { RemoveButton } from './RemoveButton';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
+import { TeamMark } from './PlayerIdentity';
 import { BaseballMark } from './BaseballMark';
 import { LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
@@ -501,6 +502,73 @@ function DetailsPhoto({
   );
 }
 
+/**
+ * **Who he plays for, and the door to them** — under the portrait, in the
+ * page's own head rather than on the Overview tab where it began.
+ *
+ * It is the same fact the portrait beside it is: a standing description of the
+ * man, like the position chip and the hand on the line under his name, where
+ * everything on the Overview below is a *reading* of him. Under the portrait
+ * because that is what the cap logo on it is already saying — the club is a
+ * property of the picture, not a line of the page — and because a chip leading
+ * the Overview was on one tab of nine, so a reader on Splits or Game Log who
+ * wanted the lineup around him had to go back to the tab he had left.
+ *
+ * The move takes it out of the tab's reading column and off the page's
+ * scroller, which is why it no longer needs `.ovw-team-row`'s cap: the head is
+ * already a centered 680px box and the chip is inside it.
+ *
+ * **The box is reserved rather than drawn on arrival.** `report` is the day
+ * read, which lands a second or so after the page opens, and this head is
+ * pinned chrome over a scroller — a chip that appeared would push the whole
+ * page down under the reader's finger. So the ghost holds the height, exactly
+ * as `.details-sub-ghost` does one line over for the position chip, and a free
+ * agent — whom MLB files under no club, the join-to-null rule — keeps the space
+ * and gets no link.
+ */
+function TeamDoor({
+  report,
+  onOpenTeam,
+}: {
+  /** His day, or null while the read is still out. */
+  report: PlayerReport | null;
+  onOpenTeam: (teamId: number) => void;
+}) {
+  const teamId = report?.teamId ?? null;
+  if (teamId === null) {
+    return (
+      /* The ghost is the **whole chip**, not a blank of its height: this column
+         is what sets its own width, so a narrower placeholder would slide the
+         name and everything under it sideways the moment the club landed
+         (measured, before it was: 64 → 82, an 18px jump). Same logo box, same
+         arrow, and a three-letter abbreviation, which is the widest MLB has —
+         which leaves the ghost at 87 against a real 82 (`LAD`) or 83 (`NYY`),
+         so what is left of the jump is the width of two glyphs. */
+      <span className="details-team details-team-ghost" aria-hidden="true">
+        <span className="row-id-logo" />
+        <span className="details-team-name">WSH</span>
+        <span className="details-team-go">&rarr;</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="details-team"
+      onClick={() => onOpenTeam(teamId)}
+      title={`${report?.team ?? 'His club'} — the club’s page`}
+    >
+      <TeamMark teamId={teamId} team={report?.team ?? ''} />
+      <span className="details-team-name">{report?.team ?? 'His club'}</span>
+      {/* The app's own `News →` / `Stats →` device: what a reader already knows
+          means "this changes what is on screen". */}
+      <span className="details-team-go" aria-hidden="true">
+        &rarr;
+      </span>
+    </button>
+  );
+}
+
 export function PlayerDetails({
   playerId,
   name,
@@ -576,10 +644,12 @@ export function PlayerDetails({
    *  connected, which is what hides the line; `null` when there is one but
    *  ESPN has no figure for this player. */
   rosterPct?: number | null;
-  /** How that figure has moved, over every span the server had a baseline for —
-   *  the same set the research board draws columns from, and in the same
-   *  ascending order. Absent with no league or no history at all; a `change` of
-   *  0 is a real answer and is drawn as a flat 0.0 rather than dropped. */
+  /** How that figure has moved, over each span the server had a baseline for,
+   *  in ascending order. **The three short ones** — `App` cuts the board's own
+   *  five down to `1d 3d 7d` on the way in, this line being a header rather
+   *  than a column to scan down; see there. Absent with no league or no history
+   *  at all; a `change` of 0 is a real answer and is drawn as a flat 0.0 rather
+   *  than dropped. */
   rosterTrends?: { window: number; days: number; change: number | null }[];
   /** Every position ESPN has him eligible at — `['2B', 'SS', 'OF']`, and here
    *  including `SP`/`RP`, which the research board's pills deliberately don't
@@ -631,8 +701,8 @@ export function PlayerDetails({
    * starter, which renders either way.
    */
   onOpenDetails: (key: string) => void;
-  /** …and his **club's** page, from the Overview tab's own head — the one fact
-   *  the report has always carried and could not act on. See `OverviewTab`. */
+  /** …and his **club's** page, from the chip under the portrait — the one fact
+   *  the day report has always carried and could not act on. See `TeamDoor`. */
   onOpenTeam: (teamId: number) => void;
   onClose: () => void;
   /**
@@ -1235,7 +1305,14 @@ export function PlayerDetails({
       head={
         <>
           <div className="details-id">
-            <DetailsPhoto playerId={playerId} name={name} kind={kind} />
+            {/* The portrait and the club under it are one column: his picture
+                and whose cap is on it. The pair is taller than the name block
+                beside it, which is what lifts the portrait to the top of the
+                head — it sat centered against three lines of text before. */}
+            <div className="details-id-photo">
+              <DetailsPhoto playerId={playerId} name={name} kind={kind} />
+              <TeamDoor report={day} onOpenTeam={onOpenTeam} />
+            </div>
             <div>
               <h1 className="details-name">
                 {name}
@@ -1322,10 +1399,11 @@ export function PlayerDetails({
                 >
                   Rostered{' '}
                   <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
-                  {/* One span per column the board can draw, in the same order,
-                      so the page and the table agree about what is available.
+                  {/* The spans `App` hands down — the board's three shortest,
+                      in the same order and the same vocabulary, so the page and
+                      the table never disagree about a span they both draw.
                       Each states its own span rather than the sentence a single
-                      trend used to read ("▲ 1.2 in 7d"): five of those is a
+                      trend used to read ("▲ 1.2 in 7d"): a run of those is a
                       paragraph, where the span up front and the move behind it
                       is a row that can be scanned across. A flat window keeps
                       its 0.0 in the muted color — the server drops zeroes from
@@ -1651,7 +1729,6 @@ export function PlayerDetails({
           pitcherLookup={pitcherLookup}
           onTab={setTab}
           onOpenDetails={onOpenDetails}
-          onOpenTeam={onOpenTeam}
         />
       )}
 

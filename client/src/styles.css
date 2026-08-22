@@ -4294,41 +4294,65 @@ body {
   white-space: nowrap;
 }
 
-/* **The club link at the head of a player's Overview.** A row rather than a
-   chip: it is the one line on that tab that is a door rather than a reading, so
-   it takes the width and says where it goes. The arrow is the app's own
-   `News →` / `Stats →` device, which is what a reader already knows means
-   "this changes what is on screen". */
-.ovw-team {
+/* **The portrait and the club under it**, one column at the head of a player's
+   page. The column is what lifts the picture: 64 + 12 + 25 = 101 is taller than
+   the three lines of name, position and rostered share beside it (91), so
+   `.details-id`'s own `align-items: center` now centers the *text* against the
+   column rather than the portrait against the text — and the portrait rises
+   14px, from `top: 34` to `top: 20`. */
+.details-id-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* 10 rather than the head's own 8: the status code hangs *below* the
+     portrait's rim (`.details-photo-status`, -6px), so the gap between the
+     picture and the chip is not the gap between the two things a reader sees.
+     Measured: the portrait's rim is at 84 and an `IL60` ends at 91, so 12 here
+     is 5px of clear air under the badge rather than the 12 it reads as. */
+  gap: 12px;
+  flex-shrink: 0;
+}
+/* **The club link.** A pill rather than a line of text: it is a door where
+   everything around it in this head is a statement, and the arrow is the app's
+   own `News →` / `Stats →` device — what a reader already knows means "this
+   changes what is on screen". `font-family: inherit` rather than `font:`, which
+   would take the size with it. */
+.details-team {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel);
   color: var(--text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
 }
 @media (hover: hover) {
-  .ovw-team:hover {
+  .details-team:hover {
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
     color: var(--accent);
   }
 }
-.ovw-team-name {
+/* The height this box is reserving for a club that has not landed yet, and for
+   the free agent who will never have one — laid out rather than declared, so it
+   is exactly as tall as a real chip in whatever font the platform gives us.
+   `.details-sub-ghost` one line over does the same for the position chip. */
+.details-team-ghost {
+  visibility: hidden;
+}
+.details-team-name {
   font-weight: 800;
   letter-spacing: 0.01em;
 }
-.ovw-team-go {
+.details-team-go {
   color: var(--faint);
   font-weight: 700;
 }
 @media (hover: hover) {
-  .ovw-team:hover .ovw-team-go {
+  .details-team:hover .details-team-go {
     color: var(--accent);
   }
 }
@@ -4466,12 +4490,7 @@ body {
 .ovw-day,
 .ovw-starts,
 .ovw-news,
-.ovw-note,
-/* The club chip's own row, folded on rather than given a second cap: it is a
-   block of this tab like the four above it, and a chip centered on a different
-   line from every heading under it reads as belonging to the overlay rather
-   than to the tab. */
-.ovw-team-row {
+.ovw-note {
   max-width: var(--card-column);
   margin-inline: auto;
 }
