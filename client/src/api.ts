@@ -36,6 +36,8 @@ import type {
   RosterProjection,
   TeamHitting,
   TeamHittingWindow,
+  TeamInfo,
+  TeamSplitSide,
   EspnRosterPlayer,
 } from './types';
 
@@ -623,6 +625,30 @@ export const api = {
     const q = cut ? `&cut=${cut}` : '';
     return request(`/api/players/${playerId}/windows?type=${kind}${q}`);
   },
+  /**
+   * **The same five spans for a club** — the team page's Stats tab, off the
+   * board's team reading rather than its player one.
+   *
+   * `playerWindows`' own answer shape, because the table that draws it is the
+   * same table. What it has no parameter for is the **cut**: the club boards
+   * are summed a day at a time from exports carrying no team-level split, so a
+   * `cut=` here could only be accepted and ignored — see the route.
+   */
+  async teamWindows(teamId: number, kind: PlayerKind): Promise<PlayerWindows> {
+    return request(`/api/teams/${teamId}/windows?type=${kind}`);
+  },
+  /**
+   * The thirty clubs by id — what names a team the app has only an id for.
+   *
+   * Read once a session beside `/api/players`, and for the same reason: it is
+   * a table that changes once a decade, wanted by three surfaces at once (the
+   * header search's club rows, the link off a player's page, the team page's
+   * own head), and every one of them wants it immediately.
+   */
+  async teams(): Promise<TeamInfo[]> {
+    const { teams } = await request<{ teams: TeamInfo[] }>('/api/teams');
+    return teams;
+  },
   /** One team's nine hitting cuts over a window — the opponent table on a
    *  pitcher's game. The season is already on the report, so this is only ever
    *  called for the other four windows; it answers with all three venues, so
@@ -636,8 +662,22 @@ export const api = {
   ): Promise<{ date: string; rosters: Record<string, EspnRosterPlayer[] | null> }> {
     return request(`/api/espn/rosters?teams=${teamIds.join(',')}&date=${date}`);
   },
-  async teamHitting(teamId: number, window: TeamHittingWindow): Promise<TeamHitting | null> {
-    return request(`/api/teams/${teamId}/hitting?window=${window}`);
+  /**
+   * One club's nine cuts over a window, on either side of the ball — the
+   * opponent table on a pitcher's game, and the team page's Splits tab.
+   *
+   * `side` defaults to `batting`, which is what the opponent table has always
+   * meant; `pitching` is the same nine cuts of the line opposing batters have
+   * put up against them, cut by the *batter's* hand. One route, because a
+   * club's pitching line is its opponents' batting line — see `teamHitting.ts`.
+   */
+  async teamSplits(
+    teamId: number,
+    window: TeamHittingWindow,
+    side: TeamSplitSide = 'batting',
+  ): Promise<TeamHitting | null> {
+    const q = side === 'pitching' ? '&side=pitching' : '';
+    return request(`/api/teams/${teamId}/splits?window=${window}${q}`);
   },
   // The season line plus the platoon splits — the platoon card at the foot of
   // the details view's **Stats** tab. Still the only reader of that route.

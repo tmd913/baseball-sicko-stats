@@ -18,7 +18,7 @@ import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js'
 import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
-import { getTeamResearch } from './teamResearch.js';
+import { getTeamResearch, getTeamWindows } from './teamResearch.js';
 import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
@@ -31,12 +31,14 @@ import type {
   ResearchWindow,
   SeasonArsenalPitch,
   TeamHittingWindow,
+  TeamSplitSide,
 } from './types.js';
 import {
   getGameClipPlayIds,
   getPitcherStats,
   getPlayerStats,
   getSeasonPlayers,
+  getTeamList,
   resolveVideoUrl,
 } from './mlbStats.js';
 import {
@@ -1662,6 +1664,53 @@ app.get(
   }),
 );
 
+/**
+ * The thirty clubs, by id — name and abbreviation, nothing else.
+ *
+ * A route rather than a table shipped in the client bundle, for the reason
+ * `/api/players` is one: it is MLB's own list, and a curated copy of it in the
+ * client is a copy that goes stale silently when a club moves or renames. It is
+ * the same cached fetch that already names a player's club on every row of
+ * `/api/players`, so this costs no upstream call in practice.
+ *
+ * Unauthenticated it is not: nothing in this app is except health and config,
+ * and there is no reason for this to be the exception.
+ */
+app.get(
+  '/api/teams',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json({ teams: await getTeamList() });
+  }),
+);
+
+/**
+ * **One club's row on each of the five spans** — the team page's Stats tab, and
+ * the exact shape and route pattern `/api/players/:playerId/windows` answers
+ * in, because it is the same table transposed onto a different population.
+ *
+ * It takes **no `cut`**, where the player route does. A split is a cut of the
+ * same board (`hfSplit` on Savant's), and the team boards this reads are summed
+ * a day at a time from exports that carry no club-level split at all — see
+ * `teamResearch.ts`. Offering the parameter and ignoring it is the failure mode
+ * that file's own header warns about: an endpoint that accepts a selection and
+ * quietly answers something else. A club's platoon reading has a home already,
+ * and it is the nine cuts of `/api/teams/:teamId/hitting`.
+ */
+app.get(
+  '/api/teams/:teamId/windows',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const teamId = Number(req.params.teamId);
+    if (!Number.isInteger(teamId) || teamId <= 0) {
+      res.status(400).json({ error: 'invalid teamId' });
+      return;
+    }
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    res.json(await getTeamWindows(teamId, kind));
+  }),
+);
+
 // What is true of a player *today* — his roster status, and where his club's
 // game has him — for every player the league has something to say about. The
 // research board and the details view both open on players who are not on the
@@ -1725,33 +1774,44 @@ app.get(
 );
 
 /**
- * How one team has hit over a window — whole, at home, on the road, and each of
- * those by the hand on the mound. The opponent table on a pitcher's game.
+ * How one team has **hit or pitched** over a window — whole, at home, on the
+ * road, and each of those by the other man's hand. The opponent table on a
+ * pitcher's game, and the team page's Splits tab.
  *
- * The report already carries the **season, all games** cut for every opponent a
- * watched pitcher has in view, so the table draws its opening state with no
- * request at all; this serves the four other windows, and it serves all nine
- * cuts of whichever one is asked for so that changing the *venue* costs nothing.
- * `window` is shape-checked against the board's own five and anything else is
- * the season, the rule `/api/research` follows for the same parameter: it is a
- * view preference in a shareable URL, and an older link should still open.
+ * The report already carries the **season, all games, batting** cut for every
+ * opponent a watched pitcher has in view, so that table draws its opening state
+ * with no request at all; this serves the four other windows, and it serves all
+ * nine cuts of whichever one is asked for so that changing the *venue* costs
+ * nothing. `window` is shape-checked against the board's own five and anything
+ * else is the season, the rule `/api/research` follows for the same parameter:
+ * it is a view preference in a shareable URL, and an older link should still
+ * open. `side` falls back the same way, to `batting`.
+ *
+ * **`/hitting` is registered beside `/splits` and answers the batting side
+ * whatever it is asked** — the rule `/api/watchlist` follows for its own name
+ * and `?start=1` for its parameter: a tab open at the moment of a deploy is
+ * still asking for the old path, and it still gets the right answer. What the
+ * path may not do is answer `side=pitching`, which would be a route called
+ * `hitting` returning a club's pitching line — the kind of drift the whole
+ * codebase spends its comments on. The new name is the honest one because the
+ * table is not about hitting any more; it is about a split.
  */
-app.get(
-  '/api/teams/:teamId/hitting',
-  requireUser,
-  asyncRoute(async (req, res) => {
-    const teamId = Number(req.params.teamId);
-    if (!Number.isInteger(teamId) || teamId <= 0) {
-      res.status(400).json({ error: 'invalid teamId' });
-      return;
-    }
-    const asked = Number(req.query.window);
-    const window: TeamHittingWindow = TEAM_HITTING_WINDOWS.includes(asked as TeamHittingWindow)
-      ? (asked as TeamHittingWindow)
-      : 'season';
-    res.json(await getTeamHitting(teamId, window));
-  }),
-);
+const teamSplitsRoute = asyncRoute(async (req, res) => {
+  const teamId = Number(req.params.teamId);
+  if (!Number.isInteger(teamId) || teamId <= 0) {
+    res.status(400).json({ error: 'invalid teamId' });
+    return;
+  }
+  const asked = Number(req.query.window);
+  const window: TeamHittingWindow = TEAM_HITTING_WINDOWS.includes(asked as TeamHittingWindow)
+    ? (asked as TeamHittingWindow)
+    : 'season';
+  const side: TeamSplitSide =
+    req.path.endsWith('/hitting') || req.query.side !== 'pitching' ? 'batting' : 'pitching';
+  res.json(await getTeamHitting(teamId, window, side));
+});
+app.get('/api/teams/:teamId/splits', requireUser, teamSplitsRoute);
+app.get('/api/teams/:teamId/hitting', requireUser, teamSplitsRoute);
 
 // A player's season line and platoon splits (vs LHP / vs RHP), for the details
 // view. The report already carries these for watchlisted players; this serves the

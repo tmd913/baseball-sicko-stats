@@ -3,7 +3,8 @@ import { LEAGUE_HR_PER_FB, fipLike, ipToOuts } from './leagueRates.js';
 import { teamStatcast, windowDates } from './statcastWindow.js';
 import { getTeamAbbrevs } from './mlbStats.js';
 import { addDays, baseballToday, daysBetween } from './etDate.js';
-import type { PlayerKind, ResearchRow, ResearchWindow } from './types.js';
+import { RESEARCH_WINDOWS } from './types.js';
+import type { PlayerKind, PlayerWindows, ResearchRow, ResearchWindow } from './types.js';
 
 /**
  * **The research board read as thirty clubs instead of six hundred players.**
@@ -437,4 +438,36 @@ export async function getTeamResearch(
   } finally {
     inFlight.delete(key);
   }
+}
+
+/**
+ * **One club's row on all five boards at once** — the team page's Stats tab,
+ * which is this board transposed exactly as the player page's is.
+ *
+ * The same shape `research.ts::getPlayerWindows` answers in (`PlayerWindows`),
+ * and deliberately the same: the table that draws it is `PlayerWindowTable`,
+ * one component over one vocabulary, so a club and a player read down the same
+ * column set with the same percentile badges. A shape of its own here would be
+ * a second thing for that table to accept for no difference in the answer.
+ *
+ * **It costs no upstream call the board has not already made.** Each span is
+ * `getTeamResearch`'s own cached board, so the first read of this warms five
+ * boards the research view then opens instantly on, and every read after is
+ * five map lookups.
+ *
+ * `row: null` for a span the club is missing from, which on a team board can
+ * only be a failed enrich or an upstream that dropped a club — thirty clubs
+ * play every window, where a *player* legitimately has nothing in a 7-day one.
+ * The table draws the same dash either way.
+ */
+export async function getTeamWindows(teamId: number, kind: PlayerKind): Promise<PlayerWindows> {
+  const windows = await Promise.all(
+    RESEARCH_WINDOWS.map((window) =>
+      getTeamResearch(kind, window).then((b) => ({
+        window,
+        row: b.rows.find((r) => r.id === teamId) ?? null,
+      })),
+    ),
+  );
+  return { season: SEASON, kind, windows };
 }

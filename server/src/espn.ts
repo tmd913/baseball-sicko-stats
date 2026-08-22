@@ -591,6 +591,10 @@ export async function extendIndex(index: MlbIndex, names: string[]): Promise<Mlb
           savantName: toSavantName(e.name),
           kind,
           team: e.team ?? '',
+          // Already on the entry, and the one field of it a prospect row can
+          // fill as fully as a season row does — `resolveProspects` reads the
+          // club it was matched to. Null where MLB files him under none.
+          teamId: e.teamId,
           position: e.position ?? '',
           bats: e.bats ?? null,
           throws: e.throws ?? null,

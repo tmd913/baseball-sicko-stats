@@ -137,3 +137,65 @@ Dates are computed in **America/New_York**, not UTC — and the baseball day **t
 - `store.ts::reorderRoster` deliberately keeps any roster players missing from the submitted `keys`, so a stale client can't drop or bury players.
 - Express 5 (path-to-regexp v8) rejects a bare `'*'` route — the SPA fallback is path-less middleware that serves `client/dist/index.html` for non-`/api` GETs.
 - **Video** (`/api/video/:playId`) is resolved lazily, from **two sources with opposite failure modes**, only when a clip is opened. (**`/api/video/clips?games=…` is the bulk form of the same question** — which plays in a set of games MLB cut a highlight for, off the very reel cache this route fills, one read per game rather than one per play. It exists for the feed's `Video` lens, which has to answer *does this play have film* for a whole day's stream at once: per play that is ~350ms of Savant scrape (40 plays of a settled day took 14.1s) against **200ms for eight reels**. Registered **before** `/api/video/:playId`, which would otherwise match `clips` and reject it as a malformed play id; a set of games in one request rather than a route per game; capped at 40; a game that throws answers with an empty list rather than failing the request. Only the day being played ever needs it — Savant covers essentially every play of a previous day, measured **90 of 90** over three settled days — which is why the client asks about today's games alone. See **Client — the Feed view**, *`Video` was selecting the whole stream*.) MLB's own `game/{gamePk}/content` highlights are tried first — joined on `guid`, which is the same Statcast playId threaded through the rest of the app — and Savant's `sporty-videos` page is scraped for a `sporty-clips.mlb.com/*.mp4` second. The order is the important part: MLB's cuts land **during** the game but are curated (15 of 82 plate appearances on a checked game), while **Savant covers essentially every play but is a day behind** — its page 200s with an identical 88KB JS shell, no `<video>` in it, for a playId it hasn't ingested yet. So the current day is the highlights or nothing. Two caching rules follow from that, and getting either wrong empties the day's video: **the highlight reel is persisted only once the game is final** (`content-{gamePk}-v2.json`, gated on a 98-byte status probe — the reel *grows as the game is played*, and the old code wrote whatever existed the first time anyone opened a clip and kept it forever, which for three of five games checked on 2026-08-09 was **no clips at all**, and for the rest 2–3 where the finished game has 15–18), and an empty reel isn't persisted even then, since cuts can land minutes after the last out. **A resolved URL is cached permanently and a miss for ten minutes** — today's miss is tomorrow's clip, so a null kept forever is unrecoverable inside a warm Lambda. The `-v2` on the key is what invalidates every blob written under the old rule. **A reel item that shares its video with another is dropped, both of them** — MLB's own join is occasionally wrong: on 2026-08-10 the "Soderstrom swipes home" item carried the *RBI double's* asset (same `mediaPlaybackId`, same caption file), so the feed's steal played a hit from four batters earlier. The guid and the join were both right; the reel was wrong. Nothing in the payload says which of the two owns the asset — each item's slug correctly names its own play — so neither keeps it and both fall through to Savant, which has them the next day. Showing nothing is an absence the UI already handles; showing the other play's clip is a lie about what happened. It costs next to nothing: zero collisions across 113 clips on eight finished games. The clip streams directly to the browser `<video>` (hotlink-protected by User-Agent, which a real browser satisfies) — the server never byte-proxies it. Every clip in the app plays through **`ClipVideo.tsx`**, which manages the native controls on touch devices: iOS keeps its control bar up for seconds after playback starts and a clip only runs six to twelve, so the bar covers the bottom of the frame — the plate — for much of it, with no way to shorten the timeout and no hover to summon it back. Under `(hover: none)` it therefore drops `controls` on play, restores them on pause/end, and pauses on a tap; that tap is armed on **`pointerdown`**, not judged when the click arrives. The native controls are shadow DOM, so a tap on the play button reaches this element too, and by the time its `click` is dispatched the `play` event has already flipped the state and re-rendered — so a handler bound on "am I playing *now*?" (which is what this used to do) is bound in time to catch the very tap that started playback, and every clip stopped dead the instant it began. Down-then-up is one gesture: if the finger went down while the controls were up, the tap belongs to them, whatever the state is when it lifts. Anything with a pointer keeps the browser's own controls. The **highlight reel** (`GameReel.tsx`, the "Highlights" button on a final game's block) is purely client-side: it resolves each of the player's at-bats' last-play clips via the same `/api/video` route (sequentially, so the first call warms the per-game highlight cache) and plays them back to back in one `<video>`. There is no server-side concatenation. **The client remembers each lookup too** (`clipUrls` in `PlateAppearanceCard`), and for a reason that is about *layout* rather than traffic: the feed renders nothing where a clip has not answered yet, so its height is a function of how many of these calls have come back, and a remount that asked again came back short and grew — see **Restoring is one write** under Client. It is the client-side counterpart of the rule above, one step stricter: a miss is held for the life of the tab rather than ten minutes. The header's Refresh used to drop that cache and has been removed, so inside a session a reload is what recovers a miss.
+
+### The two routes a club's page reads
+
+Added with `TeamDetails.tsx` (`client-team-page.md`), and between them they cost
+the upstreams nothing that was not already being fetched.
+
+**`GET /api/teams`** — the thirty clubs as `{ id, name, abbreviation }`, sorted
+by name. `mlbStats.ts::getTeamList` is a **shape change on the cached fetch the
+two existing maps are cut from**, not a request: `getTeams` has held exactly
+these three fields on a 1h TTL since `getSeasonPlayers` needed to name a club
+and `getRosterInfo` needed to abbreviate one. A route rather than a table in the
+client bundle for the reason `/api/players` is one — it is MLB's own list, and a
+curated copy of it goes stale silently when a club moves or renames. Behind
+`requireUser` like everything but health and config; there was no reason for
+this to be the exception.
+
+**`GET /api/teams/:teamId/windows?type=batter|pitcher`** — one club's row on each
+of the research board's five spans, in **`PlayerWindows`**, which is the exact
+shape and route pattern `/api/players/:playerId/windows` answers in, because it
+is the same table transposed onto a different population. The client draws both
+with `PlayerWindowTable`; a shape of its own here would be a second thing for
+that component to accept for no difference in the answer.
+`teamResearch.ts::getTeamWindows` is five lookups into `getTeamResearch`'s own
+cached boards, so the first read of a club's page **warms five boards the
+research view then opens instantly on**, and every read after is five map
+lookups. `row: null` for a span the club is missing from, which on a team board
+can only be a failed enrich or an upstream that dropped a club — thirty clubs
+play every window, where a *player* legitimately has nothing in a seven-day one.
+
+**It takes no `cut`**, where the player route does, and that is the same reason
+the client hides the control: a split is a cut of the same board (`hfSplit` on
+Savant's), and the team boards are summed a day at a time from exports that
+carry no club-level split at all. Offering the parameter and ignoring it is
+precisely what `teamResearch.ts`' own header warns about — an endpoint that
+accepts a selection and answers something else. A club's platoon reading has a
+home, and it is the route below.
+
+**`GET /api/teams/:teamId/splits?window=&side=`** — the nine cuts of a club at
+the plate or in the field, and **`/hitting` is registered beside it** answering
+the same handler with `side` forced to `batting`. That is the rule
+`/api/watchlist` follows for its own name and `?start=1` for its parameter: a
+tab open at the moment of a deploy is still asking for the old path, and it
+still gets the right answer. What the old path may *not* do is answer
+`side=pitching`, which would be a route called `hitting` returning a club's
+pitching line. The new name is the honest one because the table stopped being
+about hitting: it is about a **split**, and which half of the club it splits is
+the parameter. Both parameters fall back rather than 400 on a value they do not
+know — `window` to the season, `side` to `batting` — the rule every view
+parameter in a shareable URL follows here. What is behind it, and the mirror
+invariant that checks it, is `data-sources.md`, *Both sides of the ball*.
+
+**`SeasonPlayer` gained `teamId`** in the same change: one number per row on a
+list of ~1,400 the client holds from boot, off `p.currentTeam.id`, which was
+already in hand on the line that looks the club's *name* up — so no new field on
+the upstream request. Null for a free agent, whom MLB files under no club. It is
+what the team page's Roster tab joins on, and what the header search's club rows
+and the player page's club link are keyed to; matching on `team` instead would
+be a join on a display string, which is the one thing the app's join rule
+forbids. **No cache version to bump**: `getSeasonPlayers` is an in-memory TTL
+cache and not a stored blob, so nothing deserializes with the field missing.
+`espn.ts`'s prospect fallback fills it from the `IndexEntry` that already carried
+one.

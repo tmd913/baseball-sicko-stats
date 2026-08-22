@@ -515,7 +515,10 @@ direction every join in this app fails in.
 **`server/src/teamHitting.ts` is how every team has hit** — over one of the
 research board's five windows, at home or away or both, and against each hand
 on the mound. Nine cuts, which is what a watched pitcher's opponent table is
-made of (see **Pitchers on the roster**).
+made of (see **Pitchers on the roster**) — **and, since the team page's Splits
+tab, the same nine cuts of a club in the field**, which is the same rows read
+from the other end. See *Both sides of the ball* below; the file keeps its name
+because the batting side is still what every caller but that tab means.
 
 **MLB publishes five of the nine for the season and none of the rest, and every
 way of asking was tried.** A team's season line, its `vl`/`vr` platoon splits
@@ -570,12 +573,60 @@ and 9,595 of 9,600 across the season, 30-day and 7-day boards** — every one of
 the residue a `.125`-style rounding tie between JS's half-away and Python's
 half-to-even, not a disagreement about a number.
 
+**Both sides of the ball come off the same rows**, and the pitching side is the
+batting side filed under the other club. A club's pitching line *is* its
+opponents' batting line: the same pitch, keyed by who was **in the field** with
+the **batter's** hand as its axis instead of the pitcher's, and at that club's
+own venue — which is the other one, the away side batting in the top of an
+inning. So the day now reduces to **30 × 8** buckets, four to a side, and the
+nine cuts of either side fall out of that side's four by the same addition.
+`TeamSplitSide` is the parameter, on `getTeamHitting` and on
+`/api/teams/:teamId/splits`.
+
+- **It is one arithmetic and not two.** Every count is written to both leaves in
+  one pass — a strikeout is one the batting club took and one the fielding club
+  got — so the two sides cannot come to disagree about what happened, and the
+  run progression files the same run as *scored* and as *allowed* rather than
+  re-deriving it.
+- **The better end of every column flips**, and that is a rule rather than a
+  second table: whatever end is the better offense is by construction the worse
+  defense, so `rankedFor('pitching')` inverts each category's `lowIsBest` — most
+  strikeouts, fewest walks, fewest runs allowed, lowest OPS against. Writing the
+  eight out again with the flags inverted would be eight chances to invert seven
+  of them. It is what keeps *1st is best* true on both sides, which is the
+  sentence a rank is unreadable without.
+- **The two axes are measured complete.** Over three whole days of the live
+  export — **11,592 pitches** — `p_throws` and `stand` are each `L` or `R` on
+  every row, none missing either, so the two sides count the same rows and the
+  one guard the loop keeps (a row with no `p_throws` is skipped whole, runs and
+  all) cannot cost the pitching side a plate appearance the batting side kept.
+- **Checked as a mirror, which is the invariant that proves it.** Summed over
+  all 30 clubs, the two sides are **identical on every count**: 145,164 plate
+  appearances, 17,186 runs, 4,411 home runs, 12,951 walks, 32,108 strikeouts and
+  3,838 club-games, **0 delta on all six**. Every plate appearance in the league
+  is filed exactly once on each side.
+- **And against MLB.** Every one of the 30 clubs' season pitching lines differs
+  from MLB's published one by **exactly one game** — dG 1 on all 30, with the
+  residue one game's size (0–9 runs, 3–14 strikeouts, 0–4 home runs) — which is
+  the window rule and not an error: the window ends *yesterday*, Savant lagging
+  the live feed by a day. The **batting** side is one game behind on all 30 in
+  the same run, so the two sides are equally close to MLB. Spot-checked against
+  the published splits themselves: MIL's pitching `vl` reads `.209` here and
+  `.209` at MLB.
+
 **Cached the way the research board is**: a day's counts are a blob
-(`team-hitting-{date}-v1.json`, bumped whenever `HitCounts` gains a field, a
-bump costing a re-parse off CSVs already on disk rather than a re-download), and
-a window's whole board is another (`team-hitting-board-{window}-v1.json`, 81KB
-on a checked season, six hours in memory and in the storage tier with an
-`inFlight` guard). The `season` window starts at **1 March of the end date's own
+(`team-hitting-{date}-v2.json` — **`-v2`** because the leaf keys gained their
+`B|`/`P|` side prefix, and a key that changes meaning is the same fault as a
+field that arrives; a bump costs a re-parse off CSVs already on disk rather than
+a re-download), and a window's whole board is another per side
+(`team-hitting-board-{window}-v1.json` and `team-pitching-board-{window}-v1.json`,
+81KB on a checked season, six hours in memory and in the storage tier with an
+`inFlight` guard). **The batting board key is deliberately unchanged**: what a
+stored `-v1` holds is byte-for-byte what this build produces, the leaves it is
+summed from having gained a prefix rather than a number, so bumping it would
+throw away every cached board in exchange for identical figures. The one thing
+such a blob lacks is `TeamHitting.side`, which is why that field is optional and
+absent means `batting`. The `season` window starts at **1 March of the end date's own
 year** rather than opening day, which is what keeps this file off the list of
 places a season rolls over in: `savant.ts` asks Savant for `hfGT=R|`, so a
 spring date reduces to an empty day, and `dayHitting` writes its counts blob

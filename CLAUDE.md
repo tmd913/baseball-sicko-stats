@@ -76,7 +76,8 @@ what it is, and most of them are not recoverable from the code.
 | `SummaryTable.tsx` `PlayerIdentity.tsx` `PhotoStatus.tsx` `schedule.tsx` `ScheduleControl.tsx` `ExpandButton.tsx` | `sicko-roster` |
 | `ResearchTable.tsx` `researchColumns.tsx` `ColumnPicker.tsx` `columnRanks.tsx` `WatchStar` `LockMark.tsx` `NewsMark.tsx` | `sicko-research` |
 | `LiveFeed.tsx` `PlayerDay.tsx` `PlateAppearanceCard.tsx` `FeedFilters.tsx` `BaseDiamond.tsx` `ClipVideo.tsx` | `sicko-feed` |
-| `PlayerDetails.tsx` `PlayerOverview.tsx` `PlayerSchedule.tsx` `GameLog.tsx` `PlatoonSplits.tsx` `RollingXwoba.tsx` `PlayerWindowTable.tsx` `PlayerNews.tsx` `PlayerOrderEditor.tsx` `Tutorial.tsx` | `sicko-player-page` |
+| `PlayerDetails.tsx` `PlayerOverview.tsx` `PlayerSchedule.tsx` `GameLog.tsx` `PlatoonSplits.tsx` `RollingXwoba.tsx` `PlayerWindowTable.tsx` `PlayerNews.tsx` `PlayerOrderEditor.tsx` `Tutorial.tsx` `DetailsShell.tsx` | `sicko-player-page` |
+| `TeamDetails.tsx` `DetailsShell.tsx` | `sicko-team-page` |
 | `LeagueView.tsx` `LeagueMatchup.tsx` `LeagueRankings.tsx` `LeagueTransactions.tsx` `LeagueTeam.tsx` `MatchupSeriesChart.tsx` `Projection.tsx` | `sicko-league` |
 | `PitcherCard.tsx` `Arsenal.tsx` `ArsenalCharts.tsx` `Innings.tsx` `OutingPage.tsx` `OpponentTable.tsx` `PitchSequence.tsx` `StrikeZone.tsx` | `sicko-pitchers` |
 | `Modal.tsx` `InfoKey.tsx`, `useDismissable`, anything that opens a popup | `sicko-dialogs` |
