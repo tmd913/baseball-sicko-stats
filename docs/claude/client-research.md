@@ -128,6 +128,31 @@ carried badly, and the reason this reading needed the run more than the ordinary
 one did. Measured expanded at 390 with no scroll at all: inner 52 at y=11, head
 at 63, header row at 100.
 
+**And expanded, the rail takes its height back** — `height: auto`, the one thing
+this mode overrides on it. The zero exists so the run can appear and vanish
+*mid-scroll* without moving a row; expanded it does neither, being drawn from
+the first frame and staying for as long as the box is open, so nothing is bought
+and the cost is paid. Out in the ordinary pane the run only ever arrives once
+the whole control set has scrolled away above it, so its 52px paint over 52px of
+nothing. Expanded at rest there is no scrolled-away content under it: those 52px
+paint over the table, the head slides its own sticky 52 down on top of the first
+rows, and the header row sticks 83 into a pane that has reserved 31. **Reported
+as the full-page board cutting off its first row**, which it was — measured at
+1200, expanded, at rest, the first row sat at 93 with the header cells painting
+**94 → 145** over it, leaving a 6px sliver of a player nobody could read.
+
+With the height back the run sits at **11 → 63**, the head at **63 → 94** (its
+sticky `top` of 52 is now its flow position, so it no longer moves at all) and
+the header row at **94 → 145**, with the first row starting at 145 and clear.
+Identical at 390 / 1200 / 1920, on the batting and pitching boards, on `Teams`
+and in the Schedule reading, with page-body overflow 0 at every one; scrolled
+400 down and 900 across, the three bands hold at exactly those figures, and the
+ordinary pane is untouched (no rail at rest, inner at the pane's own top once
+stuck). Nothing else needed a number: the head and the header row already take
+their offsets from `--research-cond-h`, which is measured off the inner box
+either way. Bundle: CSS **163,242 → 163,306** raw and **29,367 → 29,379**
+gzipped, JS byte-identical.
+
 **A second source of chop went with it.** `useOverflowArrows` ran `measure()`
 and built a fresh `ResizeObserver` in one effect with no dependency list, so
 every render tore one down and made another — cheap once, and not cheap on a

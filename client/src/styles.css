@@ -10335,6 +10335,29 @@ button.start-line:focus-visible {
   height: 0;
   z-index: 5;
 }
+/* **Expanded, the rail has its height back**, and the zero above is what was
+   wrong there rather than a rule this mode is exempt from. Zero height buys one
+   thing: a run that can appear and vanish *mid-scroll* without moving a row.
+   Expanded it does neither — it is drawn from the first frame and stays for as
+   long as the box is open (`stuck || isFull`) — so there is nothing to move,
+   and the cost is paid anyway. Out in the ordinary pane the run only ever
+   appears once the whole control set has scrolled away above it, so its 52px
+   paints over 52px of nothing; expanded at rest there is no scrolled-away
+   content under it, so those 52px paint over the table, the head slides its own
+   52 down on top of the first rows, and the header row sticks 83 into a pane
+   that reserved 31.
+
+   Measured at 1200, expanded, at rest: the first row was at 93 with the header
+   cells painting **94 → 145** over it — one whole row hidden but a 6px sliver,
+   reported as the full-page board cutting off its first row. With the height
+   back the run sits at 11 → 63, the head at 63 → 94 (its sticky `top` of 52 now
+   its flow position, so it does not move), and the header row at **94 → 145**
+   with the first row starting at 145. Nothing else needed a number: the head
+   and the header row already take their offsets from `--research-cond-h`, which
+   is measured off the inner box either way. */
+.research-view.is-expanded .research-condensed-rail {
+  height: auto;
+}
 /* The box that actually has the height — measured and published. It carries
    the head's own ground and side gutter so the run lines up with the badges
    under it and the rows behind it never show through. */
