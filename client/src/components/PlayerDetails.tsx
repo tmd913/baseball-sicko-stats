@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,7 +28,7 @@ import type {
 import { handCell, headshotUrl, isRotationStarter, savantPlayerUrl, statusCorner } from '../lib';
 import { MovementChart, PitchUsageChart } from './ArsenalCharts';
 import { RemoveButton } from './RemoveButton';
-import { TabStrip } from './TabStrip';
+import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { BaseballMark } from './BaseballMark';
 import { LockMark } from './LockMark';
@@ -42,18 +41,12 @@ import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
 import { LoadingBlock } from './Loading';
 import {
   useDelayedFlag,
-  answersEscape,
-  useLockBodyScroll,
-  useOverlayFocus,
-  useOverlayChromeOffset,
   usePlayerStatus,
   useHandedness,
 } from '../hooks';
 import { OverviewTab } from './PlayerOverview';
 import { PlayerScheduleTab } from './PlayerSchedule';
 import type { PitcherLookup } from './schedule';
-import { DialogLayerContext, OVERLAY_LAYER } from './Modal';
-import { BackButton } from './BackButton';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral gray
@@ -533,6 +526,7 @@ export function PlayerDetails({
   rankPopulations,
   onNeedRankPopulations,
   onOpenDetails,
+  onOpenTeam,
   onClose,
   scheduleWindow,
   scheduleError,
@@ -637,6 +631,9 @@ export function PlayerDetails({
    * starter, which renders either way.
    */
   onOpenDetails: (key: string) => void;
+  /** …and his **club's** page, from the Overview tab's own head — the one fact
+   *  the report has always carried and could not act on. See `OverviewTab`. */
+  onOpenTeam: (teamId: number) => void;
   onClose: () => void;
   /**
    * The league-wide schedule window the **Schedule** tab draws a batter's or a
@@ -657,10 +654,6 @@ export function PlayerDetails({
    *  throwing. Free: it is a `Map` over a list already in hand. */
   pitcherLookup: PitcherLookup;
 }) {
-  // This view covers the page but scrolls in its own box, so the list behind it
-  // has to be frozen — otherwise the scroll chains straight through and closing
-  // the view lands somewhere the user never scrolled to.
-  useLockBodyScroll();
   const kind = isPitcher ? 'pitcher' : 'batter';
   const [tab, setTab] = useState<DetailsTab>('overview');
 
@@ -711,65 +704,6 @@ export function PlayerDetails({
     </span>
   ) : null;
 
-  // Five tabs overflow a phone, so the selected one can sit off the end of the
-  // strip — cut in half, or out of sight entirely on a pitcher. Scrolled by
-  // hand rather than with `scrollIntoView`, which walks up every scrollable
-  // ancestor and would drag the overlay's own scroller with it.
-  const tabsRef = useRef<HTMLDivElement | null>(null);
-  // The overlay itself: read to ask whether something inside it has taken the
-  // page (see the Escape handler below), scrolled back to the top on a tab
-  // change (below that), and written to by the offset hook, which publishes the
-  // pinned head's height on it for everything inside to clear.
-  const viewRef = useRef<HTMLDivElement | null>(null);
-  // The keyboard's half of covering the page. This overlay opens from a
-  // headshot, a name or a board row, and Tab used to walk from that control
-  // straight along the table it was in — measured before the fix, 12 of 12 tab
-  // stops behind this page — so a reader could work the roster underneath a
-  // player they had opened. Closing hands focus back to the row they pressed.
-  // See `hooks.ts::useOverlayFocus`.
-  useOverlayFocus(viewRef);
-  const chromeRef = useOverlayChromeOffset<HTMLDivElement>(viewRef);
-  // Switching tab puts the view back at the top. That is new with the pinned
-  // head and is the same rule the research board's own reset follows: the tabs
-  // were at the top of the page, so getting to one meant scrolling back up
-  // first and a reset came free with having to go there. Reachable from
-  // anywhere, they can now be pressed from 1,700px down a percentile card — and
-  // what the next tab has at that offset is somebody else's rows, or nothing at
-  // all. A tab is a different reading of the player, not a place in one.
-  // `playerId` as well as `tab`, and it is a **guard rather than a fix**: a
-  // different player is a different page and the offset the last one was read at
-  // means nothing on it, but the reset beside this one clears `day`, which
-  // unmounts the Overview's whole subtree, which collapses the box and leaves
-  // the browser to clamp the offset to 0 on its own. Measured either way at
-  // 390×844 — scrolled to 149 on a batter, the pitcher's page opens at 0 with or
-  // without the dependency. It is here so the property holds by construction
-  // rather than by an accident of what another effect happens to clear.
-  useLayoutEffect(() => {
-    if (viewRef.current) viewRef.current.scrollTop = 0;
-  }, [tab, playerId]);
-  useLayoutEffect(() => {
-    const row = tabsRef.current;
-    const el = row?.querySelector<HTMLElement>('.details-tab.is-active');
-    if (!row || !el) return;
-    const left = el.offsetLeft - row.offsetLeft;
-    const overLeft = left - row.scrollLeft;
-    const overRight = left + el.offsetWidth - (row.scrollLeft + row.clientWidth);
-    // Land it clear of the edge rather than flush against it, which reads as
-    // cut off and hides that there is more strip to swipe to — and clear of the
-    // *arrow*, which since the strip went edge to edge is drawn over that end
-    // rather than beside it, so a 24px peek left the tab it just chose half
-    // under a chevron. The width is read off the wrapper's own
-    // `--tabstrip-arrow-w` rather than copied here as a second 44 that would
-    // have to agree with the stylesheet's. It costs nothing at the two ends: an
-    // arrow there is hidden because there is nothing left to scroll, and the
-    // larger peek clamps against the same 0 or maximum it always did.
-    const arrowW = parseFloat(
-      getComputedStyle(row).getPropertyValue('--tabstrip-arrow-w'),
-    );
-    const PEEK = Number.isFinite(arrowW) && arrowW > 0 ? arrowW : 24;
-    if (overLeft < 0) row.scrollLeft += overLeft - PEEK;
-    else if (overRight > 0) row.scrollLeft += overRight + PEEK;
-  }, [tab]);
   // The Remove button arms on the first tap and commits on the second, as it
   // does on the reorder screen — see RemoveButton. There is no undo.
   const [armedRemove, setArmedRemove] = useState(false);
@@ -917,28 +851,6 @@ export function PlayerDetails({
     ro.observe(card);
     return () => ro.disconnect();
   }, [data]);
-
-  // Close on Escape, matching a modal/back affordance — unless something is on
-  // top of this view, in which case the key is that thing's to answer. Two
-  // shapes of "on top" and they need different tests. A **descendant** that has
-  // taken the page is the game log's full-page box, which lives inside this
-  // overlay and so is found by reading our own subtree (`hooks.ts::useFullPage`
-  // declines the key from the other side, when *this* view is the one above).
-  // A **portalled** one is a `Modal` opened from in here — a Game Log row's
-  // per-game popup — which is nobody's descendant and is caught by the shared
-  // stacking test instead. One press, one thing undone, either way round.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      // Before the claim, not after: a box that declines the key must not have
-      // taken the press with it (see `answersEscape`).
-      if (viewRef.current?.querySelector('.is-expanded')) return;
-      if (!answersEscape(e, viewRef.current)) return;
-      onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   useEffect(() => {
     const req = `${kind}-${playerId}`;
@@ -1308,20 +1220,20 @@ export function PlayerDetails({
     // scrolls — see `.details-view.gamelog-mode`, which is the only way its
     // header row can stick over a season's worth of rows.
     //
-    // The provider declares this box's own layer for anything opened from
-    // inside it — the Game Log's per-game popup, which is portalled to the body
-    // and so has no other way of knowing it must clear a page at 50. See
-    // `Modal.tsx::DialogLayerContext`.
-    <DialogLayerContext.Provider value={OVERLAY_LAYER}>
-    <div ref={viewRef} tabIndex={-1} className={`details-view${tab === 'gamelog' ? ' gamelog-mode' : ''}`}>
-      {/* The head and the tabs are one pinned box, held at the top of this
-          overlay's own scroller — see `.details-chrome`. They are one statement
-          of who is being read and which reading of him, which is the argument
-          `.app-chrome` makes a level up for the header, the search and the view
-          bar. */}
-      <div className="details-chrome" ref={chromeRef}>
-        <div className="details-head">
-          <BackButton onClose={onClose} />
+    // Everything this box *is* — the fixed page, its layer, the pinned chrome,
+    // the tab strip, the scroll reset and the Escape — is `DetailsShell`, which
+    // the team page is drawn on too. See there; what is left here is the head,
+    // the strip and the nine readings.
+    <DetailsShell
+      tab={tab}
+      /* A different player is a different page. Keyed by kind as well as by
+         id: a two-way player is two pages under one number. */
+      resetKey={`${kind}-${playerId}`}
+      onClose={onClose}
+      className={tab === 'gamelog' ? 'gamelog-mode' : undefined}
+      tabsLabel="Player sections"
+      head={
+        <>
           <div className="details-id">
             <DetailsPhoto playerId={playerId} name={name} kind={kind} />
             <div>
@@ -1551,93 +1463,87 @@ export function PlayerDetails({
             </button>
           ) : null}
           </div>
-        </div>
+        </>
+      }
+      chromeExtra={
+        <>
 
-        {/**
-          * **Which half of a two-way player is being read** — a tier above the
-          * tabs, and drawn only for the men who have two.
-          *
-          * It sits **between the head and the tab strip** because that is what
-          * it is: the head says *who*, this says *which of him*, and the strip
-          * under it says *which reading of that*. Put on the identity line
-          * beside the position chip it would have read as a fact about him
-          * rather than a control, and put in the cluster on the right it would
-          * have joined the two things you *do to* him — where this is
-          * navigation, like the Back button at the other end of the head.
-          *
-          * It is `.view-switch`/`.view-tab` rather than a shape of its own,
-          * which is the app's rule for a segmented control: the League page's
-          * three tabs and the Schedule spans are the same two classes, so a
-          * reader who knows one knows this. Only the row around it is new, and
-          * all it does is put the switch in the head's own 680px column.
-          *
-          * **It changes the URL, and it has to.** The page is opened on
-          * `player=${kind}-${id}` and the two halves are two keys, so a switch
-          * that left the parameter alone would leave a link describing the page
-          * the reader started on rather than the one in front of them — the
-          * rule every other view in this app follows. So it goes through the
-          * same `onOpenDetails` the Overview's scheduled game uses to open the
-          * opposing starter: one door into a player page, however it is
-          * reached, and the Back button behaves afterwards exactly as it does
-          * on any other page opened over this one.
-          */}
-        {twoWay && (
-          <div className="details-kind-row">
-            {/* `role="tablist"` with `aria-selected`, which is what every other
-                `.view-switch` in the app declares — the matchup's two sides, the
-                opponent table's spans and venues, the Schedule control's runs —
-                and three of those change a URL parameter exactly as this does.
-                A `group` of `aria-pressed` toggles was the alternative and would
-                have made this the one segmented control announcing itself
-                differently from the rest. */}
-            <div className="view-switch" role="tablist" aria-label="Which half of this player">
-              {(['batter', 'pitcher'] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="tab"
-                  className={`view-tab${kind === k ? ' active' : ''}`}
-                  aria-selected={kind === k}
-                  onClick={() => {
-                    if (kind !== k) onOpenDetails(`${k}-${playerId}`);
-                  }}
-                  title={
-                    k === 'batter'
-                      ? `${name} at the plate — his batting page`
-                      : `${name} on the mound — his pitching page`
-                  }
-                >
-                  {k === 'batter' ? 'Batting' : 'Pitching'}
-                </button>
-              ))}
+          {/**
+            * **Which half of a two-way player is being read** — a tier above the
+            * tabs, and drawn only for the men who have two.
+            *
+            * It sits **between the head and the tab strip** because that is what
+            * it is: the head says *who*, this says *which of him*, and the strip
+            * under it says *which reading of that*. Put on the identity line
+            * beside the position chip it would have read as a fact about him
+            * rather than a control, and put in the cluster on the right it would
+            * have joined the two things you *do to* him — where this is
+            * navigation, like the Back button at the other end of the head.
+            *
+            * It is `.view-switch`/`.view-tab` rather than a shape of its own,
+            * which is the app's rule for a segmented control: the League page's
+            * three tabs and the Schedule spans are the same two classes, so a
+            * reader who knows one knows this. Only the row around it is new, and
+            * all it does is put the switch in the head's own 680px column.
+            *
+            * **It changes the URL, and it has to.** The page is opened on
+            * `player=${kind}-${id}` and the two halves are two keys, so a switch
+            * that left the parameter alone would leave a link describing the page
+            * the reader started on rather than the one in front of them — the
+            * rule every other view in this app follows. So it goes through the
+            * same `onOpenDetails` the Overview's scheduled game uses to open the
+            * opposing starter: one door into a player page, however it is
+            * reached, and the Back button behaves afterwards exactly as it does
+            * on any other page opened over this one.
+            */}
+          {twoWay && (
+            <div className="details-kind-row">
+              {/* `role="tablist"` with `aria-selected`, which is what every other
+                  `.view-switch` in the app declares — the matchup's two sides, the
+                  opponent table's spans and venues, the Schedule control's runs —
+                  and three of those change a URL parameter exactly as this does.
+                  A `group` of `aria-pressed` toggles was the alternative and would
+                  have made this the one segmented control announcing itself
+                  differently from the rest. */}
+              <div className="view-switch" role="tablist" aria-label="Which half of this player">
+                {(['batter', 'pitcher'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="tab"
+                    className={`view-tab${kind === k ? ' active' : ''}`}
+                    aria-selected={kind === k}
+                    onClick={() => {
+                      if (kind !== k) onOpenDetails(`${k}-${playerId}`);
+                    }}
+                    title={
+                      k === 'batter'
+                        ? `${name} at the plate — his batting page`
+                        : `${name} on the mound — his pitching page`
+                    }
+                  >
+                    {k === 'batter' ? 'Batting' : 'Pitching'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <TabStrip label="Player sections" paneRef={tabsRef}>
+        </>
+      }
+      tabs={
+        <>
           {/* First and default: what he is doing today, which is the question
               this page is opened with on a game day. The rest are readings of
               his season, and they run pictures-before-numbers — the percentile
               card, the arsenal (pitchers) and the splits, then the news, the
               stats and the games. */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'overview'}
-            className={`details-tab${tab === 'overview' ? ' is-active' : ''}`}
-            onClick={() => setTab('overview')}
-          >
+          <DetailsTabButton id="overview" tab={tab} onPick={setTab}>
             Overview
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'percentiles'}
-            className={`details-tab${tab === 'percentiles' ? ' is-active' : ''}`}
-            onClick={() => setTab('percentiles')}
-          >
+          </DetailsTabButton>
+          <DetailsTabButton id="percentiles" tab={tab} onPick={setTab}>
             Percentile Rankings
-          </button>
+          </DetailsTabButton>
           {/* **Arsenal is third on a pitcher, directly after the percentile
               card**, where it used to trail the Game Log. It is the same
               argument that put Splits there: the card and these two charts are
@@ -1648,15 +1554,9 @@ export function PlayerDetails({
               also stops the one pitcher-only tab being the one furthest along a
               strip that scrolls on a phone. */}
           {isPitcher && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'arsenal'}
-              className={`details-tab${tab === 'arsenal' ? ' is-active' : ''}`}
-              onClick={() => setTab('arsenal')}
-            >
+            <DetailsTabButton id="arsenal" tab={tab} onPick={setTab}>
               Arsenal
-            </button>
+            </DetailsTabButton>
           )}
           {/* **Splits reads with the percentile card (and, on a pitcher, the
               Arsenal), where it used to read after Stats.** The old order was
@@ -1669,15 +1569,9 @@ export function PlayerDetails({
               between. It is still its own tab rather than the foot of the one
               beside it, because a platoon split is a *comparison* rather than a
               table — see `PlatoonSplits.tsx`. */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'splits'}
-            className={`details-tab${tab === 'splits' ? ' is-active' : ''}`}
-            onClick={() => setTab('splits')}
-          >
+          <DetailsTabButton id="splits" tab={tab} onPick={setTab}>
             Splits
-          </button>
+          </DetailsTabButton>
           {/* **News reads before Stats and the Game Log**, which is the same
               order the Overview's blocks are in and for the same reason: the
               news is what has happened to him *this week* — an IL placement, a
@@ -1685,33 +1579,15 @@ export function PlayerDetails({
               Log are the record of what he has done. A reader deciding about a
               stranger wants to know he is hurt before reading his 30-day
               xwOBA. */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'news'}
-            className={`details-tab${tab === 'news' ? ' is-active' : ''}`}
-            onClick={() => setTab('news')}
-          >
+          <DetailsTabButton id="news" tab={tab} onPick={setTab}>
             News
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'stats'}
-            className={`details-tab${tab === 'stats' ? ' is-active' : ''}`}
-            onClick={() => setTab('stats')}
-          >
+          </DetailsTabButton>
+          <DetailsTabButton id="stats" tab={tab} onPick={setTab}>
             Stats
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'gamelog'}
-            className={`details-tab${tab === 'gamelog' ? ' is-active' : ''}`}
-            onClick={() => setTab('gamelog')}
-          >
+          </DetailsTabButton>
+          <DetailsTabButton id="gamelog" tab={tab} onPick={setTab}>
             Game Log
-          </button>
+          </DetailsTabButton>
           {/* **Schedule reads after the Game Log, where it used to be second.**
               It went in directly after Overview on the argument that *now →
               next → the record* is one direction of travel, and what that
@@ -1727,32 +1603,21 @@ export function PlayerDetails({
               end where a reader goes on purpose. It is also the one tab a
               *door* leads to, so its place in the strip stopped being how it is
               reached. */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'schedule'}
-            className={`details-tab${tab === 'schedule' ? ' is-active' : ''}`}
-            onClick={() => setTab('schedule')}
-          >
+          <DetailsTabButton id="schedule" tab={tab} onPick={setTab}>
             Schedule
-          </button>
+          </DetailsTabButton>
           {/* **`Charts`, where this read `Rolling xwOBA`.** The strip names the
               *kind* of reading a tab holds — Overview, Splits, Stats, Game Log —
               and this was the one entry naming a single card instead, which is
               also the longest label on a strip a phone already scrolls. The card
               inside it still says `Rolling xwOBA · 2026`, so nothing is lost:
               the tab says which kind of reading, the card says which reading. */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'charts'}
-            className={`details-tab${tab === 'charts' ? ' is-active' : ''}`}
-            onClick={() => setTab('charts')}
-          >
+          <DetailsTabButton id="charts" tab={tab} onPick={setTab}>
             Charts
-          </button>
-        </TabStrip>
-      </div>
+          </DetailsTabButton>
+        </>
+      }
+    >
 
       {tab === 'overview' && dayWait && <LoadingBlock>Reading today&rsquo;s game</LoadingBlock>}
       {tab === 'overview' && dayError && !dayLoading && (
@@ -1786,6 +1651,7 @@ export function PlayerDetails({
           pitcherLookup={pitcherLookup}
           onTab={setTab}
           onOpenDetails={onOpenDetails}
+          onOpenTeam={onOpenTeam}
         />
       )}
 
@@ -1993,7 +1859,6 @@ export function PlayerDetails({
             : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
         </div>
       )}
-    </div>
-    </DialogLayerContext.Provider>
+    </DetailsShell>
   );
 }

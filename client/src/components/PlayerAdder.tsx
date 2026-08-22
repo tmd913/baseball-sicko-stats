@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { playerKey } from '../types';
-import type { SeasonPlayer, WatchPlayer } from '../types';
+import type { SeasonPlayer, TeamInfo, WatchPlayer } from '../types';
 import { searchFold } from '../lib';
 import { SpinningBaseball } from './Loading';
+import { TeamMark } from './PlayerIdentity';
 
 export function PlayerAdder({
   players,
@@ -11,6 +12,8 @@ export function PlayerAdder({
   canAdd = true,
   onAdd,
   onOpenDetails,
+  teams = [],
+  onOpenTeam,
   onPick,
   loading,
   autoFocus = false,
@@ -50,6 +53,18 @@ export function PlayerAdder({
   canAdd?: boolean;
   onAdd: (p: WatchPlayer) => void;
   onOpenDetails: (key: string) => void;
+  /**
+   * **The thirty clubs, searched beside the players** — because a club is now a
+   * subject with a page, and this field is the app's one way of reaching a
+   * subject by typing its name.
+   *
+   * Absent (or empty) is the field as it was: the club rows simply are not
+   * drawn, which is what a failed teams read leaves behind and is the right
+   * answer for it — a search that quietly finds no clubs beats one that offers
+   * a row opening on nothing.
+   */
+  teams?: TeamInfo[];
+  onOpenTeam?: (teamId: number) => void;
   /**
    * Called with the key of whichever player was picked, by either route — the
    * ＋ that rosters him and the name that opens his page both *complete* a
@@ -114,6 +129,34 @@ export function PlayerAdder({
     return out;
   }, [query, players, haystacks, watchedKeys]);
 
+  /**
+   * **The clubs the query names**, matched on the same folded haystack the
+   * players are — so `az` finds Arizona and a typed accent or a hyphen is gone
+   * from both sides before either is compared, exactly as it is for a name.
+   *
+   * Both the full name and the abbreviation are in it, and the abbreviation is
+   * the half that matters: every table in this app calls the club `MIL`, so
+   * `MIL` is what a reader who has just read one of those rows will type.
+   *
+   * **Clubs lead the menu**, and are capped at three so they can never crowd
+   * out the players — the field is a player search that also finds clubs, which
+   * is the honest description of what a reader uses it for, and there are
+   * thirty clubs against fourteen hundred players.
+   */
+  const teamHaystacks = useMemo(
+    () => teams.map((t) => searchFold(t.name) + ' ' + searchFold(t.abbreviation)),
+    [teams],
+  );
+  const teamMatches = useMemo(() => {
+    const q = searchFold(query);
+    if (!q || !onOpenTeam) return [];
+    const out: TeamInfo[] = [];
+    for (let i = 0; i < teams.length && out.length < 3; i++) {
+      if (teamHaystacks[i].includes(q)) out.push(teams[i]);
+    }
+    return out;
+  }, [query, teams, teamHaystacks, onOpenTeam]);
+
   // The season roster keyed the app's own way, so a remembered key becomes the
   // row it names. One pass over the ~1,400 players, held for as long as that
   // list is — the same economy `haystacks` above makes, and for the same
@@ -142,6 +185,37 @@ export function PlayerAdder({
     setQuery('');
     onClose?.();
   };
+
+  const openTeam = (t: TeamInfo) => {
+    onOpenTeam?.(t.id);
+    setQuery('');
+    onClose?.();
+  };
+
+  /**
+   * A club's row, in the player row's own shape: the name where a name goes and
+   * the club's context line under it, which for a club is what it is — its
+   * abbreviation, the three characters every table in the app calls it by.
+   *
+   * The cap mark leads it, because that is what distinguishes a club row from a
+   * player's at a glance and it is the same mark the board's rows carry. There
+   * is no ＋: a club joins no roster.
+   */
+  const teamRow = (t: TeamInfo) => (
+    <li key={`team-${t.id}`} className="adder-row">
+      <button
+        className="adder-option adder-team"
+        onMouseDown={() => openTeam(t)}
+        title={`View ${t.name}'s page`}
+      >
+        <TeamMark teamId={t.id} team={t.abbreviation} />
+        <span className="adder-team-text">
+          <span className="opt-name">{t.name}</span>
+          <span className="opt-meta">{t.abbreviation}</span>
+        </span>
+      </button>
+    </li>
+  );
 
   /**
    * One row, drawn once and used by both lists — which is the whole of what
@@ -224,7 +298,21 @@ export function PlayerAdder({
           </button>
         )}
       </div>
-      {focused && matches.length > 0 && <ul className="adder-menu">{matches.map(row)}</ul>}
+      {focused && (matches.length > 0 || teamMatches.length > 0) && (
+        <ul className="adder-menu">
+          {/* The clubs first, under a head that says what they are — without one
+              a `Milwaukee Brewers` row among a run of players reads as a player
+              this app has got badly wrong. The players need no such head: they
+              are what the field says it searches. */}
+          {teamMatches.length > 0 && (
+            <li className="adder-head" role="presentation">
+              Teams
+            </li>
+          )}
+          {teamMatches.map(teamRow)}
+          {matches.map(row)}
+        </ul>
+      )}
       {/* Before a character is typed, the players most recently picked out of
           this very field. A search here is *completed* by choosing somebody, so
           what is worth offering back is the player rather than the letters that
@@ -240,9 +328,15 @@ export function PlayerAdder({
           {recentRows.map(row)}
         </ul>
       )}
-      {focused && query.trim() && matches.length === 0 && (
+      {focused && query.trim() && matches.length === 0 && teamMatches.length === 0 && (
         <ul className="adder-menu">
-          <li className="adder-none">No players match &ldquo;{query}&rdquo;.</li>
+          {/* **What it says it searched.** The sentence named players alone
+              while players were all it had; with clubs in the field too, a
+              reader who typed a club name and read "No players match" would be
+              told the search does not do the thing it had just failed to do. */}
+          <li className="adder-none">
+            No {onOpenTeam ? 'players or teams' : 'players'} match &ldquo;{query}&rdquo;.
+          </li>
         </ul>
       )}
     </div>

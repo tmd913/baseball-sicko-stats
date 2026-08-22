@@ -708,6 +708,10 @@ interface Props {
   /** Open the details overlay (percentiles, game log, season splits) for a row.
    *  Takes a player key, the same currency the rest of the app navigates in. */
   onOpenDetails: (key: string) => void;
+  /** …and the same for a **club**, which is what a row of the team reading
+   *  opens. A team id rather than a key: a club is one row on this board and
+   *  one page, where a two-way player is two of each. */
+  onOpenTeam: (teamId: number) => void;
   /** The board's own settings, held by App so leaving the page doesn't throw
    *  them away — see `ResearchUi`. The updater form only, since every change
    *  here is a patch of one field of one board. */
@@ -991,6 +995,7 @@ export function ResearchTable({
   watchlistKeys,
   onWatchlistToggle,
   onOpenDetails,
+  onOpenTeam,
   ui,
   onUiChange,
 }: Props) {
@@ -2959,7 +2964,7 @@ export function ResearchTable({
                           designation, and neither is a fact about thirty men
                           at once. */}
                       {teams ? (
-                        <TeamPhoto teamId={r.teamId} team={r.team} />
+                        <TeamPhoto teamId={r.teamId} team={r.team} onOpen={onOpenTeam} />
                       ) : (
                         <ResearchPhoto row={r} playerKey={key} onOpen={onOpenDetails} />
                       )}
@@ -2987,9 +2992,12 @@ export function ResearchTable({
                       {/* **The team reading swaps the block and drops every
                           mark on the line.** `TeamIdentity` is the same two
                           rows in the same classes with the club's record where
-                          the position list was — see there. The name is plain
-                          text rather than a link, there being no club page
-                          behind it; and none of the four marks is drawn,
+                          the position list was — see there. The name **is** a
+                          link now, there being a club page behind it at last
+                          (this sentence read "plain text rather than a link,
+                          there being no club page behind it" and was true of
+                          the app it was written in); and none of the four marks
+                          is drawn,
                           because each of them is a fact about a *person*. The
                           baseball and the padlock say who owns him, which no
                           fantasy league can say of the Brewers; the newspaper
@@ -2999,7 +3007,13 @@ export function ResearchTable({
                           row, and the rule for both is the same. */}
                       {teams ? (
                         <TeamIdentity record={r.record ?? null}>
-                          <span className="sum-name-link is-static">{r.name}</span>
+                          <button
+                            type="button"
+                            className="sum-name-link"
+                            onClick={() => r.teamId !== null && onOpenTeam(r.teamId)}
+                          >
+                            {r.name}
+                          </button>
                         </TeamIdentity>
                       ) : (
                       <PlayerIdentity

@@ -36,6 +36,7 @@ import type {
   RosterProjection,
   TeamHitting,
   TeamHittingWindow,
+  TeamInfo,
   EspnRosterPlayer,
 } from './types';
 
@@ -622,6 +623,30 @@ export const api = {
   ): Promise<PlayerWindows> {
     const q = cut ? `&cut=${cut}` : '';
     return request(`/api/players/${playerId}/windows?type=${kind}${q}`);
+  },
+  /**
+   * **The same five spans for a club** — the team page's Stats tab, off the
+   * board's team reading rather than its player one.
+   *
+   * `playerWindows`' own answer shape, because the table that draws it is the
+   * same table. What it has no parameter for is the **cut**: the club boards
+   * are summed a day at a time from exports carrying no team-level split, so a
+   * `cut=` here could only be accepted and ignored — see the route.
+   */
+  async teamWindows(teamId: number, kind: PlayerKind): Promise<PlayerWindows> {
+    return request(`/api/teams/${teamId}/windows?type=${kind}`);
+  },
+  /**
+   * The thirty clubs by id — what names a team the app has only an id for.
+   *
+   * Read once a session beside `/api/players`, and for the same reason: it is
+   * a table that changes once a decade, wanted by three surfaces at once (the
+   * header search's club rows, the link off a player's page, the team page's
+   * own head), and every one of them wants it immediately.
+   */
+  async teams(): Promise<TeamInfo[]> {
+    const { teams } = await request<{ teams: TeamInfo[] }>('/api/teams');
+    return teams;
   },
   /** One team's nine hitting cuts over a window — the opponent table on a
    *  pitcher's game. The season is already on the report, so this is only ever

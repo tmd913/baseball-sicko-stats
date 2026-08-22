@@ -270,6 +270,7 @@ const cutOf = (cut: SplitCut, kind: PlayerKind): string =>
  */
 export function PlayerWindowTable({
   kind,
+  teams = false,
   windows,
   columnKeys,
   onColumnsChange,
@@ -282,6 +283,18 @@ export function PlayerWindowTable({
   updating,
 }: {
   kind: PlayerKind;
+  /**
+   * **Whether these five rows are a club's rather than a player's** — the team
+   * page's Stats tab, which is this table over the board's *team* reading.
+   *
+   * It changes two things and deliberately nothing else, because everything
+   * else is already right: the column vocabulary, the span column, the sort,
+   * the picker and the badges all work on a `ResearchRow` and a club's row is
+   * one. What it changes is the **population** the badges rank within (thirty
+   * clubs, not six hundred players) and the **cut** control, which a club has
+   * no boards for. See `teamResearch.ts` for both.
+   */
+  teams?: boolean;
   windows: PlayerWindowRow[];
   /** The reader's saved selection for this kind, or null for the defaults. */
   columnKeys: string[] | null;
@@ -388,10 +401,22 @@ export function PlayerWindowTable({
     const out = new Map<string, ReturnType<typeof rankScales>>();
     for (const w of windows) {
       const rows = populations[String(w.window)];
-      if (rows) out.set(String(w.window), rankScales(columns, boardPopulation(rows, kind)));
+      // **The board's own expression, not a second one.** `boardPopulation`
+      // cuts a leaderboard to its trade by reading `positionType`, which a club
+      // has not got — on the team reading it would empty the pitching board and
+      // pass every row of the batting one. The server already answers with
+      // exactly the thirty rows the kind asked for, so there is nothing left to
+      // cut; this is the same `teams ? rows : boardPopulation(…)` the research
+      // table itself writes, for the same reason and in the same words.
+      if (rows) {
+        out.set(
+          String(w.window),
+          rankScales(columns, teams ? rows : boardPopulation(rows, kind)),
+        );
+      }
     }
     return out;
-  }, [showRanks, rankable, populations, columns, kind, windows]);
+  }, [showRanks, rankable, populations, columns, kind, teams, windows]);
 
   // A hidden column must not leave the table ordered by it — the same trap the
   // board's `activeSortKey` exists for, and here there is no header left to
@@ -457,6 +482,23 @@ export function PlayerWindowTable({
             rules that agree today are two rules that will one day differ. What
             this row adds under its own name is the `auto` margin that pushes
             the pair to the far end. */}
+        {/* **Not drawn on a club's reading at all**, rather than drawn and
+            declined. Savant publishes no team cut of the boards these rows are
+            summed from, so the four buttons could only ever be four requests
+            for the same table — which is the failure `RULES.md` names first:
+            an upstream that accepts a selection and answers something else. A
+            control that cannot change what it points at is worse than no
+            control, because nothing on screen would say why nothing happened.
+            The club's platoon reading has a home, and it is the nine cuts of
+            the Hitting tab. */}
+        {/* **Not rendered at all on a club's reading**, where it was first
+            written as a `hidden` attribute on the box — which does nothing:
+            `[hidden]`'s `display: none` comes from the UA stylesheet at the
+            lowest specificity and `.split-switch { display: flex }` beats it,
+            so the empty row was still laid out and still took its slot. Seen as
+            a 5px artifact at the left end of the tools row. A conditional is
+            what an absent control is. */}
+        {!teams && (
         <div className="split-switch stats-cuts" role="tablist" aria-label="Split">
           {([null, ...SPLIT_CUTS] as (SplitCut | null)[]).map((c) => (
             <button
@@ -476,6 +518,7 @@ export function PlayerWindowTable({
             </button>
           ))}
         </div>
+        )}
         {/* **Laid out whether or not it is showing**, which is the app's own
             "reserve the box, don't move the page": this row wraps on a phone,
             so a badge that arrived with the read would re-flow the two buttons

@@ -1,6 +1,6 @@
 ---
 name: sicko-player-page
-description: The player page (PlayerDetails) — the full-screen overlay that opens on anybody, its pinned head and nine-tab strip, and every tab: Overview (his day, next game, projected starts, news, last five games), Schedule (his upcoming games, or a starter's projected starts), Percentile Rankings, Splits, News, Stats, Game Log, Charts. Also the reorder screen and the how-to page. Use when editing PlayerDetails.tsx, PlayerOverview.tsx, PlayerSchedule.tsx, GameLog.tsx, PlatoonSplits.tsx, RollingXwoba.tsx, PlayerWindowTable.tsx, PlayerNews.tsx, PlayerOrderEditor.tsx or Tutorial.tsx; when a tab's lazy read hangs, or a chart's labels, axes or geometry are wrong.
+description: The player page (PlayerDetails) — the full-screen overlay that opens on anybody, its pinned head and nine-tab strip, and every tab: Overview (his day, next game, projected starts, news, last five games), Schedule (his upcoming games, or a starter's projected starts), Percentile Rankings, Splits, News, Stats, Game Log, Charts. Also the reorder screen, the how-to page, and DetailsShell — the overlay shell this page shares with the team page. Use when editing PlayerDetails.tsx, PlayerOverview.tsx, PlayerSchedule.tsx, GameLog.tsx, PlatoonSplits.tsx, RollingXwoba.tsx, PlayerWindowTable.tsx, PlayerNews.tsx, PlayerOrderEditor.tsx or Tutorial.tsx; when a tab's lazy read hangs, or a chart's labels, axes or geometry are wrong.
 ---
 
 # The player page
@@ -40,6 +40,9 @@ Three references, split by what the tab is *about*.
 
 ## Related
 
+`sicko-team-page` is the other page drawn on `DetailsShell` — read it before
+changing anything the two share (the box, the pinned chrome, the tab strip, the
+scroll reset, the Escape ladder), since a change there reaches both.
 `sicko-research` owns the column vocabulary and picker the Stats tab shares.
 `sicko-pitchers` for the outing page a Game Log row opens. `sicko-dialogs` for
 the layer ladder every tab's popups sit on.

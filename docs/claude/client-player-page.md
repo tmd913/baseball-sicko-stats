@@ -1948,6 +1948,67 @@ Overview, a mark on a starter's fortnight and a cache lifted into the file that
 owns the table it feeds. The CSS is one new rule and three folded selectors,
 which is what a change made of folds costs.
 
+### The overlay itself is `DetailsShell`, and it is shared
+
+**The box this page is drawn in is no longer this page's.** A club got a page
+(`client-team-page.md`), and a second full-screen page wants every one of the
+rules above about *being* a page and not one line of what is between them: the
+fixed box at layer 50, `useLockBodyScroll`, `useOverlayFocus`, the
+`useOverlayChromeOffset` that publishes `--details-chrome-h`, the scroll reset on
+a tab change, the strip's scroll-the-selection-into-view with its
+`--tabstrip-arrow-w` peek, and the Escape handler with its two different tests of
+what is on top. Every one of those is a rule with a measurement behind it and a
+fault it was written to fix — and a second copy of them is a second place to find
+those faults again, which is the argument this codebase makes for `Modal`, for
+`OpponentSection` and for every folded selector list in the stylesheet.
+
+So they are **`DetailsShell.tsx`**, and this page passes `tab`, a `resetKey`
+(`${kind}-${playerId}`, which is what makes a different man a different page),
+the `head`, the Batting/Pitching row as `chromeExtra`, the nine tab buttons as
+`tabs`, and `gamelog-mode` as `className`. The shell knows nothing about a
+player — no id, no kind, no report — which is the test that the extraction is
+honest rather than a shell with a player-shaped hole in it.
+
+**`DetailsTabButton` came out with it.** The strip is still a row of buttons
+written out longhand rather than a `map` over a table, for the reason stated
+above — the order is the order they are written in, and each carries its own
+paragraph about why it sits where it does. What went is the four lines of
+`role`, `aria-selected` and the two class expressions that were identical on all
+nine, and with them the chance of a strip where one tab is missing its
+`aria-selected` and reads to a screen reader as a plain button.
+
+**Checked in a browser after the move and before any team page existed**: the
+page opens on a pitcher with `--details-chrome-h` **165px**, the head at 20 →
+111, all nine tabs in strip order, `Overview` active and `aria-selected`;
+pressing `Stats` moves both marks and leaves `scrollTop` at 0; Escape closes the
+page and drops `player=`. The same behavior it had, from a different file.
+
+### The Overview says who he plays for, and opens them
+
+**The report has carried `teamId` and `team` since the summary table wanted a cap
+logo**, and until there was a club page there was nowhere to send a reader who
+pressed it. There is one now, so the Overview leads with a chip — the cap mark,
+the club's abbreviation and the app's own `→` — that opens it.
+
+It leads because it is **context rather than a reading**: the one line on the tab
+that is about *where* he is rather than what he has done, and a reader who wants
+it wants it before anything else on the page. It is drawn only where the report
+can name the club, the join-to-null rule — a report with no `teamId` is a free
+agent or a man the day's read could not place, and a link headed by a blank is
+worse than no link.
+
+**Its wrapper is folded onto the tab's reading-column cap** (`.ovw-day,
+.ovw-starts, .ovw-news`), which is not cosmetic: without it the chip sat at the
+far left of the overlay, **200px outside** the column every heading under it is
+centered in. Measured after — the chip and the first heading both at `left: 200`
+at 1200px, and both at `16` at 390.
+
+**Opening a club puts this page away**, rather than stacking over it: `App`'s
+`openTeam` clears `player=` as it sets `team=`, and `openPlayer` does the
+reverse. One page at one layer, one press of Escape to leave it — the same rule
+that already made a player opened from another player's Overview *replace* him.
+See `client-team-page.md`, *One page at a time*.
+
 ### Where the rest of the player page's documentation lives
 
 This file was 215KB across eight tabs and is now three, on `CLAUDE.md`'s own

@@ -11,6 +11,7 @@ import type {
   RosterStatus,
   SeasonPlayer,
   SeasonStats,
+  TeamInfo,
 } from './types.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
@@ -174,6 +175,23 @@ async function getTeams(): Promise<{ names: Map<number, string>; abbrevs: Map<nu
   return teamsCache;
 }
 
+/**
+ * **The thirty clubs as a list**, which is what a client needs to *name* one it
+ * has only an id for — the team page's own head, the club rows in the header
+ * search, and the link off a player's page to his own club.
+ *
+ * The same cached fetch the two maps above are cut from, turned back into rows:
+ * `getTeams` already holds exactly these three fields, so this is a shape
+ * change rather than a request. Sorted by name so the caller never has to,
+ * every consumer of it drawing an alphabetical list.
+ */
+export async function getTeamList(): Promise<TeamInfo[]> {
+  const { names, abbrevs } = await getTeams();
+  return [...names]
+    .map(([id, name]) => ({ id, name, abbreviation: abbrevs.get(id) ?? '' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** MLB Stats API's player payload only carries currentTeam.id, not its name. */
 async function getTeamNamesById(): Promise<Map<number, string>> {
   return (await getTeams()).names;
@@ -215,6 +233,19 @@ export async function getSeasonPlayers(
       name: p.fullName,
       savantName: toSavantName(p.fullName),
       team: (p.currentTeam?.id !== undefined && teamNames.get(p.currentTeam.id)) || '',
+      /**
+       * **…and the id that name was looked up by**, which is the one thing this
+       * row was missing for anything that wants to go *from* a player *to* his
+       * club: the team page is keyed on the id, and matching a club by the
+       * printed name would be a join on a display string.
+       *
+       * It is `p.currentTeam.id` — already in hand on the line above, so the
+       * cost is one number per row on a list the client holds from boot
+       * (~1,400 of them) and no new field on the upstream request. Null for a
+       * free agent, whom MLB files under no club at all; every reader draws
+       * nothing rather than guessing at one, the join-to-null rule.
+       */
+      teamId: p.currentTeam?.id ?? null,
       position: p.primaryPosition?.abbreviation ?? '',
       // Which side he bats from and which arm he throws with. Two more leaves
       // on a call this module already makes, which is the whole reason they are

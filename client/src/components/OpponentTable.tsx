@@ -323,6 +323,7 @@ export function OpponentSection({
   collapsible = false,
   defaultOpen = false,
   bare = false,
+  title = 'Opponent',
 }: {
   hitting: TeamHitting | null;
   opponent: string;
@@ -332,17 +333,29 @@ export function OpponentSection({
   /** No heading at all — for the outing page, whose tab strip has already said
    *  `Opponent`. See `CardSection`, where the three modes are argued. */
   bare?: boolean;
+  /**
+   * What the heading calls this club, and the default is what every caller but
+   * one means: these nine cuts are drawn *about the other side*, and every
+   * surface that had them until now was a pitcher's.
+   *
+   * The exception is the **club's own page**, where "Opponent" would be flatly
+   * false — the Brewers are not the Brewers' opponent — and the same table is
+   * headed `Hitting` instead. A word, not a second component: the nine cuts,
+   * the three rows, the ten columns and the two controls are identical, and the
+   * heading is the only thing that knows whose lineup this is.
+   */
+  title?: string;
 }) {
   if (!hitting) return null;
   const body = <OpponentBody hitting={hitting} opponent={opponent} hand={hand} />;
   if (bare) return <div className="card-section">{body}</div>;
   return collapsible ? (
-    <CardSection title="Opponent" defaultOpen={defaultOpen}>
+    <CardSection title={title} defaultOpen={defaultOpen}>
       {body}
     </CardSection>
   ) : (
     <div className="card-section">
-      <div className="section-title opp-title">Opponent</div>
+      <div className="section-title opp-title">{title}</div>
       {body}
     </div>
   );

@@ -23,6 +23,7 @@ import type {
   ScheduleWindow,
   SeasonPlayer,
   SplitCut,
+  TeamInfo,
   TrendWindow,
   WatchPlayer,
 } from './types';
@@ -43,6 +44,7 @@ import type { ThemeId } from './theme';
 import { BaseballMark } from './components/BaseballMark';
 import { ScrollRow } from './components/TabStrip';
 import { PlayerAdder } from './components/PlayerAdder';
+import { TeamDetails } from './components/TeamDetails';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { LiveFeed, FEED_PAGE_SIZE, newPlays } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
@@ -482,6 +484,53 @@ export default function App() {
   const [detailsKey, setDetailsKey] = useState<string | null>(
     () => readKeys(initialParams.get('player'))[0] ?? null,
   );
+  /**
+   * **The club whose page is open**, `team=` in the URL and the exact twin of
+   * `detailsKey` above: a page over whatever view is behind it, seeded from the
+   * link so a shared one reopens it.
+   *
+   * The two are **mutually exclusive by construction**, and the pair of setters
+   * below is the one place that is enforced. They are not a stack: a player
+   * opened from a club's roster *replaces* the club, exactly as a player opened
+   * from another player's Overview already replaces him — one page at one
+   * layer, and one press of Escape to leave it. Stacking them would need a
+   * second `.details-view` above 50 and would then have to answer what happens
+   * when the reader walks a chain of six.
+   *
+   * On the way *in*, a link carrying both takes the **player**, which is the
+   * older parameter and the one an existing link can have: a hand-made URL is
+   * the only way to produce the pair, and falling back beats emptying the view.
+   */
+  const [teamPageId, setTeamPageId] = useState<number | null>(() => {
+    if (readKeys(initialParams.get('player'))[0]) return null;
+    const raw = Number(initialParams.get('team'));
+    return Number.isInteger(raw) && raw > 0 ? raw : null;
+  });
+  /**
+   * Which side of the ball that page is reading — `tside=pitching`, written
+   * only off the default, the rule every parameter here follows.
+   *
+   * In the URL because it decides *which numbers* the page's Stats and Overview
+   * are showing, which is the same test that put `pos=` and `win=` there. An
+   * unrecognized value is the default rather than an empty page.
+   */
+  const [teamSide, setTeamSide] = useState<PlayerKind>(() =>
+    initialParams.get('tside') === 'pitching' ? 'pitcher' : 'batter',
+  );
+  /** Open a club's page, putting away any player's. The one door in — the board
+   *  row, a player's Overview and the header search all come through here, so
+   *  the exclusion above cannot be got round by a caller. */
+  const openTeam = useCallback((id: number) => {
+    setDetailsKey(null);
+    setTeamPageId(id);
+  }, []);
+  /** …and its mirror: opening a player puts away a club's page. `setDetailsKey`
+   *  is handed to a dozen callers, so the clearing has to ride with it rather
+   *  than beside it. */
+  const openPlayer = useCallback((key: string | null) => {
+    setTeamPageId(null);
+    setDetailsKey(key);
+  }, []);
   // Where the page is, in two parts rather than one flat list of four views.
   //
   // The top tier is **Roster or Research**, which is the real division: Roster
@@ -3163,6 +3212,15 @@ export default function App() {
       p.set('end', end);
     }
     if (detailsKey) p.set('player', detailsKey);
+    // The club's page, which is `player=`'s twin: a page over whatever view is
+    // behind it. The two are mutually exclusive in state, so at most one of
+    // them is ever written and a link describes exactly one page.
+    if (teamPageId !== null) p.set('team', String(teamPageId));
+    // …and which side of the ball it is reading. Scoped to `team=`, which is
+    // the page that draws it — a side with no club to be a side *of* would name
+    // a reading that is not in force, the rule `cut=` and `mt=` follow — and
+    // written only off the default.
+    if (teamPageId !== null && teamSide === 'pitcher') p.set('tside', 'pitching');
     // Scoped to `player=`, which is the page that draws it — a cut with no
     // player to be a cut *of* would name a lens that is not in force, which is
     // the rule `proj=` and `mt=` already follow.
@@ -3291,6 +3349,8 @@ export default function App() {
     end,
     activePreset,
     detailsKey,
+    teamPageId,
+    teamSide,
     statsCut,
     view,
     researchPos,
@@ -3385,14 +3445,24 @@ export default function App() {
    */
   const rankPopulationsInFlight = useRef(new Set<string>());
   const loadRankPopulations = useCallback(
-    (kind: PlayerKind) => {
+    /** `teams` picks the **club** boards, which is the only population a club's
+     *  percentile means anything against — a team's home-run total against six
+     *  hundred players ranks every one of the thirty at the very top and says
+     *  nothing. Same cache, same key scheme as the research view's own
+     *  (`team-` prefixed), so a reader who has opened that board has already
+     *  paid for these. */
+    (kind: PlayerKind, teams = false) => {
       for (const w of RESEARCH_WINDOWS) {
-        const key = `${kind}:${w}`;
+        const key = `${teams ? 'team-' : ''}${kind}:${w}`;
         if (research[key] || rankPopulationsInFlight.current.has(key)) continue;
         rankPopulationsInFlight.current.add(key);
-        api
-          .research(kind, w)
-          .then((r) => setResearch((cur) => ({ ...cur, [`${r.kind}:${r.window}`]: r.rows })))
+        ;(teams ? api.teamResearch(kind, w) : api.research(kind, w))
+          .then((r) =>
+            setResearch((cur) => ({
+              ...cur,
+              [`${teams ? 'team-' : ''}${r.kind}:${r.window}`]: r.rows,
+            })),
+          )
           .catch((e: Error) => console.error('reading a board for ranks failed:', e.message))
           .finally(() => rankPopulationsInFlight.current.delete(key));
       }
@@ -3420,6 +3490,34 @@ export default function App() {
       canceled = true;
     };
   }, []);
+
+  /**
+   * **The thirty clubs**, read once beside the player list and for the same
+   * reason: three surfaces want to name a club they have only an id for — the
+   * header search's team rows, the link off a player's Overview, and the team
+   * page's own head — and every one of them wants it immediately.
+   *
+   * A failure costs the clubs and nothing else. It is deliberately **not** on
+   * `setError`, which raises the app's own banner: the banner is for a roster
+   * or a report that could not be read, and a missing team table means a search
+   * that finds no clubs and a link that is not drawn, both of which are quiet
+   * absences rather than a broken page.
+   */
+  const [teams, setTeams] = useState<TeamInfo[]>([]);
+  useEffect(() => {
+    let canceled = false;
+    api
+      .teams()
+      .then((t) => {
+        if (!canceled) setTeams(t);
+      })
+      .catch((e: Error) => console.error('reading the clubs failed:', e.message));
+    return () => {
+      canceled = true;
+    };
+  }, []);
+  /** …by id, which is how every one of those three reaches one. */
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
 
   // Load the roster once. A failure here used to be swallowed, which rendered
   // the "your roster is empty" state — actively misleading now that the list
@@ -3855,9 +3953,9 @@ export default function App() {
   const openLeaguePlayer = useCallback(
     (mlbId: number) => {
       const hit = knownPlayers.find((p) => p.id === mlbId);
-      setDetailsKey(playerKey({ id: mlbId, kind: hit?.kind ?? 'batter' }));
+      openPlayer(playerKey({ id: mlbId, kind: hit?.kind ?? 'batter' }));
     },
-    [knownPlayers],
+    [knownPlayers, openPlayer],
   );
 
   const refreshFantasy = useCallback(() => {
@@ -4194,6 +4292,23 @@ export default function App() {
   const loadDetailsRankPopulations = useCallback(() => {
     if (detailsPlayer) loadRankPopulations(detailsPlayer.kind);
   }, [detailsPlayer, loadRankPopulations]);
+
+  /** The same pair for a **club's** Stats tab, off the team boards. Written out
+   *  rather than folded into the two above because the key differs and the
+   *  side it is bound to is the team page's own control, not the open player's
+   *  kind. */
+  const teamRankPopulations = useMemo(() => {
+    const out: Partial<Record<string, ResearchRow[]>> = {};
+    if (teamPageId === null) return out;
+    for (const w of RESEARCH_WINDOWS) {
+      const rows = research[`team-${teamSide}:${w}`];
+      if (rows) out[String(w)] = rows;
+    }
+    return out;
+  }, [teamPageId, teamSide, research]);
+  const loadTeamRankPopulations = useCallback(() => {
+    loadRankPopulations(teamSide, true);
+  }, [teamSide, loadRankPopulations]);
 
   // The player list is one kind at a time, picked by its own tab row (each half
   // keeping the watchlist's order). The tabs only appear when both kinds are
@@ -4818,7 +4933,11 @@ export default function App() {
           recent={recentPlayers}
           canAdd={!usingFantasy}
           onAdd={onAdd}
-          onOpenDetails={setDetailsKey}
+          onOpenDetails={openPlayer}
+          /* The clubs, searched beside the players: this field is the app's one
+             way of reaching a subject by typing its name, and a club is one. */
+          teams={teams}
+          onOpenTeam={openTeam}
           onPick={recordRecentPlayer}
           loading={playersLoading}
         />
@@ -5350,7 +5469,9 @@ export default function App() {
         recent={recentPlayers}
         canAdd={!usingFantasy}
         onAdd={onAdd}
-        onOpenDetails={setDetailsKey}
+        onOpenDetails={openPlayer}
+        teams={teams}
+        onOpenTeam={openTeam}
         onPick={recordRecentPlayer}
         loading={playersLoading}
         autoFocus
@@ -6275,7 +6396,7 @@ export default function App() {
                `standalone` is what draws neither the Back row nor the Escape
                listener that would call this. */
             onClose={() => {}}
-            onOpenDetails={setDetailsKey}
+            onOpenDetails={openPlayer}
             projection={projection}
             projected={projected}
             projectionLoading={projLoading}
@@ -6402,7 +6523,11 @@ export default function App() {
           rosterKeys={rosterKeys}
           watchlistKeys={watchlistKeys}
           onWatchlistToggle={toggleWatchlisted}
-          onOpenDetails={setDetailsKey}
+          onOpenDetails={openPlayer}
+          /* And the team reading's own door: a club row's cap logo and its name
+             open the club's page, exactly as a player row's headshot and name
+             open his. */
+          onOpenTeam={openTeam}
           /* Held here so leaving the page doesn't throw it away, and handed
              back whole — see `researchUi`. */
           ui={researchUi}
@@ -6421,7 +6546,7 @@ export default function App() {
         viewCards.length > 0 && (
           <SummaryTable
             reports={viewCards}
-            onOpenDetails={setDetailsKey}
+            onOpenDetails={openPlayer}
             /* The tools row and the dates, rendered as the pane's own first
                children so the bar and the table's header row stick against the
                same scrollport — see `tableTakesChrome`. */
@@ -6486,7 +6611,7 @@ export default function App() {
           <LiveFeed
             key={feedKey}
             reports={viewCards}
-            onOpenDetails={setDetailsKey}
+            onOpenDetails={openPlayer}
             shown={feedShown.current.get(feedKey) ?? FEED_PAGE_SIZE}
             onShowMore={(n) => feedShown.current.set(feedKey, n)}
             /* All five gated on the **same flag that draws the control**, so the
@@ -6570,7 +6695,7 @@ export default function App() {
                half is the page's own. */
             setMatchupReading('roster');
           }}
-          onOpenDetails={setDetailsKey}
+          onOpenDetails={openPlayer}
           /* The same three the Scoreboard gets, so the `Projected` toggle is
              one control over one lens rather than two that can disagree: the
              state is in the URL up here and the read is one per period, so
@@ -6658,9 +6783,12 @@ export default function App() {
           onNeedRankPopulations={loadDetailsRankPopulations}
           /* The page is navigable between players: the Overview tab's
              scheduled game names the other side's starter and opens him. The
-             same `setDetailsKey` every other route in uses, so one man's page
+             same `openPlayer` every other route in uses, so one man's page
              is reached the one way however it was arrived at. */
-          onOpenDetails={setDetailsKey}
+          onOpenDetails={openPlayer}
+          /* …and his club's page, off the Overview tab's head. `openTeam` puts
+             his page away as it opens: one page at one layer. */
+          onOpenTeam={openTeam}
           /* The Schedule tab's fixture list. The same window, the same
              `needSchedule` and the same pitcher names the matchup page's team
              pages take — one read for every surface that draws days ahead, and
@@ -6670,7 +6798,50 @@ export default function App() {
           scheduleError={scheduleError}
           onNeedSchedule={needSchedule}
           pitcherLookup={pitcherLookup}
-          onClose={() => setDetailsKey(null)}
+          onClose={() => openPlayer(null)}
+        />
+      )}
+
+      {/* **The club's page, on the same rung as the player's** — the two are
+          mutually exclusive in state (see `openTeam` / `openPlayer`), so this
+          and the block above it can never both be on screen and neither has to
+          clear the other's layer.
+
+          It draws only for a club the teams table can name: an id nobody has
+          heard of opens nothing, which is `detailsPlayer`'s own standing rule
+          for an unresolvable `player=` and is the same answer for the same
+          reason — a page headed by a bare number is worse than no page. The
+          read is one request at boot, so in practice this is only ever false
+          for the tick before it lands. */}
+      {teamPageId !== null && teamById.has(teamPageId) && (
+        <TeamDetails
+          team={teamById.get(teamPageId) as TeamInfo}
+          side={teamSide}
+          onSideChange={setTeamSide}
+          /* The season roster the header search is already holding — the Roster
+             tab is a filter over it, so the tab costs no request at all. */
+          players={knownPlayers}
+          playersLoading={playersLoading}
+          /* The same window, the same `needSchedule` and the same pitcher names
+             the player page's Schedule tab takes. One read for every surface
+             that draws days ahead. */
+          scheduleWindow={scheduleWindow}
+          scheduleError={scheduleError}
+          onNeedSchedule={needSchedule}
+          pitcherLookup={pitcherLookup}
+          /* Every row of the Roster tab and every announced starter on a
+             fixture is a door into a player's page — through `openPlayer`, so
+             the club's page is put away as it opens. */
+          onOpenDetails={openPlayer}
+          /* The Stats tab's saved columns are the player page's own: one
+             vocabulary, one table, one preference. */
+          statsColumns={statsCols[teamSide] ?? null}
+          onStatsColumnsChange={(keys) => setStatsColumns(teamSide, keys)}
+          showRanks={showRanks}
+          onShowRanksChange={setShowRanks}
+          rankPopulations={teamRankPopulations}
+          onNeedRankPopulations={loadTeamRankPopulations}
+          onClose={() => setTeamPageId(null)}
         />
       )}
 

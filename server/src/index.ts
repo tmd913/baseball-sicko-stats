@@ -18,7 +18,7 @@ import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js'
 import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
 import { getResearch, getPlayerWindows } from './research.js';
-import { getTeamResearch } from './teamResearch.js';
+import { getTeamResearch, getTeamWindows } from './teamResearch.js';
 import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
@@ -37,6 +37,7 @@ import {
   getPitcherStats,
   getPlayerStats,
   getSeasonPlayers,
+  getTeamList,
   resolveVideoUrl,
 } from './mlbStats.js';
 import {
@@ -1659,6 +1660,53 @@ app.get(
       : 'season';
     const { season, rows } = await getTeamResearch(kind, window);
     res.json({ season, kind, window, rows });
+  }),
+);
+
+/**
+ * The thirty clubs, by id — name and abbreviation, nothing else.
+ *
+ * A route rather than a table shipped in the client bundle, for the reason
+ * `/api/players` is one: it is MLB's own list, and a curated copy of it in the
+ * client is a copy that goes stale silently when a club moves or renames. It is
+ * the same cached fetch that already names a player's club on every row of
+ * `/api/players`, so this costs no upstream call in practice.
+ *
+ * Unauthenticated it is not: nothing in this app is except health and config,
+ * and there is no reason for this to be the exception.
+ */
+app.get(
+  '/api/teams',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json({ teams: await getTeamList() });
+  }),
+);
+
+/**
+ * **One club's row on each of the five spans** — the team page's Stats tab, and
+ * the exact shape and route pattern `/api/players/:playerId/windows` answers
+ * in, because it is the same table transposed onto a different population.
+ *
+ * It takes **no `cut`**, where the player route does. A split is a cut of the
+ * same board (`hfSplit` on Savant's), and the team boards this reads are summed
+ * a day at a time from exports that carry no club-level split at all — see
+ * `teamResearch.ts`. Offering the parameter and ignoring it is the failure mode
+ * that file's own header warns about: an endpoint that accepts a selection and
+ * quietly answers something else. A club's platoon reading has a home already,
+ * and it is the nine cuts of `/api/teams/:teamId/hitting`.
+ */
+app.get(
+  '/api/teams/:teamId/windows',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const teamId = Number(req.params.teamId);
+    if (!Number.isInteger(teamId) || teamId <= 0) {
+      res.status(400).json({ error: 'invalid teamId' });
+      return;
+    }
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    res.json(await getTeamWindows(teamId, kind));
   }),
 );
 

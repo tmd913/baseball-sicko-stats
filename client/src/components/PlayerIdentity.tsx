@@ -175,22 +175,48 @@ export function TeamIdentity({
  * The cap mark at headshot size — what a team row carries where a player row
  * carries a face.
  *
- * It is `TeamMark`'s image with the row circle's geometry, and it is an image
- * rather than a button because there is nothing behind it: the page a headshot
- * opens is a page about a person, and this app has no club page. A row that
- * looks pressable and is not is worse than one that plainly is not, so the cell
- * is inert on this reading — and so, for the same reason, is the name beside
- * it.
+ * **It is a button wherever there is a page behind it**, which there now is.
+ * This note used to read the other way round — "an image rather than a button
+ * because there is nothing behind it: the page a headshot opens is a page about
+ * a person, and this app has no club page" — and every word of it was right
+ * about the app it was written in. What changed is the premise: a club has a
+ * page, so the mark that names a club opens it, exactly as a headshot opens the
+ * man it draws.
+ *
+ * The old rule survives as the fallback: **with no `onOpen`, it is still a
+ * plain `<span>`**, because "a row that looks pressable and is not is worse
+ * than one that plainly is not" is true whatever is on the other side. A caller
+ * with nowhere to send the reader passes nothing and gets the inert cell back.
  */
-export function TeamPhoto({ teamId, team }: { teamId: number | null; team: string }) {
+export function TeamPhoto({
+  teamId,
+  team,
+  onOpen,
+}: {
+  teamId: number | null;
+  team: string;
+  /** Open this club's page. Absent where the caller has none to open — see
+   *  above; and it takes the id it was given, so a row filed under no club is
+   *  inert by construction rather than by a second test. */
+  onOpen?: (teamId: number) => void;
+}) {
   const [failed, setFailed] = useState(false);
+  /* The wrapper is a `<button>` when it does something and a `<span>` when it
+     does not — the *same box* either way, which is what keeps the image cell
+     one cell across both readings rather than two that measure alike today.
+     `line-height: 0` on it is what keeps the image out of the cell's inline
+     flow (in it, the reserved descender took every club row to 60px against the
+     board's 58), and it comes off the shared class rather than off the tag. */
+  const Box = teamId !== null && onOpen ? 'button' : 'span';
+  const press =
+    teamId !== null && onOpen
+      ? { type: 'button' as const, onClick: () => onOpen(teamId), title: `${team} — the club’s page` }
+      : {};
   return (
-    /* The headshot's own wrapper, as a `<span>` — the box, not the button. It
-       is what makes the image cell the *same* cell on both readings rather than
-       two that measure alike today, and its `line-height: 0` is what keeps the
-       image out of the cell's inline flow (in it, the reserved descender took
-       every club row to 60px against the board's 58). */
-    <span className="sum-photo-wrap sum-photo-wrap-static">
+    <Box
+      {...press}
+      className={`sum-photo-wrap${teamId !== null && onOpen ? '' : ' sum-photo-wrap-static'}`}
+    >
       {teamId === null || failed ? (
         <span className="sum-photo sum-photo-team sum-photo-team-none" title={team}>
           {team || '—'}
@@ -209,6 +235,6 @@ export function TeamPhoto({ teamId, team }: { teamId: number | null; team: strin
           onError={() => setFailed(true)}
         />
       )}
-    </span>
+    </Box>
   );
 }
