@@ -159,6 +159,72 @@ the reader asked for and nothing else. Crossing back down: 162 → 154 becomes
 162 → 112, and the row moves 226 → 234. Page-body overflow **0** throughout, the
 three rows 36px each, the chrome 146px at 390 and 142 at 1200.
 
+### And then the badge row was the chips row, twice
+
+*(This supersedes **The badges are the filters and nothing else**, above, and
+finishes the argument that paragraph starts.)*
+
+**The badge row lost its last reason when the chips moved into the head.** Its
+whole remaining claim was that a stat threshold is *the one setting with no
+button of its own to be lit* — every other one is a lit control in the condensed
+run, on screen and pressable at any offset, which is what let the row come down
+to the filters alone. The section above moved the chips row into the head for
+its own reasons, and the chips are that button: the same sentence, in the same
+words, off the same `filters` array, with a press attached.
+
+So the head printed every filter twice. Measured at 390 with three built,
+`HR ≥ 10 · RBI ≥ 40 · SB ≥ 5` appeared as chips at **y=350** and again as badges
+at **y=383**, 33px apart, and the badge row cost the head **25px** (plus the
+column's 6px gap) at every width to restate a control one line above it.
+Reported as the filter badges being displayed twice, which is what they were.
+
+**Of two rows saying one thing, the one that keeps is the one you can act on.**
+The badge row is gone with `.research-badge` and `.research-badges`. What it
+leaves behind is its one measurement, which the chips row takes over.
+
+**The chips row scrolls now, where it wrapped.** That was the badge row's own
+rule and the reason it was a scroller — *wrapping cost the table a second line
+and then a third as the filters mounted up, on the one view where a line of
+chrome is a row of the table* — and it applies harder here: the chips used to
+wrap inside the control set, which scrolls away, and they are in the sticky head
+now, so what they cost they cost at every offset. Measured at 390 with six
+filters built, they wrapped to **three lines, 93px**.
+
+- **`flex: none` on the children, and leaving it out is worse than wrapping.** A
+  flex item's default is `flex-shrink: 1`, so the moment the run is wider than
+  the row the chips are squeezed *below their content* and the labels wrap
+  inside them: measured, every chip **57px tall** with `HR ≥ 10 ×` broken over
+  three lines in a 53px box — a taller row than the wrapping run it replaced.
+  This is the trap `.research-toggle svg` already records one argument along.
+  Written on the children rather than on each class, `Clear all` being exactly
+  as unsqueezable as the chips beside it.
+- **No arrows, unlike the three button runs in the bar**, and *not* for the
+  badge row's reason — these are controls, so "an arrow is a control" does not
+  carry. It is that nothing here is undiscoverable: the reader built every chip
+  in this row a moment ago, from the panel directly above it, where the bar's
+  runs are a fixed vocabulary somebody has to be able to find the end of.
+  `Clear all` is the last item and one flick away — driven at 390 with six
+  filters, the row is 659px of content in 346, and a flick to the end puts
+  `Clear all` at x=299 with `elementFromPoint` returning
+  `BUTTON.research-clear`. The pane behind it does not move (`scrollLeft` 0),
+  the row's `overscroll-behavior-x: none` being the app's standing rule.
+
+**What the table gets back.** Head height and the column headings' resting
+`top`, before → after:
+
+| | 390 | 1200 |
+| --- | --- | --- |
+| no filters | 37 → **31** (th 295 → 289) | 37 → **31** (th 295 → 289) |
+| 3 filters, panel open | 181 → **150** (th 439 → 408) | 137 → **106** (th 395 → 364) |
+| 6 filters, panel open | 247 → **150** (th 505 → 408) | 137 → **106** (th 395 → 364) |
+| 6 filters, panel shut | 161 → **64** (th 419 → 322) | 95 → **64** (th 353 → 322) |
+
+**97px on a phone with six filters built** — nearly two rows of the board, held
+back at every scroll offset, and the same 64px head whether the reader is at the
+top or at row 400. Nothing had to be told any of it: `--research-head-h` is
+measured, so the headings and the sort's scroll target followed the box.
+Page-body horizontal overflow **0** at every reading.
+
 ### A panel opens where its button is
 
 **Search and Filters answer with a panel, and the panel was drawn in the box

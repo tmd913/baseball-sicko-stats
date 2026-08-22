@@ -1448,9 +1448,10 @@ export function ResearchTable({
    * **The head's height, measured, because there is no one number.** The column
    * headings stick directly under it (`--pane-bar-h` in the stylesheet), so the
    * offset they are held at *is* this box's height — and this box is a count
-   * line and a row of badges that wraps: one line of it on a desktop, three on
-   * a phone with a filter or two built, and any of those the moment a position,
-   * a window or a search string changes the words in it. A constant would be a
+   * line with whatever the reader has opened above it: a chips row that comes
+   * and goes with the filters, and either of the two panels, which are two
+   * different heights and each a different one again on a phone. A constant
+   * would be a
    * band of rows showing through the gap on every width but the one it was
    * written at, which is the fault `--chrome-h` and `--date-bar-h` already
    * record. Published on the root, floored, by the same hook they use.
@@ -2073,34 +2074,34 @@ export function ResearchTable({
   );
 
   /**
-   * **The badges are the filters and nothing else now.**
+   * **The badge row is gone, and the chips are what it was for.**
    *
-   * The row used to carry one badge per *setting* — the reading, the position,
-   * each included set, Ranks, the schedule span, the window, the search — on
-   * the argument that a control set scrolled off the top leaves `of 622`
-   * meaning nothing without them. That argument was right about the problem
-   * and wrong about the answer: it restated the controls in a row you cannot
-   * act on, where what a reader wants is the control.
+   * It carried one badge per *setting* once — the reading, the position, each
+   * included set, Ranks, the schedule span, the window, the search — on the
+   * argument that a control set scrolled off the top leaves `of 622` meaning
+   * nothing without them. That was right about the problem and wrong about the
+   * answer, and the condensed run replaced all but one of them: every setting
+   * is a lit button that sticks with the head, which is the state on screen
+   * *and* pressable, where a badge never was.
    *
-   * **The condensed run is the answer instead.** Every one of those settings
-   * is a lit button, and the run sticks with the head — so the state is on
-   * screen *and* pressable at every scroll offset, which a badge never was.
-   * What is left here is the one setting with no button of its own to be lit:
-   * a stat threshold lives inside the Filters panel, and `PA ≥ 300` is a
-   * sentence the funnel's own count (`3`) cannot say.
+   * The one it could not replace was the stat threshold, which has no button of
+   * its own to be lit — `PA ≥ 300` is a sentence the funnel's count (`3`)
+   * cannot say. That is what the row was left carrying.
    *
-   * **One row, and it scrolls** rather than wrapping — see `.research-badges`.
-   * Wrapping is what made this row cost the table two lines and then three;
-   * a scroller costs it one at every count.
+   * **And the chips row moved into the head under it**, which finished the
+   * argument the other way: the chips say the same sentence in the same words
+   * off the same `filters` array, and each one is pressable. Measured at 390
+   * with three filters, the head printed `HR ≥ 10 · RBI ≥ 40 · SB ≥ 5` twice,
+   * 33px apart — the chips at y=350 and the badges at y=383 — and the badge row
+   * cost the head **25px at every width** to restate a control one line above
+   * it. Reported as the filter badges being displayed twice, which is what they
+   * were.
    *
-   * Labels, not controls: the app's round pill is the shape it reserves for
-   * things you read, and the way to change one is the funnel it came from.
+   * So the row went and the chips stayed: of two rows saying one thing, the one
+   * that keeps is the one you can act on. `.research-badge` and
+   * `.research-badges` went with it — see `.research-chips`, which inherits the
+   * constraint that made this row a scroller rather than a wrapping run.
    */
-  const badges = filters.map((f) => (
-    <span key={f.id} className="research-badge">
-      {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
-    </span>
-  ));
 
   /**
    * **The control set, as the tools row itself.** `.view-tools` is the band
@@ -2538,8 +2539,8 @@ export function ResearchTable({
       the two controls that answer with a panel rather than with a state.
 
       So they are drawn in `.research-head` — the one box here that is rendered
-      at every offset and sticks — above the badges. That is the same order
-      they already read in under the bar at rest (panel, chips, badges, count),
+      at every offset and sticks — above the count. That is the same order
+      they already read in under the bar at rest (panel, chips, count),
       and once the head is stuck it puts them directly under the condensed run,
       beneath the button that opened them. One copy rather than one per state: a
       second set drawn in the rail would remount the search field on the scroll
@@ -2779,7 +2780,8 @@ export function ResearchTable({
             **Drawn expanded from the first frame**, not only once stuck: that
             box covers the app's chrome, so the three-row bar is not merely
             scrolled away there, it is unreachable — which is the case the
-            badges were carrying alone and doing badly. */}
+            badge row was carrying alone and doing badly, before the run took
+            it off that row and the chips took what was left. */}
         {(stuck || isFull) && (
           <div className="research-condensed-rail">
             <div className="research-condensed-inner" ref={condRef}>
@@ -2796,14 +2798,15 @@ export function ResearchTable({
           {/* **The settings first, the count last.** They were one wrapping run
               with the count leading it, which is the shorter box and was chosen
               for that; what it got wrong is which of the two the *rows* are
-              about. The badges qualify the board — the window, the position,
-              the include set — and the count is a fact about the table
-              immediately under it, so it is the last thing read before the
-              first row and sits on its own line against them. The badges keep
-              the wrapping run they always had; the head is now the column of
-              the two. See the stylesheet for the height this costs. */}
+              about. What qualifies the board — the window, the position, the
+              include set, a threshold — is read before the count, which is a
+              fact about the table immediately under it and so is the last thing
+              before the first row.
+
+              **The row that qualified it here was a badge row and is the chips
+              now.** Both printed the same sentence off the same `filters`
+              array; only one of them could be pressed. See `panels` above. */}
           {panels}
-          <div className="research-badges">{badges}</div>
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
               {loading ? (
