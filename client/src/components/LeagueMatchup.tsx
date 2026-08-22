@@ -11,6 +11,7 @@ import { MatchupSeriesChart } from './MatchupSeriesChart';
 import { LoadingLine } from './Loading';
 import { api } from '../api';
 import { BackButton } from './BackButton';
+import { BackToTop, useScrolledAScreen, useScrollToTop } from './FloatControls';
 import { InfoKey } from './InfoKey';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
 import { ScrollRow } from './TabStrip';
@@ -712,6 +713,30 @@ export default function LeagueMatchupView({
   useLockBodyScroll(!standalone);
   const viewRef = useRef<HTMLDivElement | null>(null);
   useOverlayFocus(viewRef, undefined, !standalone);
+  /**
+   * **The way back up, on the one page in the app whose scroll App cannot
+   * see.** App's own `↑` reads `window.scrollY`, and this box is the scroller:
+   * as an overlay it is `position: fixed` with its own `overflow-y`, and as a
+   * tab it is the column's one scrolling child. Measured on the Feed reading at
+   * 390 — the page 2,875 tall against 744 of client, dragged to `scrollTop`
+   * 2,131 — `window.scrollY` never left **0** and the app's button stayed
+   * `visibility: hidden`. Reported as the feed page inside a matchup having no
+   * way back to the top, which is what it was: 2,131px of stream, and the
+   * pinned head above it offering `Back` out of the page but nothing up it.
+   *
+   * **One rule rather than one per reading**, and the readings sort themselves
+   * out. On `roster-mode` this box is `overflow: hidden` and the table's own
+   * pane takes the scroll, so `scrollTop` stays 0 and the button never reveals
+   * — which is right, a `↑` here would point at a page that has not moved. The
+   * Summary card and the Feed both scroll this box and both raise it.
+   *
+   * Only the `↑`, not `FloatControls`' pair: the how-to and league settings
+   * pages float a `Back` because their own head scrolls away, and `.mup-chrome`
+   * is `position: sticky` — the way out of this page is on screen at every
+   * offset already.
+   */
+  const scrolledAScreen = useScrolledAScreen(viewRef);
+  const toTop = useScrollToTop(viewRef);
   /**
    * **The band is measured rather than declared**, which is what carrying a
    * team page's controls costs it: the head is one row of tabs on the Summary
@@ -2386,6 +2411,15 @@ export default function LeagueMatchupView({
             )}
           </div>
         )}
+
+        {/* **Inside the view, which is what puts it over the view.** The button
+            is `position: fixed` and stays fixed to the window — nothing on the
+            way up here is a containing block for it — but as an overlay this
+            box is a stacking context at 48 and the button's own `z-index: 20`
+            is the app's page layer, so drawn as a sibling it would sit behind
+            the very page it belongs to. As a child it takes that context with
+            it and needs no layer of its own. */}
+        <BackToTop shown={scrolledAScreen} onClick={toTop} />
       </div>
 
       {/* Above the page rather than beside it: `DialogLayerContext` is set to

@@ -118,6 +118,67 @@ export function useScrollToTop(scrollRef: RefObject<HTMLElement | null>) {
 }
 
 /**
+ * **Has the scroller gone a screenful of its own?**
+ *
+ * The reveal rule for a `↑` on a box that is not the window, and it is a
+ * *measurement* where App's own is the constant `window.scrollY > 600`. Two
+ * things are wrong with a number here. A matchup page's scroller is 744px of
+ * client on a phone and 1000 on a desktop, so one figure is most of a screen on
+ * one and two-thirds of it on the other; and a page that cannot scroll 600 at
+ * all — a short feed, a bye week, a roster of four — never reveals a button
+ * however far the reader gets, which is the shape the fault took when it was
+ * reported. Its own `clientHeight` answers both: a screenful is a screenful at
+ * every width, and a box with less than one to give has nowhere for a `↑` to
+ * point.
+ *
+ * **A scroll listener rather than an `IntersectionObserver`**, unlike
+ * `useHeadGone` above, and the difference is what is being asked. That hook
+ * asks whether a *box* has left the root, which is exactly what an observer
+ * reports; this one asks whether the root has moved by its own height, which no
+ * box in the tree marks — the sentinel that would mark it is a box placed at
+ * the number we are trying not to write. Passive, and the same shape App's own
+ * window listener has always had.
+ */
+export function useScrolledAScreen(scrollRef: RefObject<HTMLElement | null>): boolean {
+  const [past, setPast] = useState(false);
+  useEffect(() => {
+    const box = scrollRef.current;
+    if (!box) return;
+    const read = () => setPast(box.scrollTop > box.clientHeight);
+    read();
+    box.addEventListener('scroll', read, { passive: true });
+    return () => box.removeEventListener('scroll', read);
+  }, [scrollRef]);
+  return past;
+}
+
+/**
+ * **The `↑` itself, once, for the three places that raise one** — the app's
+ * page, the floating pair below, and the matchup page, which is a scroller of
+ * its own that the app's button reads nothing of. It was written inline in
+ * `App.tsx` and again here, which was two copies of four attributes agreeing
+ * with each other; a third would have been the point at which they stopped.
+ * Fold, don't restyle, applied to a component.
+ *
+ * Everything it looks like is `.float-btn.back-to-top`'s and nothing is drawn
+ * here: the corner, the round 46px, the ground, the lift, the fade and the
+ * `visibility` that takes it out of the tab order on the way out.
+ */
+export function BackToTop({ shown, onClick }: { shown: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`float-btn back-to-top${shown ? ' visible' : ''}`}
+      onClick={onClick}
+      aria-label="Back to top"
+      title="Back to top"
+    >
+      ↑
+    </button>
+  );
+}
+
+/**
  * **Both of these are shapes the app already had, in the corners it already
  * floats things in.** `.float-btn` is the round 46px button in the bottom right,
  * `.back-to-top` is its `↑`, and `.back-nav` is the pill in the bottom left at
@@ -160,15 +221,7 @@ export function FloatControls({
   return (
     <>
       <BackButton onClose={onClose} className={`float-btn back-nav${on}`} ref={backRef} />
-      <button
-        type="button"
-        className={`float-btn back-to-top${on}`}
-        onClick={onTop}
-        aria-label="Back to top"
-        title="Back to top"
-      >
-        ↑
-      </button>
+      <BackToTop shown={shown} onClick={onTop} />
     </>
   );
 }

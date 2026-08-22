@@ -1007,6 +1007,17 @@ heading's own line — the heading is one short uppercase phrase and the rest of
 that line is empty at every width the app draws (105px of the 276 available at
 320, against the line's 121).
 
+**And `back-to-top` in that corner is the window's button, and only the
+window's.** It reads `window.scrollY`, so it answers for the views that let the
+page itself scroll — the Feed above all — and stays hidden on every view that
+moves the scroll into a pane of its own (`.summary-scroll`,
+`.research-scroll`) or into an overlay, where the window never moves. The
+matchup page is the second case, and it raises one of its own on its own
+scroller: see **The way back up, on a page App cannot see the scroll of** in
+*The matchup page*. The button is `BackToTop` in `FloatControls.tsx` — one
+component for the three places that raise one, where it was written inline here
+and again inside `FloatControls`.
+
 **The seam under the pinned bar was the other candidate for the badge and was
 rejected.** Out of the flow, *something* is covered; under the bar that
 something is the roster table's sticky header, the one strip a reader mid-scroll
