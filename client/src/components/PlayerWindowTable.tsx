@@ -13,6 +13,7 @@ import {
   defaultColumnKeys,
   OPPONENT_KEY,
   ROSTER_PCT_COLUMN,
+  TEAM_ONLY,
   TREND_BY_KEY,
 } from './researchColumns';
 import type { Column } from './researchColumns';
@@ -76,7 +77,13 @@ export function statsColumns(kind: PlayerKind): Column[] {
     (c) =>
       c.key !== OPPONENT_KEY &&
       c.key !== ROSTER_PCT_COLUMN.key &&
-      !TREND_BY_KEY.has(c.key),
+      !TREND_BY_KEY.has(c.key) &&
+      // **And `W%`**, which this table cannot reach at all: it is the board's
+      // team reading's own column, and every row here is one man. See
+      // `TEAM_ONLY`. It is cut here as well as in the board's `allColumns` so
+      // the picker on this tab never offers it — the same honesty the three
+      // families above are cut with.
+      !TEAM_ONLY.has(c.key),
   );
 }
 

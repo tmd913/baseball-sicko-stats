@@ -92,6 +92,16 @@ export function columnGroups(columns: Column[]): { title: string; columns: Colum
   return out;
 }
 
+/** A club's winning percentage off the record its row carries, guarded like
+ *  every other derived rate here: a club with no decisions in the window is
+ *  null rather than `.000`. See `WIN_PCT_COLUMN`. */
+const winPct = (r: ResearchRow): number | null => {
+  const rec = r.record;
+  if (!rec) return null;
+  const played = rec.wins + rec.losses;
+  return played > 0 ? rec.wins / played : null;
+};
+
 /** ".265" — the leading zero dropped, as a baseball rate is always written. */
 function rate(n: number | null): string {
   if (n === null) return '—';
@@ -428,6 +438,42 @@ export const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Colu
  *  trend column from an ordinary one without re-deriving the names. */
 export const TREND_BY_KEY = new Map<string, TrendWindow>(TREND_WINDOWS.map((w) => [trendKey(w), w]));
 
+/**
+ * **The club's won-lost record as a number the table can sort on** — the one
+ * column on this board that only the *team* reading has.
+ *
+ * The record itself has been under a club's name since the team board arrived
+ * (`TeamIdentity`), and that is where a fact about the row belongs; what a
+ * label cannot do is order thirty of them, or hold a threshold. A reader
+ * comparing club offenses over the last 30 days wants to know which of them is
+ * winning while they do it, and `62-48` in an identity cell answers that only
+ * by being read thirty times and divided in the head.
+ *
+ * **Over the same span as the rest of the row**, because `record` is: on a 30d
+ * board it is that club's last 30 days, not its season. That is the whole of
+ * why it is worth a column rather than a link to the standings — the standings
+ * have the season and this has the window.
+ *
+ * **Written `.617`, not `61.7%`**, and the header still says `W%`. That is the
+ * form every standings table in the sport prints and the one the app's own rule
+ * points at — a rate is `.xxx` and which of the two a stat is, is a convention
+ * rather than a property of the number (on-base *percentage* is `.xxx` too).
+ *
+ * Null where the standings could not be read, and null on a club that has not
+ * played in the window: an em dash, as every unreadable value on this board is,
+ * rather than a `.000` that would claim a winless club. `share` is not used —
+ * it would be the same arithmetic on a pair of fields that are not on the row.
+ */
+export const WIN_PCT_COLUMN: Column = {
+  key: 'winPct',
+  label: 'W%',
+  group: 'Club',
+  title: 'Winning percentage over the span on screen',
+  pick: 'Winning percentage',
+  format: (r) => rate(winPct(r)),
+  value: (r) => winPct(r),
+};
+
 export const ROSTER_PCT_COLUMN: Column = {
   key: 'rosterPct',
   label: 'Ros%',
@@ -445,6 +491,9 @@ export const ROSTER_PCT_COLUMN: Column = {
 };
 
 export const BATTER_COLUMNS: Column[] = [
+  // Team reading only — see `TEAM_ONLY`. First, because on a club row it is
+  // the headline: which of these thirty is winning while it hits like this.
+  WIN_PCT_COLUMN,
   ROSTER_PCT_COLUMN,
   ...TREND_COLUMNS,
   // The statuses map is injected in `allColumns`, the way a trend column's
@@ -487,6 +536,9 @@ export const BATTER_COLUMNS: Column[] = [
 ];
 
 export const PITCHER_COLUMNS: Column[] = [
+  // Team reading only — see `TEAM_ONLY`. First, because on a club row it is
+  // the headline: which of these thirty is winning while it hits like this.
+  WIN_PCT_COLUMN,
   ROSTER_PCT_COLUMN,
   ...TREND_COLUMNS,
   opponentColumn(null),
@@ -623,6 +675,27 @@ export const TEAM_HIDDEN: Record<PlayerKind, ReadonlySet<string>> = {
     'losses',
   ]),
 };
+
+/**
+ * **The mirror of `TEAM_HIDDEN`: what only a *club* has.**
+ *
+ * One key so far, and the set exists rather than a test on that key because the
+ * two directions are one rule stated twice — a column is offered on the reading
+ * whose rows can fill it — and a board with a rule in one direction and an `if`
+ * in the other is a board where the next column of either sort goes in the
+ * wrong place.
+ *
+ * It is **not** per kind, unlike `TEAM_HIDDEN`: a club's record is the club's
+ * whatever the board is reading it for, and the server puts `record` on a team
+ * row of both kinds. Written as a flat set for that reason rather than as a
+ * `Record<PlayerKind, …>` with two identical halves.
+ *
+ * A key here is kept in the reader's saved column list exactly as a
+ * `TEAM_HIDDEN` one is, so crossing to the player reading and back puts the
+ * column where he had it — `ColumnPicker` already preserves a key its table has
+ * not got, which is the same mechanism read the other way.
+ */
+export const TEAM_ONLY: ReadonlySet<string> = new Set([WIN_PCT_COLUMN.key]);
 
 export const allColumns = (kind: PlayerKind): Column[] =>
   kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;

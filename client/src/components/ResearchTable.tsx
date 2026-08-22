@@ -49,6 +49,7 @@ import {
   opponentColumn,
   PITCHER_COLUMNS,
   TEAM_HIDDEN,
+  TEAM_ONLY,
   TREND_BY_KEY,
   trendKey,
 } from './researchColumns';
@@ -1016,6 +1017,11 @@ export function ResearchTable({
       // reason for each one. It is first in the chain so nothing below it has
       // to know about the reading.
       .filter((c) => !(teams && TEAM_HIDDEN[kind].has(c.key)))
+      // **And the mirror**: a column only a club has is not offered on the
+      // player reading — `W%` is a fact about the row, and a player's row is a
+      // person. See `TEAM_ONLY`, which is the same rule as the line above read
+      // the other way.
+      .filter((c) => !(!teams && TEAM_ONLY.has(c.key)))
       .filter((c) => (c.key === 'rosterPct' ? hasRosterPct : true))
       // The one column whose cells read something other than the row. Injected
       // here for the reason a trend column's label is: the array above is the
