@@ -497,6 +497,10 @@ export default function App() {
    * second `.details-view` above 50 and would then have to answer what happens
    * when the reader walks a chain of six.
    *
+   * **`teamReturnKey` below is one step of memory and not that stack**: the
+   * club page remembers the *one* player it was opened from so `Back` can
+   * return to him, and nothing remembers what was behind him.
+   *
    * On the way *in*, a link carrying both takes the **player**, which is the
    * older parameter and the one an existing link can have: a hand-made URL is
    * the only way to produce the pair, and falling back beats emptying the view.
@@ -517,10 +521,43 @@ export default function App() {
   const [teamSide, setTeamSide] = useState<PlayerKind>(() =>
     initialParams.get('tside') === 'pitching' ? 'pitcher' : 'batter',
   );
-  /** Open a club's page, putting away any player's. The one door in — the board
-   *  row, a player's Overview and the header search all come through here, so
-   *  the exclusion above cannot be got round by a caller. */
+  /**
+   * **The player whose page a club's page was opened from**, so `Back` returns
+   * to *him* rather than to the view behind both of them.
+   *
+   * The two pages are still not a stack — this is one step of memory, not a
+   * history — and that is the whole of the distinction. A reader on Judge's
+   * page who presses `NYY` has asked *about the Yankees, from Judge*, and a
+   * back button that drops him on the roster board has undone two things with
+   * one press, which is the rule every dialog in this app already keeps. Open a
+   * club any other way (the board's team row, the header search) and there is
+   * nobody behind it, so `Back` closes to the view as it always did.
+   *
+   * **Not in the URL**, unlike everything about *which page is open*: it is the
+   * route taken rather than the page arrived at, and a link that carried it
+   * would promise a reader a page he was never on. So a reload of `?team=147`
+   * closes to the view — which is exactly what the same link handed to somebody
+   * else does, and the two agreeing is the point.
+   *
+   * Cleared by `openPlayer`, which every door into a player's page goes
+   * through: a player opened *from the club page* — a roster row, a fixture's
+   * starter — replaces the club rather than returning to it, so what is behind
+   * him is the view again.
+   */
+  const [teamReturnKey, setTeamReturnKey] = useState<string | null>(null);
+  /** `detailsKey` as the last commit left it, so `openTeam` can read who is on
+   *  screen without taking him as a dependency — it is handed to four callers
+   *  and would otherwise be a new function every time a player page opened. */
+  const detailsKeyRef = useRef<string | null>(detailsKey);
+  useEffect(() => {
+    detailsKeyRef.current = detailsKey;
+  }, [detailsKey]);
+  /** Open a club's page, putting away any player's — and remembering him. The
+   *  one door in — the board row, a player's own head and the header search all
+   *  come through here, so neither the exclusion above nor the return can be got
+   *  round by a caller. */
   const openTeam = useCallback((id: number) => {
+    setTeamReturnKey(detailsKeyRef.current);
     setDetailsKey(null);
     setTeamPageId(id);
   }, []);
@@ -529,8 +566,20 @@ export default function App() {
    *  than beside it. */
   const openPlayer = useCallback((key: string | null) => {
     setTeamPageId(null);
+    setTeamReturnKey(null);
     setDetailsKey(key);
   }, []);
+  /** **Leaving a club's page**, which is one of two things: back to the player
+   *  it was opened from, or closed. `Back` and Escape are the same door out —
+   *  `DetailsShell` gives both to `onClose` — so a returning press is a
+   *  returning key too, which is what stops the two disagreeing. */
+  const closeTeam = useCallback(() => {
+    if (teamReturnKey !== null) {
+      openPlayer(teamReturnKey);
+      return;
+    }
+    setTeamPageId(null);
+  }, [teamReturnKey, openPlayer]);
   // Where the page is, in two parts rather than one flat list of four views.
   //
   // The top tier is **Roster or Research**, which is the real division: Roster
@@ -6747,16 +6796,28 @@ export default function App() {
           eligible={eligibility ? eligibility.get(detailsPlayer.id) ?? null : undefined}
           rosterTrends={
             rosterTrend && rosterPct?.has(detailsPlayer.id) && !beyondIds.has(detailsPlayer.id)
-              ? rosterTrend.map((w) => ({
-                  window: w.window,
-                  days: w.days,
-                  // Absent is flat, an explicit `null` is withheld — the same
-                  // three-way reading the board's merge above makes, and for
-                  // the same reason.
-                  change: w.delta.has(detailsPlayer.id)
-                    ? w.delta.get(detailsPlayer.id) ?? null
-                    : 0,
-                }))
+              ? /* **The three short spans only**, where the board draws all
+                   five. This line sits under a name in pinned chrome, not in a
+                   table cell a reader is scanning down: `1d 3d 7d 12d 29d` is
+                   five readings of one number across a header, and the two long
+                   ones are the two that answer a question nobody has on a
+                   player's own page — a month-old share is a fact about the
+                   season, where what this page is opened with is whether he is
+                   being picked up *now*. The board keeps the long spans, which
+                   is where a season-shaped question is asked and where the
+                   columns can be sorted on. */
+                rosterTrend
+                  .filter((w) => w.window <= 7)
+                  .map((w) => ({
+                    window: w.window,
+                    days: w.days,
+                    // Absent is flat, an explicit `null` is withheld — the same
+                    // three-way reading the board's merge above makes, and for
+                    // the same reason.
+                    change: w.delta.has(detailsPlayer.id)
+                      ? w.delta.get(detailsPlayer.id) ?? null
+                      : 0,
+                  }))
               : undefined
           }
           onAdd={() =>
@@ -6786,8 +6847,9 @@ export default function App() {
              same `openPlayer` every other route in uses, so one man's page
              is reached the one way however it was arrived at. */
           onOpenDetails={openPlayer}
-          /* …and his club's page, off the Overview tab's head. `openTeam` puts
-             his page away as it opens: one page at one layer. */
+          /* …and his club's page, off the chip under his portrait. `openTeam`
+             puts his page away as it opens — one page at one layer — and
+             remembers him, so the club's `Back` comes back here. */
           onOpenTeam={openTeam}
           /* The Schedule tab's fixture list. The same window, the same
              `needSchedule` and the same pitcher names the matchup page's team
@@ -6841,7 +6903,9 @@ export default function App() {
           onShowRanksChange={setShowRanks}
           rankPopulations={teamRankPopulations}
           onNeedRankPopulations={loadTeamRankPopulations}
-          onClose={() => setTeamPageId(null)}
+          /* Back to the player it was opened from, where there is one — see
+             `closeTeam`. */
+          onClose={closeTeam}
         />
       )}
 
