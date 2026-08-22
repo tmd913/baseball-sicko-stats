@@ -615,6 +615,54 @@ less than league` and the four-seam `Rise 15.4" · 0.1" less than league`, both
 agreeing exactly with the ▲▼ deltas on the rows below, which are computed
 independently from the same league fields.
 
+***Superseded on the noun, and the paragraph above is the fault written down.***
+It reads the noun off `vBreak`'s **sign**, and a splitter's induced break is a
+small *positive* number — it is thrown to fall off a fastball's plane and still
+rises a little against a spinless path. So a splitter under the league's own
+splitter printed `1.8" less rise` **in red**, and the sentence beside its color
+said the opposite of it. Reported from the page, in exactly those words: a
+splitter should say *more drop*. The same fault ran through the sinker, which
+the paragraph two above states as a *finding* — `6.2" less rise` in red, "a
+sinker wants less ride" — where it is the same unreadable sentence with the
+reasoning supplied by hand.
+
+**The noun is a fact about the pitch type, not about the sign of its break.** It
+comes off `pitchDirections`, the table the color one line below it already reads
+— so the two halves of the chip cannot disagree by construction, which is the
+whole of why that table was the source of the color in the first place. A pitch
+it calls `down` is spoken of in **drop** (the sinker, the curve and its cousins,
+the changeup, the splitter, the forkball); one it calls `up` in **rise** (the
+four-seamer). Where it calls the metric `none` — the cutter, the slider, the
+sweeper, which sit near zero by design — there is no intent to speak in, the
+sign genuinely *is* the reading, and those keep it and keep their absence of
+color with it.
+
+**The left-hand chip stays on the sign, and the split is the point.** It is the
+measurement: a splitter with +2.0" of induced break does not drop two inches,
+whatever it is thrown for, and saying `2.0" drop` there to agree with
+`1.8" more drop` next door would buy the agreement with a false reading. The
+pair reads as what it is — *it rises two inches, and that is nearly two inches
+more drop than the league's own splitter.*
+
+Driven on a right-hander with all seven types, before → after:
+
+| pitch | iVB | league | before | after |
+| --- | --- | --- | --- | --- |
+| Splitter | 2.0 | 3.8 | `1.8" less rise` *(red)* | **`1.8" more drop`** *(red)* |
+| Sinker | 6.4 | 8.7 | `2.3" less rise` *(red)* | **`2.3" more drop`** *(red)* |
+| Curveball | −14.8 | −9.4 | `5.4" more drop` *(red)* | unchanged |
+| 4-Seam | 14.0 | 15.1 | `1.1" less rise` *(blue)* | unchanged |
+| Cutter | 10.9 | 7.9 | `3.0" more rise` *(none)* | unchanged |
+| Slider | −0.8 | 1.9 | `2.7" more drop` *(none)* | unchanged |
+
+Four of the seven were already right and say so; the two that changed are the
+two the table calls `down` while their break is positive, which is exactly the
+set the sign test could not reach. The left-hand chip is unmoved at every row —
+the splitter still reads `2.0" rise` beside its `1.8" more drop`. A changeup
+checked on a left-hander moves the other way for the same reason: `2.9" more
+rise` in blue becomes **`2.9" less drop`** in blue, the color unchanged and the
+words finally agreeing with it.
+
 **The callout row reserves its own height with a hidden copy of a real pitch's
 chips** rather than a declared `min-height` — the chips wrap to two rows on a
 phone and one on a desktop, so any fixed number would be wrong at one of those

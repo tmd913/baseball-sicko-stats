@@ -737,6 +737,31 @@ export function MovementChart({
   // A metric that table calls `none` (a slider's induced break sits near zero
   // by design) takes no color at all.
   const better = focus ? pitchDirections(focus.pitchType) : null;
+
+  // **The word the vertical reading is spoken in is a fact about the pitch
+  // type, not about the sign of its induced break.** A splitter's iVB is
+  // usually a small *positive* number — it is thrown to fall off a fastball's
+  // plane and still rises a little against a spinless path — so read off the
+  // sign alone, a splitter an inch under the league's own splitter said
+  // `1.0" less rise` with the color beside it saying better. Both halves were
+  // right and the sentence was unreadable: nobody who throws a splitter is
+  // trying to rise less, and a splitter that stays up is a splitter that hangs.
+  //
+  // So it comes off `pitchDirections` — the table `vTone` directly below
+  // already reads, rather than a second opinion beside it. A pitch that table
+  // calls `down` is spoken of in **drop** (the sinker, the curve and its
+  // cousins, the changeup, the splitter, the forkball); one it calls `up` in
+  // **rise** (the four-seamer). Where it calls the metric `none` — the cutter,
+  // the slider, the sweeper, which sit near zero by design — there is no intent
+  // to speak in and the sign genuinely is the reading, so those keep it.
+  const vWord =
+    better === null || better.ivb === 'none'
+      ? focus !== null && focus.vBreak !== null && focus.vBreak < 0
+        ? 'drop'
+        : 'rise'
+      : better.ivb === 'down'
+        ? 'drop'
+        : 'rise';
   const vTone =
     better === null || vDiff === null || better.ivb === 'none'
       ? null
@@ -833,6 +858,17 @@ export function MovementChart({
                 {focus.vBreak !== null && (
                   <span className="mv-cal">
                     <b>{Math.abs(focus.vBreak).toFixed(1)}"</b>{' '}
+                    {/* **This half stays on the sign, where the half beside it
+                        stays on the pitch.** It is the measurement — what the
+                        ball did against a spinless path — and a splitter with
+                        +2.0" of induced break does not drop two inches,
+                        whatever it is thrown for. Saying `2.0" drop` here to
+                        agree with `1.5" more drop` next door would buy the
+                        agreement with a false reading, and this app's rule is
+                        that the number and the word have to be the same claim.
+                        The pair reads as what it is: it rises two inches, and
+                        that is an inch and a half more drop than the league's
+                        own splitter. */}
                     {focus.vBreak >= 0 ? 'rise' : 'drop'}
                   </span>
                 )}
@@ -847,11 +883,10 @@ export function MovementChart({
                 {vDiff !== null && focus.vBreak !== null && (
                   <span className={`mv-cal${toneClass(vTone)}`}>
                     <b>{Math.abs(vDiff).toFixed(1)}"</b>{' '}
-                    {/* "more" and "less" are said of the quantity just named,
-                        which flips with the pitch: a curveball above the
+                    {/* "more" and "less" are said of the quantity `vWord` just
+                        named, which flips with it: a curveball above the
                         league's induced break has LESS drop, not more rise. */}
-                    {(focus.vBreak >= 0 ? vDiff >= 0 : vDiff < 0) ? 'more' : 'less'}{' '}
-                    {focus.vBreak >= 0 ? 'rise' : 'drop'}
+                    {(vWord === 'rise' ? vDiff >= 0 : vDiff < 0) ? 'more' : 'less'} {vWord}
                   </span>
                 )}
               </span>
