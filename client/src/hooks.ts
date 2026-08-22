@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import type { RefObject } from 'react';
+import { LIVE_POLL_MS } from './lib';
 import type { PlayerStatus, RecentNews } from './types';
 
 /**
@@ -1267,4 +1268,74 @@ export function useDelayedFlag(on: boolean, delay = WAIT_DELAY) {
     return () => clearTimeout(t);
   }, [on, delay]);
   return shown;
+}
+
+/**
+ * **The app coming back to the foreground** — the moment an iPhone home-screen
+ * PWA is reopened, a phone is unlocked on the app, or a desktop tab is returned
+ * to after a spell on another one.
+ *
+ * A PWA is not reloaded when it is reopened. iOS suspends the page and hands it
+ * back with every byte of state it had, which is right for the scroll position
+ * and wrong for everything derived from the clock: a roster left open on
+ * `Today` and reopened the next morning is still showing the previous day's
+ * games, under a bar that says `Today`. The rule this restores is the one the
+ * boot path already follows — **a preset is a rule, not a range** — and the
+ * shape of the fix is that *reopening should show what a reload would show*.
+ *
+ * **A hidden → visible transition rather than the raw event**, which is what
+ * lets three listeners share one callback without firing it three times: the
+ * flag is what arms it and the first of them to see the page visible spends it.
+ * `visibilitychange` is the signal that actually fires on iOS; `pageshow` with
+ * `persisted` is the back/forward cache restore, and it *arms* the flag as well
+ * as checking it, because a page handed back from that cache was never told it
+ * was hidden. `focus` is the belt to their braces — it costs one listener and
+ * covers a resume that somehow arrives without either.
+ *
+ * **`minAwayMs` is the whole of the politeness**, and the argument for the
+ * default is `LIVE_POLL_MS` itself: the app already declines to re-read a page
+ * it has read inside the last twenty seconds while a game is *live*, so a
+ * return from twenty seconds away is a return to a page the app considers
+ * current, and firing a full refresh on every alt-tab would spend a request per
+ * glance. Away for longer than that and it re-reads.
+ */
+export function useResumed(onResume: () => void, minAwayMs = LIVE_POLL_MS) {
+  /* Read off a ref rather than named in the deps: the callback closes over half
+     of App's state and re-identifies constantly, and a dep would tear the
+     listeners down and rebuild them on every render. The same trick the league
+     poll's own tick uses. */
+  const cb = useRef(onResume);
+  useEffect(() => {
+    cb.current = onResume;
+  });
+  useEffect(() => {
+    /* Seeded from the current state rather than from `false`: an app that
+       mounts hidden (a background tab restored at launch) is away from its
+       first frame, and its first appearance is a return. */
+    let hiddenAt = document.hidden ? Date.now() : 0;
+    const check = () => {
+      if (document.hidden) {
+        // Only the *first* hide of a spell — a second one would restart the
+        // clock on an app that never came back in between.
+        if (!hiddenAt) hiddenAt = Date.now();
+        return;
+      }
+      if (!hiddenAt) return;
+      const away = Date.now() - hiddenAt;
+      hiddenAt = 0;
+      if (away >= minAwayMs) cb.current();
+    };
+    const shown = (e: PageTransitionEvent) => {
+      if (e.persisted && !hiddenAt) hiddenAt = Date.now() - minAwayMs;
+      check();
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('pageshow', shown);
+    window.addEventListener('focus', check);
+    return () => {
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('pageshow', shown);
+      window.removeEventListener('focus', check);
+    };
+  }, [minAwayMs]);
 }

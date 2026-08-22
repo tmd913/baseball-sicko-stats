@@ -1203,6 +1203,124 @@ The settings toggle is `.settings-toggle`, **folded into `.sim-toggle`'s selecto
 
 **One definition per workspace, mirrored by hand.** The workspaces cannot import from each other — the same constraint that has `client/src/types.ts` mirroring `server/src/types.ts` — so the accent-stripping step is `stripAccents` in `client/src/lib.ts` and `stripAccents` in `server/src/names.ts`, and nothing else in either workspace spells out the NFKD-and-strip again: `savantPlayerUrl` had its own copy and now stands on the client's, and `espn.ts::normalizeName` (the ESPN name join, which needs a *different* normalization — suffixes gone, punctuation to spaces) now stands on the server's. `searchFold` itself is client-only, there being no typed-input search on the server. `names.ts` is where the server's goes because it is the module named for exactly this, and it keeps the count at one per workspace rather than the four a third copy would have made.
 
+### Reopening the app shows what a reload would show
+
+**An iPhone home-screen PWA is suspended, not unloaded.** iOS hands the page
+back with every byte of state it had — which is right for the scroll position,
+the open dialog and the tab you were on, and wrong for everything measured
+against a clock. Reported, and it is the plainest possible statement of the
+fault: *"I had my roster open yesterday to the Today date, but when opening it
+today I still saw yesterday."* The date bar said `TODAY` over the previous day's
+games, and went on saying it for as long as the icon was tapped rather than the
+page reloaded. A desktop tab left open across 3am ET has the same fault the slow
+way.
+
+Nothing in the app was watching for the return. The clock was read *inline*, in
+`useMemo`s with empty dependency lists — `presets`, `maxDate`, `matchupSpan` —
+which is the same thing as reading it live for as long as the page is being
+loaded daily, and silently frozen the moment it is not.
+
+**The fix is one sentence and the rest is its consequences: reopening should
+show what a reload would show.** The boot path already gets every part of this
+right — a preset is re-derived from its label rather than read back out of the
+URL, precisely so "a tab left open overnight and reloaded under `Today` has to
+land on the new today" — so the work was to run that same derivation again
+without a reload.
+
+**`useResumed` (hooks.ts) is the signal.** It fires on a **hidden → visible
+transition** rather than on a raw event, which is what lets three listeners
+share one callback without firing it three times: a flag arms on the hide and
+the first listener to see the page visible spends it. `visibilitychange` is what
+actually fires on iOS; `pageshow` with `persisted` is the back/forward cache
+restore, and it *arms* the flag as well as checking it, a page handed back from
+that cache never having been told it was hidden; `focus` is the belt to their
+braces, one listener for a resume that arrives without either.
+
+**It declines to fire for a return from under `LIVE_POLL_MS` (20s)**, and the
+argument for that number is that it is not a new one: it is the interval the
+report already re-reads itself on while a game is *live*, so a return from
+twenty seconds away is a return to a page the app itself considers current.
+Without it every alt-tab spent a request per glance. `LIVE_POLL_MS` moved to
+`lib.ts` from a literal in `App.tsx` to be that shared number — a value meaning
+*the app considers itself current for this long* cannot be two values.
+
+**The clock is now state (`today` in `App`) and the three memos hang off it.**
+Moved by the resume and by nothing else: this is the app's clock, not a
+subscription to it, and a timer firing at the rollover would move the dates
+under somebody who is reading them at 3am rather than when they next looked.
+`datePresets` and `matchupDays` take the day as an argument instead of reading
+the clock themselves, which is what stops that state being a decoration
+(`previousDay`/`nextDay` went with the change — `datePresets` was their only
+caller and it steps the day it is handed).
+
+**The rule re-applied, per reading.** An effect beside `rosterPresets` walks the
+four `DATE_SCOPES` and rewrites any entry *sitting on a label* to that label's
+current days. A custom range is left exactly where it was, which is what makes
+it custom. **A stepped range is safe here** and is the one case that looks
+dangerous: the arrows only keep a label where the days they landed on are
+precisely that preset's days (`stepRange`), so an entry carrying a label is an
+entry whose days are the rule's, and rewriting them from the rule can never
+overwrite a reader's own arithmetic. It fires on `rosterPresets` rather than on
+`today` so the `Matchup` span — whose end is clamped to today — moves with the
+rest; on every render where the day has not moved every comparison matches and
+the updater returns `prev`, which is no commit at all.
+
+**And what is on screen is re-read, quietly.** Every call in `refreshOnResume`
+is one the app already makes on an entry or a tick — the report, the roster
+projection where the lens is on, the fantasy roster, the statuses map behind its
+own gate, the recent-news map — so none of it is new machinery and each carries
+its own failure handling. A resume with no signal leaves the page as it was
+rather than turning it into an error, and nothing blanks: rule 1 throughout.
+
+**Two more only on a day rollover**, gated because they are the expensive ones
+and the day is the only thing that can move them:
+
+- **The schedule window**, whose every row is *days ahead of today* — a window
+  read yesterday and kept is a Schedule view whose first column is a game that
+  has already been played. **Overwritten rather than dropped**, which its own
+  read effect cannot do (it returns early on a window it already holds): the
+  presence of that window *is* the Schedule mode, so clearing it would put the
+  stat columns back under a reader for as long as the read took.
+- **The research boards**, each a season or a trailing window measured to
+  yesterday's last out. The board **on screen** is re-read and overwritten; the
+  rest are simply dropped, since dropping one nobody is looking at costs nothing
+  and the next open pays for it. Dropping the one on screen would blank a
+  megabyte of rows somebody is reading.
+
+**The League view is not in that list and that is not an omission**: its three
+tabs run their own minute poll, which already fires immediately on becoming
+visible (`LEAGUE_POLL_MS`). Two refreshes of one board would be two requests for
+one answer.
+
+**The duplicate report read on a rollover is deliberate.** The range moves in a
+later commit, so the quiet read here goes out on the *old* days and the range
+effect's goes out on the new ones. It is one extra 40ms request a day; it is the
+only thing covering a **custom** range that still contains the new today (whose
+dates do not move, so nothing else re-reads it); and it cannot land wrong —
+`loadReport` sequence-numbers and the stale one was issued first, so only the
+newer may write. Rule 1's fourth clause, doing exactly what it was written for.
+
+**Measured, driven in a headless browser over CDP** with `document.hidden` and
+`Date.now` shimmed in the page — hide, advance the clock, show — against the
+real API on the live fantasy roster:
+
+| what happened | date bar | requests fired |
+| --- | --- | --- |
+| away 5s | `TODAY · Sat, Aug 22` | *none* |
+| away 10min, same day | `TODAY · Sat, Aug 22` | `/api/report` (Aug 22), `/api/espn/roster` (Aug 22), `/api/news/recent` |
+| away 26h, Roster | `TODAY · Sat, Aug 22` → **`TODAY · Sun, Aug 23`** | those three, then `/api/espn/roster` and `/api/report` on **Aug 23** |
+| away 26h, Research view | — | those three plus `/api/statuses` and `/api/research?type=batter`; **50 rows on screen throughout**, no wait |
+| away 26h, Schedule view | — | those three plus `/api/schedule`; **31 rows on screen throughout** |
+| `focus` alone, no `visibilitychange` | — | the same three, so the fallback listener works |
+
+The two board rows are the ones that matter for rule 1: the row count was read
+400ms after the resume commit and again nine seconds later, and it is the same
+number both times with no `.loading-block` on the page.
+
+**Bundle**: JS **624.55 → 625.94 KB** raw, **185.73 → 186.14 KB** gzipped
+(+1.39KB and +0.41KB). CSS untouched at 165.43 KB / 29.70 gzipped — this change
+draws nothing.
+
 ### A rate is `.xxx` and a share is a percent, and the two are not interchangeable
 
 **Baseball writes some of its rates with a leading dot and three decimals and

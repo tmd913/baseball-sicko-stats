@@ -1792,3 +1792,18 @@ export function wideRange(start: string, end: string): string {
  * is current — which is also what keeps the Transactions dot honest.
  */
 export const LEAGUE_POLL_MS = 60_000;
+
+/**
+ * **How often the roster re-reads itself while a game is being played** — the
+ * poll `App.tsx` runs whenever any row's game is live, and the floor on how
+ * stale a page the app is willing to consider current.
+ *
+ * Twenty seconds against the league poll's minute for the reason stated above
+ * it: this one tracks a *plate appearance*, which is the fastest-moving thing
+ * the app draws. It was a literal in `App.tsx` until a second reader wanted it
+ * — `useResumed`, which asks how long the app was away before deciding a return
+ * is worth re-reading anything for, and whose honest answer is "longer than the
+ * page would have gone without a re-read had nobody left". A number that means
+ * *the app considers itself current for this long* cannot be two numbers.
+ */
+export const LIVE_POLL_MS = 20_000;

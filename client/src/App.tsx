@@ -33,6 +33,7 @@ import {
   isInjured,
   isStartingOn,
   LEAGUE_POLL_MS,
+  LIVE_POLL_MS,
   projectStarters,
   rangeDatesOf,
   seatKinds,
@@ -88,6 +89,7 @@ import {
   useDelayedFlag,
   useDismissable,
   usePopoverFit,
+  useResumed,
   useStickyChromeOffset,
 } from './hooks';
 import type { FantasySlot } from './hooks';
@@ -220,13 +222,8 @@ function baseballToday(): string {
   return baseballDay(Date.now());
 }
 
-function previousDay(): string {
-  return addDays(baseballToday(), -1);
-}
-
-function nextDay(): string {
-  return addDays(baseballToday(), 1);
-}
+/* `previousDay` and `nextDay` went with the change above: their only caller was
+   `datePresets`, which now steps the day it is handed rather than the clock. */
 
 /** Most recent Monday on or before the given date (i.e. start of that week). */
 function mondayOnOrBefore(date: string): string {
@@ -284,17 +281,22 @@ const MATCHUP_PRESET = 'Matchup';
  * leave. This window is 103 bytes, read once per session on a connected league,
  * and the app is already fetching it for the Schedule control.
  */
-function matchupDays(w: MatchupWindow | null): { start: string; end: string } | null {
+function matchupDays(
+  w: MatchupWindow | null,
+  today: string,
+): { start: string; end: string } | null {
   if (!w) return null;
-  const today = baseballToday();
   const end = w.end < today ? w.end : today;
   return w.start > end ? null : { start: w.start, end };
 }
 
-function datePresets(): DatePreset[] {
-  const today = baseballToday();
-  const tomorrow = nextDay();
-  const yesterday = previousDay();
+/** The five named spans, **derived against a day rather than against the
+ *  clock**: the caller holds the current baseball day in state so that
+ *  reopening a suspended app re-derives them (see `today` in `App`), and a
+ *  function that read the clock itself would leave that state a decoration. */
+function datePresets(today: string): DatePreset[] {
+  const tomorrow = addDays(today, 1);
+  const yesterday = addDays(today, -1);
   return [
     { label: 'Today', start: today, end: today },
     // Tomorrow surfaces watched players' scheduled games (start times) before
@@ -370,7 +372,25 @@ export default function App() {
     () => new URLSearchParams(window.location.search),
     [],
   );
-  const presets = useMemo(datePresets, []);
+  /**
+   * **The baseball day, held rather than read** — the one clock every derived
+   * span in this component is measured against.
+   *
+   * It was `baseballToday()` called inside each of the memos below, which is
+   * the same thing for as long as the page is being *loaded* daily and quietly
+   * wrong the moment it is not. An iPhone home-screen PWA is suspended rather
+   * than unloaded: it comes back with yesterday's `presets` array, so `Today`
+   * named yesterday, the roster read the day before this one, and the date bar
+   * said `Today` over it — the report the user actually made. Desktop has the
+   * same fault a slower way, in a tab left open across 3am ET.
+   *
+   * Moved by `refreshOnResume` below, on the app coming back to the foreground,
+   * and nowhere else: this is the app's clock, not a subscription to it, and
+   * a timer that fired at the rollover would move the dates under somebody
+   * reading them at 3am rather than when they next looked.
+   */
+  const [today, setToday] = useState(baseballToday);
+  const presets = useMemo(() => datePresets(today), [today]);
   // The preset named in the URL, if it's still one we offer. An unknown label
   // (renamed preset, hand-edited link) falls through to start/end instead.
   const initialPreset = useMemo(() => {
@@ -443,7 +463,7 @@ export default function App() {
   });
   // The picker allows selecting through the end of the current year so the full
   // published schedule (scheduled games, probable pitchers) can be viewed ahead.
-  const maxDate = useMemo(() => `${baseballToday().slice(0, 4)}-12-31`, []);
+  const maxDate = useMemo(() => `${today.slice(0, 4)}-12-31`, [today]);
   const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   /** The user's **roster** — the saved list the Summary, Games and Feed views
@@ -894,7 +914,7 @@ export default function App() {
      canceling its result with a `live` flag the teardown flips. */
   const matchupWindowAsked = useRef(false);
   /** The current period's played days — see `matchupDays`. */
-  const matchupSpan = useMemo(() => matchupDays(matchupWindow), [matchupWindow]);
+  const matchupSpan = useMemo(() => matchupDays(matchupWindow, today), [matchupWindow, today]);
   /**
    * The five presets plus this one, for the two roster views alone.
    *
@@ -919,6 +939,44 @@ export default function App() {
     () => (matchupSpan ? [...presets, { label: MATCHUP_PRESET, ...matchupSpan }] : presets),
     [presets, matchupSpan],
   );
+  /**
+   * **The rule re-applied when the day under it moves.** A preset is a rule and
+   * not a range — the boot path says so and re-derives from the label rather
+   * than reading the dates back out of the URL — and this is that same sentence
+   * for a session that is never booted again: an app suspended on `Today` and
+   * reopened tomorrow has to land on the new today, exactly as a reload would.
+   *
+   * **Every entry with a label, and only ever its own rule's days.** The four
+   * readings each keep a range and each may be sitting on a different preset,
+   * so `Today` and `Yesterday` both move and both move by one day. A custom
+   * range is left exactly where it was, which is what makes it custom.
+   *
+   * **A stepped range is safe here** and that is worth naming, because it is
+   * the one case that looks dangerous: the arrows only *keep* a label where the
+   * days they landed on are precisely that preset's days (`stepRange`), so an
+   * entry carrying a label is an entry whose days are the rule's, and rewriting
+   * them from the rule can never overwrite a reader's own arithmetic.
+   *
+   * Fires on `rosterPresets` rather than on `today` so that the `Matchup` span
+   * — whose end is clamped to today — moves with the rest. On mount, and on
+   * every render where the day has not moved, every comparison matches and the
+   * updater returns `prev` untouched, which is no commit at all.
+   */
+  useEffect(() => {
+    setRanges((prev) => {
+      let next: Record<DateScope, DateRange> | null = null;
+      for (const scope of DATE_SCOPES) {
+        const r = prev[scope];
+        if (!r.preset) continue;
+        const rule = rosterPresets.find((p) => p.label === r.preset);
+        /* An unknown label is left alone rather than dropped: `Matchup` is one
+           until the league answers, and `settleMatchup` is what resolves it. */
+        if (!rule || (rule.start === r.start && rule.end === r.end)) continue;
+        next = { ...(next ?? prev), [scope]: { start: rule.start, end: rule.end, preset: r.preset } };
+      }
+      return next ?? prev;
+    });
+  }, [rosterPresets]);
   /**
    * **The window's answer applied**: the flag the boot gate waits on, and the
    * resolution of a `?preset=Matchup` link, in **one** state update.
@@ -952,8 +1010,11 @@ export default function App() {
    */
   const settleMatchup = useCallback(
     (w: MatchupWindow | null) => {
-      const span = matchupDays(w);
-      const today = presets.find((p) => p.label === 'Today');
+      const span = matchupDays(w, today);
+      /* `todayPreset` rather than `today`, which is the day itself now — this
+         wants the *preset*, label and all, since it is what the entry falls
+         back to wearing. */
+      const todayPreset = presets.find((p) => p.label === 'Today');
       setMatchupWindowSettled(true);
       setRanges((prev) => {
         let next: Record<DateScope, DateRange> | null = null;
@@ -962,8 +1023,8 @@ export default function App() {
           if (r.preset !== MATCHUP_PRESET) continue;
           const to: DateRange | null = span
             ? { ...span, preset: MATCHUP_PRESET }
-            : today
-              ? { start: today.start, end: today.end, preset: today.label }
+            : todayPreset
+              ? { start: todayPreset.start, end: todayPreset.end, preset: todayPreset.label }
               : null;
           if (!to || (to.start === r.start && to.end === r.end && to.preset === r.preset)) continue;
           next = { ...(next ?? prev), [scope]: to };
@@ -971,7 +1032,7 @@ export default function App() {
         return next ?? prev;
       });
     },
-    [presets],
+    [presets, today],
   );
 
   /**
@@ -1017,6 +1078,28 @@ export default function App() {
       canceled = true;
     };
   }, [scheduleSpan, scheduleWanted, scheduleWindow]);
+  /**
+   * **The window re-read when the day beneath it moves**, and only then. Its
+   * every row is *days ahead of today* — the server derives the four weeks from
+   * its own clock — so a window read yesterday and kept is a Schedule view
+   * whose first column is a game that has already been played. Nothing else
+   * about it goes stale inside a session, which is why the read above is a
+   * once-and-keep and this is the only thing that undoes it.
+   *
+   * **Overwritten rather than dropped**, which the effect above cannot do (it
+   * returns early on a window it already holds): the presence of this window
+   * *is* the Schedule mode, so clearing it while somebody is in that mode would
+   * put the stat columns back under them for as long as the read took. No wait
+   * goes up and a failure leaves the day-old window standing — rule 1, for a
+   * read nobody asked for.
+   */
+  const refreshSchedule = useCallback(() => {
+    if (!scheduleWindow) return;
+    api
+      .schedule()
+      .then(setScheduleWindow)
+      .catch((e: Error) => console.error('re-reading the schedule window failed:', e.message));
+  }, [scheduleWindow]);
   /**
    * The window indexed by club and day, or null while the mode is off or the
    * read is still out.
@@ -1077,10 +1160,10 @@ export default function App() {
   // anyway would be a claim about a day nobody is looking at. The same
   // reasoning hides the date row on the research board, which has nothing dated
   // to act on.
-  const rangeHasToday = useMemo(() => {
-    const today = baseballToday();
-    return start <= today && today <= end;
-  }, [start, end]);
+  const rangeHasToday = useMemo(
+    () => start <= today && today <= end,
+    [start, end, today],
+  );
 
   // Play every clip with the sound off. Saved per user like the toggle above,
   // but deliberately **not** in the URL: hide-injured is there because it
@@ -2980,14 +3063,22 @@ export default function App() {
    * the table under it is what the reader came for.
    */
   const [recentNews, setRecentNews] = useState<Map<number, RecentNews> | null>(null);
+  /* Once on mount — and once more whenever the app is reopened, which is the
+     one thing that can put a *day* between two calls of it and so the one thing
+     that can change the answer. See `refreshOnResume`. */
+  const loadRecentNews = useCallback(
+    () =>
+      api
+        .recentNews()
+        .then((byId) =>
+          setRecentNews(new Map(Object.entries(byId).map(([id, n]) => [Number(id), n]))),
+        )
+        .catch((e: Error) => console.error('recent news unavailable:', e.message)),
+    [],
+  );
   useEffect(() => {
-    api
-      .recentNews()
-      .then((byId) =>
-        setRecentNews(new Map(Object.entries(byId).map(([id, n]) => [Number(id), n]))),
-      )
-      .catch((e: Error) => console.error('recent news unavailable:', e.message));
-  }, []);
+    void loadRecentNews();
+  }, [loadRecentNews]);
 
   /** How each roster % has moved, one entry per span the server found a
    *  baseline for. Null without a league, and also when it has no history at
@@ -3467,6 +3558,41 @@ export default function App() {
       canceled = true;
     };
   }, [view, researchKind, researchWindow, researchTeams, researchCacheKey, research]);
+
+  /**
+   * **The boards let go of when the day moves.** Every one of them is a season
+   * or a trailing window measured to *yesterday's* last out, so a cache kept
+   * across a rollover is a league table missing a day of baseball — and the
+   * cache above is deliberately a keep-forever one, since within a day it
+   * cannot be wrong.
+   *
+   * **The board on screen is re-read; the rest are simply dropped.** Dropping
+   * one nobody is looking at costs nothing and the next open pays for it,
+   * which is the same laziness the read itself takes. Dropping the one *on*
+   * screen would blank a megabyte of rows somebody is reading, so it is left
+   * standing and overwritten when the answer lands — and the effect above,
+   * finding its key still present, does not fire a second read of it.
+   *
+   * A board still in flight (no entry yet) is left to the read that is already
+   * out: it was fired against this same day.
+   */
+  const refreshResearch = useCallback(() => {
+    const onScreen = research[researchCacheKey];
+    setResearch(onScreen ? { [researchCacheKey]: onScreen } : {});
+    if (!onScreen || view !== 'research') return;
+    const asked = researchTeams;
+    ;(asked
+      ? api.teamResearch(researchKind, researchWindow)
+      : api.research(researchKind, researchWindow)
+    )
+      .then((r) =>
+        setResearch((prev) => ({
+          ...prev,
+          [`${asked ? 'team-' : ''}${r.kind}:${r.window}`]: r.rows,
+        })),
+      )
+      .catch((e: Error) => console.error('re-reading the board failed:', e.message));
+  }, [research, researchCacheKey, view, researchKind, researchWindow, researchTeams]);
 
   /**
    * **The five boards the Stats tab's percentile badges are ranked within.**
@@ -4148,9 +4274,86 @@ export default function App() {
     const t = setInterval(() => {
       loadReport(true);
       if (projectedRef.current) loadRosterProjection(true);
-    }, 20_000);
+    }, LIVE_POLL_MS);
     return () => clearInterval(t);
   }, [hasRealLiveGame, loadReport, loadRosterProjection]);
+
+  /**
+   * **Reopening the app shows what a reload would show.**
+   *
+   * The case this answers, in the words it was reported in: *"I had my roster
+   * open yesterday to the Today date, but when opening it today I still saw
+   * yesterday."* An iPhone home-screen PWA is **suspended, not unloaded** — iOS
+   * hands the page back with every byte of state it had, which is right for the
+   * scroll position and the open dialog and wrong for everything measured
+   * against a clock. Nothing in this app was watching for the return, so a
+   * session begun on Tuesday went on being a Tuesday session for as long as the
+   * icon was tapped, quietly, under a date bar that said `Today`. A desktop tab
+   * left open across 3am ET had the same fault the slow way.
+   *
+   * Two halves, and the first is the one the report was about:
+   *
+   * - **The clock moves**, which re-derives every preset-backed range through
+   *   `presets` (see `today`, and the effect beside `rosterPresets`). This is
+   *   free — a string compare — and is what puts `Today` back on today.
+   * - **What is on screen is re-read**, quietly and in the order the app itself
+   *   would have read it. Every call below is one the app already makes on an
+   *   entry or a tick; none of them is new machinery, and each carries its own
+   *   failure handling, so a resume with no signal leaves the page exactly as
+   *   it was rather than turning it into an error.
+   *
+   * **A day-rollover re-reads two more things**, gated because they are the
+   * expensive ones and the day is the only thing that can move them: the
+   * schedule window (days *ahead of today*, so a day old is a played game in
+   * the first column) and the research boards (a season measured to yesterday's
+   * last out, and a megabyte a piece — see `refreshResearch` for why the one on
+   * screen is overwritten and the rest are dropped).
+   *
+   * **The report is re-read on every resume, rollover or not**, and the
+   * duplicate that a rollover therefore fires is deliberate rather than
+   * overlooked: the range moves in a later commit, so the quiet read here goes
+   * out on the *old* days and the effect's goes out on the new ones. It costs
+   * one 40ms request a day, it is the only thing covering a **custom** range on
+   * a new day (whose dates do not move, so nothing else re-reads it), and it
+   * cannot land wrong — `loadReport` sequence-numbers, and the stale one was
+   * issued first, so only the newer may write.
+   *
+   * The League view is **not** here and that is not an omission: its three tabs
+   * run their own minute-by-minute poll, which already fires immediately on
+   * becoming visible (`LEAGUE_POLL_MS`). Two refreshes of one board would be
+   * two requests for one answer.
+   */
+  const refreshOnResume = useCallback(() => {
+    const now = baseballToday();
+    const rolled = now !== today;
+    setToday(now);
+    loadReport(true);
+    if (projectedRef.current) loadRosterProjection(true);
+    // Which players are where in today's lineup, and who moved overnight. Both
+    // leave their last answer standing while the read is out.
+    if (usingFantasy) loadFantasyRoster();
+    // Gated exactly as its own effect is — a request for a map only these two
+    // surfaces draw is a request the roster views would never make.
+    if (view === 'research' || detailsKey !== null) loadStatuses();
+    void loadRecentNews();
+    if (rolled) {
+      refreshSchedule();
+      refreshResearch();
+    }
+  }, [
+    today,
+    loadReport,
+    loadRosterProjection,
+    usingFantasy,
+    loadFantasyRoster,
+    view,
+    detailsKey,
+    loadStatuses,
+    loadRecentNews,
+    refreshSchedule,
+    refreshResearch,
+  ]);
+  useResumed(refreshOnResume);
 
   // Show a "back to top" button once the user has scrolled down a screenful.
   const [showBackToTop, setShowBackToTop] = useState(false);
