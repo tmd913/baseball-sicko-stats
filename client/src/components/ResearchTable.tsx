@@ -2520,6 +2520,153 @@ export function ResearchTable({
     </>
   );
 
+  /* **The two panels and the chips travel with the head, not with the bar.**
+
+      Search and Filters open inline rows rather than dialogs — see the Columns
+      picker below for why that one alone leaves the row. Drawn in the control
+      set, though, they were rows of a box that scrolls away: pressing Filters
+      in the condensed run lit the button and opened the panel **734px above
+      the top of the pane**, measured at 390 with the board scrolled 900. The
+      button was reachable at every offset and the thing it opened was not,
+      which is the fault the condensed run exists to answer, left standing in
+      the two controls that answer with a panel rather than with a state.
+
+      So they are drawn in `.research-head` — the one box here that is rendered
+      at every offset and sticks — above the badges. That is the same order
+      they already read in under the bar at rest (panel, chips, badges, count),
+      and once the head is stuck it puts them directly under the condensed run,
+      beneath the button that opened them. One copy rather than one per state: a
+      second set drawn in the rail would remount the search field on the scroll
+      that crosses the threshold, which is an `autoFocus` firing — and a phone
+      keyboard opening — mid-fling.
+
+      The head's height is measured (`--research-head-h`), so the column
+      headings and the sort's scroll target follow an opened panel without being
+      told anything about it. What it does cost is the head growing under a
+      reader who is already scrolled: the rows below move by the panel's height
+      and the head's own bottom edge moves with them, so the row against that
+      edge stays against it. That is an accordion opening, not the forbidden
+      "control that changes size under the finger that pressed it" — the finger
+      is on the condensed run, which rides a zero-height rail and does not
+      move. */
+  const panels = (
+    <>
+      {searchOpen && (
+        <div className="research-panel">
+          <input
+            className="research-search"
+            type="search"
+            placeholder="Search player or team…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search by player or team"
+            autoFocus
+          />
+          {search && (
+            <button type="button" className="research-clear" onClick={() => setSearch('')}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {filtersOpen && (
+        <div className="research-panel research-filter-add">
+          {/* Every column, not just the shown ones: a threshold on a stat you
+              have hidden is a legitimate thing to want ("300+ PA" without a PA
+              column), and the chip keeps saying so. */}
+          <select
+            value={draftColumn}
+            onChange={(e) => setDraftColumn(e.target.value)}
+            aria-label="Stat to filter on"
+          >
+            {allColumns
+              .filter((c) => !c.text)
+              .map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.pick ?? c.title}
+                </option>
+              ))}
+          </select>
+          <select
+            className="research-op"
+            value={draftOp}
+            onChange={(e) => setDraftOp(e.target.value as Op)}
+            aria-label="Comparison"
+          >
+            <option value="gte">{OP_LABEL.gte}</option>
+            <option value="lte">{OP_LABEL.lte}</option>
+          </select>
+          <input
+            className="research-value"
+            type="number"
+            step="any"
+            inputMode="decimal"
+            placeholder="0"
+            value={draftValue}
+            onChange={(e) => setDraftValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addFilter();
+            }}
+            aria-label="Threshold"
+          />
+          <button
+            type="button"
+            className="research-add"
+            onClick={addFilter}
+            disabled={draftValue.trim() === ''}
+          >
+            Add
+          </button>
+        </div>
+      )}
+
+      {/* Outside the panel on purpose: the chips are the record of what the
+          table is currently showing, so they stay whether the Filters panel is
+          open or shut. The stat thresholds are now the whole of it — Qualified
+          carried a chip here too until it was cut (see below).
+
+          **The watchlist had a chip here and has lost it**, which is the one
+          piece of the old design the union genuinely retires. Every member
+          of this row *takes rows out* of the table, and `Clear all` is the
+          button that puts them back; a control that puts rows in has no
+          business in a row whose one action would then shrink the board —
+          and with the three ownership buttons off, `Clear all` would have
+          emptied it outright. Nothing is hidden by the loss: the three
+          include buttons keep no chips either, for the same reason this one
+          no longer needs one — it is always on screen in the bar above,
+          lit, with its count beside it. */}
+      {filters.length > 0 && (
+        <div className="research-chips">
+          {filters.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              className="research-chip"
+              onClick={() => setFilters((fs) => fs.filter((x) => x.id !== f.id))}
+              title="Remove this filter"
+            >
+              {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
+              <span className="research-chip-x" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          ))}
+          {/* Clears exactly what the row shows — the stat thresholds — and
+              nothing else. It used to clear the watchlist too, which was
+              right while that narrowed the table and is wrong now that it
+              widens it: a button for undoing filters must not be able to
+              take players *off* the board, still less empty it outright
+              with the three ownership buttons off. It also cleared the
+              Qualified toggle, which no longer exists. */}
+          <button type="button" className="research-clear" onClick={() => setFilters([])}>
+            Clear all
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   const controls = (
     <div className="view-tools">
       <div className="research-chrome">
@@ -2534,120 +2681,6 @@ export function ResearchTable({
             {rowTools}
           </ScrollRow>
           </div>
-
-          {searchOpen && (
-            <div className="research-panel">
-              <input
-                className="research-search"
-                type="search"
-                placeholder="Search player or team…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label="Search by player or team"
-                autoFocus
-              />
-              {search && (
-                <button type="button" className="research-clear" onClick={() => setSearch('')}>
-                  Clear
-                </button>
-              )}
-            </div>
-          )}
-
-          {filtersOpen && (
-            <div className="research-panel research-filter-add">
-              {/* Every column, not just the shown ones: a threshold on a stat you
-                  have hidden is a legitimate thing to want ("300+ PA" without a PA
-                  column), and the chip keeps saying so. */}
-              <select
-                value={draftColumn}
-                onChange={(e) => setDraftColumn(e.target.value)}
-                aria-label="Stat to filter on"
-              >
-                {allColumns
-                  .filter((c) => !c.text)
-                  .map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.pick ?? c.title}
-                    </option>
-                  ))}
-              </select>
-              <select
-                className="research-op"
-                value={draftOp}
-                onChange={(e) => setDraftOp(e.target.value as Op)}
-                aria-label="Comparison"
-              >
-                <option value="gte">{OP_LABEL.gte}</option>
-                <option value="lte">{OP_LABEL.lte}</option>
-              </select>
-              <input
-                className="research-value"
-                type="number"
-                step="any"
-                inputMode="decimal"
-                placeholder="0"
-                value={draftValue}
-                onChange={(e) => setDraftValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') addFilter();
-                }}
-                aria-label="Threshold"
-              />
-              <button
-                type="button"
-                className="research-add"
-                onClick={addFilter}
-                disabled={draftValue.trim() === ''}
-              >
-                Add
-              </button>
-            </div>
-          )}
-
-          {/* Outside the panel on purpose: the chips are the record of what the
-              table is currently showing, so they stay whether the Filters panel is
-              open or shut. The stat thresholds are now the whole of it — Qualified
-              carried a chip here too until it was cut (see below).
-
-              **The watchlist had a chip here and has lost it**, which is the one
-              piece of the old design the union genuinely retires. Every member
-              of this row *takes rows out* of the table, and `Clear all` is the
-              button that puts them back; a control that puts rows in has no
-              business in a row whose one action would then shrink the board —
-              and with the three ownership buttons off, `Clear all` would have
-              emptied it outright. Nothing is hidden by the loss: the three
-              include buttons keep no chips either, for the same reason this one
-              no longer needs one — it is always on screen in the bar above,
-              lit, with its count beside it. */}
-          {filters.length > 0 && (
-            <div className="research-chips">
-              {filters.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  className="research-chip"
-                  onClick={() => setFilters((fs) => fs.filter((x) => x.id !== f.id))}
-                  title="Remove this filter"
-                >
-                  {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
-                  <span className="research-chip-x" aria-hidden="true">
-                    ×
-                  </span>
-                </button>
-              ))}
-              {/* Clears exactly what the row shows — the stat thresholds — and
-                  nothing else. It used to clear the watchlist too, which was
-                  right while that narrowed the table and is wrong now that it
-                  widens it: a button for undoing filters must not be able to
-                  take players *off* the board, still less empty it outright
-                  with the three ownership buttons off. It also cleared the
-                  Qualified toggle, which no longer exists. */}
-              <button type="button" className="research-clear" onClick={() => setFilters([])}>
-                Clear all
-              </button>
-            </div>
-          )}
 
           {/* **A modal, where Search and Filters beside it are inline panels**
               — see `ColumnPicker.tsx` for why this one alone leaves the row,
@@ -2763,6 +2796,7 @@ export function ResearchTable({
               first row and sits on its own line against them. The badges keep
               the wrapping run they always had; the head is now the column of
               the two. See the stylesheet for the height this costs. */}
+          {panels}
           <div className="research-badges">{badges}</div>
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
