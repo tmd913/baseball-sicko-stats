@@ -1701,6 +1701,62 @@ door — `view === 'matchup' || (view === 'league' && matchupId != null)`. `mt=`
 off it. Two copies of that test are two copies that will one day disagree about
 whether the lens is drawn.
 
+### The way back up, on a page App cannot see the scroll of
+
+**App's `↑` reads `window.scrollY`, and on this page the window never moves.**
+As an overlay `.mup-view` is `position: fixed` with its own `overflow-y`; as a
+tab it is the one scrolling child of `.app.matchup-mode`'s column. Either way
+the scroll is the box's, so the app's button — which is also at `z-index: 20`,
+under this page's 48 — stayed hidden however far the reader got. Measured on
+the Feed reading at 390: the page **2,875 tall against 744 of client**, dragged
+to `scrollTop` **2,131**, `window.scrollY` **0**, the app's button
+`visibility: hidden`. Reported as the feed page inside a matchup having no way
+back to the top, which is exactly what it was — 2,131px of stream with a pinned
+head above it offering `Back` out of the page and nothing up it.
+
+**So the page raises its own**, as the last child of `.mup-view`.
+
+- **Only the `↑`, not `FloatControls`' pair.** The how-to and league settings
+  pages float a `Back` *because their own head scrolls away*; `.mup-chrome` is
+  `position: sticky`, so the way out of this page is on screen at every offset
+  already and a second one would be the same control twice.
+- **Inside the view, which is what puts it over the view.** The button is
+  `position: fixed` and stays fixed to the window — nothing on the way up is a
+  containing block for it — but as an overlay this box is a stacking context at
+  48 while `.float-btn` carries `z-index: 20`, the app's page layer. Drawn as a
+  sibling it would sit behind the page it belongs to; as a child it inherits
+  that context and needs no layer of its own. Driven in the overlay at 390 and
+  1200: `elementFromPoint` at its center returns
+  `BUTTON.float-btn back-to-top visible`.
+- **It reveals at a screenful of the box, measured** — `useScrolledAScreen`,
+  `scrollTop > clientHeight` — where App's own is the flat `window.scrollY > 600`.
+  Two things are wrong with a number here. This scroller is **744px of client at
+  390 and 798 at 1200**, so one figure is most of a screen on one and
+  two-thirds of it on the other; and a page that cannot scroll 600 at all never
+  reveals a button however far the reader gets. Its own height answers both.
+  Driven at both widths, the crossing is exact: hidden at 743 and visible at 745
+  against a client of 744, hidden at 797 and visible at 799 against 798.
+- **One rule rather than one per reading, and the readings sort themselves
+  out.** On `roster-mode` this box is `overflow: hidden` and the table's pane
+  takes the scroll, so `scrollTop` stays 0 and nothing reveals — measured, the
+  pane at 1,328 with the view at 0 and the button hidden, which is right: a
+  `↑` on the page would point at a page that has not moved. The Summary card and
+  the Feed both scroll this box and both raise it. *(The pane's own scroll has
+  no top button, which is the app's Roster view's position too and is left
+  where it is.)*
+- **The press hands focus to the view**, `useScrollToTop`'s own rule: the button
+  goes `visibility: hidden` on arrival and a focused element hidden under the
+  reader's own press drops focus to the body. Driven with the keyboard —
+  `focus()` then press — `scrollTop` 2,131 → 0 and `document.activeElement`
+  `.mup-view.mup-page`.
+
+**And the button itself is one component now.** `BackToTop` in
+`FloatControls.tsx`: it was written inline in `App.tsx` and again inside
+`FloatControls`, two copies of four attributes that agreed with each other, and
+this page would have been the third. Fold, don't restyle, applied to a
+component — nothing is drawn in it, the corner and the fade are
+`.float-btn.back-to-top`'s as they always were.
+
 ### A team page is the app's own Roster and Feed views
 
 **`components/LeagueTeam.tsx` draws `SummaryTable` and `LiveFeed`**, the very

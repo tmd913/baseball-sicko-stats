@@ -100,6 +100,7 @@ import {
   type PlayFilterKey,
 } from './components/FeedFilters';
 import { Tutorial } from './components/Tutorial';
+import { BackToTop } from './components/FloatControls';
 import { EspnSettings } from './components/EspnSettings';
 import { LeagueOnboarding } from './components/LeagueOnboarding';
 import { ThemeSwatches } from './components/ThemePicker';
@@ -6519,16 +6520,19 @@ export default function App() {
           accordions it collapsed: the feed's three openable shapes each raise a
           dialog now, so there is never more than one open and the thing that
           closes it is the box itself. Back-to-top keeps its corner and, with
-          nothing to be raised above, its plain `bottom`. */}
-      <button
-        type="button"
-        className={`float-btn back-to-top${showBackToTop ? ' visible' : ''}`}
+          nothing to be raised above, its plain `bottom`.
+
+          **This one is the window's, and only the window's.** It reads
+          `window.scrollY`, so it answers for the views that let the page itself
+          scroll — the Feed above all — and stays hidden on every view that
+          moves the scroll into a pane of its own (`.summary-scroll`,
+          `.research-scroll`) or into an overlay. The matchup page is the
+          second case and raises its own; see `LeagueMatchup`. The button is
+          `BackToTop` rather than a fourth copy of the same four attributes. */}
+      <BackToTop
+        shown={showBackToTop}
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        aria-label="Back to top"
-        title="Back to top"
-      >
-        ↑
-      </button>
+      />
 
       {/* One matchup, as a page over the League view rather than a tab inside
           it — see `LeagueMatchup.tsx`. Rendered here beside the other overlays
