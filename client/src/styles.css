@@ -8884,24 +8884,17 @@ button.start-line:focus-visible {
    becomes the row's own 10/12px rather than the bar's old 8, which is right: it
    is that row now.
 
-   The panels and the chips row take `flex: 1 1 100%` — the same "its own line"
-   `.date-bar` uses one level up — since a filter builder has no business
-   sharing a line with the button that opened it. The count line stayed on the
-   page below, being the table's caption rather than a control. */
+   **The panels and the chips row are no longer here.** They took
+   `flex: 1 1 100%` off this container — the same "its own line" `.date-bar`
+   uses one level up — because a filter builder has no business sharing a line
+   with the button that opened it. They are rows of `.research-head` now, which
+   is a column, so the line is theirs by construction; see that rule, and
+   `ResearchTable`'s `panels`, for why a panel opened from a stuck run has to be
+   drawn in the box that sticks. The count line was never here at all, being the
+   table's caption rather than a control. */
 .research-chrome,
 .research-bar {
   display: contents;
-}
-/* Each of them a full line of its own, under whatever row of controls it was
-   opened from. Selected through `.research-chrome`, not through `.view-tools`:
-   `display: contents` hoists the *boxes* into that flex container but leaves the
-   DOM tree alone, so a child combinator still has to name the parent these
-   elements really have. Written the other way (`.view-tools > .research-panel`)
-   it matches nothing, and the panel takes its content width — a 168px search
-   field wedged onto the end of the tab row. */
-.research-chrome > .research-panel,
-.research-chrome > .research-chips {
-  flex: 1 1 100%;
 }
 
 .research-view {
@@ -10148,6 +10141,22 @@ button.start-line:focus-visible {
    itself. No hairline under it — the header row it holds is `--panel-2`, a
    whole step of the palette, and that edge is already the strongest one on the
    board. */
+/* **It carries the two opened panels and the chips row as well**, above the
+   badges, and that is a placement decision rather than a styling one: a panel
+   drawn in the control set is a row of a box that scrolls away, so pressing
+   Filters in the condensed run opened one 734px above the top of the pane
+   (measured at 390, board scrolled 900) while the button that opened it stayed
+   lit at the top of the screen. This is the only box on the board that is drawn
+   at every offset and sticks, so it is where a control's answer has to live.
+
+   Nothing here needed a rule: the head is a column, so each of them takes its
+   own full-width line the way the badges and the count already do, and the
+   height that grows when one opens is *measured* — the column headings and the
+   sort's scroll target both follow `--research-head-h` and were told nothing.
+   The one thing this box now contains that is pressable is the chip's own `×`
+   and the panel's controls; the argument below about a box that may change
+   height still holds, because what moves under an opening panel is the rows,
+   not the run the finger is on — that rides a zero-height rail. */
 .research-head {
   /* `position: sticky` and `left: 0` come from the fold above, which is where
      every block child of this pane gets the second axis; what is this box's own

@@ -159,6 +159,63 @@ the reader asked for and nothing else. Crossing back down: 162 → 154 becomes
 162 → 112, and the row moves 226 → 234. Page-body overflow **0** throughout, the
 three rows 36px each, the chrome 146px at 390 and 142 at 1200.
 
+### A panel opens where its button is
+
+**Search and Filters answer with a panel, and the panel was drawn in the box
+that scrolls away.** Every other control in the condensed run answers with a
+*state* — a lit button, a changed board — which is why the run worked at all;
+these two answer with a row of controls, and that row was a child of
+`.research-chrome`, three rows above the top of the pane. Pressing Filters at
+row 400 lit the button, set `aria-expanded="true"`, and opened the builder
+**734px above the top of the pane** — measured at 390 with the board scrolled
+900, the panel's box at `y = -734`. Reported as the filters and the search not
+being usable once the top section has stuck, which is exactly what it was.
+
+**They are rows of `.research-head` now**, above the badges, and the chips row
+with them. That box is the only one on this board that is drawn at every offset
+*and* sticks, so it is the only place a control's answer can be and still be
+there when the control is. At rest it changes nothing about the reading order —
+under the bar it is still panel, chips, badges, count — and once the head is
+stuck it puts the panel directly under the condensed run, beneath the button
+that opened it.
+
+**One copy, not one per state.** Drawing a second set inside the rail and
+choosing on `stuck` is the version that keeps the panel out of flow entirely,
+and it remounts the search field on the scroll that crosses the threshold: an
+`autoFocus` firing, and on a phone a keyboard opening, mid-fling. The head is
+the box both states already share.
+
+**Nothing had to be told the height**, which is the measured-height rule paying
+for itself a second time. `--research-head-h` is measured off the head, so an
+opened panel moves the column headings and the sort's scroll target with it:
+measured at 390, opening Filters takes the head **37 → 123** and the headings'
+`top` **295 → 381** at rest, **189 → 275** stuck. At 1200: head 37 → 79,
+headings 191 → 233. The panel's own box is at `x: 22` with the pane scrolled
+`scrollLeft: 1200`, the head's `left: 0` fold carrying it.
+
+**The rows do not move under the press, on Chrome, and move honestly without
+it.** The head grows above the viewport when stuck, so scroll anchoring adds
+the difference: `scrollTop` 900 → 986 for an 80px panel plus its gap, and the
+rows hold. Where anchoring is not on offer the rows move down by exactly what
+the head grew and the head's own bottom edge moves with them, so the row against
+that edge stays against it — an accordion opening. It is not the forbidden
+"control that changes size under the finger that pressed it": the finger is on
+the condensed run, which rides a zero-height rail and does not move at all.
+
+**Driven, not compiled.** Stuck at 390 and 1200 and in the expanded box: the
+builder opens fully in view, `elementFromPoint` at the Add button's center
+returns `BUTTON.research-add`, and a filter added from the stuck run takes the
+count **468 of 468 → 1 of 468**, raises the chip in the head and the badge
+beside it, and the chip's `×` — also in the head now — puts it back. Expanded,
+where the three-row bar is not merely scrolled away but unreachable, the run is
+at `y: 11` and the panel at `y: 69`.
+
+**At rest it costs nothing and gives 4-6px back.** The panel was a flex item of
+`.view-tools` at that row's 10/12px gap and is a row of the head's 6px column
+now. Before → after, panel open: headings **343 → 337** at 390 with Search,
+**387 → 381** with Filters, **341 → 337** at 1200. Page-body horizontal overflow
+**0** at every reading.
+
 ### The page scrolls, and the head stays
 
 *(This supersedes the arrangement the section above describes — the band is no
