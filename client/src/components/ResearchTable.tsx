@@ -1464,14 +1464,28 @@ export function ResearchTable({
   const headRef = useRef<HTMLDivElement | null>(null);
   usePublishedHeight(headRef, '--research-head-h');
   /**
-   * **Whether the head has stuck**, which is what swaps the control set for the
-   * condensed run inside it.
+   * **Whether the bar has reached its third row**, which is what swaps the
+   * control set for the condensed run.
    *
-   * A sentinel directly above the head rather than a scroll listener on the
-   * pane: the question is "has this box reached the top", and an
-   * `IntersectionObserver` answers it off the compositor instead of on every
-   * scroll event. The root is the scroller, not the window — this pane is the
-   * only thing on this view that scrolls.
+   * A sentinel rather than a scroll listener on the pane: the question is "has
+   * this line reached the top", and an `IntersectionObserver` answers it off
+   * the compositor instead of on every scroll event. The root is the scroller,
+   * not the window — this pane is the only thing on this view that scrolls.
+   *
+   * **The line it is read off is the third row's, not the head's**, and the
+   * difference is 50px of table. Read off the head, the run arrived once the
+   * whole bar had already gone: the run's 52px and the head's own line landed
+   * together on rows that nothing had vacated, so the band over the first row
+   * went 31 → 83 in a frame (measured at 1200). Read off the third row, the run
+   * *takes that row's place* — the mark sits one gap above it, the run's own
+   * air is that gap and the band's closing margin, and the head's sticky offset
+   * is where the head already was. Nothing moves; the two runs above simply
+   * scroll away behind their own condensed copy.
+   *
+   * The mark is inside the bar, so the **expanded** box — which hides the whole
+   * of `.view-tools` — hides it too and this reads `true` there. That costs
+   * nothing: the run is drawn on `stuck || isFull` either way, and it is the
+   * only thing the flag decides.
    */
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [stuck, setStuck] = useState(false);
@@ -2689,9 +2703,18 @@ export function ResearchTable({
           <ScrollRow label="the span and position" className="research-row">
             {rowSlice}
           </ScrollRow>
-          <ScrollRow label="the board's tools" className="research-row">
-            {rowTools}
-          </ScrollRow>
+          {/* **The third run carries the mark the stick is read off** — see
+              `stuck`, and `.research-stick-line` for why the mark needs a box
+              of its own rather than a place in this wrapping row. The bar stops
+              here: the two runs above scroll away behind the condensed copy of
+              themselves, and this one is replaced in place by a run that
+              already holds its buttons. */}
+          <div className="research-stick-line">
+            <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
+            <ScrollRow label="the board's tools" className="research-row">
+              {rowTools}
+            </ScrollRow>
+          </div>
           </div>
 
           {/* **A modal, where Search and Filters beside it are inline panels**
@@ -2737,8 +2760,62 @@ export function ResearchTable({
           reads under the count it explains, not on the far side of a hairline
           from it. */}
       <div className="research-scroll" ref={scrollRef} onScroll={onScroll}>
-        {/* The control set — see `controls`. First, because everything under
-            it sticks and it is the one thing here that scrolls away. */}
+        {/* **The whole control set again, condensed — on a rail that takes no
+            room.**
+
+            One run rather than three and marks rather than words: a reader who
+            has scrolled into the table wants the table, and a control they can
+            still *press* beats a badge that only says what it was set to. That
+            is what let the badge row come down to the filters — everything else
+            is a lit button here.
+
+            **The rail is `height: 0`**, which is the whole of why the scroll no
+            longer stalls. Drawn inside the head it grew that box by 52px on the
+            stick, and a sticky box keeps its place in flow, so the rows moved;
+            compensating with `scrollTop` cancels an iOS momentum scroll. With
+            no height there is nothing to move and nothing to correct.
+
+            **Drawn expanded from the first frame**, not only once stuck: that
+            box covers the app's chrome, so the three-row bar is not merely
+            scrolled away there, it is unreachable — which is the case the
+            badge row was carrying alone and doing badly, before the run took
+            it off that row and the chips took what was left.
+
+            **First in the pane, ahead of the control set it replaces**, and
+            that is what lets it land on the third row rather than under it.
+            `position: sticky` can only ever hold a box *back* from where its
+            flow would take it: drawn after the bar, this rail's flow line is
+            the head's, 50px further down, so at the moment the stick fires it
+            sat at 56 with the head pinned at 60 and the two overlapped —
+            measured at 1200, scrollTop 100, run 56 → 116 across a head at
+            60 → 91. Ahead of the bar its flow line is the top of the pane, so
+            `top: 0` holds from the first frame it is drawn in, which is the
+            frame the third row reaches that line. It costs the bar nothing to
+            sit above it, the rail having no height. */}
+        {(stuck || isFull) && (
+          <div className="research-condensed-rail">
+            <div className="research-condensed-inner" ref={condRef}>
+            {/* **The tools lead this run, where the bar reads who → slice →
+                tools**, and the stick is what turns that around. This run is
+                drawn in the third row's own place now, so the controls that
+                *were* standing there are the ones that must not move: led by
+                the include marks instead, the five tools started 741px along a
+                1,156px line at 1200 and Filters, Schedule, Columns and Ranks
+                went behind the scroll arrow at the exact frame the row they
+                live on stopped moving. Reading order belongs to a bar you read
+                top to bottom; this is one line replacing one row. */}
+            <ScrollRow label="the board's controls" className="research-row research-condensed">
+              {rowTools}
+              {rowWho}
+              {rowSlice}
+            </ScrollRow>
+            </div>
+          </div>
+        )}
+        {/* The control set — see `controls`. The one thing in this pane that
+            scrolls away, and it goes only as far as its third row: the mark
+            inside that row (`.research-stick-line`) is what puts the condensed
+            rail above on screen, in the place the row is standing in. */}
         {controls}
 
         {/* Suppressed behind a failed load, where "0 of 0 batters" would read as
@@ -2764,40 +2841,6 @@ export function ResearchTable({
             it says the count is on its way. App keeps the rows it already has
             while a re-read is in flight (`loading` is gated on the cache being
             empty), so this can only ever be a board with nothing on it yet. */}
-        {/* The mark the head's stickiness is read off — see `stuck`. Zero-height
-            and inert; it is a position, not a thing. */}
-        <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
-        {/* **The whole control set again, condensed — on a rail that takes no
-            room.**
-
-            One run rather than three and marks rather than words: a reader who
-            has scrolled into the table wants the table, and a control they can
-            still *press* beats a badge that only says what it was set to. That
-            is what let the badge row come down to the filters — everything else
-            is a lit button here.
-
-            **The rail is `height: 0`**, which is the whole of why the scroll no
-            longer stalls. Drawn inside the head it grew that box by 52px on the
-            stick, and a sticky box keeps its place in flow, so the rows moved;
-            compensating with `scrollTop` cancels an iOS momentum scroll. With
-            no height there is nothing to move and nothing to correct.
-
-            **Drawn expanded from the first frame**, not only once stuck: that
-            box covers the app's chrome, so the three-row bar is not merely
-            scrolled away there, it is unreachable — which is the case the
-            badge row was carrying alone and doing badly, before the run took
-            it off that row and the chips took what was left. */}
-        {(stuck || isFull) && (
-          <div className="research-condensed-rail">
-            <div className="research-condensed-inner" ref={condRef}>
-            <ScrollRow label="the board's controls" className="research-row research-condensed">
-              {rowWho}
-              {rowSlice}
-              {rowTools}
-            </ScrollRow>
-            </div>
-          </div>
-        )}
         <div className={`research-head${stuck ? ' is-stuck' : ''}`} ref={headRef}>
 
           {/* **The settings first, the count last.** They were one wrapping run

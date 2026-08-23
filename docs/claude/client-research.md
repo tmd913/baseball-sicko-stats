@@ -16,7 +16,10 @@ than merely intended. See **The page scrolls, and the head stays**, below.)*
 
 *(This supersedes the shape both sections below describe: one wrapping row of
 five groups. What they say about where the band is drawn and what sticks is
-unchanged.)*
+unchanged. **And the line it sticks at has since moved up to the third row** —
+everything below about the rail, the sentinel and the measured `--research-cond-h`
+holds, but the offsets it quotes are the old ones. See* **The bar stops at its
+third row**, *directly after this section.)*
 
 **Three runs, in the order the questions come in** — *which players* (Watchlist,
 Free Agents, My Roster, Other Rosters), *which slice* (span, position, Teams),
@@ -183,6 +186,105 @@ exactly the 42px the head grew, and the first row moves **192 → 184** — the 
 the reader asked for and nothing else. Crossing back down: 162 → 154 becomes
 162 → 112, and the row moves 226 → 234. Page-body overflow **0** throughout, the
 three rows 36px each, the chrome 146px at 390 and 142 at 1200.
+
+### The bar stops at its third row
+
+*(This moves one line and nothing else: the section above describes the
+mechanism, and every word of it still stands. What changed is **where** the
+swap happens, and the three numbers that had to follow it.)*
+
+**The bar scrolls away as far as its third row and no further.** The two runs
+above it — *which players* and *which slice* — go up behind it and are gone; the
+third, the run of tools, stops at the top of the pane and stays there with the
+other two rows' buttons drawn onto it as marks.
+
+**What was wrong with sticking at the head.** The mark was a block directly
+above `.research-head`, so the run arrived once the whole bar had already left —
+50px further down the page than the row it replaces. Its 52px and the head's own
+line therefore landed together on rows that nothing had vacated: measured at
+1200 crossing the old threshold, the band over the first table row went **31 →
+83 in a single frame**, one whole row of the board swallowed while the rows
+themselves never moved a pixel. The section above is right that nothing in flow
+resizes; what it does not say is that the *painted* band grows by its own whole
+height at the instant it appears. Reported as the board jumping when the buttons
+came back.
+
+**Read off the third row, the run has somewhere to be.** Three things had to
+agree for the swap to cost nothing, and all three come off two tokens rather
+than out of the air:
+
+- **`--tools-row-gap` (10px, 12 below 640) and `--tools-band-gap` (14px, 12
+  below 640)** are the air `.view-tools` keeps between two stacked runs and
+  under itself. They were written out in three places — a `gap`, a
+  `padding-block`, a `margin-bottom` — and the condensed run guessed at them
+  with a `10px … 6px` of its own.
+- **The mark sits one gap above the third row**, and it is `bottom:
+  calc(100% + var(--tools-row-gap))` off that row rather than a negative `top`:
+  an `IntersectionObserver` lets go when the mark's *lower* edge passes the
+  pane, so anchoring the upper one puts the swap a pixel early — the run's
+  buttons landing at 10 over a row that had reached 9.
+- **The run's own padding is that same pair**, top and bottom. The top makes its
+  buttons land on the buttons already there; the bottom makes its height the
+  distance from the mark to the head, so `--research-cond-h` — which the head
+  and, through `--pane-bar-h`, the header row are both held at — is where the
+  head already was.
+
+Measured at 1200, the frame before the swap and the frame after (`scrollTop` 96
+and 97): the button band **10 → 46 both times**, the head **60 → 91 both
+times**, the header row **91 → 142 both times**, and the first table row moving
+the one pixel the reader scrolled. At 390 the same pair at 96 and 97 with the
+band at **12 → 48** either side, the tokens being 12 there. Nothing moves.
+
+**The rail is drawn ahead of the control set now**, first in the pane, and that
+is what lets it reach the third row at all: `position: sticky` can only hold a
+box *back* from where its flow would take it, and drawn after the bar its flow
+line is the head's — measured at 1200, `scrollTop` 100, the run sat at 56 across
+a head pinned at 60, the two overlapping. Ahead of the bar its flow line is the
+top of the pane, so `top: 0` holds from the first frame it exists in, which is
+the frame the third row reaches that line. It costs the bar nothing to sit above
+it, the rail having no height.
+
+**And that move cost it a layer.** Two sticky boxes at `z-index: 5` resolve by
+document order, so ahead of `.view-tools` the run was painted straight over by
+the bar it replaces — the third row showing through, unchanged, at every offset.
+It takes **6**. The rule that carries it had to be renamed to `.research-scroll >
+.research-condensed-rail`: the fold list up the file sets the layer two classes
+deep, so the bare `.research-condensed-rail { z-index: 5 }` that sat here was a
+declaration that lost to it and agreed with it, and the first attempt at 6
+changed nothing at all — computed style still read 5.
+
+**The tools lead the condensed run now**, where the bar reads who → slice →
+tools. The run is drawn in the third row's own place, so the controls that
+*were* standing there are the ones that must not move; led by the include marks
+instead, the five tools started **741px along a 1,156px line** at 1200 and
+Filters, Schedule, Columns and Ranks all went behind the scroll arrow at the
+exact frame the row they live on stopped moving. Reading order belongs to a bar
+you read top to bottom. This is one line replacing one row, and on a phone it is
+the difference between the five tools being the first thing on it and their
+being the last.
+
+What did *not* change: the run is still marks rather than words, for the
+argument the section above makes; the rail is still `height: 0` in the ordinary
+pane and `height: auto` expanded; the sentinel is still an
+`IntersectionObserver` against the pane rather than a scroll listener; and the
+head and the header row are still held at measured heights and were told none of
+this. Expanded, the run is **1 → 61**, the head 61 → 92, the header row 92 →
+143 and the first row starts at 143, clear — the figures in the section above,
+plus the 8px the run's own air grew by.
+
+**The phone block at the end of the stylesheet sets the two tokens instead of
+the two values**, which is what makes the run agree with the bar below 640px as
+well. It used to restate `.view-tools`'s `gap` and its scoped `margin-bottom` at
+`--stack-gap`; the run, being outside `.view-tools`, could not see either and
+kept the desktop's 10 and 14 against a bar on 12 — the head moving 58 → 60 at
+the stick, measured at 390. Moved onto `:root`, the numbers reach both.  It also
+takes the specificity trap out rather than walking around it: that block's own
+comment records `:not(:has(+ .date-bar))` having to be restated *because the
+value was*, and with the value gone there is one rule for that margin again.
+
+Bundle: CSS **165,439 → 165,630** raw and **29,657 → 29,710** gzipped — the
+comments, near enough; JS **625,942 → 626,005** raw and **184,370 → 184,393**
+gzipped.
 
 ### And then the badge row was the chips row, twice
 
