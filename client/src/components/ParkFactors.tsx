@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { InfoKey } from './InfoKey';
 import { useParkFactor, useParkFactors, useTeamDoor } from '../hooks';
 import type { ParkFactor, ParkHand, ParkIndexes } from '../types';
@@ -98,22 +99,35 @@ const HEADLINE: ParkStat = {
 };
 
 /**
- * What a game preview carries **after the overall park factor** — what the
- * ground does to run scoring and to the ball leaving it.
- *
- * **Strikeouts used to be the fourth and are gone.** Every other figure on this
- * strip runs the same way — more of it is the hitter's night — and K ran the
- * other way, so the one column that inverted the whole strip's meaning was
- * sitting on a surface with no room to explain itself. On the club's page it
- * keeps its row, where sixteen rows and a key can carry the exception.
- *
- * Losing it is also what makes the strip's **hot/cold tint** legible: with K on
- * it, red meant *good for the hitter* three times and *good for the pitcher*
- * once, which is not a scale.
+ * What a **batter's** preview carries after the wOBA pair: what the ground does
+ * to run scoring and to the ball leaving it. Read on his own side of the plate,
+ * which is the cut the strip's hand chip names.
  */
-const PREVIEW_STATS: ParkStat[] = [
+const BATTER_PREVIEW: ParkStat[] = [
   { key: 'runs', label: 'Runs', title: 'Runs scored', full: 40 },
   { key: 'hr', label: 'HR', title: 'Home runs', full: 42 },
+];
+
+/**
+ * What a **pitcher's** carries — the same two, then the three that are his
+ * night rather than the hitter's: hits allowed, walks, and strikeouts.
+ *
+ * **Strikeouts are back on the strip and are the one figure that runs the other
+ * way**: more of them is the pitcher's gain where more of everything else is the
+ * hitter's. They are drawn like every other column anyway, because **the tint
+ * says how much of a thing happens here, not who it is good for** — red is *more
+ * than an average park*, on every figure and both surfaces. That is the rule the
+ * club page's bars already follow (the fill points at the index, not at who it
+ * favors) and it is Savant's own board: its `SO` column colors 111 red and 87
+ * blue exactly as its `HR` column does. A reader who has to be told that a
+ * pitcher wants strikeouts is not the reader this app is for.
+ */
+const PITCHER_PREVIEW: ParkStat[] = [
+  { key: 'runs', label: 'Runs', title: 'Runs scored', full: 40 },
+  { key: 'hr', label: 'HR', title: 'Home runs', full: 42 },
+  { key: 'hits', label: 'H', title: 'Hits', full: 18 },
+  { key: 'bb', label: 'BB', title: 'Walks', full: 26 },
+  { key: 'so', label: 'K', title: 'Strikeouts — the one figure here where more of it is the pitcher’s gain', full: 20, pitcherUp: true },
 ];
 
 /** All sixteen, in the order a park is read in: the headline, then what it does
@@ -373,47 +387,47 @@ export function GamePark({
   } : null;
 
   /**
-   * **Four figures, the same four on every strip.** `Park factor` leads — the
-   * all-hitters wOBA index, which is what Savant's own board calls *Park
-   * Factor* and the one a reader wants first: what this ground does, full stop.
-   * Then the three that say how, on the cut this strip is reading.
+   * **The figures, and there is no separate *park factor* column.** There was
+   * for a while, leading the strip — and it was the wOBA index under another
+   * name, which is what Savant's own board means by *Park Factor* and why that
+   * board carries no plain `wOBA` column at all. Two labels over one number is
+   * not two facts, and on a pitcher's strip the pair printed the same figure
+   * twice side by side with the same tint, which reads as a bug.
    *
-   * **A pitcher's `wOBA` is the overall one, and so reads the same as his
-   * `Park factor`.** That is not a duplicate by accident: every figure on a
-   * pitcher's strip is the both-hands cut, because he faces whichever nine the
-   * other club writes down, and the column shape is held constant across the
-   * two kinds so that a reader moving between a batter's preview and a
-   * pitcher's is reading the same table. On a **batter's** strip the two
-   * separate, and that separation is the whole point of cutting the board by
-   * hand: 102 overall against 97 to a right-handed hitter is a different park
-   * for the man actually standing in it.
+   * So `wOBA` **is** the park factor, and what the two kinds differ in is what
+   * sits beside it:
    *
-   * The column count was computed for a while, dropping the `wOBA` figure on a
-   * pitcher's strip precisely to avoid printing one number twice. A three-figure
-   * strip beside a four-figure one is the worse trade — the shape of the block
-   * changes with the kind of player, which reads as data missing rather than as
-   * a duplicate avoided.
+   * - A **batter** gets the park twice — `wOBA` for everybody and his own side
+   *   of the plate beside it — because that difference is the whole reason the
+   *   board is cut by hand at all. Yankee Stadium is 102 to the league and 97 to
+   *   a right-handed hitter, and it is the second number he bats in. The rest of
+   *   his strip is read on that same cut, which the hand chip in the head names.
+   * - A **pitcher** gets one wOBA, both hands together, because he faces
+   *   whichever nine the other club writes down — and then the three figures
+   *   that are his night rather than the hitter's: hits, walks and strikeouts.
    */
   const overall = park.hands.all;
+  const handCut = hand !== 'all' && indexes !== overall;
   const figs: { label: string; value: number | null; full: number; title: string }[] = [
     {
-      label: 'Park factor',
-      value: overall?.woba ?? null,
+      label: 'wOBA',
+      // The whole park, whoever is batting — the number Savant's board leads
+      // with. On a pitcher's strip this is the only wOBA there is to show.
+      value: (handCut ? overall?.woba : indexes.woba) ?? null,
       full: HEADLINE.full,
       title:
-        'Park factor — the wOBA index for all hitters, which is what Savant’s own board leads with. ' +
+        'wOBA index for all hitters — the park factor, and what Savant’s own board leads with. ' +
         '100 is the average ballpark.',
     },
-    {
-      label: 'wOBA',
-      value: indexes.woba,
-      full: HEADLINE.full,
-      title:
-        hand === 'all'
-          ? 'wOBA index for all hitters — the same reading as the park factor beside it, this strip being the park as it plays to both hands.'
-          : `wOBA index to ${HAND_LABEL[hand].toLowerCase()} — the same park, read from the side of the plate he stands on.`,
-    },
-    ...PREVIEW_STATS.map((st) => ({
+    ...(handCut
+      ? [{
+          label: HAND_SHORT[hand],
+          value: indexes.woba,
+          full: HEADLINE.full,
+          title: `wOBA index to ${HAND_LABEL[hand].toLowerCase()} — the same ground, read from the side of the plate he actually bats on.`,
+        }]
+      : []),
+    ...(handCut ? BATTER_PREVIEW : PITCHER_PREVIEW).map((st) => ({
       label: st.label,
       value: indexes[st.key] as number | null,
       full: st.full,
@@ -439,7 +453,7 @@ export function GamePark({
         <span className={`pf-lean pf-lean--${read.lean}`}>{read.text}</span>
         {hand !== 'all' && <span className="pf-hand">{HAND_SHORT[hand]}</span>}
       </div>
-      <div className="pf-figs">
+      <div className="pf-figs" style={{ '--pf-figs': figs.length } as CSSProperties}>
         {figs.map((f) => (
           <span key={f.label} className="pf-fig" title={f.title}>
             <span className="pf-fig-label">{f.label}</span>

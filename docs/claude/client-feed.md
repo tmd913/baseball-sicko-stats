@@ -1942,28 +1942,40 @@ box already holds a nine-cut opposing lineup or a whole platoon comparison, and
 sixteen more bars would bury the thing the reader pressed for. The rest are a
 reading of the park itself and live on its club's page, one press away.
 
-**The overall park factor leads it** — the all-hitters wOBA index, which is the
-number Savant's own board calls *Park Factor* and the one a reader wants first:
-what this ground does, full stop. Then the three that say how, on the cut this
-strip is reading.
+**There is no separate *park factor* figure, because `wOBA` is one.** There was
+for a while, leading the strip — and it was the wOBA index under another name,
+which is exactly what Savant's board means by *Park Factor* and why that board
+carries no plain `wOBA` column at all. Two labels over one number are not two
+facts, and on a pitcher's strip the pair printed the same figure twice side by
+side with the same tint, which reads as a bug rather than as a reading.
 
-**Four figures on every strip, batter's and pitcher's alike.** On a **batter's**
-the `wOBA` beside the park factor is his own side of the plate, and the two
-separating is the whole point of cutting the board by hand: 102 overall against
-97 to a right-handed hitter is a different park for the man standing in it. On a
-**pitcher's** every figure is the both-hands cut, because he faces whichever nine
-the other club writes down — so his `wOBA` and his `Park factor` are the same
-index and print the same number.
+So `wOBA` **is** the park factor, and what the two kinds differ in is what sits
+beside it.
 
-**That duplicate is deliberate, and it is the second answer this strip has
-given.** The column count was computed for a while and dropped the `wOBA` figure
-on a pitcher's strip precisely to avoid printing one number twice. It reads
-worse: a three-figure block beside a four-figure one changes shape with the kind
-of player, which a reader takes as *data missing here* rather than as a duplicate
-avoided — and the two labels do mean different things even where they agree
-(`Park factor` is the ground; `wOBA` is the cut this strip is reading, which for
-a pitcher is everybody). Savant's own board has the same property and does not
-carry a plain `wOBA` column at all, its `Park Factor` being that column.
+- A **batter** gets the ground twice — `wOBA` for everybody, and `vs RHB` /
+  `vs LHB` for his own side of the plate — because that difference is the whole
+  reason the board is cut by hand. Yankee Stadium is **102 to the league and 97
+  to a right-handed hitter**, and it is the second number he bats in. `Runs` and
+  `HR` beside them are read on that same cut, which the hand chip in the head
+  names. Four figures.
+- A **pitcher** gets one `wOBA`, both hands together, because he faces whichever
+  nine the other club writes down — and then the figures that are his night
+  rather than the hitter's: `Runs`, `HR`, `H`, `BB`, `K`. Six figures.
+
+**Strikeouts are on a pitcher's strip and are the one figure that runs the other
+way**: more of them is his gain where more of everything else is the hitter's.
+They are drawn like every other column anyway, because **the tint says how much
+of a thing happens here, not who it is good for** — red is *more than an average
+park*, on every figure and both surfaces. That is the rule the club page's bars
+already follow (*the fill points at the index, not at who it favors*), and it is
+Savant's own board, whose `SO` column colors 111 red and 87 blue exactly as its
+`HR` column does. An earlier draft kept K off the strip on the grounds that one
+inverted column made the hue mean two things; that was the wrong diagnosis — the
+hue never meant *good*, it meant *more*.
+
+**The column count is written inline** as `--pf-figs`, and the grid's own cap
+scales with it: a fixed 420px would put six figures at 65px where four sit at
+100. Measured at 390px, six hold one line with no overflow.
 
 **Strikeouts came off the strip.** Every other figure runs the same way — more of
 it is the hitter's night — and K ran the other way, so the one column that

@@ -6566,17 +6566,22 @@ button.start-line:focus-visible {
 }
 /* Four figures that must not wrap into a ragged block on a phone: an even grid
    keeps them in one row down to 320px, where a flex row would break 3+1. */
-/* An even grid rather than a flex row: four figures keep one line down to
-   320px this way, where a flex row breaks 3 + 1. Capped and centered so they
-   do not spread across the whole of a wide dialog — at 900 the strip is the
-   width of the box it garnishes and the figures were 250px apart, which reads
-   as four separate readings rather than one park. */
+/* An even grid rather than a flex row: the figures keep one line down to 320px
+   this way, where a flex row breaks 3 + 1. **The count is written inline** as
+   `--pf-figs`, because it genuinely differs — four on a batter's strip, six on
+   a pitcher's, who gets hits, walks and strikeouts as well.
+
+   Capped and centered so they do not spread across the whole of a wide dialog:
+   at 900 the strip is the width of the box it garnishes, and four figures
+   stretched across it sat 250px apart, which reads as four separate readings
+   rather than as one park. The cap scales with the count for the same reason —
+   a fixed 420px would put six figures at 65px where four sit at 100. */
 .pf-figs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--pf-figs, 4), minmax(0, 1fr));
   gap: 6px;
   width: 100%;
-  max-width: 420px;
+  max-width: calc(var(--pf-figs, 4) * 105px);
 }
 .pf-fig {
   display: flex;
