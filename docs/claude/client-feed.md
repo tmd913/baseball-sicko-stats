@@ -1939,10 +1939,52 @@ read inside a park worth nine of it either way.
 
 **A strip rather than the sixteen-row card**, because of what is under it. This
 box already holds a nine-cut opposing lineup or a whole platoon comparison, and
-sixteen more bars would bury the thing the reader pressed for. Four figures —
-wOBA, runs, home runs, strikeouts — are the ones that change how a night reads;
-the rest are a reading of the park itself and live on its club's page, one press
-away.
+sixteen more bars would bury the thing the reader pressed for. The rest are a
+reading of the park itself and live on its club's page, one press away.
+
+**The overall park factor leads it** — the all-hitters wOBA index, which is the
+number Savant's own board calls *Park Factor* and the one a reader wants first:
+what this ground does, full stop. The hand-specific wOBA follows it **only where
+the two are different questions**. On a batter's strip they are (102 overall and
+97 to a right-handed hitter is the whole point of cutting the board by hand); on
+a pitcher's the strip already reads both hands together, so the two would be one
+number printed twice under different labels. That is why the column count is
+computed rather than fixed.
+
+**Strikeouts came off the strip.** Every other figure runs the same way — more of
+it is the hitter's night — and K ran the other way, so the one column that
+inverted the whole strip's meaning sat on the surface with least room to explain
+itself. It keeps its row on the club's page, where sixteen rows and a key can
+carry the exception.
+
+**Hot and cold, Savant's own way of drawing this board.** The strip has no rails
+on it, so the figures carry both halves of the reading themselves: red above the
+average park, blue below, and the strength of the tint is how far. A number's
+distance from 100 is exactly the case `RULES.md` allows color for — *where a
+scale genuinely is the reading* — and dropping K is what makes one hue mean one
+thing. A reader arriving from Savant does not have to learn a second vocabulary.
+
+**It saturates at half the rail's scale**, not the whole of it. The club page's
+bars run to the most extreme park in the league, which is right for a *length*:
+it makes a long bar rare and therefore worth something. A *tint* at that scale is
+the opposite — almost every park lands in a pale middle and the strip reads as
+colorless, which is not the reading Savant's table gives. Half-scale puts the
+ordinary park at a visible tint and the extreme one at full strength.
+
+**And the tint is capped at 70%, which is measured.** The two hues are mid-tone,
+so a chip at full strength is too light for dark ink and too dark for light: at
+100% the figure reads **3.34:1** in the dark theme, under the 4.5 a 15px
+weight-800 number needs (not WCAG "large text", which starts at 18.66px bold).
+Measured across five themes, the worst case runs 6.67 at 45%, 5.20 at 65%,
+**4.87 at 70%** and 4.57 at 75% — so 75 passes by 0.07, one palette tweak from
+failing, and 70 passes with margin everywhere. `frac` still runs the whole 0→1,
+so the relative scale is untouched; only how dark its top gets is capped. The
+alternative was Savant's own, white ink on a saturated chip, and it does not
+survive six themes: the ink here is `--text`, already near-white in four of them.
+
+A **chip** rather than colored ink, which is also what Savant does: ink tinted to
+30% of a hue is a number gone pale, where a ground tinted to 30% is a number on a
+pale ground.
 
 **A hitter is shown his own side of the plate and a pitcher is shown both.** He
 faces whichever nine the other club writes down, so the park he works in is the

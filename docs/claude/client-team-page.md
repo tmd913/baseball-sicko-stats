@@ -334,7 +334,30 @@ is inside the tab, in `.view-switch`'s own shape.
 **100 is the average park**, and the key says so in words because nothing about
 the digits does — `109` read cold is a rate, a rank or a count with equal
 plausibility. Above 100 favors the hitter on every row **except strikeouts**,
-which wears a `P` mark beside its label rather than an inverted bar; see below.
+and the key is the only place that is said.
+
+**The strikeout row carried a small `P` beside its label and no longer does.**
+The reasoning for it was that a row whose direction means the opposite of every
+other row's should say so where it is read. It loses to two things: that is a
+fact about *strikeouts* which any reader of this table already has, and a glyph
+on one row in sixteen reads as a footnote the reader has to go and find. The
+row's own tooltip still names who the number favors — `pitcherUp` survives as
+the flag that makes that sentence come out right, rather than as anything drawn.
+
+**The index figures are plain, and used to take the accent** wherever the park
+was not exactly average. That was the platoon card's rule imported without its
+reason: there the accent marks *which of two figures is the stronger*, which is a
+fact the reader cannot get otherwise. Here there is one figure a row and the bar
+beside it already says how far from average it is and which way, so the color was
+marking nothing but "not 100" — true of fifteen rows in sixteen. *Color is spent
+on state*, and having a value is not one.
+
+**`Index` is folded onto the axis labels' rule** (`fewer` / `average` / `more`),
+being the same kind of thing — a label on a column rather than a reading. That
+rule has to sit **after** `.pf-val`: the head carries both classes, they are of
+equal specificity, and written above it the head lost its size and color and drew
+13px `--text` beside 10px `--faint`. The ordering rule `RULES.md` states for
+media queries, biting without one.
 
 **The fill points at the index, not at who it favors.** That is the deliberate
 break from the platoon card's rule, where the fill points at the *stronger* side.
@@ -343,7 +366,8 @@ in runs at 119 **and in strikeouts at 94** — three hitter-friendly readings, o
 which two are above the line and one is below it. Point every bar at "who this
 favors" and those three rows draw two directions for one fact; point them all at
 the index and the picture *is* the table, with the judgment made once, in words,
-by the headline. The strikeout row's `P` is that problem marked where it is read.
+by the headline. Strikeouts are the row that problem lives on, and the key is
+where it is answered.
 
 **Every row's scale is that stat's own measured league spread, and it is the
 maximum rather than a percentile.** All 30 club parks on all three hands (90

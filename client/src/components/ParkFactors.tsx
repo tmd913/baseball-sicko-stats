@@ -97,15 +97,23 @@ const HEADLINE: ParkStat = {
   full: 18,
 };
 
-/** The four a game preview carries: what the park does to run scoring, to the
- *  ball leaving it, and to the strikeout. Chosen because they are the four that
- *  change how a hitter or a pitcher reads a night — the other twelve are a
- *  reading of the park itself and live on its club's page. */
+/**
+ * What a game preview carries **after the overall park factor** — what the
+ * ground does to run scoring and to the ball leaving it.
+ *
+ * **Strikeouts used to be the fourth and are gone.** Every other figure on this
+ * strip runs the same way — more of it is the hitter's night — and K ran the
+ * other way, so the one column that inverted the whole strip's meaning was
+ * sitting on a surface with no room to explain itself. On the club's page it
+ * keeps its row, where sixteen rows and a key can carry the exception.
+ *
+ * Losing it is also what makes the strip's **hot/cold tint** legible: with K on
+ * it, red meant *good for the hitter* three times and *good for the pitcher*
+ * once, which is not a scale.
+ */
 const PREVIEW_STATS: ParkStat[] = [
-  HEADLINE,
   { key: 'runs', label: 'Runs', title: 'Runs scored', full: 40 },
   { key: 'hr', label: 'HR', title: 'Home runs', full: 42 },
-  { key: 'so', label: 'K', title: 'Strikeouts — the one row where above 100 favors the pitcher', full: 20, pitcherUp: true },
 ];
 
 /** All sixteen, in the order a park is read in: the headline, then what it does
@@ -176,6 +184,62 @@ export function parkRead(woba: number): { text: string; lean: 'hitter' | 'pitche
 
 const fmt = (v: number | null): string => (v == null ? '–' : String(v));
 
+/** One figure's tooltip on the preview strip — the number said in words. */
+function figTitle(stat: ParkStat, v: number | null): string {
+  if (typeof v !== 'number') return `${stat.title} — no index published for this park.`;
+  const off = v - 100;
+  return (
+    `${stat.title}: ${v} — ` +
+    (off === 0
+      ? 'exactly average.'
+      : `${Math.abs(off)}% ${off > 0 ? 'more' : 'fewer'} than an average park.`)
+  );
+}
+
+/**
+ * **The hot/cold tint on a preview figure**, Savant's own way of drawing this
+ * board: red above the average park, blue below, and the strength of it is how
+ * far.
+ *
+ * **It saturates at half the rail's scale, not at the whole of it.** The bars on
+ * the club's page run to the most extreme park in the league, which is right for
+ * a length — it makes a long bar rare and therefore worth something. A *tint* at
+ * that scale is the opposite: almost every park would land in the pale middle
+ * and the strip would read as uniformly colorless, which is exactly the reading
+ * Savant's own table does not give. Half-scale puts the ordinary park at a
+ * visible tint and the genuinely extreme one at full strength — measured on the
+ * 2026 board, Coors' 109 park factor saturates and Yankee Stadium's 97 to a
+ * right-handed hitter sits at a third.
+ *
+ * Mixed against the strip's own ground rather than painted flat, and the ink is
+ * left alone — which is what `MAX_TINT` is for. **70%, and it is a measured
+ * number rather than a taste.** The two hues are mid-tone, so a chip at full
+ * strength is the classic case that is too light for dark ink and too dark for
+ * light: at 100% the figure reads at **3.34:1** in the dark theme, under the
+ * 4.5 a 15px weight-800 number needs (it is not WCAG "large text", which starts
+ * at 18.66px bold). Measured across the five themes at four caps, the worst case
+ * runs 6.67 at 45%, 5.20 at 65%, **4.87 at 70%** and 4.57 at 75% — so 75 passes
+ * by 0.07, which is one palette tweak away from failing, and 70 passes with
+ * margin in every theme. `frac` still runs the whole 0→1, so the *relative*
+ * scale is untouched; only how dark its top gets is capped.
+ *
+ * The alternative was Savant's own — white ink on a saturated chip — and it does
+ * not survive six themes: the ink here is `--text`, which is already near-white
+ * in four of them, so switching it buys nothing where the problem actually is.
+ */
+const MAX_TINT = 70;
+
+function heatStyle(v: number | null, full: number): { background: string } | undefined {
+  if (typeof v !== 'number' || full <= 0) return undefined;
+  const off = v - 100;
+  if (off === 0) return undefined;
+  const frac = Math.max(0, Math.min(1, Math.abs(off) / (full / 2)));
+  const hue = off > 0 ? 'var(--park-hot)' : 'var(--park-cold)';
+  return {
+    background: `color-mix(in srgb, ${hue} ${Math.round(frac * MAX_TINT)}%, transparent)`,
+  };
+}
+
 /** A number's distance from the average park, as a fraction of the rail's half.
  *  Answers in [0,1] for **every** input, the absurd and the non-finite alike —
  *  the invariant `railFraction` holds on the platoon card, for the same reason:
@@ -212,13 +276,15 @@ function ParkRow({ stat, indexes }: { stat: ParkStat; indexes: ParkIndexes }) {
 
   return (
     <div className="pf-row" title={title}>
-      <span className="pf-label">
-        {stat.label}
-        {/* The one row whose direction does not mean what every other row's
-            means, marked where it is read rather than explained in the key
-            alone — see the note on this module. */}
-        {stat.pitcherUp && <abbr className="pf-flip" title="More strikeouts favors the pitcher">P</abbr>}
-      </span>
+      {/* **No mark on the strikeout row.** It carried a small `P` for a while,
+          on the reasoning that a row whose direction means the opposite of every
+          other row's should say so where it is read. It is gone because that is
+          a fact about *strikeouts*, which any reader of this table already has —
+          and a glyph on one row of sixteen reads as a footnote the reader has to
+          go and find. The row's own tooltip still names who the number favors,
+          which is where the fact belongs; `pitcherUp` survives as the flag that
+          makes that sentence come out right rather than as anything drawn. */}
+      <span className="pf-label">{stat.label}</span>
       <span className="spl-track">
         {has && off > 0 && (
           <span
@@ -227,9 +293,16 @@ function ParkRow({ stat, indexes }: { stat: ParkStat; indexes: ParkIndexes }) {
           />
         )}
       </span>
-      <span className={`pf-val${!has ? ' pf-val--none' : off === 0 ? '' : ' pf-val--on'}`}>
-        {fmt(v)}
-      </span>
+      {/* **Plain, whatever the number is.** These used to take the accent
+          wherever the park was not exactly average, on the platoon card's rule
+          that a reading should survive being read at a glance *and* carefully.
+          That rule earns its keep there because the accent marks *which of two
+          figures is the stronger* — a fact the reader cannot get otherwise. Here
+          there is one figure a row and the bar beside it already says both how
+          far from average it is and which way, so the color was marking nothing
+          except "not 100", which is true of fifteen rows in sixteen. Color is
+          spent on state in this app, and "has a value" is not one. */}
+      <span className={`pf-val${has ? '' : ' pf-val--none'}`}>{fmt(v)}</span>
     </div>
   );
 }
@@ -299,6 +372,45 @@ export function GamePark({
     openTeam(club, 'park');
   } : null;
 
+  /**
+   * **The overall park factor leads, and it is the park for everybody** — the
+   * all-hitters wOBA index, which is the number Savant's own board calls *Park
+   * Factor* and the one figure a reader wants first: what this ground does,
+   * full stop.
+   *
+   * The hand-specific wOBA follows it **only where the two are different
+   * questions**. On a batter's strip they are — 102 overall and 97 to a
+   * right-handed hitter is the whole point of cutting the board by hand — and
+   * on a pitcher's the strip is already reading both hands together, so the two
+   * would be the same number printed twice under different labels. That is why
+   * the column count is computed rather than fixed at four.
+   */
+  const overall = park.hands.all;
+  const figs: { label: string; value: number | null; full: number; title: string }[] = [
+    {
+      label: 'Park factor',
+      value: overall?.woba ?? null,
+      full: HEADLINE.full,
+      title:
+        'Park factor — the wOBA index for all hitters, which is what Savant’s own board leads with. ' +
+        '100 is the average ballpark.',
+    },
+    ...(hand !== 'all' && indexes !== overall
+      ? [{
+          label: 'wOBA',
+          value: indexes.woba,
+          full: HEADLINE.full,
+          title: `wOBA index to ${HAND_LABEL[hand].toLowerCase()} — the same park, read from the side of the plate he stands on.`,
+        }]
+      : []),
+    ...PREVIEW_STATS.map((st) => ({
+      label: st.label,
+      value: indexes[st.key] as number | null,
+      full: st.full,
+      title: figTitle(st, indexes[st.key] as number | null),
+    })),
+  ];
+
   return (
     <div className="pf-strip" title={handNote ?? HAND_LABEL[hand]}>
       <div className="pf-strip-head">
@@ -317,31 +429,23 @@ export function GamePark({
         <span className={`pf-lean pf-lean--${read.lean}`}>{read.text}</span>
         {hand !== 'all' && <span className="pf-hand">{HAND_SHORT[hand]}</span>}
       </div>
-      <div className="pf-figs">
-        {PREVIEW_STATS.map((s) => {
-          const v = indexes[s.key] as number | null;
-          const off = typeof v === 'number' ? v - 100 : 0;
-          return (
-            <span
-              key={s.key}
-              className="pf-fig"
-              title={
-                typeof v !== 'number'
-                  ? `${s.title} — no index published for this park.`
-                  : `${s.title}: ${v} — ${
-                      off === 0
-                        ? 'exactly average'
-                        : `${Math.abs(off)}% ${off > 0 ? 'more' : 'fewer'} than an average park`
-                    }.`
-              }
-            >
-              <span className="pf-fig-label">{s.label}</span>
-              <span className={`pf-fig-val${typeof v === 'number' && v !== 100 ? ' pf-val--on' : ''}`}>
-                {fmt(v)}
-              </span>
+      <div className="pf-figs" style={{ gridTemplateColumns: `repeat(${figs.length}, minmax(0, 1fr))` }}>
+        {figs.map((f) => (
+          <span key={f.label} className="pf-fig" title={f.title}>
+            <span className="pf-fig-label">{f.label}</span>
+            {/* **Hot and cold, Savant's own way of drawing this table.** The
+                strip has no rails on it — that is the club page's tab — so the
+                figures have to carry both halves of the reading themselves, and
+                a number's distance from 100 is exactly the kind of scale
+                `RULES.md` allows color for: *where a scale genuinely is the
+                reading*. Red above the average park, blue below, and the
+                strength of the tint is how far. Every figure here runs the same
+                way now that K is off the strip, so one hue means one thing. */}
+            <span className="pf-fig-val" style={heatStyle(f.value, f.full)}>
+              {fmt(f.value)}
             </span>
-          );
-        })}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -396,8 +500,9 @@ export function ParkTable({ teamId, teamName }: { teamId: number; teamName: stri
             biggest park in the game and nine points of triples is noise.
           </p>
           <p>
-            More of a stat favors the hitter on every row <em>except</em> strikeouts, marked{' '}
-            <span className="pf-flip">P</span> — more of those is the pitcher’s gain.
+            More of a stat favors the hitter on every row <em>except</em>{' '}
+            <strong>K</strong> — more strikeouts is the pitcher’s gain, so a bar to the right on
+            that row is the one that reads the other way.
           </p>
           <p>
             A park is not one park: the same fence is a short porch from one side of the plate and a

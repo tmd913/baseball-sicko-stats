@@ -70,6 +70,15 @@
   --walk: #60a5fa;
   --out: #64748b;
   --strikeout: #f87171;
+  /* **Hot and cold on a park factor**, and the only place in this app a
+     diverging scale is drawn in color. Savant's own board is read this way and
+     a reader arriving from it should not have to learn a second vocabulary:
+     red is a ground that gives the hitter more than an average park, blue one
+     that gives him less. They are mid-tone on purpose — the tint is mixed with
+     whatever panel it lands on, so one pair has to sit legibly under `--text`
+     in all six themes rather than one. See `.pf-fig-val`. */
+  --park-hot: #d64545;
+  --park-cold: #3f74c0;
 
   /* **Ink on a saturated fill** — an accent-filled tab, a lit toggle, the
      count badge on a disclosure, a lineup pip. Eighteen rules wrote this as
@@ -6586,11 +6595,23 @@ button.start-line:focus-visible {
   letter-spacing: 0.03em;
   color: var(--muted);
 }
+/* The figure, and the strip's whole reading of *how far from average*: the
+   `background` is written inline by `heatStyle`, mixing `--park-hot` or
+   `--park-cold` into this ground in proportion to the distance. A chip rather
+   than colored ink, which is what Savant's board does and what keeps the number
+   legible — ink tinted to 30% of a hue is a number that has gone pale, where a
+   ground tinted to 30% is a number on a pale ground. The padding and the radius
+   are what make it a chip at all; `min-width` stops a two-digit index drawing a
+   visibly narrower one than a three-digit index beside it. */
 .pf-fig-val {
   font-size: 15px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+  min-width: 3.1ch;
+  padding: 1px 6px;
+  border-radius: 6px;
+  text-align: center;
 }
 
 /* The card, on the team page's Park tab. */
@@ -6656,31 +6677,11 @@ button.start-line:focus-visible {
   justify-content: flex-end;
   gap: 4px;
 }
-/* The strikeout row's mark: the one row where a fill to the right is the
-   pitcher's gain. A letter in a box rather than a color, because it is a fact
-   about what the row *means* and not a state the row is in — and because the
-   fill it qualifies is already the accent. */
-.pf-flip {
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
-  padding: 2px 3px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--muted);
-  text-decoration: none;
-  cursor: help;
-}
 /* The axis, named once in the head rather than on every row — the rail's own
    dashed center line runs down the card and this is what it means. */
 .pf-axis {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--faint);
 }
 .pf-val {
   text-align: center;
@@ -6689,18 +6690,25 @@ button.start-line:focus-visible {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
+/* **The column heads, all of them on one rule.** `Index` is the same kind of
+   thing as `fewer` / `average` / `more` — a label on a column rather than a
+   reading — so it is folded onto them rather than given declarations that agree
+   today.
+
+   **It sits after `.pf-val`, and that is load-bearing.** The head carries both
+   `pf-val` (for the grid cell's alignment and tabular figures) and
+   `pf-val--head`, which are single classes of equal specificity, so source
+   order is the whole of what decides. Written above `.pf-val` — where it was
+   first — the head lost its size and its color to it and drew 13px in `--text`
+   beside 10px `--faint` axis labels. The same rule `RULES.md` states for media
+   queries, and it does not need a media query to bite. */
+.pf-axis,
 .pf-val--head {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-/* A park that is not the average park in this stat — the figure carries the
-   accent the fill does, so the row survives being read at a glance and being
-   read carefully, which is the platoon card's own rule for its two figures. */
-.pf-val--on {
-  color: var(--accent);
+  letter-spacing: 0.03em;
+  color: var(--faint);
 }
 .pf-val--none {
   color: var(--faint);
