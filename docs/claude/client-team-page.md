@@ -536,6 +536,26 @@ worse than no page.
 
 ## Measured
 
+**The bundle, `main` → this work.** JS **626.33 kB → 635.10 kB** raw, **186.25 →
+188.83 kB gzipped** (+2.58); CSS **165.97 → 168.36 kB** raw, **29.81 → 30.22 kB
+gzipped** (+0.41). **+2.99 kB gzipped in total** for a tab, a strip on three
+dialogs, a shared context and the route behind them.
+
+**The park payload** is **22,826 bytes of JSON, 4,423 gzipped** — 33 parks of 16
+indexes on 3 hands — read once a session and shared by all four surfaces.
+
+**The rail geometry**, read off the rendered page at 900px: track 728px, a full
+bar's fill ending **3px inside the rail's end**, which is `--spl-inset` exactly
+and is the fold onto `.spl-table` working. Coors' wOBA at the measured-maximum
+scale draws **181px of a 364px half-rail** (49.7%), against a p90 scale where it
+and six other rows clamped.
+
+**Light-theme contrast** of everything this tab introduced, measured on the
+rendered page: index figure **8.93**, row label **16.29**, axis label **5.54**,
+the `P` mark and the sample line **7.28**. The lowest is 5.54, against 4.5 for
+normal text.
+
+
 Driven in a browser at **1200×900** and **390×844**, dark theme, against the live
 season.
 
