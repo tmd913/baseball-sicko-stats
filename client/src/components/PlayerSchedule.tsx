@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatStartTime, handThrows, prettyGameDate } from '../lib';
-import { useDelayedFlag } from '../hooks';
+import { useDelayedFlag, useHandedness } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
 import type { OppRead } from './OpponentTable';
+import { GamePark, hitterHand } from './ParkFactors';
 import { BatterSplitsTab } from './PlatoonSplits';
 import {
   buildScheduleIndex,
@@ -431,6 +432,9 @@ function GameRow({
   const oppId = game.homeId === teamId ? game.awayId : game.homeId;
   const oppAbbr = game.homeId === teamId ? game.away : game.home;
   const vsHand = vs?.hand === 'L' || vs?.hand === 'R' ? vs.hand : null;
+  // His own side of the plate, for the park's cut — off the season roster the
+  // app already holds, so it costs no request. See `ParkFactors.tsx`.
+  const bats = useHandedness(report.id)?.bats ?? null;
   const known = opp !== undefined && 'board' in opp;
   const expandable = isPitcher ? !(known && opp.board == null) : vsHand !== null;
   // The weekday rides on the row's title rather than in the line. A fantasy
@@ -509,6 +513,21 @@ function GameRow({
           onClose={() => setOpen(false)}
         >
           <div className="start-detail">
+            {/* The ballpark — the one fact about a scheduled game that is
+                settled the moment the fixture is, above the split or the
+                lineup that is not. A batter reads it from his own side of the
+                plate, a switch hitter from the side the man on the mound puts
+                him on; a pitcher reads both hands, facing whichever nine the
+                other club writes down. See `ParkFactors.tsx`. */}
+            <GamePark
+              venueId={game.venueId}
+              hand={isPitcher ? 'all' : hitterHand(bats, vsHand)}
+              handNote={
+                isPitcher
+                  ? 'The park as it plays to both hands — he faces whoever they write down.'
+                  : undefined
+              }
+            />
             {/* **What the box is looking at may itself be a guess**, and it says
                 so where the reader is: on a batter's dialog the half of his
                 split that is marked is the half the *projected* starter would

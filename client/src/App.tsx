@@ -22,6 +22,7 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
+  ParkFactor,
   SplitCut,
   TeamInfo,
   TrendWindow,
@@ -85,6 +86,7 @@ import {
   MutedContext,
   PlayerStatusContext,
   HandednessContext,
+  ParkFactorsContext,
   RecentNewsContext,
   useDelayedFlag,
   useDismissable,
@@ -1058,6 +1060,58 @@ export default function App() {
    */
   const [scheduleWanted, setScheduleWanted] = useState(false);
   const needSchedule = useCallback(() => setScheduleWanted(true), []);
+
+  /**
+   * **Every ballpark's park factors** — the team page's Park tab and the strip a
+   * game preview draws, held once here and shared through
+   * `ParkFactorsContext`.
+   *
+   * `needSchedule`'s own shape, and for the same two reasons. It takes **no
+   * parameters** — one table answers for every club, every fixture and the
+   * neutral sites nobody is at home in — so several surfaces asking is one
+   * request; and it is **lazy**, so a session that opens no team page and
+   * previews no game never pays for it. The readers are leaves three and four
+   * components down inside dialogs, which is what makes it a context rather
+   * than a prop (see `hooks.ts`).
+   */
+  const [parkFactors, setParkFactors] = useState<Map<number, ParkFactor> | null>(null);
+  const [parksLoading, setParksLoading] = useState(false);
+  const [parksError, setParksError] = useState<string | null>(null);
+  const [parksWanted, setParksWanted] = useState(false);
+  const needParkFactors = useCallback(() => setParksWanted(true), []);
+  useEffect(() => {
+    if (!parksWanted || parkFactors) return;
+    let canceled = false;
+    setParksLoading(true);
+    setParksError(null);
+    api
+      .parkFactors()
+      .then((pf) => {
+        if (canceled) return;
+        setParkFactors(new Map(pf.parks.map((p) => [p.venueId, p])));
+      })
+      .catch((e: Error) => {
+        if (!canceled) {
+          setParksError(e.message);
+          // A failed read may be asked for again — the next surface that wants
+          // a park sets the flag and this effect runs. Nothing retries on its
+          // own, which is rule 1: this is a garnish, not the page.
+          setParksWanted(false);
+        }
+      })
+      .finally(() => {
+        if (!canceled) setParksLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [parksWanted, parkFactors]);
+  /** The one object the context carries, memoized so every leaf reading it does
+   *  not re-render on an unrelated render of `App`. */
+  const parkRead = useMemo(
+    () => ({ byVenue: parkFactors, loading: parksLoading, error: parksError, need: needParkFactors }),
+    [parkFactors, parksLoading, parksError, needParkFactors],
+  );
   useEffect(() => {
     if ((scheduleSpan === null && !scheduleWanted) || scheduleWindow) return;
     let canceled = false;
@@ -5839,6 +5893,11 @@ export default function App() {
         no request; null until that one boot read lands, and every reader draws
         nothing for a null. */}
     <HandednessContext.Provider value={handById}>
+    {/* Every ballpark's park factors — read by the strip on three different
+        game-preview dialogs and by the team page's Park tab, none of which
+        should be fetching a league-wide table for itself. Lazy: nothing is
+        requested until one of those surfaces asks. */}
+    <ParkFactorsContext.Provider value={parkRead}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -7141,6 +7200,7 @@ export default function App() {
         />
       )}
     </div>
+    </ParkFactorsContext.Provider>
     </HandednessContext.Provider>
     </RecentNewsContext.Provider>
     </EligibilityContext.Provider>

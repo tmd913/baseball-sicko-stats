@@ -214,6 +214,9 @@ export interface ProjectedStart {
   home: boolean; // his club's side of it
   opponent: string; // "TOR" — the abbreviation, as everywhere else
   opponentId: number;
+  /** **The ballpark he would work in**, MLB's own venue id, off the same
+   *  fixture the row is built from. Null where the schedule carried none. */
+  venueId: number | null;
   /** True where MLB has named him for this game, false where we have placed
    *  him. Kept beside `tier` rather than derived from it: it is the one
    *  distinction every older client reads, and `tier === 'announced'` is the
@@ -699,6 +702,87 @@ export interface TeamInfo {
   abbreviation: string;
 }
 
+/**
+ * **Which hitter a park is being read for.** A ballpark is not one park: the
+ * same fence is a short porch to one side of the plate and a long out to the
+ * other, and the gap is large enough to change how a game reads. Measured on
+ * the 2026 board — Yankee Stadium's home-run index is **139 to a left-handed
+ * hitter and 105 to a right-handed one**, Oracle Park's **64 and 83** — which
+ * is why this is a cut of the data rather than a footnote on it.
+ *
+ * `all` is both hands together, and is what a *pitcher* is shown: he faces
+ * whichever nine the other club writes down, so the park he works in is the
+ * park as it plays to everybody.
+ */
+export type ParkHand = 'all' | 'L' | 'R';
+
+/**
+ * One park's Statcast indexes for one hitter hand.
+ *
+ * **100 is the average park, and every field is scaled to it** — 109 means a
+ * plate appearance here produces 9% more of that stat than the same plate
+ * appearance in a neutral park would, and 91 means 9% less. So a number above
+ * 100 favors the hitter on every row *except* `so`, where more strikeouts is
+ * the pitcher's gain; the client's key is what says so, since nothing about the
+ * number itself can.
+ *
+ * Every field but `woba` and `pa` is nullable: Savant leaves a cell empty on a
+ * park with too little of that event to index (a venue with three hundred
+ * plate appearances at it has no triples rate worth printing), and an absent
+ * index is drawn as a dash rather than as a 100 it has not earned.
+ */
+export interface ParkIndexes {
+  /** **The headline** — the number Savant's own board calls *Park Factor*, and
+   *  the one figure this app leads with everywhere it shows a park. */
+  woba: number;
+  runs: number | null;
+  hr: number | null;
+  /** Strikeouts. **The one row where above 100 is the pitcher's** — see above. */
+  so: number | null;
+  bb: number | null;
+  obp: number | null;
+  hits: number | null;
+  singles: number | null;
+  doubles: number | null;
+  triples: number | null;
+  hardHit: number | null;
+  /** wOBA on contact — the park with the strikeouts taken out of it. */
+  wobaCon: number | null;
+  xwobaCon: number | null;
+  xbaCon: number | null;
+  baCon: number | null;
+  /** wOBA excluding the times through the order Savant excludes. */
+  wobaTto: number | null;
+  /** Plate appearances the cut is measured over — what says whether a 164 is a
+   *  park or a small sample. A neutral-site venue can carry a few hundred. */
+  pa: number;
+}
+
+/** One ballpark, cut three ways. */
+export interface ParkFactor {
+  venueId: number;
+  /** "Coors Field". */
+  venue: string;
+  /**
+   * The club whose home park this is, or **null for a neutral site** — the
+   * handful of venues a season is played at that nobody is at home in. Savant
+   * spells those with a negative `main_team_id`; this is the null that spelling
+   * becomes, and the reason a game's park is joined on its **venue** and never
+   * on its home club.
+   */
+  teamId: number | null;
+  /** "Rockies", as Savant names the club; null on a neutral site. */
+  club: string | null;
+  hands: Record<ParkHand, ParkIndexes | null>;
+}
+
+/** Every park, as `/api/park-factors` answers it. */
+export interface ParkFactors {
+  season: number;
+  /** Venue-name order, which is the order a reader meets them in. */
+  parks: ParkFactor[];
+}
+
 /** Which side of the ball a club's splits are read from.
  *
  * **`batting` is the club at the plate** — how they have hit, cut by the hand
@@ -795,6 +879,20 @@ export interface PlayerGame {
   date: string;
   homeTeam: string;
   awayTeam: string;
+  /**
+   * **The ballpark this game is played in**, MLB's own venue id — what the park
+   * factors on a game preview are joined on. Null on a game read before this
+   * was captured, and on any feed that carried no venue.
+   *
+   * The **venue** rather than the home club, which are the same thing all but a
+   * handful of times a season and are not the same *fact*: a Reds "home" game
+   * in Mexico City is not played in Great American Ball Park, and joining on
+   * the club would quietly show the reader the wrong park's numbers. Savant's
+   * board carries those neutral sites as venues of their own, so the honest
+   * join is available and is the one taken — *a join fails to null, never to a
+   * guess*.
+   */
+  venueId: number | null;
   batterTeam: string;
   opponent: string;
   isHome: boolean;
@@ -1662,6 +1760,10 @@ export interface ScheduleGame {
   startTime: string | null;
   homeId: number;
   awayId: number;
+  /** **The ballpark**, MLB's own venue id — what a fixture's park factors are
+   *  joined on. Null where the schedule carried none. The venue rather than
+   *  `homeId` deliberately; see `PlayerGame.venueId`. */
+  venueId: number | null;
   /** Club abbreviations — "MIL". Empty where the teams table couldn't be read. */
   home: string;
   away: string;

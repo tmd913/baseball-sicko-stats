@@ -37,6 +37,7 @@ import type {
   TeamHitting,
   TeamHittingWindow,
   TeamInfo,
+  ParkFactors,
   TeamSplitSide,
   EspnRosterPlayer,
 } from './types';
@@ -648,6 +649,19 @@ export const api = {
   async teams(): Promise<TeamInfo[]> {
     const { teams } = await request<{ teams: TeamInfo[] }>('/api/teams');
     return teams;
+  },
+  /**
+   * **Every ballpark's park factors, all three hitter hands** — the team page's
+   * Park tab, and the line a game preview draws.
+   *
+   * One read for every park, held once by `App` and shared through
+   * `ParkFactorsContext`, on the same reasoning `teams()` above carries: it is
+   * a table a reader meets from several surfaces at once and it changes by a
+   * point a week. **Lazy**, though, where `teams()` is read at boot — a session
+   * that never opens a team page and never previews a game never pays for it.
+   */
+  async parkFactors(): Promise<ParkFactors> {
+    return request('/api/park-factors');
   },
   /** One team's nine hitting cuts over a window — the opponent table on a
    *  pitcher's game. The season is already on the report, so this is only ever

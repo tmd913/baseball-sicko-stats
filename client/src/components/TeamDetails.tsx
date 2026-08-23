@@ -5,6 +5,7 @@ import { useDelayedFlag } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { OpponentSection } from './OpponentTable';
+import { ParkTable } from './ParkFactors';
 import { PlayerWindowTable } from './PlayerWindowTable';
 import { buildScheduleIndex, gamesOn, opponentText, spanPhrase } from './schedule';
 import type { PitcherLookup } from './schedule';
@@ -78,7 +79,7 @@ import type {
  *  `team=` and `tside=` are which subject and which of its two halves. A link
  *  carrying the tab as well would describe a scroll position of the page rather
  *  than the page. */
-type TeamTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'stats';
+type TeamTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'park' | 'stats';
 
 /** How many days of fixtures the Schedule tab draws, and the preview's five.
  *  The player page's own `HORIZON` — one fortnight means one thing in this
@@ -404,6 +405,27 @@ export function TeamDetails({
           <DetailsTabButton id="splits" tab={tab} onPick={setTab}>
             Splits
           </DetailsTabButton>
+          {/* **`Park` is a fact about the club's ground rather than about the
+              club**, and it is on this page because a ballpark has no page of
+              its own and nobody looks for one: a reader asking what Coors does
+              to a hitter is on the Rockies' page already.
+
+              It sits after Splits and before Stats for the reason Splits sits
+              before Stats: a park factor is a **comparison** — every number on
+              it is against the average park — where the Stats tab is the
+              club's record. And it is a tab rather than a block on Overview
+              because it is sixteen indexes on each of three hands, which is
+              more than a tab argued to be short can hold.
+
+              It is the one tab that does **not** follow the side switch, and
+              that is a fact about parks rather than an omission: a park does
+              the same thing to both clubs standing in it, so `Pitching` could
+              only mean the same numbers under a different heading. The cut a
+              park factor genuinely has is *which hitter*, and that switch is
+              inside the tab. */}
+          <DetailsTabButton id="park" tab={tab} onPick={setTab}>
+            Park
+          </DetailsTabButton>
           <DetailsTabButton id="stats" tab={tab} onPick={setTab}>
             Stats
           </DetailsTabButton>
@@ -492,6 +514,12 @@ export function TeamDetails({
               No {side === 'pitcher' ? 'pitching' : 'hitting'} splits for {team.name}.
             </p>
           )}
+        </div>
+      )}
+
+      {tab === 'park' && (
+        <div className="details-overview">
+          <ParkTable teamId={team.id} teamName={team.name} />
         </div>
       )}
 

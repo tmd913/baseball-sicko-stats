@@ -22,6 +22,7 @@ import { getTeamResearch, getTeamWindows } from './teamResearch.js';
 import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
+import { getParkFactors } from './parkFactors.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, SPLIT_CUTS, TEAM_HITTING_WINDOWS } from './types.js';
@@ -1681,6 +1682,43 @@ app.get(
   requireUser,
   asyncRoute(async (_req, res) => {
     res.json({ teams: await getTeamList() });
+  }),
+);
+
+/**
+ * **Every ballpark's Statcast park factors for the season, all three hitter
+ * hands** — the team page's Park tab, and the line a game preview draws above
+ * the split or the lineup it opens on.
+ *
+ * One route for every park rather than one per club, and that is the same
+ * bargain `/api/teams/:teamId/hitting` strikes by answering with all three
+ * venues at once: the payload is thirty-three parks of sixteen small integers
+ * three times over — **22,826 bytes of JSON, 4,423 gzipped, measured** — so a
+ * client that holds one copy can answer for the club whose page is open, for
+ * the park a fixture is at three days from now, and for the neutral site
+ * nobody is at home in, having asked once.
+ *
+ * **The venue join was measured against the whole 2026 schedule before anything
+ * was built on it**: 33 of the 34 venues the season is played at have a park
+ * factor, and the one that does not is Journey Bank Ballpark — the Little
+ * League Classic, one game, too few plate appearances for Savant to index at
+ * all — which draws nothing rather than a borrowed number. The same count is
+ * the argument for joining on the venue: **10 games this season are not at the
+ * home club's own park**, and every one of them is a game a `homeId` join would
+ * have quietly labeled with the wrong park's numbers.
+ *
+ * **This route 502s honestly**, where every enrichment in this server costs its
+ * own column and nothing more. That is the `/api/schedule` exception and the
+ * same test: the answer *is* the table. A park factor drawn as a dash because
+ * the upstream was down is indistinguishable from a park Savant has no index
+ * for, and this is the one reading in the app where the difference between
+ * "average park" and "we could not ask" is the whole of the fact.
+ */
+app.get(
+  '/api/park-factors',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json(await getParkFactors());
   }),
 );
 

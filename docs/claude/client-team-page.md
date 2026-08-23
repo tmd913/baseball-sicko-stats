@@ -62,7 +62,7 @@ behavior it had, from a different file.
 
 ## What the page is, and what it is not
 
-Five tabs: **Overview · Schedule · Roster · Splits · Stats**.
+Six tabs: **Overview · Schedule · Roster · Splits · Park · Stats**.
 
 Every per-player mark is gone, each for the reason the research board's team
 rows already give: the roster baseball and the padlock say who owns him, which
@@ -301,6 +301,70 @@ other's lit tab. Measured — `15d` batting is 552 plate appearances over 14
 games, `15d` pitching 523 over the same 14, and crossing back and forth is
 instant.
 
+### Park
+
+**A fact about the club's ground rather than about the club**, and it is on this
+page because a ballpark has no page of its own and nobody would look for one: a
+reader asking what Coors does to a hitter is on the Rockies' page already.
+
+It sits **after Splits and before Stats**, for the reason Splits sits before
+Stats: a park factor is a *comparison* — every number on it is against the
+average park — where the Stats tab is the club's record.
+
+**It is a tab rather than a block on Overview** because it is sixteen indexes on
+each of three hands, which is more than a tab argued to be short can hold. And
+it is **the one tab that does not follow the side switch**, which is a fact about
+parks rather than an omission: a park does the same thing to both clubs standing
+in it, so `tside=pitching` could only draw the same numbers under a different
+heading. The cut a park factor genuinely has is *which hitter*, and that switch
+is inside the tab, in `.view-switch`'s own shape.
+
+**100 is the average park**, and the key says so in words because nothing about
+the digits does — `109` read cold is a rate, a rank or a count with equal
+plausibility. Above 100 favors the hitter on every row **except strikeouts**,
+which wears a `P` mark beside its label rather than an inverted bar; see below.
+
+**The fill points at the index, not at who it favors.** That is the deliberate
+break from the platoon card's rule, where the fill points at the *stronger* side.
+A park does not lean one way per row: Coors is a hitter's park in wOBA at 109,
+in runs at 119 **and in strikeouts at 94** — three hitter-friendly readings, of
+which two are above the line and one is below it. Point every bar at "who this
+favors" and those three rows draw two directions for one fact; point them all at
+the index and the picture *is* the table, with the judgment made once, in words,
+by the headline. The strikeout row's `P` is that problem marked where it is read.
+
+**Every row's scale is that stat's own measured league spread, and it is the
+maximum rather than a percentile.** All 30 club parks on all three hands (90
+readings a stat) give `full` as the largest `|index − 100|` in the population.
+Per-stat because a nine-point swing in wOBA is the biggest wOBA park in baseball
+and a nine-point swing in triples is noise — **triples run to 245 points against
+wOBA's 18**, a park with an odd corner turning a handful of doubles a year into
+triples off a denominator of almost nothing.
+
+The maximum, where the platoon card takes the 90th percentile, and the
+difference was **measured rather than chosen**: at p90 the scale is tight enough
+that Coors Field clamped **7 of its 16 rows**, and seven identical full bars say
+less than the numbers beside them do. The reason is that a park's indexes are
+*correlated* — a ground that inflates wOBA inflates runs, hits, BAcon and
+wOBAcon with it — so one park meets a per-stat p90 on half its rows at once. A
+platoon gap has no such structure, one hitter's eight stats moving
+independently, which is why the same constant does different work in the two
+cards. Against the maximum nothing clamps, Coors' wOBA draws at 50% of its
+half-rail and its home runs at 24%, which is the fact: an extreme park for run
+scoring and an ordinary one for home runs.
+
+**The rail is the platoon card's**, shared rather than re-cut — `.spl-track` and
+`.spl-fill`, with `.pf-table` folded onto the block declaring `--spl-inset` so a
+full bar's cap nests inside the rail's by the same 3px in both places (measured:
+3px at the rail's end). Only the **grid** is this tab's own, and that is because
+it genuinely differs: a platoon row prints a figure either side of the rail and
+a park row has one number. `.pf-card-head` is likewise folded onto
+`.spl-card-head` rather than given rules of its own, which buys two things that
+file argues at length — the key's panel gets this box as its containing block
+(anchored to the 30px button it opens off-screen at 390), and the box cannot
+make a **stacking context**, which would paint the panel underneath the very
+bars it explains.
+
 ### Stats
 
 `PlayerWindowTable` over the board's **team** reading — the same table, the same
@@ -477,7 +541,7 @@ season.
 
 **The page.** `--details-chrome-h` is **188px** at 1200 and **242** at 390 (the
 strip wraps to its scrolling form and the side switch takes its own line), the
-crest and both head chips drawn, all five tabs in the strip, and **page-body
+crest and both head chips drawn, all six tabs in the strip, and **page-body
 overflow 0 and view overflow 0 on every tab at both widths**. Rows are 31px.
 
 **Overview** (MIL): `Season` and `Next Games`, the season strip reading `G 129 ·

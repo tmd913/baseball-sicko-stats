@@ -6104,7 +6104,12 @@ button.start-line:focus-visible {
 /* Label · left figure · rail · right figure. The two value columns are equal
    and fixed so the rail is centered in the row as well as in itself — a rail
    whose zero sat off the middle of the card would undo the whole device. */
-.spl-table {
+.spl-table,
+/* The park table's rows are this rail, so it takes the token that nests the
+   fill inside it — one number, and the two rails cannot drift apart. The two
+   width tokens above come with it and go unused there: a park row prints one
+   figure where a platoon row prints two, so its grid is its own. */
+.pf-table {
   --spl-label-w: 62px;
   --spl-val-w: 54px;
   /* How far the fill is nested inside the rail: on both long sides, and at the
@@ -6336,7 +6341,8 @@ button.start-line:focus-visible {
    overhang into the table under it. The title is centered by the flex rather than
    by `.pct-card-head`'s `text-align`, which is the same result for one span and
    is untouched on the percentile card that shares that class. */
-.spl-card-head {
+.spl-card-head,
+.pf-card-head {
   position: relative;
   display: flex;
   align-items: center;
@@ -6377,7 +6383,8 @@ button.start-line:focus-visible {
    caller adds to the shared `.info-key*` family: those are `.info-key`'s to set
    and the anchor is this caller's, and a `position: relative` arriving there
    later would silently put the panel back on the button. */
-.spl-card-head .spl-key {
+.spl-card-head .spl-key,
+.pf-card-head .pf-key {
   position: static;
   display: flex;
   align-items: center;
@@ -6395,7 +6402,8 @@ button.start-line:focus-visible {
    button over the panel at both widths. `left: 0` was the other option and is
    worse at the wide end: the panel would run 283 → 603 and stop 60px short of
    its own trigger, which reads as a popover belonging to something else. */
-.spl-card-head .info-key-panel {
+.spl-card-head .info-key-panel,
+.pf-card-head .info-key-panel {
   left: auto;
   right: 0;
 }
@@ -6451,6 +6459,235 @@ button.start-line:focus-visible {
   }
   .spl-val {
     font-size: 11px;
+  }
+}
+
+/* ---- Park factors --------------------------------------------------------
+   Two shapes off one table: the four-figure **strip** a game preview carries,
+   and the sixteen-row **card** the team page's Park tab draws. See
+   `components/ParkFactors.tsx`, which carries the reasoning for both — why the
+   fill points at the index rather than at who it favors, and why every row's
+   scale is the measured 90th percentile of that stat's own league spread.
+
+   The rail itself is `.spl-track` / `.spl-fill`, shared with the platoon card
+   rather than re-cut: a center-zero track with a fill growing out of the middle
+   is the same object in both places. Only the grid around it is here. */
+
+/* The strip, on three different preview dialogs. It sits above the split or the
+   lineup the dialog opened on, so it is a **band rather than a card**: a second
+   panel on a box that already holds one reads as two answers to one press. */
+.pf-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+}
+.pf-strip-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.pf-venue {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+/* The one judgment on the strip, and the only place a park is graded in words.
+   Both leans take the accent and the **word** says which — `hitter's park` and
+   `pitcher's park` are not two states of one scale that a reader could be
+   expected to read off a hue, and this app spends color on state rather than on
+   emphasis. Neutral goes muted, being the absence of a reading. */
+.pf-lean {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.pf-lean--neutral {
+  color: var(--muted);
+}
+.pf-hand {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+  margin-left: auto;
+}
+/* Four figures that must not wrap into a ragged block on a phone: an even grid
+   keeps them in one row down to 320px, where a flex row would break 3+1. */
+/* An even grid rather than a flex row: four figures keep one line down to
+   320px this way, where a flex row breaks 3 + 1. Capped and centered so they
+   do not spread across the whole of a wide dialog — at 900 the strip is the
+   width of the box it garnishes and the figures were 250px apart, which reads
+   as four separate readings rather than one park. */
+.pf-figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+}
+.pf-fig {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+/* **No `text-transform: uppercase` here**, where every other small label in
+   this app takes one: these are stat names, and this app spells the first one
+   `wOBA`. Uppercased it renders `WOBA`, which is a different word — the same
+   reason `researchColumns` sets its own casing rather than letting the header
+   row impose one. Size, weight and color carry the label on their own. */
+.pf-fig-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.pf-fig-val {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* The card, on the team page's Park tab. */
+.pf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* The head is **folded onto `.spl-card-head`** rather than given rules of its
+   own, because it is the same object solving the same two problems: the key's
+   panel needs this box as its containing block (anchored to the 30px button it
+   would open off-screen at 390), and the box must not make a **stacking
+   context** — the rows' `.spl-fill`s are absolutely positioned and come after
+   the head in the DOM, so a transformed head would paint the panel underneath
+   the very bars it explains. Both are written out where that rule sits. */
+.pf-venue-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+/* The hand switch takes `.view-switch`'s own shape — it is the same control
+   this app uses everywhere for *which reading of one subject*, and the team
+   page's side switch two rows above it is the same component. Left-aligned
+   rather than full width: three short pills stretched across a card read as a
+   tab strip, which this is not. */
+.pf-hands {
+  align-self: flex-start;
+}
+.pf-sample {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pf-sample strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* label | rail | figure. Three columns where the platoon card's is four, which
+   is the whole reason this grid is its own: a park row has one number. */
+.pf-heads,
+.pf-row {
+  display: grid;
+  grid-template-columns: var(--pf-label-w, 74px) 1fr var(--pf-val-w, 46px);
+  align-items: center;
+  column-gap: 10px;
+}
+.pf-row {
+  min-height: 30px;
+}
+.pf-heads {
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 2px solid var(--border);
+}
+.pf-label {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+/* The strikeout row's mark: the one row where a fill to the right is the
+   pitcher's gain. A letter in a box rather than a color, because it is a fact
+   about what the row *means* and not a state the row is in — and because the
+   fill it qualifies is already the accent. */
+.pf-flip {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 2px 3px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: help;
+}
+/* The axis, named once in the head rather than on every row — the rail's own
+   dashed center line runs down the card and this is what it means. */
+.pf-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+}
+.pf-val {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pf-val--head {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+/* A park that is not the average park in this stat — the figure carries the
+   accent the fill does, so the row survives being read at a glance and being
+   read carefully, which is the platoon card's own rule for its two figures. */
+.pf-val--on {
+  color: var(--accent);
+}
+.pf-val--none {
+  color: var(--faint);
+}
+/* Narrow: the label and the figure give up what they can and the rail keeps the
+   rest, exactly as the platoon table's own narrow block decides. It sits
+   immediately after the rules it overrides — a media query adds no specificity,
+   so a block above them would lose. */
+@media (max-width: 560px) {
+  .pf-table {
+    --pf-label-w: 58px;
+    --pf-val-w: 38px;
+  }
+  .pf-heads,
+  .pf-row {
+    column-gap: 7px;
+  }
+  .pf-label {
+    font-size: 11px;
+  }
+  .pf-val {
+    font-size: 12px;
+  }
+  .pf-fig-val {
+    font-size: 14px;
   }
 }
 

@@ -640,6 +640,85 @@ nightly: `/api/report` reads this for every opponent a watched pitcher has, so a
 reader must never be the one paying for it.
 
 
+### Park factors: the ballpark as a number, and why the join is the venue
+
+`parkFactors.ts` reads Savant's **Statcast Park Factors** board — every park,
+sixteen indexes, on each of three hitter hands — and it is the source behind the
+team page's Park tab and the strip a game preview draws.
+
+**An index is scaled so that 100 is the average park.** 109 means a plate
+appearance there produces 9% more of that stat than the same plate appearance in
+a neutral park would. Nothing about the digits carries that, so the client's key
+says it in words; see `docs/claude/client-team-page.md`.
+
+**There is no CSV behind this board.** Every other Savant leaderboard this app
+reads answers `&csv=true` with a CSV; this one answers it with the HTML page,
+200 and 124KB of it — the exact failure this file's own header warns about, a
+parameter accepted and ignored. Probed before anything was built on it. What the
+page carries instead is the whole table already reduced, as `var data = [...]`
+on one line of inline script, so the read *is* the page and the parse is a
+`JSON.parse` of one capture. That is the shape every chart on Savant has.
+
+**`stat=` is a sort order, not a projection.** The URL names `index_wOBA`
+because the board wants something to sort by; every one of the sixteen index
+columns is in the payload whichever is named, so one read gets the whole table.
+`rolling=1` is the single season rather than the three-year average the board
+also offers.
+
+**The join is on the venue, and that is the whole feature.** Savant gives each
+row a `venue_id` — MLB's own — alongside a `main_team_id` for the club at home
+there, and it is tempting to key a game's park off the home club instead, since
+they are the same thing almost always. *Almost* is the problem, and it was
+measured against the whole 2026 schedule before the field was added: **10 games
+this season are not at the home club's own park**, and every one of them is a
+game a `homeId` join would have quietly labeled with the wrong park's numbers —
+a Reds "home" game in Mexico City reading as Great American Ball Park. The
+venues themselves are on the board, so the honest join is available and is the
+one taken. Savant spells a neutral site with a **negative** `main_team_id`;
+that becomes `teamId: null` here rather than a guess.
+
+Of the **34 venues** the 2026 season is played at, **33 have a park factor**.
+The one that does not is Journey Bank Ballpark — the Little League Classic, one
+game, too few plate appearances for Savant to index at all — and it draws
+nothing rather than a borrowed number. *A join fails to null, never to a guess.*
+
+**Three reads rather than one, because a park is not one park.** `batSide=`
+empty is both hands together; `L` and `R` are real cuts and were probed before
+being built on, the parameter being exactly the kind that returns 200 and is
+ignored. It is not: on the 2026 board **Yankee Stadium's home-run index is 139
+to a left-handed hitter and 105 to a right-handed one**, and Oracle Park's is
+**64 and 83**. A club's short porch is not a fact about the club, it is a fact
+about which side of the plate a man stands on — which is why the preview shows a
+*hitter* his own side and a *pitcher* both.
+
+**`park-factors-{SEASON}-v1.json`, six hours in memory and in the storage tier
+behind one `inFlight` guard** — `expectedStats.ts`'s own shape. A park index is
+a season to date over ~14,000 plate appearances, so a day's games move it by a
+point at the outside, and three page reads is more than any single request
+should be made to wait for twice. The whole answer is **22,826 bytes of JSON,
+4,423 gzipped** (measured), which is what makes one route for every park cheaper
+than one route per club.
+
+**`venueId` rides on three types and needed no cache bump.** `ScheduleGame`
+takes it from the schedule fetch (`venue` added to the `fields` whitelist, which
+is leaf-matched, so naming the parent is the whole of it), `ProjectedStart`
+passes it through, and `PlayerGame` takes it off the game feed (`'venue'` added
+to `FEED_FIELDS`, same reason). `DayGame` carries it into the day snapshot and
+`DAY_SNAPSHOT_VERSION` **stayed at 9**, which is this file's version rule applied
+rather than skipped: the test is not whether a field rides in the blob but
+whether anything reads it back out of one, and nothing does — the only readers
+are the three game previews, which draw for a `scheduled` game alone, where a
+snapshot is written only once every game on the day is final and settled. A v9
+blob deserializes with it undefined and every build site coalesces to `null`,
+which is the same answer a feed carrying no venue gives.
+
+**The route 502s honestly**, where every enrichment in this server costs its own
+column and nothing more. That is the `/api/schedule` exception and the same
+test: the answer *is* the table. A park factor drawn as a dash because the
+upstream was down is indistinguishable from a park Savant has no index for, and
+this is the one reading in the app where the difference between *average park*
+and *we could not ask* is the whole of the fact.
+
 ### Team research: thirty clubs on the research board, and what reconciles
 
 `teamResearch.ts`. The board's **team reading** (see **Client — research**) is

@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { RefObject } from 'react';
 import { LIVE_POLL_MS } from './lib';
-import type { PlayerStatus, RecentNews } from './types';
+import type { ParkFactor, PlayerStatus, RecentNews } from './types';
 
 /**
  * Whether clips play with the sound off — the settings menu's "Mute clip
@@ -237,6 +237,85 @@ export const HandednessContext = createContext<Map<number, Handedness> | null>(n
 
 export function useHandedness(id: number): Handedness | null {
   return useContext(HandednessContext)?.get(id) ?? null;
+}
+
+/**
+ * **Every ballpark's park factors, and the way to ask for them.**
+ *
+ * A context for the reason the four above are: the readers are leaves. The
+ * park line on a game preview is drawn inside three different dialogs, each of
+ * them several components below `App` and one of them inside a `map` where a
+ * prop would have to be threaded through the feed, the player group and the
+ * row; the team page's Park tab is inside an overlay. What they all want is one
+ * league-wide table that none of them should be fetching for itself.
+ *
+ * Keyed by **venue** rather than by club — see `ParkFactor.teamId` in
+ * `types.ts` for why that distinction is the whole feature, and the route for
+ * the ten games a season it is measured to matter on.
+ *
+ * **`need` is what makes the read lazy**, the idiom `onNeedSchedule` and
+ * `onNeedRankPopulations` already use: nothing is fetched until a surface that
+ * draws a park says it wants one, so a reader who never opens a preview or a
+ * team page never pays for the request. It is safe to call on every render —
+ * `App` sets a flag that is already set.
+ */
+export interface ParkFactorsRead {
+  /** Every park by venue id, or null before the read lands (and for a reader
+   *  whose surfaces have not asked). */
+  byVenue: Map<number, ParkFactor> | null;
+  /** True while the one request is out and has not answered. */
+  loading: boolean;
+  /** The message, where the read failed. The park is the whole of what these
+   *  surfaces are drawing, so a failure is said rather than swallowed. */
+  error: string | null;
+  /** Ask for the table. Idempotent; safe in an effect with no deps. */
+  need: () => void;
+}
+
+export const ParkFactorsContext = createContext<ParkFactorsRead>({
+  byVenue: null,
+  loading: false,
+  error: null,
+  need: () => {},
+});
+
+/**
+ * **One park, and the read it came from** — for a surface that knows which
+ * venue it is drawing. Asks for the table on mount, so a caller need only
+ * render the answer.
+ *
+ * A null `venueId` is a game whose park this app was never told (an older
+ * cached game, a feed that carried none), and answers `park: null` **without**
+ * asking for the table: there would be nothing to look up in it.
+ */
+/**
+ * **The whole park table, asked for on mount** — for a surface that has no
+ * venue to look up.
+ *
+ * The team page's Park tab is the case: it has a *club*, and the club → park
+ * direction is the one lookup in this feature that does not go through a venue
+ * id. Everything else should take `useParkFactor` and a venue.
+ */
+export function useParkFactors(): ParkFactorsRead {
+  const read = useContext(ParkFactorsContext);
+  const { need } = read;
+  useEffect(() => {
+    need();
+  }, [need]);
+  return read;
+}
+
+export function useParkFactor(venueId: number | null): {
+  park: ParkFactor | null;
+  loading: boolean;
+  error: string | null;
+} {
+  const { byVenue, loading, error, need } = useContext(ParkFactorsContext);
+  useEffect(() => {
+    if (venueId != null) need();
+  }, [venueId, need]);
+  if (venueId == null) return { park: null, loading: false, error: null };
+  return { park: byVenue?.get(venueId) ?? null, loading, error };
 }
 
 /**

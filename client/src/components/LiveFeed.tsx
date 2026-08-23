@@ -30,6 +30,7 @@ import {
   useDelayedFlag,
   useLockBodyScroll,
   useOverlayChromeOffset,
+  useHandedness,
   useOverlayFocus,
 } from '../hooks';
 import { BackButton } from './BackButton';
@@ -37,6 +38,7 @@ import { LoadingLine } from './Loading';
 import { DialogLayerContext, Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
+import { GamePark, hitterHand } from './ParkFactors';
 import { BatterSplitsTab } from './PlatoonSplits';
 import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
@@ -918,6 +920,11 @@ export function UpcomingRow({
   // there is no half to mark, and the row's reason to open at all is the man who
   // has been named for it.
   const spHand = sp?.hand === 'L' ? 'L' : sp?.hand === 'R' ? 'R' : null;
+  // Which side of the plate he stands on, for the park's own cut. Off
+  // `HandednessContext` — the season roster this app already holds — so it
+  // costs no request, and a man it has never listed falls to both hands
+  // together rather than to a guessed side.
+  const bats = useHandedness(report.id)?.bats ?? null;
   const expandable = isPitcher ? !!game.opponentHitting : spHand !== null;
   const spKey = sp ? playerKey({ id: sp.id, kind: 'pitcher' }) : null;
   // The bar under the name: matchup, the SP chip, the other side's announced
@@ -982,6 +989,28 @@ export function UpcomingRow({
           onClose={() => setOpen(false)}
         >
           <div className="upcoming-detail">
+            {/* **The ballpark, above whatever the reader pressed for.** It is
+                the one fact about a scheduled game that is already knowable in
+                full — the split below it is a season's worth of one man and
+                the lineup is the other club's, but the park is settled the
+                moment the fixture is — and it moves both readings: a platoon
+                edge worth 40 points of wOBA is being read inside a park worth
+                nine of it either way.
+
+                A **batter** is shown his own side of the plate, and a switch
+                hitter is resolved off the very fact this dialog opened to show
+                — the hand the announced starter throws with. A **pitcher** is
+                shown both hands, because he faces whichever nine the other club
+                writes down. */}
+            <GamePark
+              venueId={game.venueId}
+              hand={isPitcher ? 'all' : hitterHand(bats, spHand)}
+              handNote={
+                isPitcher
+                  ? 'The park as it plays to both hands — he faces whoever they write down.'
+                  : undefined
+              }
+            />
             {isPitcher ? (
               <OpponentSection
                 hitting={game.opponentHitting}

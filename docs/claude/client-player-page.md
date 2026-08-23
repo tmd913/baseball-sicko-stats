@@ -2113,3 +2113,50 @@ non-blank lines of the original is present exactly once across the three**, with
 nothing added but the paragraph at the head of each. References elsewhere to
 "see **Client — the player page**" still resolve, all three being imported
 together — follow them by the tab they name.
+
+### The park, on every game preview
+
+**Three doors open one preview** — the feed's Upcoming row, the Overview's
+Projected Starts row and the Schedule tab's game row — and each of them now
+draws `GamePark` above whatever the dialog opened on: for a batter the platoon
+card, for a pitcher the opposing lineup.
+
+**It goes above, not below.** The park is the one fact about a scheduled game
+that is settled the moment the fixture is — the split under it is a season's
+worth of one man and the lineup is the other club's, both of which are readings
+of people — and it moves both: a platoon edge worth 40 points of wOBA is being
+read inside a park worth nine of it either way.
+
+**A strip rather than the sixteen-row card**, because of what is under it. This
+box already holds a nine-cut opposing lineup or a whole platoon comparison, and
+sixteen more bars would bury the thing the reader pressed for. Four figures —
+wOBA, runs, home runs, strikeouts — are the ones that change how a night reads;
+the rest are a reading of the park itself and live on its club's page, one press
+away.
+
+**A hitter is shown his own side of the plate and a pitcher is shown both.** He
+faces whichever nine the other club writes down, so the park he works in is the
+park as it plays to everybody; a hitter stands on one side all night, and on the
+2026 board that is worth **34 points of home-run index at Yankee Stadium**.
+
+**A switch hitter is resolved off the very fact the dialog opened to show** —
+the hand the announced (or projected) starter throws with, which decides the
+side he will actually bat from. Verified in the running app: Adley Rutschman
+(`bats: S`) against a left-handed starter draws the **vs RHB** cut. Unknown
+handedness falls to both hands together rather than guessing a side, both hands
+being a true reading of the park where the wrong side is not.
+
+**It draws nothing rather than a wait.** Rule 1 of the loading system, and this
+is the case it is for: the block is a garnish on a dialog whose content is
+already up, so a park still being read shows nothing at all rather than a
+spinner over somebody's platoon splits. It appears when it has something to say,
+and a game whose venue this app was never told (`venueId: null`) never asks.
+
+**One league-wide table behind all four surfaces**, held by `App` and shared
+through `ParkFactorsContext` — the shape `PlayerStatusContext`,
+`EligibilityContext`, `RecentNewsContext` and `HandednessContext` already have,
+and for their reason: the readers are leaves, three and four components down
+inside dialogs and one of them inside a `map` where a prop would have to be
+threaded through the feed, the player group and the row. **Lazy**, on
+`needSchedule`'s own idiom, so a session that opens no team page and previews no
+game never pays for the request.
