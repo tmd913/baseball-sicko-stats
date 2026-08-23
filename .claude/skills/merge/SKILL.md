@@ -388,6 +388,22 @@ the `deploy` skill is the next step, and it starts from the working tree.
   *single* bump past the higher of the two, not both edits kept and not the lower one
   chosen — a stale blob deserializes with the new fields missing and quietly costs
   every row those fields for six hours.
-- **The season is hardcoded in seven places.** If a branch rolled the season over,
-  confirm all seven survived the merge (`savant.ts`, `percentiles.ts`, `xwoba.ts`,
-  `pitcherArsenal.ts`, `teamStats.ts`, `expectedStats.ts`, `research.ts`).
+- **The season is pinned in several places and a rolled-over branch must keep all
+  of them.** **`CLAUDE.md` holds the list and the count; do not trust a copy.** This
+  bullet carried its own list for a while and went stale twice — it said *seven*
+  when the answer was ten, then eleven, and it named `teamStats.ts`, a file that no
+  longer exists, while missing five that do. A merge checklist restating a list that
+  grows with every new upstream is a second source that drifts, which is the fault
+  this repo's own docs warn about. So the check is a command, not a memory:
+
+  ```bash
+  # declarations, which is what has to be updated — plus savant.ts, whose pin is
+  # written `hfSea: '2026|'` and so is not matched by the `hfSea=` half
+  grep -rn "hfSea=\|CURRENT_SEASON = \|SEASON = " server/src/ | grep -v '\${SEASON}'
+  grep -n "hfSea: '" server/src/savant.ts
+  ```
+
+  Count what those print, compare it against the number `CLAUDE.md` states, and if
+  they disagree the *prose* is what is wrong — `CLAUDE.md` says so itself and records
+  having been one behind twice. Also check `leagueRates.ts` and `pitchLeague.ts`,
+  whose league constants are read off one season's board.
