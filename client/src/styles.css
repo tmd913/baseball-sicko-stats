@@ -3963,6 +3963,43 @@ body {
     inset 0 -1px 0 var(--border),
     var(--shadow-bar);
 }
+/* ---- …and a chrome with no tab strip has to close itself ------------------
+   `.details-chrome` carries **no bottom padding**, and is right not to: on the
+   player page its last child is the tab strip, whose active tab's 2px underline
+   *is* the bar's bottom edge — the inset shadow is drawn under it deliberately,
+   and a padding there would lift the underline off the line it is part of.
+
+   **Two of the boxes that take this rule have no strip in them**, and in both
+   the last child is a head, whose own bottom margin then **collapses straight
+   through the bar** and becomes the gap *below* it. The New plays page is one
+   and has never had a strip; the **outing page** is the other and has one only
+   once the outing has landed — so this is the shape a reader sees for the
+   386–715ms the read takes, which is exactly when they are looking at it.
+   Measured at 1200 on a Game Log row's press, with the day read held at 5s of
+   latency: the chrome was **66px** — 20 of top padding plus a 46px head plus
+   nothing — with the pitcher's name and the game line sitting flush on the
+   hairline, and the 20px the head thought it had outside the box.
+
+   So the number moves onto the parent, where a padding cannot collapse, and the
+   head gives its margin up. **16px rather than the head's own 20**: the top
+   padding is clearing a window edge and a rounded corner where this is clearing
+   text from a rule, and 16 is the gap every other box on these two pages reads.
+   The gap to the content below is untouched — that is `.details-chrome`'s own
+   `margin-bottom: 16px`, which is what the head's margin was collapsing into
+   and is now the only thing there.
+
+   **One rule for both, rather than a rule each**, which is this file's standing
+   fold: they are the same object — a details chrome whose last child is a head
+   — and `:has()` is what says so, where two hand-written copies would be two
+   rules that agree today. `.newplays-chrome` and `.newplays-head` carried this
+   number and its measurement and no longer declare it; their paragraphs are
+   left where they are, pointing here. */
+.details-chrome:not(:has(.details-tabstrip)) {
+  padding-bottom: 16px;
+}
+.details-chrome:not(:has(.details-tabstrip)) > .details-head {
+  margin-bottom: 0;
+}
 /* A window with no room for it gets the old behavior back, on the page's own
    rule and for its own reason. The note here used to read *a phone held sideways
    is about 390px tall, and 139px of chrome is 36% of it* — which was the right
@@ -7049,6 +7086,10 @@ button.start-line:focus-visible {
    ended up going. */
 .settings-btn,
 .fantasy-btn,
+/* The fifth: the way to the league's moves, beside the fantasy button it is
+   about. Folded on rather than restyled, which is what keeps every icon button
+   in this header identical by construction. */
+.tx-btn,
 .edit-order-btn,
 .search-toggle {
   flex: none;
@@ -7067,6 +7108,7 @@ button.start-line:focus-visible {
 }
 .settings-btn:hover,
 .fantasy-btn:hover,
+.tx-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover {
   color: var(--text);
@@ -7074,6 +7116,7 @@ button.start-line:focus-visible {
 }
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
+.tx-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible {
   outline: 2px solid var(--accent);
@@ -7230,7 +7273,14 @@ button.start-line:focus-visible {
 /* And the Rankings tab's span bar, which is this same band in this same
    arrangement one view over: a viewport-tall column with one scroller in it,
    the tools row scrolling away and the bar holding the top of the pane. */
-.league-scroll > .date-bar {
+.league-scroll > .date-bar,
+/* **And the Scoreboard tab's week bar**, which is the fourth placement and the
+   one that was drawing none of this. It is the app's own arrangement — a page
+   the window scrolls, the tools row in the flow and the bar pinned under the
+   chrome — except that the bar is one box further down the tree, `.league-view`
+   being what holds the tab. That depth is the whole reason it was left out; it
+   is not a reason for the band to look different. */
+.league-view > .date-bar {
   /* The same ground as the row above it, and for its reason — see
      `.view-tools`. The two are one band and neither may be a rectangle. */
   background: var(--bg);
@@ -7268,7 +7318,8 @@ button.start-line:focus-visible {
 .app > .date-bar::after,
 .mup-view > .date-bar::after,
 .summary-scroll > .date-bar::after,
-.league-scroll > .date-bar::after {
+.league-scroll > .date-bar::after,
+.league-view > .date-bar::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -7277,6 +7328,28 @@ button.start-line:focus-visible {
   pointer-events: none;
 }
 .app > .date-bar {
+  position: sticky;
+  top: var(--chrome-h);
+  z-index: 39;
+}
+/* **The Scoreboard tab's week bar sticks to the same edge**, and it is the same
+   declaration rather than a second one that agrees today — which is why it sits
+   in this rule's own list rather than in a block of its own further down.
+
+   It was the one statement of *which days these numbers are* in the app that
+   scrolled away. The bar says which week the whole page is of, and a manager
+   reading down ten matchup cards on a phone had to go back up to find out — the
+   very complaint that put the app's own dates against the chrome in the first
+   place, made again one view over. The cards under it are 252px each, so on a
+   390px phone the week is off the top of the screen by the third card.
+
+   **`.league-view >` rather than `.app >`**, because the bar is a child of the
+   tab rather than of the page: `LeagueView` draws the Scoreboard's own
+   component, and the bar is that component's first child. The box between it
+   and `.app` is static and in normal flow, so it changes nothing about what the
+   bar sticks *to* — a sticky box sticks to the nearest scrollport, which here is
+   the window either way. */
+.league-view > .date-bar {
   position: sticky;
   top: var(--chrome-h);
   z-index: 39;
@@ -7296,7 +7369,11 @@ button.start-line:focus-visible {
    block that only won on order. The pane's own bar on the two board views is not
    a sibling of the chrome and is untouched, which is right: that one sticks to
    the pane. */
-.app-chrome[data-unpinned] ~ .date-bar {
+.app-chrome[data-unpinned] ~ .date-bar,
+/* The League's week bar takes it through the box it is in, which is the same
+   sibling test one level longer — `.league-view` is the chrome's own later
+   sibling, exactly as the page's bar is. */
+.app-chrome[data-unpinned] ~ .league-view > .date-bar {
   position: static;
 }
 
@@ -7380,6 +7457,46 @@ button.start-line:focus-visible {
      would put the row past the window's edge. */
   padding-inline: var(--table-bleed, 0px);
 }
+/* ---- The board's control set does not scroll the board --------------------
+   **A sideways gesture that lands on this row moved the table under it**,
+   reported exactly so. The row is a sticky child of the pane the table scrolls
+   in, so it is pinned at `left: 0` and never moves — but it is *in* that pane,
+   and the pane is the nearest scrollable ancestor of every pixel of it that is
+   not inside one of the three runs. So a two-finger swipe or a thumb landing on
+   the row's own 22px side padding, or in the 10px between two runs, scrolled the
+   columns: the control set stood still and the board slid, which reads as
+   dragging something that isn't there.
+
+   The runs themselves were never the fault and are the proof of what the fix
+   has to be: `.tool-scroll-box` is `overflow-x: auto` with
+   `overscroll-behavior-x: none`, so it is a scroll container and a gesture that
+   lands in one is spent there whether or not it has anywhere to go. Measured at
+   1200 with a 200px horizontal wheel, `.research-scroll.scrollLeft` after:
+   **200 on the row's left padding, 200 on the strip above the runs, 0 inside a
+   run**. So the row takes the same pair and becomes the scroll container it was
+   already behaving like the inside of. After: **0, 0, 0**.
+
+   **`overscroll-behavior-x` alone would do nothing**, which is the trap: the
+   row is not a scroll container, so there is no chaining to prevent — the pane
+   is simply the box that scrolls. `overflow: hidden` is what interposes one.
+
+   **The block axis is left to chain**, deliberately: this row has no scrollable
+   overflow of its own, so a vertical wheel over it passes to the pane exactly as
+   before (measured: `scrollTop` 300 either way, with the condensed run appearing
+   and the sentinel above the stick line still un-clipped and reporting).
+
+   **And it is this pane's row alone, not the fold the two selectors above
+   make.** The Roster's tools row and the League Rankings' each open a
+   *projection key* out of their own box — a four-paragraph panel that hangs
+   below the row — and a row that clips would clip it. Nothing in the board's
+   control set leaves the row: its two dialogs are `Modal`s in a portal, and
+   `Search` and `Filters` open rows *inside* the bar, which is why this one can
+   take the rule and the other two cannot. Checked by clicking all 26 controls in
+   the row and looking for a descendant outside its rect — **none**. */
+.research-scroll > .view-tools {
+  overflow: hidden;
+  overscroll-behavior-x: none;
+}
 /* **The Rankings pane's second row of chrome is a date bar**, where it was a
    caption (`.lg-span-detail`, gone with it). It sticks against the same
    scrollport the tools row above it and the header row below it do — the rule
@@ -7442,8 +7559,18 @@ button.start-line:focus-visible {
    band ending exactly there). A margin rather than padding, and the distinction
    is the one the rule above turns on: padding is band, and there is no band to
    continue here — this is the space between two different things, which is what
-   a margin is for. */
-.view-tools:not(:has(+ .date-bar)) {
+   a margin is for.
+
+   **The second test is the League Scoreboard's**, where a bar *does* follow and
+   the adjacent one cannot see it: the tab is a box of its own (`.league-view`)
+   and the week bar is its first child, so `+ .date-bar` matches nothing and the
+   band was cut in two by a 14px strip of page above a bar that then pinned
+   itself against the chrome anyway. One more relative selector rather than a
+   class, which is the rule the two `:has()` tests below already follow: nothing
+   about this row changes, what changes is what follows it. The other two League
+   tabs are untouched — Rankings puts its row inside its own pane and
+   Transactions has no bar — so both keep the gap. */
+.view-tools:not(:has(+ .date-bar)):not(:has(+ .league-view > .date-bar)) {
   margin-bottom: var(--tools-band-gap);
 }
 /* **The band starts where the chrome ends.** The bar above closes itself with a
@@ -7919,6 +8046,9 @@ button.start-line:focus-visible {
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
 .app.edit-mode .fantasy-menu,
+/* And the button beside it, which leads out of this screen to another page —
+   the same statement the entry above makes. */
+.app.edit-mode .tx-btn,
 .app.edit-mode .view-bar,
 /* The tools row goes with it. It is gated on `!editMode` in the render as well
    — a reading toggle over a screen with no table to read is not a thing this
@@ -11694,17 +11824,34 @@ button.start-line:focus-visible {
    moving the two tabs beside it each time. The corner it sits in is the 12px
    of horizontal padding the label never reaches, so it overlaps nothing at any
    width. */
-.lg-tab {
+/* **And the same mark on the header button that leads here**, which is a
+   reversal of the sentence beside it: the dot was kept off the League pill
+   deliberately, on the grounds that *the tabs are drawn only on the League
+   view, so the dot is a statement about a page you are already on*. That
+   argument is right about the pill and is exactly why the mark is worth having
+   on `.tx-btn` — a button on every view, whose whole errand is *has anybody
+   done anything*. One rule for both, so the two can never come to be two
+   different reds; the corner each sits in is its own, a 36px square having no
+   label to keep clear of and 5px of its own edge to spare. */
+.lg-tab,
+.tx-btn {
   position: relative;
 }
-.lg-tab-dot {
+.lg-tab-dot,
+.tx-dot {
   position: absolute;
-  top: 4px;
-  right: 5px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--strikeout);
+}
+.lg-tab-dot {
+  top: 4px;
+  right: 5px;
+}
+.tx-dot {
+  top: 5px;
+  right: 5px;
 }
 
 /* ---- Live feed (per-at-bat stream) ---- */
@@ -12718,10 +12865,15 @@ button.start-line:focus-visible {
    into and is now the only thing there.
 
    `--details-chrome-h` follows by itself: `useOverlayChromeOffset` measures the
-   border box, so 66 → **82** at 1400 and 390 without a line of it being told. */
-.newplays-chrome {
-  padding-bottom: 16px;
-}
+   border box, so 66 → **82** at 1400 and 390 without a line of it being told.
+
+   **The declaration is not here any more and the paragraph is.** The outing
+   page's chrome turned out to be the same box in its loading state — a head
+   with no strip under it, flush on the hairline — so the number and the
+   `margin-bottom: 0` below are one rule keyed on *there being no strip*
+   (`.details-chrome:not(:has(.details-tabstrip))`, which is where the second
+   measurement is). This page is unchanged by the move: it never has a strip, so
+   the rule matches it at every width, and the chrome still measures 82. */
 /* The head takes the feed's own column rather than the player page's 680: every
    card under it is `--card-column` wide, so a 680 head would be indented 60px
    from the content it names. `.details-head` is otherwise unchanged — a wrapping
@@ -12750,9 +12902,9 @@ button.start-line:focus-visible {
      last child" — the pill row's old job, `.details-chrome` having none of its
      own. A margin cannot do that job: with no padding or border on the parent's
      bottom edge it **collapses through it**, so the 16px was never inside the
-     bar at all and the head sat flush on the hairline. See `.newplays-chrome`,
-     which carries the number and the measurement. */
-  margin-bottom: 0;
+     bar at all and the head sat flush on the hairline. Neither declaration is
+     written here now: both belong to the chrome-with-no-strip rule beside
+     `.details-chrome`, which the outing page's loading state needed as well. */
 }
 .newplays-id {
   flex: 1 1 auto;
@@ -14835,6 +14987,19 @@ button.start-line:focus-visible {
    one it is once several are in view. */
 .lg-matchup.lg-mine {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+/* **A projected card is drawn as a projection**, which is this app's standing
+   rule that an estimate never wears the same clothes as a measurement — the
+   percentile card's dotted bubble, the Splits card's hatched fill, the Schedule
+   grid's dashed chip, the matchup page's own `.mup-proj`. A **dashed border** is
+   that rule at the size of a whole card, since every figure on it is projected
+   rather than one of them: marking each cell would be the same claim made twenty
+   times.
+
+   It sits after `.lg-mine` so the reader's own projected matchup keeps its accent
+   *and* takes the dash — the two say different things and both are true. */
+.lg-matchup.lg-proj {
+  border-style: dashed;
 }
 .lg-mine-tag {
   font-size: 10px;
