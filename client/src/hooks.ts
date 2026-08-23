@@ -9,7 +9,14 @@ import {
 } from 'react';
 import type { RefObject } from 'react';
 import { LIVE_POLL_MS } from './lib';
-import type { ParkFactor, PlayerStatus, RecentNews } from './types';
+import type {
+  ParkFactor,
+  PlayerGame,
+  PlayerReport,
+  PlayerStatus,
+  RecentNews,
+  ScheduleGame,
+} from './types';
 
 /**
  * Whether clips play with the sound off — the settings menu's "Mute clip
@@ -288,6 +295,35 @@ export const ParkFactorsContext = createContext<ParkFactorsRead>({
  * cached game, a feed that carried none), and answers `park: null` **without**
  * asking for the table: there would be nothing to look up in it.
  */
+/**
+ * **The door onto a game preview**, from a cell that is not the dialog's owner.
+ *
+ * The summary table's opponent cell raises the same box the feed's Upcoming row
+ * and the player page's Schedule row do, and it cannot own it: the cell is
+ * inside a `map` inside a row inside one of two tables, and the dialog needs
+ * state (which game is open, and the opposing club's board once it is read)
+ * that belongs to the table rather than to a cell. So the table provides this
+ * and the cells call it — the same shape `TeamDoorContext` below has, and for
+ * the same reason.
+ *
+ * Two shapes because the two readings of that table hold two different objects:
+ * the stats reading has a **`PlayerGame`** (which carries the announced starter
+ * and, for a watched pitcher, the opposing club's board), and the Schedule view
+ * has a **`ScheduleGame`** (which carries neither, so the starter is the
+ * projection's and the board is read on demand). They are tagged rather than
+ * sniffed, so the table's dialog knows which preview to raise without testing
+ * for a field.
+ */
+export type PreviewTarget =
+  | { kind: 'game'; report: PlayerReport; game: PlayerGame }
+  | { kind: 'fixture'; report: PlayerReport; game: ScheduleGame };
+
+export const PreviewDoorContext = createContext<((t: PreviewTarget) => void) | null>(null);
+
+export function usePreviewDoor(): ((t: PreviewTarget) => void) | null {
+  return useContext(PreviewDoorContext);
+}
+
 /**
  * **The one door into a club's page.**
  *

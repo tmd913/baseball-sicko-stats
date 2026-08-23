@@ -618,54 +618,80 @@ ladder reads 100 / 156 / 210 at rest with page-body overflow **0**. Expanded:
 one date bar, in `.expanded-chrome`, `has-pane-chrome` off, `thead` at the
 pane's own top (**117** against a pane at 116).
 
-### The opposing club is a door to its page, in both readings
+### The opponent opens the game, in both readings
 
-The abbreviation is what every table in this app calls a club, and it was the
-one place a club was named that a reader could not get to it from: the Brewers'
-page was reachable from a research row, from a player's own head and from the
-header search, but not from the `vs MIL` you were actually looking at while
-deciding whether to start somebody against them. Both readings of this table now
-open it — the stats reading's opponent cell and the Schedule view's day cells.
+The abbreviation is what every table in this app calls a club, and it is the
+thing a reader is already looking at while deciding whether to start somebody —
+so it is the handle for **the whole matchup**. Pressing it raises the same game
+preview the feed's Upcoming row and the player page's Schedule row raise: the
+ballpark, and either his split against the announced starter or the lineup
+waiting for him.
 
-**One component, `OpponentDoor`**, living in `schedule.tsx` beside
-`opponentText`, which is where this app's matchup vocabulary already lives. It
-reads `TeamDoorContext` rather than taking a prop, for the reason the park strip
-does: these are cells inside a `map` inside two different tables, and
-`App::openTeam` is the one door in. A club with no id — the join-to-null case —
-draws as the plain text it always was rather than as a door that goes nowhere.
+**It led to the club's *page* for one commit and no longer does.** The club is
+still one press further on — the venue's name inside the preview is a door to
+its Park tab — but a reader pressing `vs MIL` on his own roster is asking *what
+is this game*, not *who are the Brewers*, and the club page answers the second
+question at the cost of the first.
 
-**The door is the whole matchup where a matchup is written, and the
-abbreviation alone where a score is.** Before first pitch the cell writes
-`vs HOU`, so the target is all of it: prefix and abbreviation are one fact, and
-eleven characters at 12px is a small enough target already. Once there is a
-score the cell stops writing a matchup and writes `TOR 3–2 NYY`, where the only
-thing naming a club is an abbreviation in the middle of a line — so the door
-shrinks to that abbreviation and the digits stay plain text.
+**A fourth caller is what turned the dialog into a component.** It was the body
+of `UpcomingRow`, copied in shape by the player page's Schedule row and its
+Projected Starts row; three copies agreeing was already the trap this codebase
+spends its comments on, and four would have been where they stop agreeing. So
+`UpcomingPreview` and `canPreview` came out of `LiveFeed.tsx`, and
+`SchedulePreview` and `canPreviewFixture` out of `PlayerSchedule.tsx`, and every
+surface now asks the same predicate rather than spelling the test again.
 
-**Only the opposing half of a line score is a door.** The other is the player's
-own club, whose page he is one press from on his own row already. Linking both
-would offer a choice nobody asked for and make the row's real targets harder to
-hit. Measured in the running app: `SF 3–5 BOS` on a Red Sox batter's row draws
-exactly one door, `SF`, and pressing it lands on `team=137`; the row's own name
-still opens `player=batter-668939`.
+**Two components rather than one, because the two readings hold two different
+objects.** The stats reading has a `PlayerGame`, which carries the announced
+starter and — for a watched pitcher — the opposing club's board already. The
+Schedule view has a `ScheduleGame`, which carries neither: the starter is
+`opposingStarter`'s (announced *or* projected, with the tier saying which) and
+the board is read on press. Folding them would be one component taking both
+shapes and using half of each.
 
-**A postponement is not a door.** The Schedule view's cell says `PPD` there, and
-a link under a word that is not a club's name leads somewhere the reader did not
-ask to go.
+**The dialog is the table's, not the cell's.** One is open at a time, and the
+state that goes with it — the opposing club's board — is a read this table
+should make once per club rather than once per cell. So `SummaryTable` holds it
+and the cells reach it through `PreviewDoorContext`, the same shape
+`TeamDoorContext` has and for the same reason: a cell is inside a `map` inside a
+row inside one of two tables.
+
+**Only a game nobody has played is a preview.** The dialog is a reading of a
+matchup *before* it, so a live or final opponent stays plain text and lets the
+score be the answer — which is also why the stats reading's cell shows the score
+in the first place. Measured on today's board: 31 opponent cells, 6 pressable,
+all 6 the day's only scheduled game; on tomorrow's, 14 of them.
+
+**A postponement is not a press.** The Schedule view's cell says `PPD` there,
+and a press under a word that is not a club's name opens something the reader
+did not ask for.
 
 **`color: inherit` is load-bearing.** A live game's opponent is green and a
-postponed one amber, and those are set on the cell *around* this button — a door
-that took a color of its own would undo the one thing these two tables spend
-color on. Verified: the live rows keep their green through the door.
+postponed one amber, set on the cell *around* the button — a press that took a
+color of its own would undo the one thing these two tables spend color on.
 
-**It cost `gameStatusView` a field and the app a duplicated formatter.** The cell
-cannot put a link through the middle of a finished string, so that function now
-hands back `sides` — the four parts — alongside `score`, with `score` built from
-them so the two cannot disagree. Building it that way turned up the duplication:
-`gameStatusView` was spelling `${away} ${a}–${h} ${home}` inline while
-`lib.ts::scoreLine` twenty lines up spelled it identically for the feed. The app
-had two definitions of a line score that happened to agree; one is now the
+**It cost `gameStatusView` a field and the app a duplicated formatter.** The
+stats cell cannot put a press through the middle of a finished string, so that
+function now hands back `sides` — the four parts — alongside `score`, with
+`score` built from them so the two cannot disagree. Building it that way turned
+up the duplication: `gameStatusView` was spelling `${away} ${a}–${h} ${home}`
+inline while `lib.ts::scoreLine` twenty lines up spelled it identically for the
+feed. Two definitions of a line score that happened to agree; one is now the
 other's caller.
+
+**Only the opposing half of a line score is a press.** The other is the player's
+own club, and a row that offered both would make its real targets harder to hit.
+Measured: `SF 3–5 BOS` on a Red Sox batter's row draws exactly one, `SF`.
+
+**Verified in the running app.** From the roster's `@ MIA` cell: *Adley
+Rutschman — BOS @ MIA*, loanDepot park, `wOBA 96 · vs LHB 98 · Runs 96 · HR 85`,
+Sandy Alcantara named, and the platoon card under it — Rutschman switch-hitting,
+so a right-handed starter puts him on the **vs LHB** cut of the park. The one
+fixture that draws no park strip is today's MIL–ATL at **Journey Bank Ballpark**
+(venue 2735), the Little League Classic, which Savant does not index: the join
+falls to null and the strip draws nothing rather than borrowing a number. That
+is the documented case, caught by instrumenting `GamePark` rather than guessed
+at.
 
 ### The Schedule view: the days ahead, in place of the stats
 

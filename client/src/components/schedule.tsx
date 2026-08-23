@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { addDays, handThrows, surname } from '../lib';
-import { useTeamDoor } from '../hooks';
 import type { Column } from './researchColumns';
 import type {
   MatchupWindow,
@@ -721,52 +720,51 @@ export function tallyWords(t: StartTally): string {
 
 /** `@ LAD` / `vs SEA` — what a cell says, and what its column sorts on. */
 /**
- * **An opposing club, as a door to its page.**
+ * **The opposing club as a press**, wherever a table names one.
  *
- * The abbreviation is what every table in this app calls a club, and until now
- * it was the one place a club was named that a reader could not get to it from
- * — you could reach the Brewers' page from a research row, from a player's own
- * head and from the header search, but not from the `vs MIL` you were actually
- * looking at while deciding whether to start somebody against them.
+ * The abbreviation is what every table in this app calls a club, and it is the
+ * thing a reader is already looking at while deciding whether to start somebody
+ * against them — so it is the natural handle for *the whole matchup*, which is
+ * what pressing it opens: the same game preview the feed's Upcoming row and the
+ * player page's Schedule row raise, with the park, and his split against the
+ * announced starter, or the lineup waiting for him.
+ *
+ * **It led to the club's page for one commit and no longer does.** The club is
+ * still one press further on — the venue's name inside the preview is a door to
+ * it — but a reader pressing `vs MIL` on his own roster is asking *what is this
+ * game*, not *who are the Brewers*, and the club page answers the second
+ * question at the cost of the first.
  *
  * **The text is unchanged and the whole of it is the target.** `vs MIL` is
- * eleven characters at 12px, which is a small aimed target already; splitting
- * the door off the `vs` would halve it for no gain, the prefix being part of
- * the same fact. A club this app has no id for — the join-to-null case — is
- * drawn as the plain text it always was rather than as a door that goes
- * nowhere.
- *
- * It reads `TeamDoorContext` rather than taking a prop, for the reason the park
- * strip does: these are cells inside a `map` inside two different tables, and
- * `openTeam` is the app's one door in.
+ * eleven characters at 12px, a small aimed target already; splitting the press
+ * off the `vs` would halve it for no gain, the prefix being part of the same
+ * fact. A cell with nothing to open — see `canPreview` and `canPreviewFixture`
+ * — draws the plain text it always was rather than a press that does nothing.
  */
-export function OpponentDoor({
-  teamId,
+export function OpponentPress({
+  onPress,
   label,
   title,
-  className,
 }: {
-  /** The **opposing** club's MLB id, or null where it could not be resolved. */
-  teamId: number | null;
+  /** What opens, or null where there is nothing to. */
+  onPress: (() => void) | null;
   /** What the cell already says — `vs MIL`, `@ TOR`, or a bare `MIL`. */
   label: string;
-  /** The club's name for the button's own tooltip, where the caller has it. */
   title?: string;
-  className?: string;
 }) {
-  const openTeam = useTeamDoor();
-  if (teamId === null || !openTeam) return <>{label}</>;
+  if (!onPress) return <>{label}</>;
   return (
     <button
       type="button"
-      className={`opp-door${className ? ` ${className}` : ''}`}
+      className="opp-door"
+      aria-haspopup="dialog"
       onClick={(e) => {
-        // The cell sits in a row with its own press targets (the headshot and
-        // the name open the player). Nothing here should reach them.
+        // The row around this has its own press targets — the headshot and the
+        // name open the player. Nothing here should reach them.
         e.stopPropagation();
-        openTeam(teamId, 'overview');
+        onPress();
       }}
-      title={title ?? `${label} — the club’s page`}
+      title={title ?? `${label} — open the matchup`}
     >
       {label}
     </button>
@@ -855,7 +853,11 @@ export function ScheduleCell({
   teamId,
   playerId,
   date,
+  onPreview,
 }: {
+  /** Open this fixture's preview. Absent on any caller that has no dialog to
+   *  raise, which leaves every opponent here as the plain text it was. */
+  onPreview?: (g: ScheduleGame) => boolean | void;
   index: ScheduleIndex;
   teamId: number | null;
   playerId: number;
@@ -883,7 +885,12 @@ export function ScheduleCell({
         const opp = opponentText(g, teamId as number);
         // The club on the other side of this fixture — one subtraction, the row
         // knowing its own. It is what the opponent's abbreviation is a door to.
-        const oppId = teamId === null ? null : g.homeId === teamId ? g.awayId : g.homeId;
+        // **Only a fixture nobody has played is a preview.** A preview is a
+        // reading of a game *before* it — the split against the man they have
+        // named, the lineup waiting — so a live or final cell keeps its plain
+        // text and lets the score be the answer.
+        const press =
+          onPreview && g.state === 'scheduled' ? () => void onPreview(g) : null;
         const vs = opposingStarter(index, g, teamId);
         const title = ppd
           ? `${opp} — postponed`
@@ -911,7 +918,7 @@ export function ScheduleCell({
             {tier ? (
               <span className={`sched-opp-box sched-opp-box-${tier}`}>
                 <span className="sched-opp">
-                  <OpponentDoor teamId={oppId} label={opp} />
+                  <OpponentPress onPress={press} label={opp} />
                 </span>
                 {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
                 <StartChip tier={tier} cadence={rotation?.cadence ?? null} />
@@ -923,7 +930,7 @@ export function ScheduleCell({
                     is not the club's name is a link to something the reader did
                     not ask for. */}
                 <span className="sched-opp">
-                  {ppd ? 'PPD' : <OpponentDoor teamId={oppId} label={opp} />}
+                  {ppd ? 'PPD' : <OpponentPress onPress={press} label={opp} />}
                 </span>
                 {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
               </>

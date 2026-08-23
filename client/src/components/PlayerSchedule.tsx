@@ -364,6 +364,162 @@ const MARK_TAG: Record<StartTier, string> = {
 };
 
 /**
+ * **The game preview for a fixture nobody has a `PlayerGame` for yet** — the
+ * dialog a Schedule row opens, extracted so a second surface can raise it: the
+ * summary table's own Schedule view, whose cells are these same
+ * `ScheduleGame`s.
+ *
+ * It is the twin of the feed's `UpcomingPreview` and deliberately not folded
+ * onto it, the two differing in the one thing that matters here — **where the
+ * other side's starter and lineup come from.** A `PlayerGame` carries the
+ * announced starter and, for a watched pitcher, the opposing club's board; a
+ * `ScheduleGame` carries neither, so the starter is `opposingStarter`'s
+ * (announced *or* projected, with the tier that says which) and the board is
+ * read on demand by the caller's `useOpponentBoards`. Folding them would mean a
+ * component that took both shapes and used half of each.
+ */
+export function SchedulePreview({
+  report,
+  game,
+  index,
+  teamId,
+  name,
+  isPitcher,
+  tier,
+  opp,
+  onLoad,
+  onClose,
+}: {
+  report: PlayerReport;
+  game: ScheduleGame;
+  index: ScheduleIndex;
+  teamId: number;
+  name: string;
+  isPitcher: boolean;
+  tier: StartTier | null;
+  opp: OppRead | undefined;
+  onLoad: (teamId: number) => void;
+  onClose: () => void;
+}) {
+  const when = prettyGameDate(game.date);
+  const matchup = opponentText(game, teamId);
+  const vs = opposingStarter(index, game, teamId);
+  const oppId = game.homeId === teamId ? game.awayId : game.homeId;
+  const oppAbbr = game.homeId === teamId ? game.away : game.home;
+  const vsHand = vs?.hand === 'L' || vs?.hand === 'R' ? vs.hand : null;
+  const bats = useHandedness(report.id)?.bats ?? null;
+  return (
+      <Modal
+        title={`${name} — ${when} ${matchup}`}
+        titleId={`game-opponent-${game.gamePk}`}
+        className="play-detail-box"
+        onClose={onClose}
+      >
+        <div className="start-detail">
+          {/* The ballpark — the one fact about a scheduled game that is
+              settled the moment the fixture is, above the split or the
+              lineup that is not. A batter reads it from his own side of the
+              plate, a switch hitter from the side the man on the mound puts
+              him on; a pitcher reads both hands, facing whichever nine the
+              other club writes down. See `ParkFactors.tsx`. */}
+          <GamePark
+            venueId={game.venueId}
+            hand={isPitcher ? 'all' : hitterHand(bats, vsHand)}
+            handNote={
+              isPitcher
+                ? 'The park as it plays to both hands — he faces whoever they write down.'
+                : undefined
+            }
+            onNavigate={onClose}
+          />
+          {/* **What the box is looking at may itself be a guess**, and it says
+              so where the reader is: on a batter's dialog the half of his
+              split that is marked is the half the *projected* starter would
+              create, and on a starter's it is a turn nobody has named him for.
+              The row says both of those in a tag and an underline, and neither
+              travels into the box. */}
+          {tier && tier !== 'announced' && (
+            <p className="ovw-none">
+              Projected from his rotation slot — nobody has named this start yet, so this is the
+              lineup he <em>would</em> face.
+            </p>
+          )}
+          {isPitcher ? (
+            <OpponentRead
+              opp={opp}
+              opponent={oppAbbr}
+              opponentId={oppId}
+              hand={report.throws}
+              onRetry={onLoad}
+            />
+          ) : (
+            <>
+              {vs && vs.tier !== 'announced' && (
+                <p className="ovw-none">
+                  {oppAbbr} hasn’t named a starter this far out — {vs.full} is who their rotation
+                  puts on the mound, so this is the half of his split that <em>would</em> apply.
+                </p>
+              )}
+              {/* Nobody named *and* nobody projected — the row opens on the
+                  strength of the park and the unmarked split, and says which
+                  of the two it is short of. */}
+              {!vs && (
+                <p className="ovw-none">
+                  Nobody is on the mound for {oppAbbr} yet, named or projected, so neither half of
+                  his split is marked — the ballpark above is settled either way.
+                </p>
+              )}
+              {/* The whole platoon comparison with this game's half marked,
+                  rather than that half alone — the feed's Upcoming dialog
+                  draws exactly this, for the reason `BatterSplitsTab` records:
+                  a split is a comparison, and one side of it is a number. */}
+              <BatterSplitsTab
+                vsLeft={report.splitVsLeft}
+                vsRight={report.splitVsRight}
+                /* Null where neither club has named nor projected anybody —
+                   the whole comparison unmarked, the player page's own Splits
+                   tab. See the feed's `UpcomingRow`. */
+                highlight={vsHand === null ? null : vsHand === 'L' ? 'left' : 'right'}
+                highlightTitle={
+                  vsHand
+                    ? `${vs?.full ?? handThrows(vsHand)} throws ${
+                        vsHand === 'L' ? 'left' : 'right'
+                      }-handed, so this is the half that applies to this game.`
+                    : undefined
+                }
+              />
+            </>
+          )}
+        </div>
+      </Modal>
+  );
+}
+
+/**
+ * **Whether a fixture has a preview worth opening**, the `ScheduleGame` twin of
+ * `canPreview`. Asked by the Schedule row and by the summary table's Schedule
+ * cell, so a cell that presses and a dialog with something in it cannot come
+ * apart.
+ *
+ * A pitcher's is a press by default and goes static on exactly one answer — the
+ * server returning no board for that club — because the opposing line is not
+ * read until somebody presses. A read that *threw* keeps its press, a retry
+ * being a different fact from an absence.
+ */
+export function canPreviewFixture(
+  report: PlayerReport,
+  game: ScheduleGame,
+  isPitcher: boolean,
+  opp: OppRead | undefined,
+): boolean {
+  const hasPark = game.venueId !== null;
+  const known = opp !== undefined && 'board' in opp;
+  if (isPitcher) return !(known && opp.board == null) || hasPark;
+  const hasSplits = (report.splitVsLeft?.pa ?? 0) > 0 || (report.splitVsRight?.pa ?? 0) > 0;
+  return hasSplits || hasPark;
+}
+
+/**
  * One fixture — the same line a projected start is.
  *
  * **A press, and the same press an upcoming game is everywhere else in this
@@ -430,23 +586,11 @@ function GameRow({
   const matchup = opponentText(game, teamId);
   const vs = opposingStarter(index, game, teamId);
   const oppId = game.homeId === teamId ? game.awayId : game.homeId;
-  const oppAbbr = game.homeId === teamId ? game.away : game.home;
-  const vsHand = vs?.hand === 'L' || vs?.hand === 'R' ? vs.hand : null;
-  // His own side of the plate, for the park's cut — off the season roster the
-  // app already holds, so it costs no request. See `ParkFactors.tsx`.
-  const bats = useHandedness(report.id)?.bats ?? null;
-  const known = opp !== undefined && 'board' in opp;
-  /** Whether he has a platoon comparison at all — the test this row used to
-   *  make on the *starter* instead. */
-  const hasSplits = (report.splitVsLeft?.pa ?? 0) > 0 || (report.splitVsRight?.pa ?? 0) > 0;
-  /* **The park is knowable on a fixture nobody has been named for**, which is
-     what lets this row open without a starter. Read off `game.venueId` rather
-     than off the park table, which is fetched lazily and would turn the row
-     pressable after it had already drawn — see the feed's own note. */
-  const hasPark = game.venueId !== null;
-  const expandable = isPitcher
-    ? !(known && opp.board == null) || hasPark
-    : hasSplits || hasPark;
+  /** **`canPreviewFixture`'s to decide**, so this row and the cell in the
+   *  summary table's Schedule view cannot disagree about whether a fixture
+   *  opens — the same reason the feed's row asks `canPreview` rather than
+   *  spelling the test again. */
+  const expandable = canPreviewFixture(report, game, isPitcher, opp);
   // The weekday rides on the row's title rather than in the line. A fantasy
   // week runs Monday to Sunday and the day is worth having, but `prettyGameDate`
   // is how *this page* says a date — on the next-game line and on every
@@ -516,89 +660,18 @@ function GameRow({
           `open`, and a static row has none, so the two cannot contradict each
           other. */}
       {open && (
-        <Modal
-          title={`${name} — ${when} ${matchup}`}
-          titleId={`game-opponent-${game.gamePk}`}
-          className="play-detail-box"
+        <SchedulePreview
+          report={report}
+          game={game}
+          index={index}
+          teamId={teamId}
+          name={name}
+          isPitcher={isPitcher}
+          tier={tier}
+          opp={opp}
+          onLoad={onLoad}
           onClose={() => setOpen(false)}
-        >
-          <div className="start-detail">
-            {/* The ballpark — the one fact about a scheduled game that is
-                settled the moment the fixture is, above the split or the
-                lineup that is not. A batter reads it from his own side of the
-                plate, a switch hitter from the side the man on the mound puts
-                him on; a pitcher reads both hands, facing whichever nine the
-                other club writes down. See `ParkFactors.tsx`. */}
-            <GamePark
-              venueId={game.venueId}
-              hand={isPitcher ? 'all' : hitterHand(bats, vsHand)}
-              handNote={
-                isPitcher
-                  ? 'The park as it plays to both hands — he faces whoever they write down.'
-                  : undefined
-              }
-              onNavigate={() => setOpen(false)}
-            />
-            {/* **What the box is looking at may itself be a guess**, and it says
-                so where the reader is: on a batter's dialog the half of his
-                split that is marked is the half the *projected* starter would
-                create, and on a starter's it is a turn nobody has named him for.
-                The row says both of those in a tag and an underline, and neither
-                travels into the box. */}
-            {tier && tier !== 'announced' && (
-              <p className="ovw-none">
-                Projected from his rotation slot — nobody has named this start yet, so this is the
-                lineup he <em>would</em> face.
-              </p>
-            )}
-            {isPitcher ? (
-              <OpponentRead
-                opp={opp}
-                opponent={oppAbbr}
-                opponentId={oppId}
-                hand={report.throws}
-                onRetry={onLoad}
-              />
-            ) : (
-              <>
-                {vs && vs.tier !== 'announced' && (
-                  <p className="ovw-none">
-                    {oppAbbr} hasn’t named a starter this far out — {vs.full} is who their rotation
-                    puts on the mound, so this is the half of his split that <em>would</em> apply.
-                  </p>
-                )}
-                {/* Nobody named *and* nobody projected — the row opens on the
-                    strength of the park and the unmarked split, and says which
-                    of the two it is short of. */}
-                {!vs && (
-                  <p className="ovw-none">
-                    Nobody is on the mound for {oppAbbr} yet, named or projected, so neither half of
-                    his split is marked — the ballpark above is settled either way.
-                  </p>
-                )}
-                {/* The whole platoon comparison with this game's half marked,
-                    rather than that half alone — the feed's Upcoming dialog
-                    draws exactly this, for the reason `BatterSplitsTab` records:
-                    a split is a comparison, and one side of it is a number. */}
-                <BatterSplitsTab
-                  vsLeft={report.splitVsLeft}
-                  vsRight={report.splitVsRight}
-                  /* Null where neither club has named nor projected anybody —
-                     the whole comparison unmarked, the player page's own Splits
-                     tab. See the feed's `UpcomingRow`. */
-                  highlight={vsHand === null ? null : vsHand === 'L' ? 'left' : 'right'}
-                  highlightTitle={
-                    vsHand
-                      ? `${vs?.full ?? handThrows(vsHand)} throws ${
-                          vsHand === 'L' ? 'left' : 'right'
-                        }-handed, so this is the half that applies to this game.`
-                      : undefined
-                  }
-                />
-              </>
-            )}
-          </div>
-        </Modal>
+        />
       )}
     </li>
   );

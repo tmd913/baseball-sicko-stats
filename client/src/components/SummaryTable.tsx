@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FantasySlotTag, ProjectedSlotTag, readLineup } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
@@ -7,7 +7,7 @@ import { PlayerIdentity } from './PlayerIdentity';
 import { PlayerNewsMark } from './NewsMark';
 import {
   DayHead,
-  OpponentDoor,
+  OpponentPress,
   ScheduleCell,
   gameCount,
   gamesOn,
@@ -18,7 +18,12 @@ import {
 } from './schedule';
 import type { ScheduleIndex } from './schedule';
 import type { FantasySlot } from '../hooks';
-import { useEligible, useFantasyRoster, useFullPage } from '../hooks';
+import { PreviewDoorContext, useEligible, useFantasyRoster, useFullPage, usePreviewDoor } from '../hooks';
+import type { PreviewTarget } from '../hooks';
+import { UpcomingPreview, canPreview } from './LiveFeed';
+import { SchedulePreview, canPreviewFixture } from './PlayerSchedule';
+import { useOpponentBoards } from './OpponentTable';
+import { startTierOn } from './schedule';
 import type {
   BattingLine,
   PitchingLine,
@@ -76,15 +81,9 @@ function pickGame(report: PlayerReport): PlayerGame | null {
  * reader a choice they did not ask for and make the row's own targets harder to
  * hit.
  */
-function OppSide({ abbr, opponent }: { abbr: string; opponent: PlayerGame }) {
+function OppSide({ abbr, opponent, onPress }: { abbr: string; opponent: PlayerGame; onPress: (() => void) | null }) {
   if (abbr !== opponent.opponent) return <>{abbr}</>;
-  return (
-    <OpponentDoor
-      teamId={opponent.opponentId}
-      label={abbr}
-      title={`${abbr} — the club’s page`}
-    />
-  );
+  return <OpponentPress onPress={onPress} label={abbr} />;
 }
 
 /**
@@ -98,8 +97,17 @@ function OppSide({ abbr, opponent }: { abbr: string; opponent: PlayerGame }) {
  * under way the starter drops off: by then the line that matters is the score
  * and the inning, and the batter is as likely to be facing a reliever.
  */
-function OpponentCell({ game }: { game: PlayerGame | null }) {
+function OpponentCell({ r, game }: { r: PlayerReport; game: PlayerGame | null }) {
+  const openPreview = usePreviewDoor();
   if (!game) return <td className="sum-opp sum-opp-empty">—</td>;
+  /* **Only a game nobody has played is a preview.** The dialog is a reading of
+     a matchup *before* it — his split against the man they have named, or the
+     lineup waiting for him — and once there is a score the cell is showing one,
+     which is the answer. So a live or final opponent stays plain text. */
+  const press =
+    openPreview && game.status.state === 'scheduled' && canPreview(r, game)
+      ? () => openPreview({ kind: 'game', report: r, game })
+      : null;
   const { kind, sides, detail } = gameStatusView(game);
   const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
   const scheduled = kind === 'scheduled';
@@ -119,12 +127,12 @@ function OpponentCell({ game }: { game: PlayerGame | null }) {
    */
   const main =
     sides === null ? (
-      <OpponentDoor teamId={game.opponentId} label={matchup} title={`${game.opponent} — the club’s page`} />
+      <OpponentPress onPress={press} label={matchup} />
     ) : (
       <>
-        <OppSide abbr={sides.away} opponent={game} />
+        <OppSide abbr={sides.away} opponent={game} onPress={press} />
         {` ${sides.awayScore}–${sides.homeScore} `}
-        <OppSide abbr={sides.home} opponent={game} />
+        <OppSide abbr={sides.home} opponent={game} onPress={press} />
       </>
     );
   return (
@@ -790,6 +798,7 @@ function ScheduleCells({
   index: ScheduleIndex;
   r: PlayerReport;
 }) {
+  const openPreview = usePreviewDoor();
   const tally = r.kind === 'pitcher' ? startTally(index, r.teamId, r.id) : null;
   const tier = tally && tallyTier(tally);
   return (
@@ -817,7 +826,25 @@ function ScheduleCells({
       )}
       {index.dates.map((date) => (
         <td key={date} className="sum-num">
-          <ScheduleCell index={index} teamId={r.teamId} playerId={r.id} date={date} />
+          <ScheduleCell
+            index={index}
+            teamId={r.teamId}
+            playerId={r.id}
+            date={date}
+            /* The cell has the fixture and this row has the man; the table
+               above owns the dialog. `canPreviewFixture` is asked with no board
+               yet — a pitcher's is a press by default and goes static only on
+               the server answering that his opponent has none. */
+            onPreview={
+              openPreview
+                ? (g) => {
+                    if (!canPreviewFixture(r, g, r.kind === 'pitcher', undefined)) return false;
+                    openPreview({ kind: 'fixture', report: r, game: g });
+                    return true;
+                  }
+                : undefined
+            }
+          />
         </td>
       ))}
     </>
@@ -972,7 +999,7 @@ function LeadCells({
               chip that widens the one column this table can least afford. */}
         </RowIdentity>
       </th>
-      {showOpponent && <OpponentCell game={game} />}
+      {showOpponent && <OpponentCell r={r} game={game} />}
     </>
   );
 }
@@ -1609,12 +1636,76 @@ export function SummaryTable({
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
   const expand = { isFull, toggle };
+  /**
+   * **The game preview an opponent cell opens, held here rather than in the
+   * cell.** One at a time, which is what a dialog is, and the state that goes
+   * with it — the opposing club's board — is a read this table should make once
+   * per club rather than once per cell.
+   *
+   * The two shapes are the two readings of this table: the stats reading holds
+   * a `PlayerGame` and raises the feed's own `UpcomingPreview`; the Schedule
+   * view holds a `ScheduleGame` and raises the player page's `SchedulePreview`,
+   * which is the one that can read a fixture nobody has been named for. Both
+   * are the components those surfaces already draw, so a game opened from a
+   * roster row and the same game opened from the feed answer alike.
+   */
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  /* Keyed on whose preview is open, so a board read for one man is dropped when
+     the next opens — `useOpponentBoards`'s own contract. */
+  const { opps, load } = useOpponentBoards(preview?.report.id ?? 0);
+  const openPreview = useCallback((t: PreviewTarget) => {
+    // A pitcher's dialog reads the opposing club's line, and the read is started
+    // by the press exactly as the Schedule row starts it — the dialog itself
+    // draws the three loading states.
+    if (t.report.kind === 'pitcher') {
+      const oppId =
+        t.kind === 'game'
+          ? t.game.opponentId
+          : t.game.homeId === t.report.teamId
+            ? t.game.awayId
+            : t.game.homeId;
+      if (oppId) load(oppId);
+    }
+    setPreview(t);
+  }, [load]);
   return (
     /* Full page is a class on this box, not the Fullscreen API — see
        `hooks.ts::useFullPage`. The button that sets it is down in the table's
        corner header cell, which is pinned on both axes and so is always the way
        back out. */
+    <PreviewDoorContext.Provider value={openPreview}>
     <div ref={fullRef} className={`summary-view${isFull ? ' is-expanded' : ''}`}>
+      {/* **The preview, drawn once for the whole table.** `Modal` portals it,
+          so where it sits in this tree decides nothing about where it paints —
+          only which state it can see, which is the reason it is here. */}
+      {preview?.kind === 'game' && (
+        <UpcomingPreview
+          report={preview.report}
+          game={preview.game}
+          onOpenDetails={onOpenDetails}
+          onClose={() => setPreview(null)}
+        />
+      )}
+      {preview?.kind === 'fixture' && schedule && preview.report.teamId !== null && (
+        <SchedulePreview
+          report={preview.report}
+          game={preview.game}
+          index={schedule}
+          teamId={preview.report.teamId}
+          name={preview.report.name}
+          isPitcher={preview.report.kind === 'pitcher'}
+          tier={startTierOn(schedule, preview.game, preview.report.teamId, preview.report.id)}
+          opp={
+            opps[
+              preview.game.homeId === preview.report.teamId
+                ? preview.game.awayId
+                : preview.game.homeId
+            ]
+          }
+          onLoad={load}
+          onClose={() => setPreview(null)}
+        />
+      )}
       {/* Expanded, the app's header and tab rows are behind this box — but
           which kind the table is showing and which days it covers are not
           decoration, they are what the numbers *are*, and both are controls you
@@ -1691,5 +1782,6 @@ export function SummaryTable({
         <RoleLegend />
       </div>
     </div>
+    </PreviewDoorContext.Provider>
   );
 }
