@@ -19138,6 +19138,15 @@ html[data-theme='light'] .league-table thead th {
   font-size: var(--mser-font, 11px);
   font-variant-numeric: tabular-nums;
 }
+/* **Laid out and never painted.** How many days the x axis can name is a
+   function of how wide one of their names *renders*, which is a font this app
+   does not choose printing a month name — so every day's label is laid out in a
+   hidden group and the widest measured off it (`labelW` in
+   `MatchupSeriesChart`). `visibility: hidden` rather than `display: none`,
+   which would leave `getBBox` answering zero. */
+.mser-probe {
+  visibility: hidden;
+}
 /* **Color marks state, and the state here is who is taking the category** —
    the same `--win`/`--muted` pair the card's own cells use, so the reader has
    one key rather than two. A tie leaves both lines muted, which is what a tie

@@ -247,6 +247,49 @@ rather than a disagreement.
 earned runs over four days of outs, never four ERAs averaged. Every `DERIVED` id
 is recomputed from the running components at each day.
 
+#### And it stops reproducing the card as a week wears on, which is open
+
+**The 120 of 120 above was measured on a week that had just settled, and the
+agreement does not hold once managers have moved players.** Re-measured on
+2026-08-23 with the revision rule below in force and every day's totals fresh
+from ESPN: **19 of the live week's 120 cells disagree with the card**, all of
+them small — team 1's Runs **72 against 75**, its Home runs 17 against 18,
+Stolen bases 8 against 9, OPS .731 against .743; team 5's Wins 10 against 11 and
+Strikeouts 119 against 121. The 101 that agree agree exactly.
+
+**It is not staleness and it is not the arithmetic.** Both were checked and
+excluded: forcing every day of the period fresh from ESPN changes nothing, and
+the day-by-day sum reproduces itself through two independent upstreams —
+`mMatchupScore`'s `rosterForCurrentScoringPeriod` and `mRoster` at the same past
+day give the identical **72**. ESPN's own figure for the same period is **71
+through yesterday**, and `rosterForMatchupPeriodDelayed` reproduces *that*
+exactly (R 71, ER 60, outs 482, K 135) — so ESPN has a per-player accrual for the
+matchup period that our per-day reconstruction is three runs short of.
+
+**What is short is two players, not two days.** Sorted, our per-player run
+totals for the period are `10,9,8,7,6,6,5,5,5,3,3,1` and ESPN's are
+`12,10,8,7,6,6,5,5,5,3,3,1` — the same twelve scorers, with one on 12 where we
+have 10 and one on 10 where we have 9. So somebody accrued on a day our snapshot
+of that day has him benched: ESPN scores the lineup **as it was when the game
+started**, and the roster it hands back for a past scoring period is the lineup
+as it was left. A manager who benches a player after his game has been played
+takes that day's production out of our sum and not out of ESPN's.
+
+**It is not fixable from what ESPN exposes**, which is why it is written down
+rather than fixed. `rosterForMatchupPeriodDelayed` is the accrual view and is the
+only place the missing production appears — but it is the **whole period** in one
+figure (its stat line is `scoringPeriodId: 0`, invariant to the
+`scoringPeriodId` asked for, checked at 139/141/145/149/151/152), and its entries
+carry **no player identity at all**: `playerPoolEntry.player` has a `stats` key
+and nothing else. There is no per-day breakdown to distribute and no name to
+attach one to.
+
+**So the chart's last point is *within a unit or two* of the cell that opened
+it, not identical to it** — and correcting that by pinning the last point to the
+card was considered and rejected: it would put a whole week's divergence onto one
+day, which is a lie about that day. This repo's rule is that a join fails to null
+rather than to a guess, and the same holds for a total.
+
 **A day that cannot be read stops the series rather than being skipped.** Every
 figure is a running total, so a hole in the middle is not a missing point but a
 wrong one for every day after it — the sum would be short by that day's
@@ -271,6 +314,38 @@ chart affordable on the week anybody is looking at — the first press pays for
 the whole week, and every minute after it re-reads the one day that can still
 move.
 
+**The freeze is the matchup period's, not the day's** — which is the correction
+the paragraph above needed, and the one the day blob shipped without. A finished
+day *is* a fact once its **week** is over; a finished day inside the week being
+played is still being scored, and ESPN restates it when official scoring is
+revised. Measured on the live league on 2026-08-23 against blobs written on the
+17th: team 1's **earned runs for Aug 11 went 15 → 10 and for Aug 15 went 3 → 1**,
+so the day-by-day chart's ERA for week 19 read **3.53 against the card's 3.16**,
+and its WHIP **1.2422 against 1.2363** — and it would have gone on reading them
+for as long as the blob lived, because nothing ever asked ESPN again. Every other
+stat of every other day of that week matched to the unit, which is what makes
+this a revision rule rather than a cache-everything one.
+
+So `DayFreeze` is three states rather than a boolean, and `REVISION_TTL_MS` is
+what the middle one is believed for: **half an hour**. A day in a settled period
+is `settled` and is untouched — a blob read with no test, which is what keeps a
+past week free. A finished day in the live period is `revisable` and takes the
+same blob against that half hour. The day itself is `live` and memory-only on
+`LIVE_TTL_MS`, unchanged.
+
+**The stamp is read rather than spent**, which is why this goes through
+`readStampedBlob` and not `readJsonBlob`: the memory copy inherits the blob's own
+`cachedAt`, so a `revisable` day read off a 29-minute-old blob is due in one
+minute rather than in thirty-one. `readJsonBlob` spends the stamp on its
+freshness predicate and would have left `dayTotalsCache` believing it had just
+read ESPN.
+
+**What it costs is thirteen reads a half hour on the one week being played**,
+against the one a minute the live day already costs — and nothing at all on the
+eighteen weeks that are over. Measured after the change, the ERA and WHIP cells
+match the card exactly (3.1640625 and 1.236328125 against the card's own
+3.1640625 and 1.236328125, 0 delta).
+
 **The live scoreboard reads through it too, which it did not before.**
 `fetchMatchups` only ever asks for `latestScoringPeriod`, so it always takes the
 live path and its behavior is unchanged; what it gains is the `inFlight` guard,
@@ -285,7 +360,7 @@ that is the period's own last day, and on the live one `latestScoringPeriod`,
 which is the same day the scoreboard adds to `cumulativeScore`. The fan-out is
 the repo's own `mapLimit` at **6**; the assembled series is memoized per league
 and period, frozen with no freshness test and live on `LIVE_TTL_MS`, and `force`
-reaches the live one while the frozen day blobs stand.
+reaches the live one while the settled day blobs stand.
 
 **Measured through the route on the live league.** A settled seven-day week is
 **797,498 bytes and 1,588ms of upstream**, paid once ever: **675ms** genuinely

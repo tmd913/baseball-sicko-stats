@@ -32,7 +32,7 @@
 
 import { stripAccents, toSavantName } from './names.js';
 import type { PlayerKind, SeasonPlayer, WatchPlayer } from './types.js';
-import { readBlob, readJsonBlob, writeBlob, writeJsonBlob } from './storage.js';
+import { readBlob, readJsonBlob, readStampedBlob, writeBlob, writeJsonBlob } from './storage.js';
 import { addDays, baseballToday, daysBetween, easternDate } from './etDate.js';
 import { mapLimit } from './limit.js';
 // The 30-club table every abbreviation in the app is drawn from — 24h cached
@@ -3414,16 +3414,49 @@ const dayTotalsCache = new Map<string, { totals: DayTotals; fetchedAt: number }>
 const dayTotalsInFlight = new Map<string, Promise<DayTotals>>();
 
 /**
+ * **How much a day's own totals can still move**, which is the only thing that
+ * decides how they are cached — see `dayTotals`.
+ *
+ *  - `live` — the day ESPN is on. Memory only, on `LIVE_TTL_MS`.
+ *  - `revisable` — a finished day inside the matchup period *being played*.
+ *    Blobbed, but read back against `REVISION_TTL_MS` rather than trusted.
+ *  - `settled` — a day in a matchup period that is over. Blobbed and read back
+ *    with no freshness test at all, which is what makes a settled week free.
+ */
+type DayFreeze = 'live' | 'revisable' | 'settled';
+
+/**
+ * **How long a finished day inside the live week is believed for.**
+ *
+ * A day was treated as a fact the moment ESPN moved off it, and it is not one:
+ * official scoring is revised, and ESPN restates the day when it is. Measured
+ * on the live league on 2026-08-23, against blobs written on the 17th — team 1's
+ * **earned runs for Aug 11 went 15 → 10 and for Aug 15 went 3 → 1**, so the
+ * chart's ERA for the week read **3.53 against the card's 3.16** and would have
+ * gone on reading it for as long as the blob lived. Every other stat of every
+ * other day of that week matched, which is what makes this a revision rule
+ * rather than a cache-everything one.
+ *
+ * Half an hour, which is the number that makes an open page self-correcting
+ * without making the week expensive: a settled period is untouched, and the
+ * thirteen finished days of the live one cost thirteen reads a half hour on top
+ * of the one a minute today already costs.
+ */
+const REVISION_TTL_MS = 30 * 60 * 1000;
+
+/**
  * `scoringPeriodTotals` with the cache the series needs and the live scoreboard
  * turns out to want too.
  *
- * **A finished day is a fact and a day being played is not**, which is the one
- * split here and it is `getTeamRoster`'s exactly: a scoring period strictly
- * before ESPN's `latestScoringPeriod` takes a storage blob read with **no
- * freshness test**, and the day being played is memory-only on `LIVE_TTL_MS`.
- * That is what makes the chart affordable on the week anybody is looking at —
- * the first press pays for the whole week, and every minute after it re-reads
- * the one day that can still move.
+ * **The freeze is the matchup period's, not the day's** — which is the
+ * correction `DayFreeze` carries and `REVISION_TTL_MS` measures. A day whose
+ * *week* is over cannot move and takes a blob read with no freshness test; a
+ * finished day inside the week being played is still being scored, and takes
+ * the same blob against a half-hour test; the day itself is memory-only on
+ * `LIVE_TTL_MS`. That is what keeps the chart affordable on the week anybody is
+ * looking at — the first press pays for the whole week, and every minute after
+ * it re-reads the one day that can still move — while letting a scoring
+ * revision reach a page somebody has left open.
  *
  * The live scoreboard reads through it as well, which it did not before. It
  * only ever asks for the latest day, so it always takes the live path and its
@@ -3434,28 +3467,39 @@ async function dayTotals(
   creds: EspnCreds,
   period: number,
   scoringPeriodId: number,
-  frozen: boolean,
+  freeze: DayFreeze,
 ): Promise<DayTotals> {
   const key = `${creds.leagueId}:${scoringPeriodId}`;
+  const ttl =
+    freeze === 'settled' ? Infinity : freeze === 'revisable' ? REVISION_TTL_MS : LIVE_TTL_MS;
   const hit = dayTotalsCache.get(key);
-  if (hit && (frozen || Date.now() - hit.fetchedAt < LIVE_TTL_MS)) return hit.totals;
+  if (hit && Date.now() - hit.fetchedAt < ttl) return hit.totals;
   const running = dayTotalsInFlight.get(key);
   if (running) return running;
 
   const job = (async () => {
-    if (frozen) {
-      const stored = await readJsonBlob<DayTotals>(
+    if (freeze !== 'live') {
+      // **Stamped rather than tested**, so the memory copy inherits the blob's
+      // own age: a `revisable` day read off a blob written 29 minutes ago is
+      // due in one, not in thirty-one. `readJsonBlob` would have spent the
+      // stamp on the test and left this cache believing it had just read ESPN.
+      const stored = await readStampedBlob<DayTotals>(
         dayTotalsBlobKey(creds.leagueId, scoringPeriodId),
-        () => true,
       );
-      if (stored && typeof stored === 'object') {
-        dayTotalsCache.set(key, { totals: stored, fetchedAt: Date.now() });
-        return stored;
+      if (
+        stored !== null &&
+        typeof stored.value === 'object' &&
+        (freeze === 'settled' || Date.now() - stored.cachedAt < REVISION_TTL_MS)
+      ) {
+        dayTotalsCache.set(key, { totals: stored.value, fetchedAt: stored.cachedAt });
+        return stored.value;
       }
     }
     const totals = await scoringPeriodTotals(creds, period, scoringPeriodId);
     dayTotalsCache.set(key, { totals, fetchedAt: Date.now() });
-    if (frozen) await writeJsonBlob(dayTotalsBlobKey(creds.leagueId, scoringPeriodId), totals);
+    if (freeze !== 'live') {
+      await writeJsonBlob(dayTotalsBlobKey(creds.leagueId, scoringPeriodId), totals);
+    }
     return totals;
   })().finally(() => {
     dayTotalsInFlight.delete(key);
@@ -3603,7 +3647,7 @@ async function fetchMatchups(
   const wantsToday =
     live && typeof latest === 'number' && span != null && latest >= span.first && latest <= span.last;
   const today = wantsToday
-    ? await dayTotals(creds, period, latest, false).catch((err: Error) => {
+    ? await dayTotals(creds, period, latest, 'live').catch((err: Error) => {
         console.error(`ESPN live day ${latest} unavailable for league ${creds.leagueId}:`, err.message);
         return null;
       })
@@ -3951,11 +3995,13 @@ export async function getMatchupSeries(
     for (let sp = span.first; sp <= last; sp++) periods.push(sp);
 
     const read = await mapLimit(periods, SERIES_CONCURRENCY, async (sp) => {
-      // Every day but ESPN's own latest is finished, and a finished day takes
-      // the blob rather than the clock.
-      const dayFrozen = typeof latest === 'number' ? sp < latest : true;
+      // Every day but ESPN's own latest is finished — and a finished day is a
+      // fact only once its **week** is over, `REVISION_TTL_MS` being what a
+      // finished day inside the live one is believed for instead.
+      const done = typeof latest === 'number' ? sp < latest : true;
+      const freeze: DayFreeze = !done ? 'live' : live ? 'revisable' : 'settled';
       try {
-        return { totals: await dayTotals(creds, asked, sp, dayFrozen), ok: true };
+        return { totals: await dayTotals(creds, asked, sp, freeze), ok: true };
       } catch (err) {
         console.error(
           `ESPN day ${sp} unavailable for league ${creds.leagueId}:`,

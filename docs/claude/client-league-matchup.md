@@ -892,6 +892,16 @@ inferred: over **all 20 category charts of one card, at 1200 and at 390, the
 last point of a series equals the cell that opened it — 0 mismatches at either
 width**.
 
+**That last sentence held on the week it was measured and does not hold on a
+week that has been played through**, which is worth saying here because this is
+the page both numbers are on. Re-measured on 2026-08-23 with every day fresh
+from ESPN: **101 of the live week's 120 cells reproduce the card exactly and 19
+are a unit or two under it** — team 1's Runs 72 against 75, its Home runs 17
+against 18. It is not staleness, not the arithmetic, and not fixable from what
+ESPN publishes; the measurement and the three upstreams it was narrowed down
+through are in *ESPN scoreboard*, **And it stops reproducing the card as a week
+wears on**.
+
 **The house style is `RollingXwoba`'s and each borrowing is deliberate.**
 
 - **Labels are sized in rendered pixels, not viewBox units.** A viewBox unit is
@@ -945,6 +955,60 @@ does makes clipping a point off the plot impossible rather than unlikely
 week labeled `Aug 10 · 12 · 14 · 16` and then forced the 17th on as well, so the
 two ran together at the right edge of a phone.
 
+**And how many of them there is room for is measured, not declared.** The step
+was `ceil(days.length / 7)` on the reasoning that "the axis has room for about
+seven at the narrow end", which is a count of labels asked of a plot whose
+*width* is not in the arithmetic at all — so a fortnight drew seven `Aug NN`
+labels at 1200, at 390 and at 320 alike. Measured on the live league's week 19
+before the change, the six gaps between them ran **4.8 · 4.8 · 4.7 · 4.7 · 4.8 ·
+−14.3px at 390** and were tighter still at 320, where the worst pair overlapped
+by **−24.9px**: `Aug 21` and `Aug 23` printed on top of each other. Only 1200,
+where the gaps were 35.9–56.1px, was ever the case the constant described.
+
+**So the step satisfies the collision the axis can actually have.** Labels sit
+`dayStep · PLOT_W / (days.length − 1)` apart in viewBox units, and the tightest
+pair is the **last** one — an end-anchored label beside a centered one, which
+needs one and a half label widths plus a gap (`X_LABEL_GAP_EM`, three quarters of
+a character height). The label width is the part that cannot be a constant: it is
+a font this app does not choose printing a month name, and a viewBox unit is a
+different number of pixels in every box this is drawn in. So **every day's label
+is laid out once in a hidden `<g>` and the widest measured off it** —
+`.mser-probe`, `visibility: hidden` rather than `display: none` because
+`getBBox` answers zero for the second. That is `--roll-font`'s rule and
+`--chart-tip-nudge`'s, and it **cannot loop**: the probe draws every day
+unconditionally, so what it measures does not depend on the `dayStep` it feeds.
+The old constant is kept as the first paint, before the probe has been read.
+
+**Measured after, over all ten categories at each width** — 1200 is
+**unchanged** (7 labels, tightest gap **35.9px**, which is the point: the fix
+costs the desktop nothing), 390 draws **4** (`Aug 11 · 15 · 19 · 23`, tightest
+**28.7px**) and 320 draws **3** (`Aug 13 · 18 · 23`, tightest **23.6px**). Three
+labels on a fortnight at 320 is sparse and is the honest number; the scrub names
+every day the axis cannot.
+
+**A leading null is not a hole, and conflating the two cost a whole team its
+line.** The plot draws only the days the series can be read at all — `ok`, which
+is a prefix, a day ESPN would not answer for poisoning every running total after
+it — and inside that window it used to walk forward from day one and stop at the
+first null. Two different things read as null there. A day that could not be read
+is a hole. **A rate with no denominator yet is not**: a team whose pitchers
+recorded no outs on the Monday has no ERA *on the Monday* and a perfectly good
+one from the Tuesday, the components being cumulative, so the null is a
+**leading** gap and the line starts where the category starts existing.
+
+Measured on the live league, week 19, `WAXM vs GREG` (`mup=111`): the `Earned run
+average` and `Walks and hits per inning` charts drew **one path and one legend
+figure** at 1200, 390 and 320 — Cochabamba Crushers' `values[0]` was null, the
+walk stopped at zero, and a chart whose whole job is to set two sides against
+each other showed one of them. After: **both paths drawn and both legend figures
+printed on all ten categories at all three widths** (`3.16 / 3.11` for ERA,
+`1.24 / 1.06` for WHIP, each matching the cell that opened it).
+
+So `drawn` is the **list of days each line stands behind** rather than a count of
+them, the path breaks at a gap inside that list rather than jumping one, and the
+scrub and the legend read the same list — a readout printing a figure the plot
+has declined to draw says in words what the line refuses to.
+
 **A bye is one line and says so**, which is a real shape rather than a failure —
 the live league's first playoff round is two matchups and eight byes. Measured on
 the reader's own bye: one path, one legend item, and no `--win` mark, there being
@@ -983,6 +1047,31 @@ cards and a second category costs nothing. A period change throws it away. A
 failed read draws the server's own message inside the box (`Couldn't read the
 day-by-day totals: Upstream is having a day`) and, because the request is marked
 answered only once it *is* answered, pressing again retries it.
+
+**And it re-reads itself while the week is being played**, which is the same
+correction the team page's projected lens already takes on this page and for the
+same reason. Cached for the life of the page is right for a week that is over and
+wrong for the one being played: the chart is a running total of the same week the
+card above it prints, the card is polled on `LEAGUE_POLL_MS`, and read once at
+the moment of the press the chart was the one thing on a live page frozen there.
+A reader watching an evening's games saw the cell tick up over a line that never
+moved. Measured on the live league before this — the `Runs` chart's last point
+stood at **72** while the cell that opened it read **75**.
+
+Two halves, both gated on `board.live`: **a press re-reads** (so reopening a
+chart an hour later is not handed the hour-old answer), and **an open chart polls
+on the League page's own minute**. Only while a chart is actually open — a series
+nobody is looking at is a week of ESPN rosters fetched for nothing — and the poll
+stops when it closes. Measured with `window.fetch` wrapped on the live page: with
+the ERA chart open for 140s, `/api/espn/matchup-series` was read at the press and
+twice more; with it closed for another 140s, **0** further reads.
+
+**Quiet, and sequence-numbered.** A re-read of a chart that already has its days
+leaves the last answer standing and raises no banner — the app's never-over-data
+rule — so `quiet` suppresses the error path on a re-read and a failed *first*
+press still says so and still retries. And two reads can now be in flight at
+once, so only the newest may write: `seriesRead` is the sequence number, the
+rule this repo applies to every read that can be superseded.
 
 **Measured at 1200×900 and 390×844**: the box is **720 × (svg 694 × 289)** and
 **358 × (332 × 138)**, the dialog body and the page body each overflow by **0**,

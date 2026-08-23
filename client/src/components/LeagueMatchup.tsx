@@ -1358,25 +1358,73 @@ export default function LeagueMatchupView({
   const [series, setSeries] = useState<EspnMatchupSeries | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
   const asked = useRef(false);
+  /** Sequence-numbered, because two reads of this can now be in flight — the
+   *  press and a poll tick — and a stale answer must not land on a fresh one. */
+  const seriesRead = useRef(0);
 
   const openCategory = useCallback(
     (statId: number) => {
       setOpenStat(statId);
-      if (asked.current) return;
+      // **Cached for the life of the page on a settled week, re-read on a live
+      // one.** A week that is over cannot move, so the first press pays for
+      // every category and every reopening after it; the week being played
+      // moves under the reader, and a second press an hour later must not be
+      // handed the hour-old answer the first one got.
+      if (asked.current && !board.live) return;
       // **Marked only once it is answered** — the rule this repo has written
       // down four times now: a mark set before the fetch makes a failed read
       // unrepeatable, and a failed chart has to be retryable by pressing again.
-      setSeriesError(null);
+      // A re-read of a chart that already has its days is **quiet**: it keeps
+      // the last answer standing and leaves no banner, which is the app's own
+      // never-over-data rule.
+      const quiet = asked.current;
+      if (!quiet) setSeriesError(null);
+      const seq = ++seriesRead.current;
       api
         .espnMatchupSeries(board.matchupPeriod)
         .then((r) => {
+          if (seq !== seriesRead.current) return;
           asked.current = true;
           setSeries(r);
         })
-        .catch((e: Error) => setSeriesError(e.message));
+        .catch((e: Error) => {
+          if (seq !== seriesRead.current || quiet) return;
+          setSeriesError(e.message);
+        });
     },
-    [board.matchupPeriod],
+    [board.matchupPeriod, board.live],
   );
+
+  /**
+   * **And it re-reads itself while the week is being played**, on the League
+   * page's own minute — the correction the team projection above already takes,
+   * for the same reason and with the same gate.
+   *
+   * The chart is a running total of the same week the card above it is printing
+   * and the card is polled; read once when the row was pressed, the chart was
+   * the one thing on a live page frozen at the moment of the press, and a
+   * reader watching an evening's games saw the cell tick up over a line that
+   * never moved. Measured on the live league before this: the `Runs` chart's
+   * last point stood at **72** while the cell that opened it read **75**.
+   *
+   * Only while a chart is actually open — a series nobody is looking at is a
+   * week of ESPN rosters fetched for nothing — and only on a live week, `board.live`
+   * being the poll's own gate up in App. **Quiet**, so nothing blanks and the
+   * last answer stands until the next one lands.
+   */
+  useEffect(() => {
+    if (openStat === null || !board.live) return;
+    const t = setInterval(() => {
+      const seq = ++seriesRead.current;
+      api
+        .espnMatchupSeries(board.matchupPeriod)
+        .then((r) => {
+          if (seq === seriesRead.current) setSeries(r);
+        })
+        .catch(() => {});
+    }, LEAGUE_POLL_MS);
+    return () => clearInterval(t);
+  }, [openStat, board.live, board.matchupPeriod]);
 
   if (!matchup) {
     return (
