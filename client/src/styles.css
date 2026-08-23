@@ -326,6 +326,20 @@
      narrower than the control stating the days — measured 346 against 370 at
      390, and 1156 against 1180 at 1200, on all three pages that draw both. */
   --bar-pad: 10px;
+  /* **The two numbers a tools row's band is made of**, and tokens because a
+     fourth box now has to land on exactly the same rhythm from outside the row.
+     `--tools-row-gap` is the air between two stacked runs inside `.view-tools`;
+     `--tools-band-gap` is the air the band leaves under itself, which is that
+     row's `padding-block` at the top and its `margin-bottom` at the foot.
+
+     The reader is the research board's condensed run, which is a *replacement*
+     for the third of those runs and has to be the same height as the band it
+     replaces or the swap moves the head under the finger. Written out, that was
+     `10px … 6px` against a `10px` gap and a `14px` margin, and the two
+     disagreed by 8 — see `.research-condensed-inner`, where the arithmetic is
+     stated in full. Derived, they cannot. */
+  --tools-row-gap: 10px;
+  --tools-band-gap: 14px;
   /* The headshot circle in a table row, and one definition because the research
      board's pinned name column is offset by *this number plus its two gutters*
      — an arithmetic that sat in the stylesheet as a hardcoded `63px` and would
@@ -6502,7 +6516,9 @@ button.start-line:focus-visible {
      is atomic (`flex: none` below), so a line holds whole groups and centering
      balances them rather than stranding one at an edge. */
   justify-content: center;
-  gap: 10px 12px;
+  /* The row gap is a token because the research board's condensed run has to
+     reproduce this band's rhythm from outside the row — see `--tools-row-gap`. */
+  gap: var(--tools-row-gap) 12px;
   /* **It paints its own ground, and that is what makes the readings look the
      same on every surface.** This row is rendered into three different boxes —
      the page on a stream reading, the table's own pane on a table reading, a
@@ -6528,7 +6544,7 @@ button.start-line:focus-visible {
      chrome above still a lighter panel). It is flat now because *everything* is:
      see `body`. A band cannot be a seam against a page that is the same value. */
   background: var(--bg);
-  padding-block: 14px 0;
+  padding-block: var(--tools-band-gap) 0;
   /* The anchor the Rankings tab's `Projected` key opens from — `.lg-head`'s job
      on the Scoreboard and `.mup-bar`'s on a matchup, and here for the identical
      reason: that key is `position: static` so its 340px panel hangs off a *row*
@@ -6958,7 +6974,6 @@ button.start-line:focus-visible {
 .research-scroll > .view-tools,
 .research-scroll > .research-head,
 .research-scroll > .research-condensed-rail,
-.research-scroll > .research-sentinel,
 .research-scroll > .error-banner,
 .research-scroll > .empty-state {
   position: sticky;
@@ -7069,7 +7084,7 @@ button.start-line:focus-visible {
    continue here — this is the space between two different things, which is what
    a margin is for. */
 .view-tools:not(:has(+ .date-bar)) {
-  margin-bottom: 14px;
+  margin-bottom: var(--tools-band-gap);
 }
 /* **The band starts where the chrome ends.** The bar above closes itself with a
    hairline and its own shadow, and 14px of page between the two would be the
@@ -10479,33 +10494,73 @@ button.start-line:focus-visible {
   }
 }
 
-/* The mark the head's stickiness is read off. A pixel with its own height
-   given straight back, so it is a *position* in the flow and costs the pane
-   nothing: `height: 0` is not reliably observable, and anything taller is a
-   gap above the head. */
-/* **The mark the head's stickiness is read off**, and it takes `left: 0` from
-   the fold above while taking **no `top`** — which is the whole of what makes
-   it answer the right question.
+/* **The third run and the mark the stick is read off, as one box.**
 
-   `IntersectionObserver` tests *both axes*. Pinned only in flow, this 1px block
-   is 390px wide against a pane whose content is thousands, so scrolling
-   sideways carried it out of the root's box and the observer reported it gone —
-   indistinguishable from having scrolled *down*, and the condensed run appeared
-   at the top of an unscrolled board the moment the reader moved the columns.
-   Reported exactly so.
+   The bar stops at its third row now. It used to scroll away whole and the
+   condensed run arrived afterwards, at the head's own line — which is 50px
+   further down the page, so the run and the head between them took 52px of
+   *table* that nothing had vacated. Measured at 1200 crossing the old
+   threshold: the band over the first row went 31px to 83, one full row of the
+   board swallowed in a frame while the rows themselves never moved. Reported as
+   the board jumping when the buttons came back.
 
-   Sticky at `left: 0` it never leaves horizontally, and with no `top` it still
-   scrolls away vertically like anything else — so the observer is left with the
-   vertical question, which is the only one it was ever asked. A `rootMargin` of
-   some huge horizontal number would also have worked and is the version with a
-   magic number in it.
+   Read off the third row instead and the run has somewhere to *be*: it lands
+   exactly where that row was standing, carrying the other two rows' buttons in
+   as marks beside its own. The arithmetic that makes the swap free is in
+   `.research-condensed-inner` below; what this box owes it is the mark's
+   position, one gap above the row, which is the top of the band the run
+   replaces.
 
-   Zero height in effect — a pixel given straight back — so it is a position in
-   the flow and costs the pane nothing. */
+   A wrapper rather than a sibling in `.view-tools`, and that is a flex
+   constraint rather than a preference: this container wraps, so a sibling is a
+   line of its own with a `gap` either side of it, and giving those 11px back as
+   a negative margin asks the line for a **negative** cross size — which is not
+   what a flex line does with one. Out of flow inside a box that takes the line
+   anyway, the mark costs nothing and cannot be rounded away.
+
+   `position: relative` here rather than reading `.view-tools`'s own, which is
+   the anchor its `Projected` key opens against and would put this at the top of
+   the *bar* instead of the top of the row. */
+.research-stick-line {
+  /* A line of its own, exactly as `.tool-scroll` inside it takes one and
+     against the same `.view-tools > * { flex: none }`. `min-width: 0` with it,
+     for the reason that rule gives: without it the run grows to its natural
+     width and pushes the page sideways instead of scrolling. */
+  flex: 1 1 100%;
+  min-width: 0;
+  position: relative;
+}
+/* **The mark the stick is read off**, and it no longer needs a word about the
+   horizontal axis — which used to be the whole of its rule.
+
+   `IntersectionObserver` tests *both axes*, and as a block child of a pane
+   whose content is thousands of pixels wide this was 390px of a much wider row:
+   scrolling the columns carried it out of the root's box and the observer
+   reported it gone, indistinguishable from having scrolled *down*, so the
+   condensed run appeared at the top of an unscrolled board the moment the
+   reader moved the columns. Reported exactly so, and answered then with
+   `position: sticky; left: 0` and deliberately no `top`.
+
+   Inside the bar it is inside `.view-tools`, which is already pinned at
+   `left: 0` against this same pane and is exactly the pane's own width — so the
+   mark travels with it and never leaves that way. The fix survives as its
+   container's rule, one box up; the fold list above is one selector shorter.
+
+   `top` is the negative row gap: the mark sits at the top of the air above this
+   row, which is the line the run's own `padding-top` fills once it is drawn.
+   A pixel square, out of flow, so it is a position and nothing else. */
 .research-sentinel {
+  position: absolute;
+  /* **Its bottom edge is the line**, which is why this is `bottom` off the
+     row's own top rather than a `top` of the negative gap. The mark stops
+     intersecting when its *lower* edge passes the pane's top, so anchoring the
+     upper one puts the swap a pixel early — the run's buttons landing at 10
+     over a row that had reached 9. Anchored here the two are the same number at
+     the frame it fires in. */
+  bottom: calc(100% + var(--tools-row-gap));
+  left: 0;
+  width: 1px;
   height: 1px;
-  margin-bottom: -1px;
-  flex: none;
 }
 
 /* **The condensed run, inside the stuck head.**
@@ -10542,7 +10597,13 @@ button.start-line:focus-visible {
    starts — the expanded box and the ordinary pane are the same coordinate
    system to it, which is also why the run is simply drawn from the first frame
    when expanded. `z-index` above the head's 4. */
-.research-condensed-rail {
+/* **Named against the pane, which is what the layer below needs and the rest of
+   this rule never did.** The fold above sets `z-index: 5` two classes deep, so
+   a bare `.research-condensed-rail { z-index: 5 }` here was a declaration that
+   lost to it and agreed with it — invisible for as long as the two numbers
+   matched, and the reason the first attempt at 6 changed nothing on the screen:
+   computed style still read 5 and the bar painted over the run. */
+.research-scroll > .research-condensed-rail {
   /* `position: sticky` and `left: 0` come from the fold above — this pane
      scrolls **sideways** as well as down, and a box pinned only at the top
      rides off the left edge with the columns. Reported: the condensed run
@@ -10550,7 +10611,13 @@ button.start-line:focus-visible {
      box's own is the `top`, the zero height, and the layer. */
   top: 0;
   height: 0;
-  z-index: 5;
+  /* **6, where every other pinned box in this pane stops at 5** — and it is
+     the DOM order that makes the extra step necessary rather than a new claim
+     about the ladder. The rail is drawn *ahead* of `.view-tools` now, so that
+     it can pin to the top of the pane rather than to the head's line 50px
+     below; two boxes at 5 resolve by order, and at 5 the bar it replaces
+     painted straight over it. */
+  z-index: 6;
 }
 /* **Expanded, the rail has its height back**, and the zero above is what was
    wrong there rather than a rule this mode is exempt from. Zero height buys one
@@ -10577,10 +10644,31 @@ button.start-line:focus-visible {
 }
 /* The box that actually has the height — measured and published. It carries
    the head's own ground and side gutter so the run lines up with the badges
-   under it and the rows behind it never show through. */
+   under it and the rows behind it never show through.
+
+   **Its vertical air is the third row's own, and that is what makes the swap
+   free.** This run is a replacement for that row: the mark it is drawn from
+   sits one gap above it, so at the instant it appears the row is still on
+   screen and directly underneath. For nothing to move, two things have to be
+   true at once and both fall out of the same two tokens —
+
+     `padding-top`    = the gap above the row (`--tools-row-gap`)
+                        → the run's buttons land on the row's own buttons
+     `padding-bottom` = the band's closing air (`--tools-band-gap`)
+                        → the run's height *is* the distance from the mark to
+                          the head, so the head's sticky `top`
+                          (`--research-cond-h`) is where the head already was
+
+   Written out it was `10px … 6px` against a 10px gap and a 14px margin, so the
+   run stood 8px short of the band it replaced and the head jumped 8px down on
+   the stick. Measured at 1200 crossing the threshold, before → after: the run
+   52 → 60, the head's own line 52 → 60 and the seam between them 0.00px both
+   ways, with the first table row unmoved either side. The air under the run and
+   the air under the resting bar are the same number now, which they always
+   looked like they should be: 14 to the head's own 6px of padding on both. */
 .research-condensed-inner {
   background: var(--bg);
-  padding: 10px var(--table-bleed, 0px) 6px;
+  padding: var(--tools-row-gap) var(--table-bleed, 0px) var(--tools-band-gap);
 }
 .research-condensed {
   margin-inline: 0;
@@ -17840,12 +17928,22 @@ html[data-theme='light'] .league-table thead th {
      is the pane's darker `--bg`: measured at 390 and 640, **12px of dead band
      between the buttons and the dates** against 0 from 641 up. Reported as
      exactly that, off a phone. The condition has to be restated because the
-     value is; a rule that overrides a scoped one has to be scoped the same. */
-  .view-tools {
-    gap: var(--stack-gap);
-  }
-  .view-tools:not(:has(+ .date-bar)) {
-    margin-bottom: var(--stack-gap);
+     value is; a rule that overrides a scoped one has to be scoped the same.
+
+     **Both are the tokens now, and that is what took the trap out rather than
+     merely walking around it.** `.view-tools` reads `--tools-row-gap` for its
+     row gap and `--tools-band-gap` for that margin, so moving the *values* here
+     needs no selector at all — and a token moved on the root reaches the one
+     box that has to agree with this row from outside it. The research board's
+     condensed run is a replacement for that row's third line and takes its
+     height from the same two numbers; left on the desktop's 10 and 14 against a
+     bar on 12, the head moved 58 → 60 at the stick. Measured at 390, before →
+     after: 2px → 0. The scoped `:not(:has(+ .date-bar))` above is untouched and
+     still the only rule that margin has, which is the whole of what the
+     paragraph above was asking for. */
+  :root {
+    --tools-row-gap: var(--stack-gap);
+    --tools-band-gap: var(--stack-gap);
   }
   .player-list {
     gap: var(--stack-gap);
