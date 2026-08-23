@@ -1944,12 +1944,26 @@ reading of the park itself and live on its club's page, one press away.
 
 **The overall park factor leads it** — the all-hitters wOBA index, which is the
 number Savant's own board calls *Park Factor* and the one a reader wants first:
-what this ground does, full stop. The hand-specific wOBA follows it **only where
-the two are different questions**. On a batter's strip they are (102 overall and
-97 to a right-handed hitter is the whole point of cutting the board by hand); on
-a pitcher's the strip already reads both hands together, so the two would be one
-number printed twice under different labels. That is why the column count is
-computed rather than fixed.
+what this ground does, full stop. Then the three that say how, on the cut this
+strip is reading.
+
+**Four figures on every strip, batter's and pitcher's alike.** On a **batter's**
+the `wOBA` beside the park factor is his own side of the plate, and the two
+separating is the whole point of cutting the board by hand: 102 overall against
+97 to a right-handed hitter is a different park for the man standing in it. On a
+**pitcher's** every figure is the both-hands cut, because he faces whichever nine
+the other club writes down — so his `wOBA` and his `Park factor` are the same
+index and print the same number.
+
+**That duplicate is deliberate, and it is the second answer this strip has
+given.** The column count was computed for a while and dropped the `wOBA` figure
+on a pitcher's strip precisely to avoid printing one number twice. It reads
+worse: a three-figure block beside a four-figure one changes shape with the kind
+of player, which a reader takes as *data missing here* rather than as a duplicate
+avoided — and the two labels do mean different things even where they agree
+(`Park factor` is the ground; `wOBA` is the cut this strip is reading, which for
+a pitcher is everybody). Savant's own board has the same property and does not
+carry a plain `wOBA` column at all, its `Park Factor` being that column.
 
 **Strikeouts came off the strip.** Every other figure runs the same way — more of
 it is the hitter's night — and K ran the other way, so the one column that

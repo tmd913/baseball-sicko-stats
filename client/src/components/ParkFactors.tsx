@@ -373,17 +373,26 @@ export function GamePark({
   } : null;
 
   /**
-   * **The overall park factor leads, and it is the park for everybody** — the
-   * all-hitters wOBA index, which is the number Savant's own board calls *Park
-   * Factor* and the one figure a reader wants first: what this ground does,
-   * full stop.
+   * **Four figures, the same four on every strip.** `Park factor` leads — the
+   * all-hitters wOBA index, which is what Savant's own board calls *Park
+   * Factor* and the one a reader wants first: what this ground does, full stop.
+   * Then the three that say how, on the cut this strip is reading.
    *
-   * The hand-specific wOBA follows it **only where the two are different
-   * questions**. On a batter's strip they are — 102 overall and 97 to a
-   * right-handed hitter is the whole point of cutting the board by hand — and
-   * on a pitcher's the strip is already reading both hands together, so the two
-   * would be the same number printed twice under different labels. That is why
-   * the column count is computed rather than fixed at four.
+   * **A pitcher's `wOBA` is the overall one, and so reads the same as his
+   * `Park factor`.** That is not a duplicate by accident: every figure on a
+   * pitcher's strip is the both-hands cut, because he faces whichever nine the
+   * other club writes down, and the column shape is held constant across the
+   * two kinds so that a reader moving between a batter's preview and a
+   * pitcher's is reading the same table. On a **batter's** strip the two
+   * separate, and that separation is the whole point of cutting the board by
+   * hand: 102 overall against 97 to a right-handed hitter is a different park
+   * for the man actually standing in it.
+   *
+   * The column count was computed for a while, dropping the `wOBA` figure on a
+   * pitcher's strip precisely to avoid printing one number twice. A three-figure
+   * strip beside a four-figure one is the worse trade — the shape of the block
+   * changes with the kind of player, which reads as data missing rather than as
+   * a duplicate avoided.
    */
   const overall = park.hands.all;
   const figs: { label: string; value: number | null; full: number; title: string }[] = [
@@ -395,14 +404,15 @@ export function GamePark({
         'Park factor — the wOBA index for all hitters, which is what Savant’s own board leads with. ' +
         '100 is the average ballpark.',
     },
-    ...(hand !== 'all' && indexes !== overall
-      ? [{
-          label: 'wOBA',
-          value: indexes.woba,
-          full: HEADLINE.full,
-          title: `wOBA index to ${HAND_LABEL[hand].toLowerCase()} — the same park, read from the side of the plate he stands on.`,
-        }]
-      : []),
+    {
+      label: 'wOBA',
+      value: indexes.woba,
+      full: HEADLINE.full,
+      title:
+        hand === 'all'
+          ? 'wOBA index for all hitters — the same reading as the park factor beside it, this strip being the park as it plays to both hands.'
+          : `wOBA index to ${HAND_LABEL[hand].toLowerCase()} — the same park, read from the side of the plate he stands on.`,
+    },
     ...PREVIEW_STATS.map((st) => ({
       label: st.label,
       value: indexes[st.key] as number | null,
@@ -429,7 +439,7 @@ export function GamePark({
         <span className={`pf-lean pf-lean--${read.lean}`}>{read.text}</span>
         {hand !== 'all' && <span className="pf-hand">{HAND_SHORT[hand]}</span>}
       </div>
-      <div className="pf-figs" style={{ gridTemplateColumns: `repeat(${figs.length}, minmax(0, 1fr))` }}>
+      <div className="pf-figs">
         {figs.map((f) => (
           <span key={f.label} className="pf-fig" title={f.title}>
             <span className="pf-fig-label">{f.label}</span>
