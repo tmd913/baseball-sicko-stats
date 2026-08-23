@@ -1004,6 +1004,80 @@ export function UpcomingRow({
 
 
 /**
+ * **The man on the mound, at the head of a game preview.**
+ *
+ * The feed's own headshot and name rather than a third circle of their own, so
+ * this is the same target with the same click behavior as every other name in
+ * the app — and the headshot is the one route in a preview to the *pitcher's*
+ * page, a man nobody has rostered, which `PlayerDetails` opens on as a matter
+ * of course.
+ *
+ * **It is drawn on a pitcher's preview as well as a batter's**, and on his it
+ * is his **counterpart** rather than someone he faces: `probablePitcher` on a
+ * pitcher's own game is the *opposing* announced starter. A reader deciding
+ * whether to start a pitcher wants to know who the other club is running out
+ * quite as much as a hitter does, which is why the block is no longer inside
+ * the batter branch. The sub-line says which of the two readings it is, because
+ * `starting for MIA` under a pitcher's dialog would otherwise be read as a man
+ * he steps in against.
+ *
+ * It carries **no lineup pip or status code**: those are `PhotoStatus`'s marks
+ * and read off `/api/statuses`, which the feed does not fetch — and both would
+ * only restate what is here (his pip is `SP`, and a man on the IL is not the
+ * announced starter).
+ */
+export function StarterLine({
+  sp,
+  club,
+  viewerIsPitcher,
+  onOpenDetails,
+  note,
+}: {
+  /** The other club's starter, announced or projected. Null draws nothing —
+   *  the caller says what an absence means, the two surfaces wording it
+   *  differently. */
+  sp: { id: number; name: string; hand: string | null } | null;
+  /** The opposing club's abbreviation. */
+  club: string;
+  /** Whose preview this is: a pitcher's makes this man his counterpart. */
+  viewerIsPitcher: boolean;
+  /**
+   * Open his page. **Optional, and its absence draws him without the links
+   * rather than with dead ones** — the Overview's own opener is optional
+   * (`PlayerDay` mounts that block from a context that has none), and a
+   * headshot that looks like a door and answers nothing is worse than a
+   * headshot that does not look like one.
+   */
+  onOpenDetails?: (key: string) => void;
+  /** A word on how sure this is — the Schedule view's projected tier. */
+  note?: string;
+}) {
+  if (!sp) return null;
+  const key = playerKey({ id: sp.id, kind: 'pitcher' });
+  const open = onOpenDetails;
+  return (
+    <div className="upcoming-sp">
+      {open ? (
+        <FeedHeadshot id={sp.id} name={sp.name} onOpen={() => open(key)} />
+      ) : (
+        <img className="feed-photo" src={headshotUrl(sp.id)} alt={sp.name} loading="lazy" />
+      )}
+      <div className="feed-item-id">
+        {open ? (
+          <FeedPlayerName playerKey={key} name={sp.name} onOpen={open} />
+        ) : (
+          <span className="feed-player-name">{sp.name}</span>
+        )}
+        <span className="feed-context">
+          {handThrows(sp.hand)} · {viewerIsPitcher ? `${club}'s starter, his counterpart` : `starting for ${club}`}
+          {note ? ` · ${note}` : ''}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
  * **The game preview: everything a scheduled game can be asked before it is
  * played**, as a dialog on its own.
  *
@@ -1032,7 +1106,6 @@ export function UpcomingPreview({
   const isPitcher = report.kind === 'pitcher';
   const sp = game.probablePitcher;
   const spHand = sp?.hand === 'L' ? 'L' : sp?.hand === 'R' ? 'R' : null;
-  const spKey = sp ? playerKey({ id: sp.id, kind: 'pitcher' }) : null;
   // Which side of the plate he stands on, for the park's own cut. Off
   // `HandednessContext` — the season roster this app already holds — so it
   // costs no request, and a man it has never listed falls to both hands
@@ -1046,6 +1119,20 @@ export function UpcomingPreview({
         onClose={onClose}
       >
         <div className="upcoming-detail">
+          {/* **The man on the mound comes first.** The whole reason a scheduled
+              game is worth opening is *who is pitching*, and both the park and
+              the split below are read against him — he sat under the ballpark
+              for a commit, which put a fact about the ground above a fact about
+              the game. On a **pitcher's** preview he is that man's counterpart
+              rather than somebody he faces, and is drawn all the same: a reader
+              deciding whether to start a pitcher wants to know who the other
+              club is running out quite as much as a hitter does. */}
+          <StarterLine
+            sp={sp}
+            club={game.opponent}
+            viewerIsPitcher={isPitcher}
+            onOpenDetails={onOpenDetails}
+          />
           {/* **The ballpark, above whatever the reader pressed for.** It is
               the one fact about a scheduled game that is already knowable in
               full — the split below it is a season's worth of one man and
@@ -1082,40 +1169,13 @@ export function UpcomingPreview({
             />
           ) : (
             <>
-              {/* Who he is facing, in full and with a way through to him. The
-                  bar above says `vs LHP Gasser`, which is what fits a phone
-                  line beside the matchup and first pitch; a dialog has the
-                  width for the whole name, and the headshot is the row's only
-                  route to the *pitcher's* page — a man nobody has rostered,
-                  which `PlayerDetails` opens on as a matter of course. Drawn
-                  with the feed's own `FeedHeadshot`/`FeedPlayerName` rather
-                  than a third headshot circle, so it is the same target with
-                  the same click behavior as every other name in this stream.
-                  It carries **no lineup pip or status code**: those are
-                  `PhotoStatus`'s marks and read off `/api/statuses`, which the
-                  feed does not fetch — and both would only restate the bar
-                  (his pip is `SP`, and a man on the IL is not the announced
-                  starter). */}
-              {sp ? (
-                <div className="upcoming-sp">
-                  <FeedHeadshot
-                    id={sp.id}
-                    name={sp.name}
-                    onOpen={() => onOpenDetails(spKey!)}
-                  />
-                  <div className="feed-item-id">
-                    <FeedPlayerName playerKey={spKey!} name={sp.name} onOpen={onOpenDetails} />
-                    <span className="feed-context">
-                      {handThrows(sp.hand)} · starting for {game.opponent}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                /* **Nobody named yet, said where the reader is.** The row
-                   opens now on the strength of the park and the split, and
-                   the thing that is missing is the one thing the split's
-                   marked half would have come from — so the sentence names
-                   that rather than apologizing for the box. */
+              {!sp && (
+                /* **Nobody named yet, said where the reader is.** The dialog
+                   opens on the strength of the park and the split, and the
+                   thing that is missing is the one thing the split's marked
+                   half would have come from — so the sentence names that
+                   rather than apologizing for the box. The starter himself,
+                   where there is one, is drawn at the top by `StarterLine`. */
                 <p className="ovw-none">
                   {game.opponent} haven’t named a starter yet, so neither half of his split is
                   marked — the ballpark above is settled either way.

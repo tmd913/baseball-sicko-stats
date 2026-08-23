@@ -1703,6 +1703,7 @@ export function SummaryTable({
             ]
           }
           onLoad={load}
+          onOpenDetails={onOpenDetails}
           onClose={() => setPreview(null)}
         />
       )}

@@ -306,6 +306,12 @@ export interface OpposingStarter {
   label: string;
   /** `Sandy Alcantara (RHP)` — the whole of him, for the cell's own title. */
   full: string;
+  /** `Sandy Alcantara` — the plain name, for the places that draw him as a
+   *  person rather than as a cell: the game preview's starter line puts the
+   *  hand on its own row and would otherwise print it twice. Carried rather
+   *  than parsed back out of `full`, which would be reading a string this file
+   *  wrote to recover a field it had — the reason `hand` is carried too. */
+  name: string;
   /** Which arm he throws with, raw — `R`, `L` or null where the roster has no
    *  answer. The grid has never needed it (its cell prints `label`), and the
    *  player page's Schedule tab does: a batter's row opens the half of his
@@ -408,6 +414,7 @@ function buildStarters(
       id,
       label: `${hand} ${surname(p.name)}`,
       full: `${p.name} (${hand})`,
+      name: p.name,
       hand: p.throws,
       tier,
     };

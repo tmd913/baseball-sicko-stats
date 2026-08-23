@@ -254,6 +254,7 @@ export function OverviewTab({
         />
       ) : (
         <UpcomingGames
+          onOpenDetails={onOpenDetails}
           report={report}
           reportLoading={false}
           playerId={playerId}

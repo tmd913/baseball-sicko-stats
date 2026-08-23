@@ -2103,3 +2103,44 @@ prop it would be six signatures and six chances for a call site to forget it,
 and a forgotten one does not fail: it silently stops being a link on one surface
 out of four. The tab union lives in `hooks.ts` (`TeamPageTab`) so the door can
 name one without `hooks.ts` importing a component.
+
+#### The man on the mound comes first, and every preview draws him
+
+**Order: starter, park, then the reading.** The whole reason a scheduled game is
+worth opening is *who is pitching*, and both the park and the split below are
+read against him. He sat under the ballpark for a commit, which put a fact about
+the ground above a fact about the game.
+
+**A pitcher's preview draws him too**, where it used to draw only the opposing
+lineup. He is that man's **counterpart** rather than somebody he faces — MLB's
+`probablePitcher` on a pitcher's own game is the *opposing* announced starter —
+and a manager deciding whether to start a pitcher wants to know who the other
+club is running out quite as much as a hitter does. The sub-line says which
+reading it is (`RHP · PHI's starter, his counterpart`), because `starting for
+PHI` under a pitcher's dialog would otherwise be read as a man he steps in
+against.
+
+**The Schedule row's preview drew no starter at all until now**, and that was
+the gap rather than a choice: it carried the *sentence* about a projected
+starter without ever naming the man or offering a way through to him. It now
+draws the same `StarterLine`, so a fixture opened from a Schedule row and the
+same game opened from the feed show him identically — and the tier rides on the
+line as one word (`· projected`) rather than as a second sentence, the paragraph
+below being about what the tier does to the *reading* underneath.
+
+**`OpposingStarter` gained a plain `name`.** The cell forms are `label`
+(`RHP Alcantara`) and `full` (`Sandy Alcantara (RHP)`), and the starter line puts
+the hand on its own row — so `full` would print it twice. Carried rather than
+parsed back out of a string this file wrote, which is the reason `hand` is
+carried too.
+
+**`StarterLine`'s opener is optional and its absence draws him without links
+rather than with dead ones.** The Overview mounts `UpcomingGames` from a context
+whose own opener is optional, and a headshot that looks like a door and answers
+nothing is worse than one that does not look like a door.
+
+Verified in the running app. Batter, from a roster cell: `upcoming-sp` →
+`pf-strip` → `pct-card`, with *Sandy Alcantara · RHP · starting for MIA* over
+loanDepot park. Batter, from a Schedule row: the same order with *Ethan Pecko ·
+RHP · starting for HOU · projected*. Pitcher, from a Schedule row: *Aaron Nola ·
+RHP · PHI's starter, his counterpart* over T-Mobile Park and the PHI lineup.

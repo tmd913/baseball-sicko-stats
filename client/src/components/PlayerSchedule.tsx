@@ -6,6 +6,7 @@ import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
 import type { OppRead } from './OpponentTable';
 import { GamePark, hitterHand } from './ParkFactors';
+import { StarterLine } from './LiveFeed';
 import { BatterSplitsTab } from './PlatoonSplits';
 import {
   buildScheduleIndex,
@@ -115,6 +116,7 @@ export function PlayerScheduleTab({
   scheduleError,
   onNeedSchedule,
   pitcherLookup,
+  onOpenDetails,
 }: {
   /** The Overview's day, which carries both facts this tab turns on — his club
    *  (`teamId`) and, through `startTierOn`, nothing at all: the rotation is the
@@ -135,10 +137,14 @@ export function PlayerScheduleTab({
   scheduleError: string | null;
   onNeedSchedule: () => void;
   pitcherLookup: PitcherLookup;
+  /** Open the opposing starter's own page from his name or headshot.
+   *  Optional; see `StarterLine`. */
+  onOpenDetails?: (key: string) => void;
 }) {
   return (
     <div className="details-schedule">
       <UpcomingGames
+        onOpenDetails={onOpenDetails}
         report={report}
         reportLoading={reportLoading}
         playerId={playerId}
@@ -181,6 +187,7 @@ export function UpcomingGames({
   scheduleError,
   onNeedSchedule,
   pitcherLookup,
+  onOpenDetails,
   limit,
   heading = 'Upcoming Games',
   onSeeAll,
@@ -194,6 +201,11 @@ export function UpcomingGames({
   scheduleError: string | null;
   onNeedSchedule: () => void;
   pitcherLookup: PitcherLookup;
+  /** Open another player's page — the opposing starter at the head of a
+   *  fixture's preview. The same opener every other name in the app uses.
+   *  Optional, because the Overview mounts this block from a context that has
+   *  none; `StarterLine` then draws him without the links. */
+  onOpenDetails?: (key: string) => void;
   /** The preview's five. Absent is the fortnight, which is the tab. */
   limit?: number;
   heading?: string;
@@ -312,6 +324,7 @@ export function UpcomingGames({
               cadence={rotation?.cadence ?? null}
               opp={opps[g.homeId === teamId ? g.awayId : g.homeId]}
               onLoad={load}
+              onOpenDetails={onOpenDetails}
             />
           ))}
         </ol>
@@ -388,6 +401,7 @@ export function SchedulePreview({
   tier,
   opp,
   onLoad,
+  onOpenDetails,
   onClose,
 }: {
   report: PlayerReport;
@@ -399,6 +413,9 @@ export function SchedulePreview({
   tier: StartTier | null;
   opp: OppRead | undefined;
   onLoad: (teamId: number) => void;
+  /** Open the opposing starter's own page from his name or headshot.
+   *  Optional; see `StarterLine`. */
+  onOpenDetails?: (key: string) => void;
   onClose: () => void;
 }) {
   const when = prettyGameDate(game.date);
@@ -416,6 +433,31 @@ export function SchedulePreview({
         onClose={onClose}
       >
         <div className="start-detail">
+          {/* **The man on the mound comes first**, exactly as he does on the
+              feed's own preview — the same `StarterLine`, so a fixture opened
+              from a Schedule row and the same game opened from the feed draw
+              him identically.
+
+              **This dialog did not draw him at all until now**, which was the
+              gap: it had the *sentence* about a projected starter but never the
+              man, so a reader could learn that HOU's rotation put somebody on
+              the mound without being shown who, or given a way through to him.
+              The tier rides on the line as a word rather than as a second
+              sentence, the paragraph below being about what the tier does to
+              the *reading* underneath.
+
+              **Drawn for a pitcher too**, where he is the counterpart rather
+              than a man faced. */}
+          <StarterLine
+            sp={vs ? { id: vs.id, name: vs.name, hand: vs.hand } : null}
+            club={oppAbbr}
+            viewerIsPitcher={isPitcher}
+            onOpenDetails={onOpenDetails}
+            /* A word, not `VS_TITLE`'s sentence — that one is a tooltip's
+               length and this line has a name and a hand on it already. The
+               paragraph below carries the whole caveat. */
+            note={vs && vs.tier !== 'announced' ? 'projected' : undefined}
+          />
           {/* The ballpark — the one fact about a scheduled game that is
               settled the moment the fixture is, above the split or the
               lineup that is not. A batter reads it from his own side of the
@@ -565,6 +607,7 @@ function GameRow({
   cadence,
   opp,
   onLoad,
+  onOpenDetails,
 }: {
   game: ScheduleGame;
   index: ScheduleIndex;
@@ -579,6 +622,7 @@ function GameRow({
   cadence: number | null;
   opp: OppRead | undefined;
   onLoad: (teamId: number) => void;
+  onOpenDetails?: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const when = prettyGameDate(game.date);
@@ -670,6 +714,7 @@ function GameRow({
           tier={tier}
           opp={opp}
           onLoad={onLoad}
+          onOpenDetails={onOpenDetails}
           onClose={() => setOpen(false)}
         />
       )}
