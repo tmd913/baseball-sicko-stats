@@ -6505,40 +6505,61 @@ button.start-line:focus-visible {
   font-weight: 700;
   color: var(--text);
 }
-/* **The venue's name is the door to its club's Park tab.** A button reset
-   rather than a link, the navigation being in-app state; `font: inherit` is
-   deliberately *not* used, that shorthand resetting `font-size` and costing the
-   name the 13px the rule above just gave it — the rule `RULES.md` states and
-   this is the fourth caller to have to obey it.
+/* **A name that is a door**, and there are two of them: the ballpark on a game
+   preview (`.pf-venue--door`, through to that club's Park tab) and an opposing
+   club in either wide table (`.opp-door`, through to its page). They share this
+   rule because they are the same device — a word the reader is already looking
+   at, made pressable — and they differ only in type, which each sets below.
 
-   The underline is the affordance and it is `dotted`, not solid: a solid one is
-   what an *estimate* wears everywhere else in this app, and this is a door
+   A button reset rather than a link, the navigation being in-app state.
+   **`font: inherit` is deliberately not used**: that shorthand resets
+   `font-size`, and this is the rule `RULES.md` states — the family and the
+   weight are taken, the size is each caller's own business.
+
+   The underline is the affordance and it is **dotted, not solid**: a solid one
+   is what an *estimate* wears everywhere else in this app, and this is a door
    rather than a reading. It sits on `text-decoration` rather than a border so a
-   name that wraps on a phone underlines both lines. */
-.pf-venue--door {
+   name that wraps on a phone underlines both of its lines.
+
+   `color: inherit` is load-bearing on the table cells: a live game's opponent
+   is green and a postponed one amber, and those are set on the cell around this
+   button. A door that took its own color would undo the one thing those two
+   tables spend color on. */
+.pf-venue--door,
+.opp-door {
   padding: 0;
   border: 0;
   background: none;
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  font-weight: inherit;
   line-height: inherit;
-  color: var(--text);
+  color: inherit;
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   text-decoration-color: var(--faint);
 }
-/* Scoped, because a touch device has no pointer to move away and the tint would
-   stick to the last venue a finger crossed — the app-wide rule for a pressable
-   surface. `:focus-visible` is never scoped and is the keyboard's own mark. */
-@media (hover: hover) {
-  .pf-venue--door:hover {
-    color: var(--accent);
-    text-decoration-color: var(--accent);
-  }
+.pf-venue--door {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
 }
-.pf-venue--door:focus-visible {
+/* The table cells set their own size and weight on the text around it, so the
+   door takes them rather than naming any. */
+.opp-door {
+  font-size: inherit;
+}
+/* Both are **small aimed targets**, so the hover is not scoped to
+   `(hover: hover)` — that rule is for full-width rows and cards in a scrolling
+   list, where a touch device has no pointer to move away and the tint sticks to
+   the last one a finger crossed. `:focus-visible` is never scoped. */
+.pf-venue--door:hover,
+.opp-door:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.pf-venue--door:focus-visible,
+.opp-door:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;

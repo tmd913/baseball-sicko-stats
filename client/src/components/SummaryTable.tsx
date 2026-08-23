@@ -7,6 +7,7 @@ import { PlayerIdentity } from './PlayerIdentity';
 import { PlayerNewsMark } from './NewsMark';
 import {
   DayHead,
+  OpponentDoor,
   ScheduleCell,
   gameCount,
   gamesOn,
@@ -68,6 +69,25 @@ function pickGame(report: PlayerReport): PlayerGame | null {
 }
 
 /**
+ * One club's abbreviation inside a line score. **Only the opposing one is a
+ * door** — the other is the player's own club, whose page he is one press from
+ * on his own row already (the headshot and the name open him, and his head
+ * carries the club chip). A line score with both sides linked would offer the
+ * reader a choice they did not ask for and make the row's own targets harder to
+ * hit.
+ */
+function OppSide({ abbr, opponent }: { abbr: string; opponent: PlayerGame }) {
+  if (abbr !== opponent.opponent) return <>{abbr}</>;
+  return (
+    <OpponentDoor
+      teamId={opponent.opponentId}
+      label={abbr}
+      title={`${abbr} — the club’s page`}
+    />
+  );
+}
+
+/**
  * The opponent / game cell: the matchup before first pitch, the live score +
  * inning while it's on, the final score once it's over.
  *
@@ -80,14 +100,37 @@ function pickGame(report: PlayerReport): PlayerGame | null {
  */
 function OpponentCell({ game }: { game: PlayerGame | null }) {
   if (!game) return <td className="sum-opp sum-opp-empty">—</td>;
-  const { kind, score, detail } = gameStatusView(game);
+  const { kind, sides, detail } = gameStatusView(game);
   const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
   const scheduled = kind === 'scheduled';
   const sp = scheduled ? game.probablePitcher : null;
+  /**
+   * **The opposing club is a door to its page, in whichever of the two shapes
+   * this cell is drawing.**
+   *
+   * Before first pitch the cell writes the matchup, so the door is the whole of
+   * `vs HOU` — prefix and abbreviation being one fact and eleven characters
+   * being a small enough target already. Once there is a score the cell stops
+   * writing a matchup and writes `TOR 3–2 NYY` instead, where the only thing
+   * that names a club is an abbreviation in the middle of a line: so the door
+   * shrinks to that abbreviation and the digits stay plain text. That is why
+   * `gameStatusView` hands back `sides` as well as `score` — a link cannot be
+   * put through the middle of a finished string.
+   */
+  const main =
+    sides === null ? (
+      <OpponentDoor teamId={game.opponentId} label={matchup} title={`${game.opponent} — the club’s page`} />
+    ) : (
+      <>
+        <OppSide abbr={sides.away} opponent={game} />
+        {` ${sides.awayScore}–${sides.homeScore} `}
+        <OppSide abbr={sides.home} opponent={game} />
+      </>
+    );
   return (
     <td className={`sum-opp sum-opp-${kind}`}>
       <span className="sum-opp-main">
-        {scheduled ? matchup : (score ?? matchup)}
+        {main}
         {scheduled && <span className="sum-opp-time">{detail}</span>}
       </span>
       {!scheduled && <span className="sum-opp-detail">{detail}</span>}

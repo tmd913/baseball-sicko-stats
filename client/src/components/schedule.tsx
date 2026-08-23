@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { addDays, handThrows, surname } from '../lib';
+import { useTeamDoor } from '../hooks';
 import type { Column } from './researchColumns';
 import type {
   MatchupWindow,
@@ -719,6 +720,59 @@ export function tallyWords(t: StartTally): string {
 }
 
 /** `@ LAD` / `vs SEA` — what a cell says, and what its column sorts on. */
+/**
+ * **An opposing club, as a door to its page.**
+ *
+ * The abbreviation is what every table in this app calls a club, and until now
+ * it was the one place a club was named that a reader could not get to it from
+ * — you could reach the Brewers' page from a research row, from a player's own
+ * head and from the header search, but not from the `vs MIL` you were actually
+ * looking at while deciding whether to start somebody against them.
+ *
+ * **The text is unchanged and the whole of it is the target.** `vs MIL` is
+ * eleven characters at 12px, which is a small aimed target already; splitting
+ * the door off the `vs` would halve it for no gain, the prefix being part of
+ * the same fact. A club this app has no id for — the join-to-null case — is
+ * drawn as the plain text it always was rather than as a door that goes
+ * nowhere.
+ *
+ * It reads `TeamDoorContext` rather than taking a prop, for the reason the park
+ * strip does: these are cells inside a `map` inside two different tables, and
+ * `openTeam` is the app's one door in.
+ */
+export function OpponentDoor({
+  teamId,
+  label,
+  title,
+  className,
+}: {
+  /** The **opposing** club's MLB id, or null where it could not be resolved. */
+  teamId: number | null;
+  /** What the cell already says — `vs MIL`, `@ TOR`, or a bare `MIL`. */
+  label: string;
+  /** The club's name for the button's own tooltip, where the caller has it. */
+  title?: string;
+  className?: string;
+}) {
+  const openTeam = useTeamDoor();
+  if (teamId === null || !openTeam) return <>{label}</>;
+  return (
+    <button
+      type="button"
+      className={`opp-door${className ? ` ${className}` : ''}`}
+      onClick={(e) => {
+        // The cell sits in a row with its own press targets (the headshot and
+        // the name open the player). Nothing here should reach them.
+        e.stopPropagation();
+        openTeam(teamId, 'overview');
+      }}
+      title={title ?? `${label} — the club’s page`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function opponentText(g: ScheduleGame, teamId: number): string {
   const home = g.homeId === teamId;
   return `${home ? 'vs' : '@'} ${home ? g.away : g.home}`;
@@ -827,6 +881,9 @@ export function ScheduleCell({
         // and an announcement for it means nothing now.
         const tier = ppd || teamId === null ? null : startTierOn(index, g, teamId, playerId);
         const opp = opponentText(g, teamId as number);
+        // The club on the other side of this fixture — one subtraction, the row
+        // knowing its own. It is what the opponent's abbreviation is a door to.
+        const oppId = teamId === null ? null : g.homeId === teamId ? g.awayId : g.homeId;
         const vs = opposingStarter(index, g, teamId);
         const title = ppd
           ? `${opp} — postponed`
@@ -853,13 +910,21 @@ export function ScheduleCell({
                 shape this device replaced, one line lower. */}
             {tier ? (
               <span className={`sched-opp-box sched-opp-box-${tier}`}>
-                <span className="sched-opp">{opp}</span>
+                <span className="sched-opp">
+                  <OpponentDoor teamId={oppId} label={opp} />
+                </span>
                 {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
                 <StartChip tier={tier} cadence={rotation?.cadence ?? null} />
               </span>
             ) : (
               <>
-                <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+                {/* A postponement says `PPD` and is not a door: the cell has
+                    stopped naming a club at all, and a link under a word that
+                    is not the club's name is a link to something the reader did
+                    not ask for. */}
+                <span className="sched-opp">
+                  {ppd ? 'PPD' : <OpponentDoor teamId={oppId} label={opp} />}
+                </span>
                 {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
               </>
             )}
