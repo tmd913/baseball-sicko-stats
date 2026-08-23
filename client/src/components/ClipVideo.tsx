@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useMuted } from '../hooks';
+import { useDelayedFlag, useMuted } from '../hooks';
+import { SpinningBaseball } from './Loading';
 
 /** No hover means no way to summon controls on demand — i.e. a touch screen. */
 const NO_HOVER = '(hover: none)';
@@ -54,6 +55,42 @@ function useNoHover(): boolean {
  * chips over a 332px frame to re-watch six seconds of baseball that can be
  * re-watched by letting it end, and on the one device they were for they were
  * three 36px targets across the top of the picture.
+ *
+ * **And the frame says when it is waiting for the clip**, which on a phone
+ * nothing else was left to say. The two rules above compose into a dead press:
+ * `play` fires when playback *begins*, not when a frame arrives, so on a slow
+ * connection the control bar is dropped at the moment of the tap and the video
+ * then sits on a blank frame with the buffer filling behind it — no bar, no
+ * scrub, no poster, and the one control still on screen a mute. Reported off an
+ * iPhone as pressing play and nothing happening for a while. The ball is the
+ * app's own loading language rather than the browser's, and it is drawn over
+ * the frame for the same reason the mute is: `controls` is gone for the whole
+ * of a touch device's playback, so anything the reader is owed while a clip
+ * plays has to be on the frame itself.
+ *
+ * **It is drawn on exactly the condition that drops the bar** (`hideControls`),
+ * and that is a measurement rather than a scoping preference. Every browser
+ * with the native bar up already draws its own buffering mark in the middle of
+ * the frame — checked in Chrome at 1200 with the throughput throttled to 6KB/s,
+ * where its thin arc came up behind this chip and the two read as one broken
+ * mark. Where the bar is up the reader is told; where this app took it away,
+ * this app owes the telling. It is the mute's own argument, one control on.
+ *
+ * **`WAIT_DELAY` and no `MIN_SPIN`**, and the pair of decisions is the app's
+ * standing one read against this surface. The delay is what keeps a clip that
+ * starts promptly from flashing a ball nobody needed — and it also answers a
+ * buffer that stutters, since each `waiting` has to last 250ms of its own
+ * before anything is drawn. The floor is deliberately absent: `MIN_SPIN` is
+ * owed where a press would otherwise leave no trace, and here the trace a
+ * fast press leaves is *the clip playing*, so holding a ball over the first
+ * frames of it would be the mark outstaying the thing it was about.
+ *
+ * `busy` is read off the element rather than tracked as an intent: `waiting`
+ * says the buffer ran dry, `playing` says it filled, and `play` opens the state
+ * only when `readyState` says there is nothing to show yet — which is the
+ * `preload="none"` case, where no frame has been fetched at all. `stalled` is
+ * taken only on a clip that is not paused, since it fires against a background
+ * fetch nobody asked to watch.
  */
 export function ClipVideo({
   src,
@@ -71,6 +108,8 @@ export function ClipVideo({
   const noHover = useNoHover();
   const prefMuted = useMuted();
   const [playing, setPlaying] = useState(false);
+  /** Playback is wanted and there is no frame to give it — see the note above. */
+  const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLVideoElement>(null);
   // This clip's own audio state. The saved preference is its *starting* value,
   // not a rule over it.
@@ -95,6 +134,8 @@ export function ClipVideo({
   /** Did this touch go down on the bare frame (controls hidden), i.e. is it ours? */
   const tapIsOurs = useRef(false);
   const hideControls = noHover && playing;
+  /** The wait mark, drawn only where the browser's own is not — see above. */
+  const waiting = useDelayedFlag(busy && hideControls);
   const setAudio = (next: boolean) => {
     audioTouched.current = true;
     setMuted(next);
@@ -133,10 +174,28 @@ export function ClipVideo({
       autoPlay={autoPlay}
       preload={preload}
       playsInline
-      onPlay={() => setPlaying(true)}
-      onPause={() => setPlaying(false)}
+      onPlay={(e) => {
+        setPlaying(true);
+        // `HAVE_FUTURE_DATA` (3) is the first state with a frame to show *and*
+        // one after it. Below that, playback has begun over nothing — which is
+        // every `preload="none"` clip at the moment of the press.
+        if (e.currentTarget.readyState < 3) setBusy(true);
+      }}
+      onWaiting={() => setBusy(true)}
+      onStalled={(e) => {
+        // Fires against a background fetch too, which nobody pressed anything
+        // to start and which owes no mark.
+        if (!e.currentTarget.paused) setBusy(true);
+      }}
+      onPlaying={() => setBusy(false)}
+      onError={() => setBusy(false)}
+      onPause={() => {
+        setPlaying(false);
+        setBusy(false);
+      }}
       onEnded={() => {
         setPlaying(false);
+        setBusy(false);
         onEnded?.();
       }}
       onPointerDown={() => {
@@ -156,6 +215,22 @@ export function ClipVideo({
         if (el.muted !== muted) setAudio(el.muted);
       }}
     />
+      {/* **The wait, centered on the picture.** Drawn only while the clip has
+          been waiting for `WAIT_DELAY`, so a clip that starts promptly never
+          shows one — see the note above for why there is no `MIN_SPIN` floor
+          under it either.
+
+          `pointer-events: none` is not decoration: the tap-to-pause is bound on
+          the `<video>` itself, and the reason the mute positions *itself*
+          rather than sitting in a layer spanning the frame is that no such
+          layer may exist to swallow that tap. This is the layer that argument
+          rules out, so it declines the pointer instead. */}
+      {waiting && (
+        <div className="clip-wait" role="status">
+          <SpinningBaseball size="md" />
+          <span>Loading the clip</span>
+        </div>
+      )}
       {/* Per-clip audio, on top of the frame, and the only thing on it. The
           browser's own mute is only reachable with a pointer — on a touch
           device the control bar is hidden for the whole time a clip is playing
