@@ -105,6 +105,16 @@ interface DayGame {
   awayTeam: string;
   homeTeamId: number | null;
   awayTeamId: number | null;
+  /** The ballpark, MLB's venue id — see `PlayerGame.venueId`.
+   *
+   *  **No `DAY_SNAPSHOT_VERSION` bump.** The test that file states is not
+   *  whether a field rides in the blob but whether anything reads it back
+   *  out of one, and nothing does: the only readers are the three game
+   *  previews, which draw for a `scheduled` game alone, where a snapshot is
+   *  written only once every game on the day is final and settled. A v9
+   *  blob deserializes with this undefined and the builds below coalesce it
+   *  to null, which is the same answer a feed with no venue gives. */
+  venueId: number | null;
   status: GameStatus;
   homeProbablePitcher: ProbablePitcher | null;
   awayProbablePitcher: ProbablePitcher | null;
@@ -869,6 +879,7 @@ async function buildStatsApiDay(
       awayTeam: g.awayTeam,
       homeTeamId: g.homeTeamId,
       awayTeamId: g.awayTeamId,
+      venueId: g.venueId,
       status,
       homeProbablePitcher: g.homeProbablePitcher,
       awayProbablePitcher: g.awayProbablePitcher,
@@ -924,6 +935,7 @@ async function buildStatsApiDay(
         date,
         homeTeam: g.homeTeam,
         awayTeam: g.awayTeam,
+        venueId: g.venueId ?? null,
         batterTeam,
         opponent,
         isHome: bg.isHome,
@@ -978,6 +990,7 @@ async function buildStatsApiDay(
         date,
         homeTeam: g.homeTeam,
         awayTeam: g.awayTeam,
+        venueId: g.venueId ?? null,
         batterTeam: pitcherTeam,
         opponent,
         isHome: pg.isHome,
@@ -1485,6 +1498,7 @@ function rosterGame(dg: DayGame, isHome: boolean, playerId: number): PlayerGame 
     date: dg.date,
     homeTeam: dg.homeTeam,
     awayTeam: dg.awayTeam,
+    venueId: dg.venueId ?? null,
     batterTeam: isHome ? dg.homeTeam : dg.awayTeam,
     opponent: isHome ? dg.awayTeam : dg.homeTeam,
     isHome,

@@ -1749,6 +1749,7 @@ export function PlayerDetails({
           scheduleError={scheduleError}
           onNeedSchedule={onNeedSchedule}
           pitcherLookup={pitcherLookup}
+          onOpenDetails={onOpenDetails}
         />
       )}
 

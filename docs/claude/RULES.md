@@ -75,13 +75,16 @@ cannot import from each other. Change one and change the other in the same
 breath — nothing will catch it for you, and a field that exists on one side and
 not the other fails at runtime rather than at build time.
 
-**The season is pinned in ten places** and they must stay in sync. The list is
-in `CLAUDE.md`; **check the count against the code rather than trusting the
+**The season is pinned in eleven places** and they must stay in sync. The list
+is in `CLAUDE.md`; **check the count against the code rather than trusting the
 prose** — `grep -rln "hfSea\|CURRENT_SEASON = \|SEASON = " server/src/` is what
-it is derived from, and it has been one behind before (it was, again:
-`teamResearch.ts`). That grep answers **eleven** against a count of ten, and
-always will — `playerSplits.ts` answers it by *using* an imported `SEASON`
-rather than declaring one. Count the declarations, not the filenames.
+it is derived from, and it has been one behind **twice** (`teamResearch.ts`, and
+then `parkFactors.ts`). That grep answers **twelve** against a count of eleven,
+and always will — `playerSplits.ts` answers it by *using* an imported `SEASON`
+rather than declaring one. Count the declarations, not the filenames — and note
+the declaration grep is itself one short, `savant.ts` spelling its pin
+`hfSea: '2026|'` where the pattern looks for `hfSea=`. Ten from that grep plus
+`savant.ts` is the eleven.
 
 **All cache reads and writes go through `storage.ts`.** No module outside it
 should touch `fs` for cache purposes. Reads degrade to a miss; **writes are

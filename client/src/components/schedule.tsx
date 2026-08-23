@@ -306,6 +306,12 @@ export interface OpposingStarter {
   label: string;
   /** `Sandy Alcantara (RHP)` — the whole of him, for the cell's own title. */
   full: string;
+  /** `Sandy Alcantara` — the plain name, for the places that draw him as a
+   *  person rather than as a cell: the game preview's starter line puts the
+   *  hand on its own row and would otherwise print it twice. Carried rather
+   *  than parsed back out of `full`, which would be reading a string this file
+   *  wrote to recover a field it had — the reason `hand` is carried too. */
+  name: string;
   /** Which arm he throws with, raw — `R`, `L` or null where the roster has no
    *  answer. The grid has never needed it (its cell prints `label`), and the
    *  player page's Schedule tab does: a batter's row opens the half of his
@@ -408,6 +414,7 @@ function buildStarters(
       id,
       label: `${hand} ${surname(p.name)}`,
       full: `${p.name} (${hand})`,
+      name: p.name,
       hand: p.throws,
       tier,
     };
@@ -719,6 +726,58 @@ export function tallyWords(t: StartTally): string {
 }
 
 /** `@ LAD` / `vs SEA` — what a cell says, and what its column sorts on. */
+/**
+ * **The opposing club as a press**, wherever a table names one.
+ *
+ * The abbreviation is what every table in this app calls a club, and it is the
+ * thing a reader is already looking at while deciding whether to start somebody
+ * against them — so it is the natural handle for *the whole matchup*, which is
+ * what pressing it opens: the same game preview the feed's Upcoming row and the
+ * player page's Schedule row raise, with the park, and his split against the
+ * announced starter, or the lineup waiting for him.
+ *
+ * **It led to the club's page for one commit and no longer does.** The club is
+ * still one press further on — the venue's name inside the preview is a door to
+ * it — but a reader pressing `vs MIL` on his own roster is asking *what is this
+ * game*, not *who are the Brewers*, and the club page answers the second
+ * question at the cost of the first.
+ *
+ * **The text is unchanged and the whole of it is the target.** `vs MIL` is
+ * eleven characters at 12px, a small aimed target already; splitting the press
+ * off the `vs` would halve it for no gain, the prefix being part of the same
+ * fact. A cell with nothing to open — see `canPreview` and `canPreviewFixture`
+ * — draws the plain text it always was rather than a press that does nothing.
+ */
+export function OpponentPress({
+  onPress,
+  label,
+  title,
+}: {
+  /** What opens, or null where there is nothing to. */
+  onPress: (() => void) | null;
+  /** What the cell already says — `vs MIL`, `@ TOR`, or a bare `MIL`. */
+  label: string;
+  title?: string;
+}) {
+  if (!onPress) return <>{label}</>;
+  return (
+    <button
+      type="button"
+      className="opp-door"
+      aria-haspopup="dialog"
+      onClick={(e) => {
+        // The row around this has its own press targets — the headshot and the
+        // name open the player. Nothing here should reach them.
+        e.stopPropagation();
+        onPress();
+      }}
+      title={title ?? `${label} — open the matchup`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function opponentText(g: ScheduleGame, teamId: number): string {
   const home = g.homeId === teamId;
   return `${home ? 'vs' : '@'} ${home ? g.away : g.home}`;
@@ -801,7 +860,11 @@ export function ScheduleCell({
   teamId,
   playerId,
   date,
+  onPreview,
 }: {
+  /** Open this fixture's preview. Absent on any caller that has no dialog to
+   *  raise, which leaves every opponent here as the plain text it was. */
+  onPreview?: (g: ScheduleGame) => boolean | void;
   index: ScheduleIndex;
   teamId: number | null;
   playerId: number;
@@ -827,6 +890,14 @@ export function ScheduleCell({
         // and an announcement for it means nothing now.
         const tier = ppd || teamId === null ? null : startTierOn(index, g, teamId, playerId);
         const opp = opponentText(g, teamId as number);
+        // The club on the other side of this fixture — one subtraction, the row
+        // knowing its own. It is what the opponent's abbreviation is a door to.
+        // **Only a fixture nobody has played is a preview.** A preview is a
+        // reading of a game *before* it — the split against the man they have
+        // named, the lineup waiting — so a live or final cell keeps its plain
+        // text and lets the score be the answer.
+        const press =
+          onPreview && g.state === 'scheduled' ? () => void onPreview(g) : null;
         const vs = opposingStarter(index, g, teamId);
         const title = ppd
           ? `${opp} — postponed`
@@ -853,13 +924,21 @@ export function ScheduleCell({
                 shape this device replaced, one line lower. */}
             {tier ? (
               <span className={`sched-opp-box sched-opp-box-${tier}`}>
-                <span className="sched-opp">{opp}</span>
+                <span className="sched-opp">
+                  <OpponentPress onPress={press} label={opp} />
+                </span>
                 {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
                 <StartChip tier={tier} cadence={rotation?.cadence ?? null} />
               </span>
             ) : (
               <>
-                <span className="sched-opp">{ppd ? 'PPD' : opp}</span>
+                {/* A postponement says `PPD` and is not a door: the cell has
+                    stopped naming a club at all, and a link under a word that
+                    is not the club's name is a link to something the reader did
+                    not ask for. */}
+                <span className="sched-opp">
+                  {ppd ? 'PPD' : <OpponentPress onPress={press} label={opp} />}
+                </span>
                 {vs && <span className={`sched-vs sched-vs-${vs.tier}`}>{vs.label}</span>}
               </>
             )}

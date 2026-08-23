@@ -22,6 +22,7 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
+  ParkFactor,
   SplitCut,
   TeamInfo,
   TrendWindow,
@@ -85,6 +86,8 @@ import {
   MutedContext,
   PlayerStatusContext,
   HandednessContext,
+  ParkFactorsContext,
+  TeamDoorContext,
   RecentNewsContext,
   useDelayedFlag,
   useDismissable,
@@ -92,7 +95,7 @@ import {
   useResumed,
   useStickyChromeOffset,
 } from './hooks';
-import type { FantasySlot } from './hooks';
+import type { FantasySlot, TeamDoor, TeamPageTab } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
@@ -576,9 +579,15 @@ export default function App() {
    *  one door in — the board row, a player's own head and the header search all
    *  come through here, so neither the exclusion above nor the return can be got
    *  round by a caller. */
-  const openTeam = useCallback((id: number) => {
+  /** Which tab that page should open on, where a door named one. Held beside
+   *  `teamPageId` rather than in the URL, which is where the team page's tab has
+   *  always *not* been — it is a reading of one club rather than which data the
+   *  view shows, the same call `tside=` went the other way on. */
+  const [teamPageTab, setTeamPageTab] = useState<TeamPageTab | undefined>(undefined);
+  const openTeam = useCallback<TeamDoor>((id, tab) => {
     setTeamReturnKey(detailsKeyRef.current);
     setDetailsKey(null);
+    setTeamPageTab(tab);
     setTeamPageId(id);
   }, []);
   /** …and its mirror: opening a player puts away a club's page. `setDetailsKey`
@@ -1058,6 +1067,58 @@ export default function App() {
    */
   const [scheduleWanted, setScheduleWanted] = useState(false);
   const needSchedule = useCallback(() => setScheduleWanted(true), []);
+
+  /**
+   * **Every ballpark's park factors** — the team page's Park tab and the strip a
+   * game preview draws, held once here and shared through
+   * `ParkFactorsContext`.
+   *
+   * `needSchedule`'s own shape, and for the same two reasons. It takes **no
+   * parameters** — one table answers for every club, every fixture and the
+   * neutral sites nobody is at home in — so several surfaces asking is one
+   * request; and it is **lazy**, so a session that opens no team page and
+   * previews no game never pays for it. The readers are leaves three and four
+   * components down inside dialogs, which is what makes it a context rather
+   * than a prop (see `hooks.ts`).
+   */
+  const [parkFactors, setParkFactors] = useState<Map<number, ParkFactor> | null>(null);
+  const [parksLoading, setParksLoading] = useState(false);
+  const [parksError, setParksError] = useState<string | null>(null);
+  const [parksWanted, setParksWanted] = useState(false);
+  const needParkFactors = useCallback(() => setParksWanted(true), []);
+  useEffect(() => {
+    if (!parksWanted || parkFactors) return;
+    let canceled = false;
+    setParksLoading(true);
+    setParksError(null);
+    api
+      .parkFactors()
+      .then((pf) => {
+        if (canceled) return;
+        setParkFactors(new Map(pf.parks.map((p) => [p.venueId, p])));
+      })
+      .catch((e: Error) => {
+        if (!canceled) {
+          setParksError(e.message);
+          // A failed read may be asked for again — the next surface that wants
+          // a park sets the flag and this effect runs. Nothing retries on its
+          // own, which is rule 1: this is a garnish, not the page.
+          setParksWanted(false);
+        }
+      })
+      .finally(() => {
+        if (!canceled) setParksLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [parksWanted, parkFactors]);
+  /** The one object the context carries, memoized so every leaf reading it does
+   *  not re-render on an unrelated render of `App`. */
+  const parkRead = useMemo(
+    () => ({ byVenue: parkFactors, loading: parksLoading, error: parksError, need: needParkFactors }),
+    [parkFactors, parksLoading, parksError, needParkFactors],
+  );
   useEffect(() => {
     if ((scheduleSpan === null && !scheduleWanted) || scheduleWindow) return;
     let canceled = false;
@@ -5839,6 +5900,17 @@ export default function App() {
         no request; null until that one boot read lands, and every reader draws
         nothing for a null. */}
     <HandednessContext.Provider value={handById}>
+    {/* Every ballpark's park factors — read by the strip on three different
+        game-preview dialogs and by the team page's Park tab, none of which
+        should be fetching a league-wide table for itself. Lazy: nothing is
+        requested until one of those surfaces asks. */}
+    <ParkFactorsContext.Provider value={parkRead}>
+    {/* The one door into a club's page, for the park strip on a game preview —
+        a leaf inside three dialogs in four trees. `openTeam` is stable and is
+        already the single door the board row, a player's head and the header
+        search all come through; this puts it where a leaf can reach it without
+        six components agreeing to pass it on. */}
+    <TeamDoorContext.Provider value={openTeam}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -7080,7 +7152,14 @@ export default function App() {
           for the tick before it lands. */}
       {teamPageId !== null && teamById.has(teamPageId) && (
         <TeamDetails
+          /* **Keyed on the club and the tab it was opened for**, so a door that
+             names a tab gets a page that opens on it. `TeamDetails` reads
+             `initialTab` once, at mount; without the key a second door onto a
+             club already on screen would be read by a component that has
+             already mounted and would land on the tab the reader left. */
+          key={`${teamPageId}:${teamPageTab ?? ''}`}
           team={teamById.get(teamPageId) as TeamInfo}
+          initialTab={teamPageTab}
           side={teamSide}
           onSideChange={setTeamSide}
           /* The season roster the header search is already holding — the Roster
@@ -7141,6 +7220,8 @@ export default function App() {
         />
       )}
     </div>
+    </TeamDoorContext.Provider>
+    </ParkFactorsContext.Provider>
     </HandednessContext.Provider>
     </RecentNewsContext.Provider>
     </EligibilityContext.Provider>

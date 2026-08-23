@@ -62,6 +62,7 @@ function toStart(
     startTime: g.startTime,
     home,
     opponentId,
+    venueId: g.venueId,
     opponent: abbrevs.get(opponentId) ?? '—',
     announced: tier === 'announced',
     tier,

@@ -27,6 +27,7 @@ import { LoadingLine } from './Loading';
 import { GameLogPreview } from './GameLog';
 import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
+import { GamePark } from './ParkFactors';
 import type { OppRead } from './OpponentTable';
 import { NewsList } from './PlayerNews';
 import { PlayerDay, playerDayLine } from './PlayerDay';
@@ -253,6 +254,7 @@ export function OverviewTab({
         />
       ) : (
         <UpcomingGames
+          onOpenDetails={onOpenDetails}
           report={report}
           reportLoading={false}
           playerId={playerId}
@@ -944,6 +946,14 @@ function StartRow({
           onClose={() => setOpen(false)}
         >
           <div className="start-detail">
+            {/* The ballpark he would work in. Both hands together, on every row
+                of this list: it is a pitcher's, and he faces whichever nine the
+                other club writes down. See `ParkFactors.tsx`. */}
+            <GamePark
+              venueId={start.venueId}
+              handNote="The park as it plays to both hands — he faces whoever they write down."
+              onNavigate={() => setOpen(false)}
+            />
             {/* **A projected row's dialog must not read as a claim about a game
                 he has been named for.** The row says `Projected` and goes muted;
                 inside the box that context is gone, so the sentence is repeated

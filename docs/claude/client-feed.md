@@ -1923,3 +1923,236 @@ Bundle: JS 600,915 → 600,915 bytes raw, 176,982 → 176,985 gzipped (+3 bytes,
 moved comment's words). CSS unchanged at 159,369 / 28,510 — the two sections
 were already siblings under `.live-feed` with the same class, so the order is a
 JSX one and no rule anywhere depends on which came first.
+
+### The park, on every game preview
+
+**Three doors open one preview** — the feed's Upcoming row, the Overview's
+Projected Starts row and the Schedule tab's game row — and each of them now
+draws `GamePark` above whatever the dialog opened on: for a batter the platoon
+card, for a pitcher the opposing lineup.
+
+**It goes above, not below.** The park is the one fact about a scheduled game
+that is settled the moment the fixture is — the split under it is a season's
+worth of one man and the lineup is the other club's, both of which are readings
+of people — and it moves both: a platoon edge worth 40 points of wOBA is being
+read inside a park worth nine of it either way.
+
+**A strip rather than the sixteen-row card**, because of what is under it. This
+box already holds a nine-cut opposing lineup or a whole platoon comparison, and
+sixteen more bars would bury the thing the reader pressed for. The rest are a
+reading of the park itself and live on its club's page, one press away.
+
+**Six figures, the same six on every strip** — `wOBA · Runs · HR · H · BB · K` —
+and there is no separate *park factor* among them, because **`wOBA` is one**.
+That is what Savant's own board means by the name, and why that board carries no
+plain `wOBA` column at all. Two labels over one number are not two facts, and a
+pitcher's strip carrying both printed the same figure twice side by side with the
+same tint, which reads as a bug.
+
+**What differs between a batter's strip and a pitcher's is the cut, not the
+columns.** A batter reads the ground from his own side of the plate — the whole
+reason the board is fetched by hand — and a pitcher reads both hands together,
+facing whichever nine the other club writes down. The hand chip in the head says
+which, so the strip does not spend a column on it. Measured: Yankee Stadium is
+`wOBA 97` to Aaron Judge under a `vs RHB` chip, and T-Mobile is `wOBA 94` to
+Logan Gilbert under none.
+
+**It spent one for two commits and no longer does.** A batter's carried the
+overall wOBA *and* his own beside it (`102` and `97` at Yankee Stadium), which is
+a real and interesting difference — and it cost a seventh column on the narrowest
+surface in the app to say something the head already says in three characters.
+The club's Park tab is where the two cuts can be read against each other
+properly, on a switch and at full width.
+
+**Hits, walks and strikeouts stopped being a pitcher's alone.** They were on a
+pitcher's strip and off a batter's, on the reasoning that they are his night
+rather than the hitter's. True of who *earns* them, false of who is *affected*
+by them: a park that eats singles eats them for the man batting in it, and a
+manager starting a hitter wants to know that quite as much as the pitcher does.
+The split was a distinction about baseball imposed on a table that only reports
+the park.
+
+**Strikeouts are the one figure that runs the other way** — more of them is the
+pitcher's gain where more of everything else is the hitter's — and they are drawn
+like every other column anyway, because **the tint says how much of a thing
+happens here, not who it is good for**. Red is *more than an average park* on
+every figure and both surfaces. That is the rule the club page's bars already
+follow (*the fill points at the index, not at who it favors*), and it is Savant's
+own board, whose `SO` column colors 111 red and 87 blue exactly as its `HR`
+column does. An earlier draft kept K off the strip on the grounds that one
+inverted column made the hue mean two things; that was the wrong diagnosis — the
+hue never meant *good*, it meant *more*.
+
+**The column count is written inline** as `--pf-figs`, and the grid's own cap
+scales with it: a fixed 420px would put six figures at 65px where four sit at
+100. It survives the columns settling at six because the number is still the
+thing that decides the width. Measured at 390px and 900px, both strips hold one
+line with no overflow.
+
+**Strikeouts came off the strip.** Every other figure runs the same way — more of
+it is the hitter's night — and K ran the other way, so the one column that
+inverted the whole strip's meaning sat on the surface with least room to explain
+itself. It keeps its row on the club's page, where sixteen rows and a key can
+carry the exception.
+
+**Hot and cold, Savant's own way of drawing this board.** The strip has no rails
+on it, so the figures carry both halves of the reading themselves: red above the
+average park, blue below, and the strength of the tint is how far. A number's
+distance from 100 is exactly the case `RULES.md` allows color for — *where a
+scale genuinely is the reading* — and dropping K is what makes one hue mean one
+thing. A reader arriving from Savant does not have to learn a second vocabulary.
+
+**It saturates at half the rail's scale**, not the whole of it. The club page's
+bars run to the most extreme park in the league, which is right for a *length*:
+it makes a long bar rare and therefore worth something. A *tint* at that scale is
+the opposite — almost every park lands in a pale middle and the strip reads as
+colorless, which is not the reading Savant's table gives. Half-scale puts the
+ordinary park at a visible tint and the extreme one at full strength.
+
+**And the tint is capped at 70%, which is measured.** The two hues are mid-tone,
+so a chip at full strength is too light for dark ink and too dark for light: at
+100% the figure reads **3.34:1** in the dark theme, under the 4.5 a 15px
+weight-800 number needs (not WCAG "large text", which starts at 18.66px bold).
+Measured across five themes, the worst case runs 6.67 at 45%, 5.20 at 65%,
+**4.87 at 70%** and 4.57 at 75% — so 75 passes by 0.07, one palette tweak from
+failing, and 70 passes with margin everywhere. `frac` still runs the whole 0→1,
+so the relative scale is untouched; only how dark its top gets is capped. The
+alternative was Savant's own, white ink on a saturated chip, and it does not
+survive six themes: the ink here is `--text`, already near-white in four of them.
+
+A **chip** rather than colored ink, which is also what Savant does: ink tinted to
+30% of a hue is a number gone pale, where a ground tinted to 30% is a number on a
+pale ground.
+
+**A hitter is shown his own side of the plate and a pitcher is shown both.** He
+faces whichever nine the other club writes down, so the park he works in is the
+park as it plays to everybody; a hitter stands on one side all night, and on the
+2026 board that is worth **34 points of home-run index at Yankee Stadium**.
+
+**A switch hitter is resolved off the very fact the dialog opened to show** —
+the hand the announced (or projected) starter throws with, which decides the
+side he will actually bat from. Verified in the running app: Adley Rutschman
+(`bats: S`) against a left-handed starter draws the **vs RHB** cut. Unknown
+handedness falls to both hands together rather than guessing a side, both hands
+being a true reading of the park where the wrong side is not.
+
+**It draws nothing rather than a wait.** Rule 1 of the loading system, and this
+is the case it is for: the block is a garnish on a dialog whose content is
+already up, so a park still being read shows nothing at all rather than a
+spinner over somebody's platoon splits. It appears when it has something to say,
+and a game whose venue this app was never told (`venueId: null`) never asks.
+
+**One league-wide table behind all four surfaces**, held by `App` and shared
+through `ParkFactorsContext` — the shape `PlayerStatusContext`,
+`EligibilityContext`, `RecentNewsContext` and `HandednessContext` already have,
+and for their reason: the readers are leaves, three and four components down
+inside dialogs and one of them inside a `map` where a prop would have to be
+threaded through the feed, the player group and the row. **Lazy**, on
+`needSchedule`'s own idiom, so a session that opens no team page and previews no
+game never pays for the request.
+
+#### A row no longer needs an announced starter to be worth opening
+
+**It used to, and the reason was sound at the time.** A batter's detail was the
+platoon card *with one half marked*, so with nobody named there was no half to
+mark and the dialog had nothing to say — `expandable` tested `spHand !== null`
+and a row three days out was dead.
+
+Two things are now true that were not. The **park is a fact about the fixture
+rather than about either club's plans**, so it is knowable the moment the game
+is scheduled and reads the same whoever ends up on the mound. And the platoon
+comparison **reads perfectly well unmarked** — that is exactly what the player
+page's own Splits tab draws, and `BatterSplitsTab` has always taken a null
+`highlight` for it. So the test became *has this row anything to show*: his
+split, or the park.
+
+**What an unnamed starter costs is the mark, and the dialog says so where the
+reader is** rather than by refusing to open — one line naming which of the two
+it is short of (nobody named, or nobody named *or projected*), above an unmarked
+comparison.
+
+Measured on a 14-day schedule: **3 of Aaron Judge's 12 rows and 4 of Shohei
+Ohtani's 12** had no starter named or projected and were static; all of them
+open now. A quarter to a third of a fortnight.
+
+**The test is `game.venueId`, not a park looked up in the table.** The table is
+fetched lazily and would not have landed when `expandable` is first read, so a
+row keyed on the *park* would turn pressable half a second after it drew — a
+control changing under the finger, which is the fault `RULES.md` names under
+*reserve the box, don't move the page*. The venue is on the game, so this is
+settled at first paint. The one venue a season with no factor behind it still
+has the split to show, which is what its dialog would have opened on anyway.
+
+#### The venue's name is the door to its club's Park tab
+
+A reader who has just been told the ground moves a night by nine points of wOBA
+wants the other twelve indexes, and they are one press away — the same
+relationship the Overview's `Stats →` has with the Stats tab, said with the name
+instead of an arrow because the name is already the thing being read.
+
+**It opens on `park` rather than on the club's Overview**, which is what makes
+it an answer rather than a navigation. `openTeam` grew an optional tab for it
+and `TeamDetails` takes `initialTab`; `App` keys the page on club-and-tab so a
+door naming a tab gets a page that opens on it.
+
+**A neutral site is not a door.** `ParkFactor.teamId` is null for the venues
+nobody is at home in, so there is no club page to lead to and the name stays
+plain text — the same null the venue join exists to produce.
+
+**The dialog closes as the club's page opens.** `openTeam` puts away a *player*
+page on its own, so the two doors inside one are covered for free; the **feed's**
+is not, the feed being a view rather than an overlay, and without
+`GamePark`'s `onNavigate` the club's page opened underneath a box the reader had
+to dismiss by hand. Verified in the running app: pressing `Fenway Park` in a feed
+preview leaves `?team=111` with the Park tab active, the feed's dialog gone and
+no stray modal in the tree.
+
+**`TeamDoorContext` rather than a prop.** `App::openTeam` is what the app calls
+*the one door in* — it puts away the player page, remembers him for the way back
+and opens the club — and the strip that wants it is a leaf inside three dialogs
+in four trees, one of them inside a `map` in the feed. Threaded as an optional
+prop it would be six signatures and six chances for a call site to forget it,
+and a forgotten one does not fail: it silently stops being a link on one surface
+out of four. The tab union lives in `hooks.ts` (`TeamPageTab`) so the door can
+name one without `hooks.ts` importing a component.
+
+#### The man on the mound comes first, and every preview draws him
+
+**Order: starter, park, then the reading.** The whole reason a scheduled game is
+worth opening is *who is pitching*, and both the park and the split below are
+read against him. He sat under the ballpark for a commit, which put a fact about
+the ground above a fact about the game.
+
+**A pitcher's preview draws him too**, where it used to draw only the opposing
+lineup. He is that man's **counterpart** rather than somebody he faces — MLB's
+`probablePitcher` on a pitcher's own game is the *opposing* announced starter —
+and a manager deciding whether to start a pitcher wants to know who the other
+club is running out quite as much as a hitter does. The sub-line says which
+reading it is (`RHP · PHI's starter, his counterpart`), because `starting for
+PHI` under a pitcher's dialog would otherwise be read as a man he steps in
+against.
+
+**The Schedule row's preview drew no starter at all until now**, and that was
+the gap rather than a choice: it carried the *sentence* about a projected
+starter without ever naming the man or offering a way through to him. It now
+draws the same `StarterLine`, so a fixture opened from a Schedule row and the
+same game opened from the feed show him identically — and the tier rides on the
+line as one word (`· projected`) rather than as a second sentence, the paragraph
+below being about what the tier does to the *reading* underneath.
+
+**`OpposingStarter` gained a plain `name`.** The cell forms are `label`
+(`RHP Alcantara`) and `full` (`Sandy Alcantara (RHP)`), and the starter line puts
+the hand on its own row — so `full` would print it twice. Carried rather than
+parsed back out of a string this file wrote, which is the reason `hand` is
+carried too.
+
+**`StarterLine`'s opener is optional and its absence draws him without links
+rather than with dead ones.** The Overview mounts `UpcomingGames` from a context
+whose own opener is optional, and a headshot that looks like a door and answers
+nothing is worse than one that does not look like a door.
+
+Verified in the running app. Batter, from a roster cell: `upcoming-sp` →
+`pf-strip` → `pct-card`, with *Sandy Alcantara · RHP · starting for MIA* over
+loanDepot park. Batter, from a Schedule row: the same order with *Ethan Pecko ·
+RHP · starting for HOU · projected*. Pitcher, from a Schedule row: *Aaron Nola ·
+RHP · PHI's starter, his counterpart* over T-Mobile Park and the PHI lineup.

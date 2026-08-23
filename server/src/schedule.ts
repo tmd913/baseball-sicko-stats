@@ -107,6 +107,7 @@ interface ScheduleResponse {
       gameDate?: string;
       officialDate?: string;
       status?: StatusFields;
+      venue?: { id?: number };
       teams?: {
         away?: { team?: { id?: number }; probablePitcher?: { id?: number; fullName?: string } };
         home?: { team?: { id?: number }; probablePitcher?: { id?: number; fullName?: string } };
@@ -242,7 +243,9 @@ async function fetchSeason(from: string, to: string): Promise<Entry> {
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${year}` +
     `&gameType=R&hydrate=probablePitcher` +
     `&fields=dates,date,games,gamePk,gameDate,officialDate,status,abstractGameState,` +
-    `codedGameState,detailedState,teams,away,home,team,id,probablePitcher,fullName`;
+    // `venue` is the parent and `id` is already on the list — this whitelist is
+    // leaf-matched, so naming the parent is what makes `venue.id` arrive.
+    `codedGameState,detailedState,teams,away,home,team,id,venue,probablePitcher,fullName`;
   const [res, abbrevs, roster] = await Promise.all([
     fetch(url, { headers: UA }),
     // A missing abbreviation costs a cell its club's short name, not the
@@ -284,6 +287,10 @@ async function fetchSeason(from: string, to: string): Promise<Entry> {
         startTime: g.gameDate ?? null,
         homeId,
         awayId,
+        // The park, for the park factors a fixture's preview draws. The venue
+        // rather than `homeId`, which is the same club all but a handful of
+        // times a season and is not the same fact — see `PlayerGame.venueId`.
+        venueId: g.venue?.id ?? null,
         home: abbrevs.get(homeId) ?? '',
         away: abbrevs.get(awayId) ?? '',
         state: stateOf(g.status),

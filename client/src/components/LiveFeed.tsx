@@ -30,6 +30,7 @@ import {
   useDelayedFlag,
   useLockBodyScroll,
   useOverlayChromeOffset,
+  useHandedness,
   useOverlayFocus,
 } from '../hooks';
 import { BackButton } from './BackButton';
@@ -37,6 +38,7 @@ import { LoadingLine } from './Loading';
 import { DialogLayerContext, Modal } from './Modal';
 import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
+import { GamePark, hitterHand } from './ParkFactors';
 import { BatterSplitsTab } from './PlatoonSplits';
 import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
@@ -913,13 +915,23 @@ export function UpcomingRow({
   const time = formatStartTime(game.status.startTime);
   const isPitcher = report.kind === 'pitcher';
   const sp = game.probablePitcher;
-  // A batter's detail is the platoon card with one half marked, so it opens on a
-  // starter of a *known hand* rather than on any announced starter: without one
-  // there is no half to mark, and the row's reason to open at all is the man who
-  // has been named for it.
-  const spHand = sp?.hand === 'L' ? 'L' : sp?.hand === 'R' ? 'R' : null;
-  const expandable = isPitcher ? !!game.opponentHitting : spHand !== null;
-  const spKey = sp ? playerKey({ id: sp.id, kind: 'pitcher' }) : null;
+  // **The row no longer needs an announced starter to be worth opening.** It
+  // used to: a batter's detail was the platoon card with one half marked, so
+  // with nobody named there was no half to mark and nothing the dialog could
+  // say. Two things are now true that were not. The **park** is a fact about the
+  // fixture rather than about either club's plans, so it is knowable the moment
+  // the game is scheduled and is the same reading whoever ends up on the mound.
+  // And the platoon comparison **reads perfectly well unmarked** — that is
+  // exactly what the player page's own Splits tab draws, and `BatterSplitsTab`
+  // has always taken a null `highlight` for it.
+  //
+  // So the test is *has this row anything to show*: his split, or the park. What
+  // an unnamed starter costs is the mark, and the dialog says so where the
+  // reader is rather than by refusing to open.
+  /** Whether he has a platoon comparison to draw at all — what the row's press
+   *  title distinguishes. The press itself is `canPreview`'s to decide. */
+  const hasSplits = (report.splitVsLeft?.pa ?? 0) > 0 || (report.splitVsRight?.pa ?? 0) > 0;
+  const expandable = canPreview(report, game);
   // The bar under the name: matchup, the SP chip, the other side's announced
   // starter and first pitch. It is the whole of the row's interactive surface —
   // the headshot and name above it are links, and inside a tappable row a
@@ -966,7 +978,15 @@ export function UpcomingRow({
           className="upcoming-head"
           aria-haspopup="dialog"
           aria-expanded={open}
-          title={isPitcher ? 'Open opponent' : 'Open platoon splits'}
+          title={
+            isPitcher
+              ? game.opponentHitting
+                ? 'Open opponent'
+                : 'Open the ballpark'
+              : hasSplits
+                ? 'Open platoon splits'
+                : 'Open the ballpark'
+          }
           onClick={() => setOpen(true)}
         >
           {bar}
@@ -975,67 +995,236 @@ export function UpcomingRow({
         <div className="upcoming-head static">{bar}</div>
       )}
       {expandable && open && (
-        <Modal
-          title={`${report.name} — ${matchup(game)}`}
-          titleId="upcoming-detail-title"
-          className="play-detail-box"
-          onClose={() => setOpen(false)}
-        >
-          <div className="upcoming-detail">
-            {isPitcher ? (
-              <OpponentSection
-                hitting={game.opponentHitting}
-                opponent={game.opponent}
-                hand={game.stand ?? report.throws ?? null}
-              />
-            ) : (
-              <>
-                {/* Who he is facing, in full and with a way through to him. The
-                    bar above says `vs LHP Gasser`, which is what fits a phone
-                    line beside the matchup and first pitch; a dialog has the
-                    width for the whole name, and the headshot is the row's only
-                    route to the *pitcher's* page — a man nobody has rostered,
-                    which `PlayerDetails` opens on as a matter of course. Drawn
-                    with the feed's own `FeedHeadshot`/`FeedPlayerName` rather
-                    than a third headshot circle, so it is the same target with
-                    the same click behavior as every other name in this stream.
-                    It carries **no lineup pip or status code**: those are
-                    `PhotoStatus`'s marks and read off `/api/statuses`, which the
-                    feed does not fetch — and both would only restate the bar
-                    (his pip is `SP`, and a man on the IL is not the announced
-                    starter). */}
-                <div className="upcoming-sp">
-                  <FeedHeadshot
-                    id={sp!.id}
-                    name={sp!.name}
-                    onOpen={() => onOpenDetails(spKey!)}
-                  />
-                  <div className="feed-item-id">
-                    <FeedPlayerName playerKey={spKey!} name={sp!.name} onOpen={onOpenDetails} />
-                    <span className="feed-context">
-                      {handThrows(sp!.hand)} · starting for {game.opponent}
-                    </span>
-                  </div>
-                </div>
-                {/* The whole platoon comparison with tonight's half marked,
-                    rather than that half alone — see the note on this component
-                    and `BatterSplitsTab`. */}
-                <BatterSplitsTab
-                  vsLeft={report.splitVsLeft}
-                  vsRight={report.splitVsRight}
-                  highlight={spHand === 'L' ? 'left' : 'right'}
-                  highlightTitle={`${sp!.name} throws ${spHand === 'L' ? 'left' : 'right'}-handed, so this is the half that applies to this game.`}
-                />
-              </>
-            )}
-          </div>
-        </Modal>
+        <UpcomingPreview report={report} game={game} onOpenDetails={onOpenDetails} onClose={() => setOpen(false)} />
       )}
     </div>
   );
 }
 
 
+
+/**
+ * **The man on the mound, at the head of a game preview.**
+ *
+ * The feed's own headshot and name rather than a third circle of their own, so
+ * this is the same target with the same click behavior as every other name in
+ * the app — and the headshot is the one route in a preview to the *pitcher's*
+ * page, a man nobody has rostered, which `PlayerDetails` opens on as a matter
+ * of course.
+ *
+ * **It is drawn on a pitcher's preview as well as a batter's**, and on his it
+ * is his **counterpart** rather than someone he faces: `probablePitcher` on a
+ * pitcher's own game is the *opposing* announced starter. A reader deciding
+ * whether to start a pitcher wants to know who the other club is running out
+ * quite as much as a hitter does, which is why the block is no longer inside
+ * the batter branch. The sub-line says which of the two readings it is, because
+ * `starting for MIA` under a pitcher's dialog would otherwise be read as a man
+ * he steps in against.
+ *
+ * It carries **no lineup pip or status code**: those are `PhotoStatus`'s marks
+ * and read off `/api/statuses`, which the feed does not fetch — and both would
+ * only restate what is here (his pip is `SP`, and a man on the IL is not the
+ * announced starter).
+ */
+export function StarterLine({
+  sp,
+  club,
+  viewerIsPitcher,
+  onOpenDetails,
+  note,
+}: {
+  /** The other club's starter, announced or projected. Null draws nothing —
+   *  the caller says what an absence means, the two surfaces wording it
+   *  differently. */
+  sp: { id: number; name: string; hand: string | null } | null;
+  /** The opposing club's abbreviation. */
+  club: string;
+  /** Whose preview this is: a pitcher's makes this man his counterpart. */
+  viewerIsPitcher: boolean;
+  /**
+   * Open his page. **Optional, and its absence draws him without the links
+   * rather than with dead ones** — the Overview's own opener is optional
+   * (`PlayerDay` mounts that block from a context that has none), and a
+   * headshot that looks like a door and answers nothing is worse than a
+   * headshot that does not look like one.
+   */
+  onOpenDetails?: (key: string) => void;
+  /** A word on how sure this is — the Schedule view's projected tier. */
+  note?: string;
+}) {
+  if (!sp) return null;
+  const key = playerKey({ id: sp.id, kind: 'pitcher' });
+  const open = onOpenDetails;
+  return (
+    <div className="upcoming-sp">
+      {open ? (
+        <FeedHeadshot id={sp.id} name={sp.name} onOpen={() => open(key)} />
+      ) : (
+        <img className="feed-photo" src={headshotUrl(sp.id)} alt={sp.name} loading="lazy" />
+      )}
+      <div className="feed-item-id">
+        {open ? (
+          <FeedPlayerName playerKey={key} name={sp.name} onOpen={open} />
+        ) : (
+          <span className="feed-player-name">{sp.name}</span>
+        )}
+        <span className="feed-context">
+          {handThrows(sp.hand)} · {viewerIsPitcher ? `${club}'s starter, his counterpart` : `starting for ${club}`}
+          {note ? ` · ${note}` : ''}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * **The game preview: everything a scheduled game can be asked before it is
+ * played**, as a dialog on its own.
+ *
+ * It was the body of `UpcomingRow` and is now a component because a **fourth**
+ * surface opens it — the summary table's opponent cell, in both of that table's
+ * readings. Three copies of a dialog agreeing with each other was already the
+ * trap this codebase spends its comments on; four would have been the one where
+ * they stop agreeing.
+ *
+ * For a **batter** it is the platoon card with the announced starter's half
+ * marked, over the ballpark; for a **pitcher** the lineup waiting for him, over
+ * the same. `canPreview` is the test for whether there is anything here to open
+ * at all, and every caller asks it rather than reproducing it.
+ */
+export function UpcomingPreview({
+  report,
+  game,
+  onOpenDetails,
+  onClose,
+}: {
+  report: PlayerReport;
+  game: PlayerGame;
+  onOpenDetails: (key: string) => void;
+  onClose: () => void;
+}) {
+  const isPitcher = report.kind === 'pitcher';
+  const sp = game.probablePitcher;
+  const spHand = sp?.hand === 'L' ? 'L' : sp?.hand === 'R' ? 'R' : null;
+  // Which side of the plate he stands on, for the park's own cut. Off
+  // `HandednessContext` — the season roster this app already holds — so it
+  // costs no request, and a man it has never listed falls to both hands
+  // together rather than to a guessed side.
+  const bats = useHandedness(report.id)?.bats ?? null;
+  return (
+      <Modal
+        title={`${report.name} — ${matchup(game)}`}
+        titleId="upcoming-detail-title"
+        className="play-detail-box"
+        onClose={onClose}
+      >
+        <div className="upcoming-detail">
+          {/* **The man on the mound comes first.** The whole reason a scheduled
+              game is worth opening is *who is pitching*, and both the park and
+              the split below are read against him — he sat under the ballpark
+              for a commit, which put a fact about the ground above a fact about
+              the game. On a **pitcher's** preview he is that man's counterpart
+              rather than somebody he faces, and is drawn all the same: a reader
+              deciding whether to start a pitcher wants to know who the other
+              club is running out quite as much as a hitter does. */}
+          <StarterLine
+            sp={sp}
+            club={game.opponent}
+            viewerIsPitcher={isPitcher}
+            onOpenDetails={onOpenDetails}
+          />
+          {/* **The ballpark, above whatever the reader pressed for.** It is
+              the one fact about a scheduled game that is already knowable in
+              full — the split below it is a season's worth of one man and
+              the lineup is the other club's, but the park is settled the
+              moment the fixture is — and it moves both readings: a platoon
+              edge worth 40 points of wOBA is being read inside a park worth
+              nine of it either way.
+
+              A **batter** is shown his own side of the plate, and a switch
+              hitter is resolved off the very fact this dialog opened to show
+              — the hand the announced starter throws with. A **pitcher** is
+              shown both hands, because he faces whichever nine the other club
+              writes down. */}
+          <GamePark
+            venueId={game.venueId}
+            hand={isPitcher ? 'all' : hitterHand(bats, spHand)}
+            handNote={
+              isPitcher
+                ? 'The park as it plays to both hands — he faces whoever they write down.'
+                : undefined
+            }
+            /* This dialog can be opened from a view rather than from an
+               overlay — the feed, and the summary table's opponent cell — where
+               `openTeam` does not put it away the way it puts a player page
+               away. Without this the club's page opens *underneath* a box the
+               reader then has to dismiss by hand. */
+            onNavigate={onClose}
+          />
+          {isPitcher ? (
+            <OpponentSection
+              hitting={game.opponentHitting}
+              opponent={game.opponent}
+              hand={game.stand ?? report.throws ?? null}
+            />
+          ) : (
+            <>
+              {!sp && (
+                /* **Nobody named yet, said where the reader is.** The dialog
+                   opens on the strength of the park and the split, and the
+                   thing that is missing is the one thing the split's marked
+                   half would have come from — so the sentence names that
+                   rather than apologizing for the box. The starter himself,
+                   where there is one, is drawn at the top by `StarterLine`. */
+                <p className="ovw-none">
+                  {game.opponent} haven’t named a starter yet, so neither half of his split is
+                  marked — the ballpark above is settled either way.
+                </p>
+              )}
+              {/* The whole platoon comparison with tonight's half marked,
+                  rather than that half alone — see the note on this component
+                  and `BatterSplitsTab`. */}
+              <BatterSplitsTab
+                vsLeft={report.splitVsLeft}
+                vsRight={report.splitVsRight}
+                /* Null where nobody is named — the whole comparison, unmarked,
+                   which is exactly what the player page's own Splits tab
+                   draws. A mark is a claim about who he will face, and there
+                   is nobody to make it about. */
+                highlight={spHand === null ? null : spHand === 'L' ? 'left' : 'right'}
+                highlightTitle={
+                  sp && spHand
+                    ? `${sp.name} throws ${spHand === 'L' ? 'left' : 'right'}-handed, so this is the half that applies to this game.`
+                    : undefined
+                }
+              />
+            </>
+          )}
+        </div>
+      </Modal>
+  );
+}
+
+/**
+ * **Whether a game has a preview worth opening.**
+ *
+ * The one test, asked by every caller rather than reproduced by each — the feed's
+ * Upcoming row and the summary table's opponent cell both gate their press on
+ * it, so a row that presses and a dialog that has something in it cannot come
+ * apart.
+ *
+ * A batter's is his split or the park; a pitcher's is the opposing lineup or the
+ * park. **`venueId` rather than a park looked up in the table**, which is fetched
+ * lazily: a cell keyed on the park would turn pressable after it had already
+ * drawn, and a control that changes under the finger is the fault `RULES.md`
+ * names.
+ */
+export function canPreview(report: PlayerReport, game: PlayerGame): boolean {
+  const hasPark = game.venueId !== null;
+  if (report.kind === 'pitcher') return !!game.opponentHitting || hasPark;
+  const hasSplits = (report.splitVsLeft?.pa ?? 0) > 0 || (report.splitVsRight?.pa ?? 0) > 0;
+  return hasSplits || hasPark;
+}
 
 /**
  * A stream item's React key. It used to be two things — the key an item's *open

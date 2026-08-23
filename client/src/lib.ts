@@ -863,10 +863,26 @@ export function inningLabel(
   return `${inningState ?? ''} ${inning}`.trim();
 }
 
+/** The four things a line score is written out of, away first. */
+export interface ScoreSides {
+  away: string;
+  awayScore: number;
+  home: string;
+  homeScore: number;
+}
+
 export interface GameStatusView {
   kind: 'scheduled' | 'live' | 'final' | 'postponed';
   /** Away-first line score, e.g. "BOS 2–3 NYY" (null before a game starts). */
   score: string | null;
+  /**
+   * The same score before it was joined into a string, or null where there is
+   * none. It exists for **one** caller — the summary table's opponent cell,
+   * which has to wrap one of the two clubs in a link to its page and cannot do
+   * that to the middle of a finished string. Everything else reads `score`, and
+   * `score` is built from this, so the two can never disagree.
+   */
+  sides: ScoreSides | null;
   /** Right-hand label: start time, current inning, or "Final". */
   detail: string;
 }
@@ -874,28 +890,35 @@ export interface GameStatusView {
 /** Presentation of a game's status: start time (scheduled), score + inning (live), or final. */
 export function gameStatusView(game: PlayerGame): GameStatusView {
   const s = game.status;
-  const score =
+  // **`scoreLine` rather than the same template again**, which is what stood
+  // here: this function spelled `${away} ${a}–${h} ${home}` inline while the
+  // feed's own helper twenty lines up spelled it identically, so the app had two
+  // definitions of a line score that happened to agree. One of them is now the
+  // other's caller.
+  const score = scoreLine(game, s.awayScore, s.homeScore);
+  const sides: ScoreSides | null =
     s.awayScore !== null && s.homeScore !== null
-      ? `${game.awayTeam} ${s.awayScore}–${s.homeScore} ${game.homeTeam}`
+      ? { away: game.awayTeam, awayScore: s.awayScore, home: game.homeTeam, homeScore: s.homeScore }
       : null;
 
   if (s.state === 'postponed') {
     // A postponed game's start time is often bumped to the makeup date, so show
     // the "Postponed" label rather than a misleading next-day time.
-    return { kind: 'postponed', score: null, detail: s.detailedState || 'Postponed' };
+    return { kind: 'postponed', score: null, sides: null, detail: s.detailedState || 'Postponed' };
   }
   if (s.state === 'scheduled') {
     const t = formatStartTime(s.startTime);
-    return { kind: 'scheduled', score: null, detail: t ?? (s.detailedState || 'Scheduled') };
+    return { kind: 'scheduled', score: null, sides: null, detail: t ?? (s.detailedState || 'Scheduled') };
   }
   if (s.state === 'live') {
     return {
       kind: 'live',
       score,
+      sides,
       detail: inningLabel(s.inningState, s.currentInning) ?? (s.detailedState || 'Live'),
     };
   }
-  return { kind: 'final', score, detail: 'Final' };
+  return { kind: 'final', score, sides, detail: 'Final' };
 }
 
 /** Short "Jul 3" style date, for disambiguating games across a date range. */

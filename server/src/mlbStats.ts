@@ -780,6 +780,10 @@ const FEED_FIELDS = [
   'away',
   'home',
   'abbreviation',
+  // gameData.venue.id — the ballpark, for the park factors a game preview
+  // draws. `id` is already on this list and the whitelist is leaf-matched,
+  // so naming the parent is the whole of what has to be added.
+  'venue',
   'liveData',
   'linescore',
   // Boxscore rosters — the per-side player ids, so a watched player can be tied
@@ -1016,6 +1020,8 @@ interface LiveFeed {
       home?: { abbreviation?: string; id?: number };
       away?: { abbreviation?: string; id?: number };
     };
+    /** The ballpark. Present on the filtered feed as well as the full one. */
+    venue?: { id?: number };
     datetime?: { dateTime?: string };
     probablePitchers?: {
       home?: { id?: number; fullName?: string };
@@ -1644,6 +1650,9 @@ export interface StatsApiGame {
   awayTeam: string;
   homeTeamId: number | null;
   awayTeamId: number | null;
+  /** MLB's venue id for the ballpark — the join the park factors on a game
+   *  preview are made on. Null on a feed that carried none. */
+  venueId: number | null;
   status: GameStatus;
   homeProbablePitcher: ProbablePitcher | null;
   awayProbablePitcher: ProbablePitcher | null;
@@ -2155,6 +2164,7 @@ export async function getStatsApiGame(
   const awayTeam = feed.gameData?.teams?.away?.abbreviation ?? '';
   const homeTeamId = feed.gameData?.teams?.home?.id ?? null;
   const awayTeamId = feed.gameData?.teams?.away?.id ?? null;
+  const venueId = feed.gameData?.venue?.id ?? null;
   const status = buildGameStatus(feed);
   const homeProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.home);
   const awayProbablePitcher = probablePitcher(feed, feed.gameData?.probablePitchers?.away);
@@ -2408,6 +2418,7 @@ export async function getStatsApiGame(
     awayTeam,
     homeTeamId,
     awayTeamId,
+    venueId,
     status,
     homeProbablePitcher,
     awayProbablePitcher,

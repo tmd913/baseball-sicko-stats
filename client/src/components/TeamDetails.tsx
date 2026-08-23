@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { fmt, formatStartTime, prettyGameDate, surname, teamColor, teamLogoUrl } from '../lib';
 import { useDelayedFlag } from '../hooks';
+import type { TeamPageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { OpponentSection } from './OpponentTable';
+import { ParkTable } from './ParkFactors';
 import { PlayerWindowTable } from './PlayerWindowTable';
 import { buildScheduleIndex, gamesOn, opponentText, spanPhrase } from './schedule';
 import type { PitcherLookup } from './schedule';
@@ -78,7 +80,9 @@ import type {
  *  `team=` and `tside=` are which subject and which of its two halves. A link
  *  carrying the tab as well would describe a scroll position of the page rather
  *  than the page. */
-type TeamTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'stats';
+/** The tab union lives in `hooks.ts` — see `TeamPageTab`, which the team door
+ *  names one of. Aliased here so this file reads in its own vocabulary. */
+type TeamTab = TeamPageTab;
 
 /** How many days of fixtures the Schedule tab draws, and the preview's five.
  *  The player page's own `HORIZON` — one fortnight means one thing in this
@@ -142,6 +146,7 @@ export function TeamDetails({
   onShowRanksChange,
   rankPopulations,
   onNeedRankPopulations,
+  initialTab,
 }: {
   team: TeamInfo;
   /**
@@ -187,8 +192,15 @@ export function TeamDetails({
    *  `App::teamRankPopulations`. */
   rankPopulations: Partial<Record<string, ResearchRow[]>>;
   onNeedRankPopulations: () => void;
+  /** Which tab to open on. Absent means Overview, which is every door but the
+   *  park strip's. Read once, at mount — a page already open does not jump
+   *  under the reader because something re-rendered. */
+  initialTab?: TeamPageTab;
 }) {
-  const [tab, setTab] = useState<TeamTab>('overview');
+  /** **The tab the page opens on.** `overview` unless a door named one — the
+   *  park strip on a game preview opens straight onto `park`, that being the
+   *  reading its reader pressed the venue's name to get. */
+  const [tab, setTab] = useState<TeamTab>(initialTab ?? 'overview');
 
   /**
    * **The club's row on all five spans**, read once per club and side and shared
@@ -404,6 +416,27 @@ export function TeamDetails({
           <DetailsTabButton id="splits" tab={tab} onPick={setTab}>
             Splits
           </DetailsTabButton>
+          {/* **`Park` is a fact about the club's ground rather than about the
+              club**, and it is on this page because a ballpark has no page of
+              its own and nobody looks for one: a reader asking what Coors does
+              to a hitter is on the Rockies' page already.
+
+              It sits after Splits and before Stats for the reason Splits sits
+              before Stats: a park factor is a **comparison** — every number on
+              it is against the average park — where the Stats tab is the
+              club's record. And it is a tab rather than a block on Overview
+              because it is sixteen indexes on each of three hands, which is
+              more than a tab argued to be short can hold.
+
+              It is the one tab that does **not** follow the side switch, and
+              that is a fact about parks rather than an omission: a park does
+              the same thing to both clubs standing in it, so `Pitching` could
+              only mean the same numbers under a different heading. The cut a
+              park factor genuinely has is *which hitter*, and that switch is
+              inside the tab. */}
+          <DetailsTabButton id="park" tab={tab} onPick={setTab}>
+            Park
+          </DetailsTabButton>
           <DetailsTabButton id="stats" tab={tab} onPick={setTab}>
             Stats
           </DetailsTabButton>
@@ -492,6 +525,12 @@ export function TeamDetails({
               No {side === 'pitcher' ? 'pitching' : 'hitting'} splits for {team.name}.
             </p>
           )}
+        </div>
+      )}
+
+      {tab === 'park' && (
+        <div className="details-overview">
+          <ParkTable teamId={team.id} teamName={team.name} />
         </div>
       )}
 
