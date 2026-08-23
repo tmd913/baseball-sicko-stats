@@ -2132,40 +2132,52 @@ box already holds a nine-cut opposing lineup or a whole platoon comparison, and
 sixteen more bars would bury the thing the reader pressed for. The rest are a
 reading of the park itself and live on its club's page, one press away.
 
-**There is no separate *park factor* figure, because `wOBA` is one.** There was
-for a while, leading the strip — and it was the wOBA index under another name,
-which is exactly what Savant's board means by *Park Factor* and why that board
-carries no plain `wOBA` column at all. Two labels over one number are not two
-facts, and on a pitcher's strip the pair printed the same figure twice side by
-side with the same tint, which reads as a bug rather than as a reading.
+**Six figures, the same six on every strip** — `wOBA · Runs · HR · H · BB · K` —
+and there is no separate *park factor* among them, because **`wOBA` is one**.
+That is what Savant's own board means by the name, and why that board carries no
+plain `wOBA` column at all. Two labels over one number are not two facts, and a
+pitcher's strip carrying both printed the same figure twice side by side with the
+same tint, which reads as a bug.
 
-So `wOBA` **is** the park factor, and what the two kinds differ in is what sits
-beside it.
+**What differs between a batter's strip and a pitcher's is the cut, not the
+columns.** A batter reads the ground from his own side of the plate — the whole
+reason the board is fetched by hand — and a pitcher reads both hands together,
+facing whichever nine the other club writes down. The hand chip in the head says
+which, so the strip does not spend a column on it. Measured: Yankee Stadium is
+`wOBA 97` to Aaron Judge under a `vs RHB` chip, and T-Mobile is `wOBA 94` to
+Logan Gilbert under none.
 
-- A **batter** gets the ground twice — `wOBA` for everybody, and `vs RHB` /
-  `vs LHB` for his own side of the plate — because that difference is the whole
-  reason the board is cut by hand. Yankee Stadium is **102 to the league and 97
-  to a right-handed hitter**, and it is the second number he bats in. `Runs` and
-  `HR` beside them are read on that same cut, which the hand chip in the head
-  names. Four figures.
-- A **pitcher** gets one `wOBA`, both hands together, because he faces whichever
-  nine the other club writes down — and then the figures that are his night
-  rather than the hitter's: `Runs`, `HR`, `H`, `BB`, `K`. Six figures.
+**It spent one for two commits and no longer does.** A batter's carried the
+overall wOBA *and* his own beside it (`102` and `97` at Yankee Stadium), which is
+a real and interesting difference — and it cost a seventh column on the narrowest
+surface in the app to say something the head already says in three characters.
+The club's Park tab is where the two cuts can be read against each other
+properly, on a switch and at full width.
 
-**Strikeouts are on a pitcher's strip and are the one figure that runs the other
-way**: more of them is his gain where more of everything else is the hitter's.
-They are drawn like every other column anyway, because **the tint says how much
-of a thing happens here, not who it is good for** — red is *more than an average
-park*, on every figure and both surfaces. That is the rule the club page's bars
-already follow (*the fill points at the index, not at who it favors*), and it is
-Savant's own board, whose `SO` column colors 111 red and 87 blue exactly as its
-`HR` column does. An earlier draft kept K off the strip on the grounds that one
+**Hits, walks and strikeouts stopped being a pitcher's alone.** They were on a
+pitcher's strip and off a batter's, on the reasoning that they are his night
+rather than the hitter's. True of who *earns* them, false of who is *affected*
+by them: a park that eats singles eats them for the man batting in it, and a
+manager starting a hitter wants to know that quite as much as the pitcher does.
+The split was a distinction about baseball imposed on a table that only reports
+the park.
+
+**Strikeouts are the one figure that runs the other way** — more of them is the
+pitcher's gain where more of everything else is the hitter's — and they are drawn
+like every other column anyway, because **the tint says how much of a thing
+happens here, not who it is good for**. Red is *more than an average park* on
+every figure and both surfaces. That is the rule the club page's bars already
+follow (*the fill points at the index, not at who it favors*), and it is Savant's
+own board, whose `SO` column colors 111 red and 87 blue exactly as its `HR`
+column does. An earlier draft kept K off the strip on the grounds that one
 inverted column made the hue mean two things; that was the wrong diagnosis — the
 hue never meant *good*, it meant *more*.
 
 **The column count is written inline** as `--pf-figs`, and the grid's own cap
 scales with it: a fixed 420px would put six figures at 65px where four sit at
-100. Measured at 390px, six hold one line with no overflow.
+100. It survives the columns settling at six because the number is still the
+thing that decides the width. Measured at 390px and 900px, both strips hold one
+line with no overflow.
 
 **Strikeouts came off the strip.** Every other figure runs the same way — more of
 it is the hitter's night — and K ran the other way, so the one column that
