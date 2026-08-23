@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { InfoKey } from './InfoKey';
-import { useParkFactor, useParkFactors } from '../hooks';
+import { useParkFactor, useParkFactors, useTeamDoor } from '../hooks';
 import type { ParkFactor, ParkHand, ParkIndexes } from '../types';
 
 /**
@@ -253,14 +253,24 @@ export function GamePark({
   venueId,
   hand = 'all',
   handNote,
+  onNavigate,
 }: {
   venueId: number | null;
   /** Which cut to draw — `hitterHand` for a batter, `all` for a pitcher. */
   hand?: ParkHand;
   /** Why this cut and not another, for the strip's own tooltip. */
   handNote?: string;
+  /**
+   * **Close the dialog this strip is in**, called just before the club's page
+   * opens. The host owns its own `open` flag and this strip cannot reach it —
+   * and without it the feed's dialog would stay up *over* the page it just
+   * navigated to, the feed being a view rather than an overlay that
+   * `openTeam` puts away on its own.
+   */
+  onNavigate?: () => void;
 }) {
   const { park, loading, error } = useParkFactor(venueId);
+  const openTeam = useTeamDoor();
   // Rule 1 of the loading system: never a wait over data, and this block *is*
   // a garnish on a dialog whose content is already up. A park still being read
   // draws nothing at all rather than a spinner over somebody's platoon splits;
@@ -270,10 +280,40 @@ export function GamePark({
   if (!indexes) return null;
   const read = parkRead(indexes.woba);
 
+  // **The park's name is the door to the club whose ground it is.** A reader
+  // who has just been told the venue moves a night by nine points of wOBA wants
+  // the other fourteen indexes, and they are one press away on that club's Park
+  // tab — which is the same relationship the Overview's `Stats →` has with the
+  // Stats tab, said with the name instead of an arrow because the name is
+  // already the thing being read.
+  //
+  // **A neutral site is not a door**, and that is `ParkFactor.teamId`'s null
+  // doing exactly what it is for: nobody is at home in Field of Dreams, so
+  // there is no club page for it to lead to and the name stays plain text.
+  const club = park.teamId;
+  const toClub = club != null && openTeam ? () => {
+    onNavigate?.();
+    // Straight onto the Park tab, which is the reading the reader pressed the
+    // venue's name to get. Landing them on the club's Overview would make the
+    // door a navigation rather than an answer.
+    openTeam(club, 'park');
+  } : null;
+
   return (
     <div className="pf-strip" title={handNote ?? HAND_LABEL[hand]}>
       <div className="pf-strip-head">
-        <span className="pf-venue">{park.venue}</span>
+        {toClub ? (
+          <button
+            type="button"
+            className="pf-venue pf-venue--door"
+            onClick={toClub}
+            title={`${park.venue} — open ${park.club ?? 'the club'}’s page for all sixteen park factors`}
+          >
+            {park.venue}
+          </button>
+        ) : (
+          <span className="pf-venue">{park.venue}</span>
+        )}
         <span className={`pf-lean pf-lean--${read.lean}`}>{read.text}</span>
         {hand !== 'all' && <span className="pf-hand">{HAND_SHORT[hand]}</span>}
       </div>

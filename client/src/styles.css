@@ -6496,6 +6496,44 @@ button.start-line:focus-visible {
   font-weight: 700;
   color: var(--text);
 }
+/* **The venue's name is the door to its club's Park tab.** A button reset
+   rather than a link, the navigation being in-app state; `font: inherit` is
+   deliberately *not* used, that shorthand resetting `font-size` and costing the
+   name the 13px the rule above just gave it — the rule `RULES.md` states and
+   this is the fourth caller to have to obey it.
+
+   The underline is the affordance and it is `dotted`, not solid: a solid one is
+   what an *estimate* wears everywhere else in this app, and this is a door
+   rather than a reading. It sits on `text-decoration` rather than a border so a
+   name that wraps on a phone underlines both lines. */
+.pf-venue--door {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: inherit;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--faint);
+}
+/* Scoped, because a touch device has no pointer to move away and the tint would
+   stick to the last venue a finger crossed — the app-wide rule for a pressable
+   surface. `:focus-visible` is never scoped and is the keyboard's own mark. */
+@media (hover: hover) {
+  .pf-venue--door:hover {
+    color: var(--accent);
+    text-decoration-color: var(--accent);
+  }
+}
+.pf-venue--door:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 /* The one judgment on the strip, and the only place a park is graded in words.
    Both leans take the accent and the **word** says which — `hitter's park` and
    `pitcher's park` are not two states of one scale that a reader could be

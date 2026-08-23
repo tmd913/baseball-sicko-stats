@@ -1970,3 +1970,68 @@ inside dialogs and one of them inside a `map` where a prop would have to be
 threaded through the feed, the player group and the row. **Lazy**, on
 `needSchedule`'s own idiom, so a session that opens no team page and previews no
 game never pays for the request.
+
+#### A row no longer needs an announced starter to be worth opening
+
+**It used to, and the reason was sound at the time.** A batter's detail was the
+platoon card *with one half marked*, so with nobody named there was no half to
+mark and the dialog had nothing to say — `expandable` tested `spHand !== null`
+and a row three days out was dead.
+
+Two things are now true that were not. The **park is a fact about the fixture
+rather than about either club's plans**, so it is knowable the moment the game
+is scheduled and reads the same whoever ends up on the mound. And the platoon
+comparison **reads perfectly well unmarked** — that is exactly what the player
+page's own Splits tab draws, and `BatterSplitsTab` has always taken a null
+`highlight` for it. So the test became *has this row anything to show*: his
+split, or the park.
+
+**What an unnamed starter costs is the mark, and the dialog says so where the
+reader is** rather than by refusing to open — one line naming which of the two
+it is short of (nobody named, or nobody named *or projected*), above an unmarked
+comparison.
+
+Measured on a 14-day schedule: **3 of Aaron Judge's 12 rows and 4 of Shohei
+Ohtani's 12** had no starter named or projected and were static; all of them
+open now. A quarter to a third of a fortnight.
+
+**The test is `game.venueId`, not a park looked up in the table.** The table is
+fetched lazily and would not have landed when `expandable` is first read, so a
+row keyed on the *park* would turn pressable half a second after it drew — a
+control changing under the finger, which is the fault `RULES.md` names under
+*reserve the box, don't move the page*. The venue is on the game, so this is
+settled at first paint. The one venue a season with no factor behind it still
+has the split to show, which is what its dialog would have opened on anyway.
+
+#### The venue's name is the door to its club's Park tab
+
+A reader who has just been told the ground moves a night by nine points of wOBA
+wants the other twelve indexes, and they are one press away — the same
+relationship the Overview's `Stats →` has with the Stats tab, said with the name
+instead of an arrow because the name is already the thing being read.
+
+**It opens on `park` rather than on the club's Overview**, which is what makes
+it an answer rather than a navigation. `openTeam` grew an optional tab for it
+and `TeamDetails` takes `initialTab`; `App` keys the page on club-and-tab so a
+door naming a tab gets a page that opens on it.
+
+**A neutral site is not a door.** `ParkFactor.teamId` is null for the venues
+nobody is at home in, so there is no club page to lead to and the name stays
+plain text — the same null the venue join exists to produce.
+
+**The dialog closes as the club's page opens.** `openTeam` puts away a *player*
+page on its own, so the two doors inside one are covered for free; the **feed's**
+is not, the feed being a view rather than an overlay, and without
+`GamePark`'s `onNavigate` the club's page opened underneath a box the reader had
+to dismiss by hand. Verified in the running app: pressing `Fenway Park` in a feed
+preview leaves `?team=111` with the Park tab active, the feed's dialog gone and
+no stray modal in the tree.
+
+**`TeamDoorContext` rather than a prop.** `App::openTeam` is what the app calls
+*the one door in* — it puts away the player page, remembers him for the way back
+and opens the club — and the strip that wants it is a leaf inside three dialogs
+in four trees, one of them inside a `map` in the feed. Threaded as an optional
+prop it would be six signatures and six chances for a call site to forget it,
+and a forgotten one does not fail: it silently stops being a link on one surface
+out of four. The tab union lives in `hooks.ts` (`TeamPageTab`) so the door can
+name one without `hooks.ts` importing a component.

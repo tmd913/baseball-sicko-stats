@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { fmt, formatStartTime, prettyGameDate, surname, teamColor, teamLogoUrl } from '../lib';
 import { useDelayedFlag } from '../hooks';
+import type { TeamPageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { OpponentSection } from './OpponentTable';
@@ -79,7 +80,9 @@ import type {
  *  `team=` and `tside=` are which subject and which of its two halves. A link
  *  carrying the tab as well would describe a scroll position of the page rather
  *  than the page. */
-type TeamTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'park' | 'stats';
+/** The tab union lives in `hooks.ts` — see `TeamPageTab`, which the team door
+ *  names one of. Aliased here so this file reads in its own vocabulary. */
+type TeamTab = TeamPageTab;
 
 /** How many days of fixtures the Schedule tab draws, and the preview's five.
  *  The player page's own `HORIZON` — one fortnight means one thing in this
@@ -143,6 +146,7 @@ export function TeamDetails({
   onShowRanksChange,
   rankPopulations,
   onNeedRankPopulations,
+  initialTab,
 }: {
   team: TeamInfo;
   /**
@@ -188,8 +192,15 @@ export function TeamDetails({
    *  `App::teamRankPopulations`. */
   rankPopulations: Partial<Record<string, ResearchRow[]>>;
   onNeedRankPopulations: () => void;
+  /** Which tab to open on. Absent means Overview, which is every door but the
+   *  park strip's. Read once, at mount — a page already open does not jump
+   *  under the reader because something re-rendered. */
+  initialTab?: TeamPageTab;
 }) {
-  const [tab, setTab] = useState<TeamTab>('overview');
+  /** **The tab the page opens on.** `overview` unless a door named one — the
+   *  park strip on a game preview opens straight onto `park`, that being the
+   *  reading its reader pressed the venue's name to get. */
+  const [tab, setTab] = useState<TeamTab>(initialTab ?? 'overview');
 
   /**
    * **The club's row on all five spans**, read once per club and side and shared

@@ -915,17 +915,36 @@ export function UpcomingRow({
   const time = formatStartTime(game.status.startTime);
   const isPitcher = report.kind === 'pitcher';
   const sp = game.probablePitcher;
-  // A batter's detail is the platoon card with one half marked, so it opens on a
-  // starter of a *known hand* rather than on any announced starter: without one
-  // there is no half to mark, and the row's reason to open at all is the man who
-  // has been named for it.
+  // **The row no longer needs an announced starter to be worth opening.** It
+  // used to: a batter's detail was the platoon card with one half marked, so
+  // with nobody named there was no half to mark and nothing the dialog could
+  // say. Two things are now true that were not. The **park** is a fact about the
+  // fixture rather than about either club's plans, so it is knowable the moment
+  // the game is scheduled and is the same reading whoever ends up on the mound.
+  // And the platoon comparison **reads perfectly well unmarked** — that is
+  // exactly what the player page's own Splits tab draws, and `BatterSplitsTab`
+  // has always taken a null `highlight` for it.
+  //
+  // So the test is *has this row anything to show*: his split, or the park. What
+  // an unnamed starter costs is the mark, and the dialog says so where the
+  // reader is rather than by refusing to open.
   const spHand = sp?.hand === 'L' ? 'L' : sp?.hand === 'R' ? 'R' : null;
+  /** Whether he has a platoon comparison to draw at all — the test the row used
+   *  to make on the *starter* instead. See `expandable`. */
+  const hasSplits = (report.splitVsLeft?.pa ?? 0) > 0 || (report.splitVsRight?.pa ?? 0) > 0;
   // Which side of the plate he stands on, for the park's own cut. Off
   // `HandednessContext` — the season roster this app already holds — so it
   // costs no request, and a man it has never listed falls to both hands
   // together rather than to a guessed side.
   const bats = useHandedness(report.id)?.bats ?? null;
-  const expandable = isPitcher ? !!game.opponentHitting : spHand !== null;
+  // `venueId` rather than a park looked up in the table: the table is fetched
+  // lazily and would not have landed when this is first read, and a row that
+  // turned pressable half a second after it drew would be a control changing
+  // under the finger. The venue is on the game, so this is settled at first
+  // paint — and the one venue a season with no factor behind it still has the
+  // split to show, which is what it would have opened on anyway.
+  const hasPark = game.venueId !== null;
+  const expandable = isPitcher ? !!game.opponentHitting || hasPark : hasSplits || hasPark;
   const spKey = sp ? playerKey({ id: sp.id, kind: 'pitcher' }) : null;
   // The bar under the name: matchup, the SP chip, the other side's announced
   // starter and first pitch. It is the whole of the row's interactive surface —
@@ -973,7 +992,15 @@ export function UpcomingRow({
           className="upcoming-head"
           aria-haspopup="dialog"
           aria-expanded={open}
-          title={isPitcher ? 'Open opponent' : 'Open platoon splits'}
+          title={
+            isPitcher
+              ? game.opponentHitting
+                ? 'Open opponent'
+                : 'Open the ballpark'
+              : hasSplits
+                ? 'Open platoon splits'
+                : 'Open the ballpark'
+          }
           onClick={() => setOpen(true)}
         >
           {bar}
@@ -1010,6 +1037,11 @@ export function UpcomingRow({
                   ? 'The park as it plays to both hands — he faces whoever they write down.'
                   : undefined
               }
+              /* The feed is a view rather than an overlay, so `openTeam` does
+                 not put this dialog away the way it puts a player page away —
+                 without this the club's page would open *underneath* a box the
+                 reader has to dismiss by hand. */
+              onNavigate={() => setOpen(false)}
             />
             {isPitcher ? (
               <OpponentSection
@@ -1033,27 +1065,47 @@ export function UpcomingRow({
                     feed does not fetch — and both would only restate the bar
                     (his pip is `SP`, and a man on the IL is not the announced
                     starter). */}
-                <div className="upcoming-sp">
-                  <FeedHeadshot
-                    id={sp!.id}
-                    name={sp!.name}
-                    onOpen={() => onOpenDetails(spKey!)}
-                  />
-                  <div className="feed-item-id">
-                    <FeedPlayerName playerKey={spKey!} name={sp!.name} onOpen={onOpenDetails} />
-                    <span className="feed-context">
-                      {handThrows(sp!.hand)} · starting for {game.opponent}
-                    </span>
+                {sp ? (
+                  <div className="upcoming-sp">
+                    <FeedHeadshot
+                      id={sp.id}
+                      name={sp.name}
+                      onOpen={() => onOpenDetails(spKey!)}
+                    />
+                    <div className="feed-item-id">
+                      <FeedPlayerName playerKey={spKey!} name={sp.name} onOpen={onOpenDetails} />
+                      <span className="feed-context">
+                        {handThrows(sp.hand)} · starting for {game.opponent}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* **Nobody named yet, said where the reader is.** The row
+                     opens now on the strength of the park and the split, and
+                     the thing that is missing is the one thing the split's
+                     marked half would have come from — so the sentence names
+                     that rather than apologizing for the box. */
+                  <p className="ovw-none">
+                    {game.opponent} haven’t named a starter yet, so neither half of his split is
+                    marked — the ballpark above is settled either way.
+                  </p>
+                )}
                 {/* The whole platoon comparison with tonight's half marked,
                     rather than that half alone — see the note on this component
                     and `BatterSplitsTab`. */}
                 <BatterSplitsTab
                   vsLeft={report.splitVsLeft}
                   vsRight={report.splitVsRight}
-                  highlight={spHand === 'L' ? 'left' : 'right'}
-                  highlightTitle={`${sp!.name} throws ${spHand === 'L' ? 'left' : 'right'}-handed, so this is the half that applies to this game.`}
+                  /* Null where nobody is named — the whole comparison, unmarked,
+                     which is exactly what the player page's own Splits tab
+                     draws. A mark is a claim about who he will face, and there
+                     is nobody to make it about. */
+                  highlight={spHand === null ? null : spHand === 'L' ? 'left' : 'right'}
+                  highlightTitle={
+                    sp && spHand
+                      ? `${sp.name} throws ${spHand === 'L' ? 'left' : 'right'}-handed, so this is the half that applies to this game.`
+                      : undefined
+                  }
                 />
               </>
             )}

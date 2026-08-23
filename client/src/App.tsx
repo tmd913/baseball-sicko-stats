@@ -87,6 +87,7 @@ import {
   PlayerStatusContext,
   HandednessContext,
   ParkFactorsContext,
+  TeamDoorContext,
   RecentNewsContext,
   useDelayedFlag,
   useDismissable,
@@ -94,7 +95,7 @@ import {
   useResumed,
   useStickyChromeOffset,
 } from './hooks';
-import type { FantasySlot } from './hooks';
+import type { FantasySlot, TeamDoor, TeamPageTab } from './hooks';
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
@@ -578,9 +579,15 @@ export default function App() {
    *  one door in — the board row, a player's own head and the header search all
    *  come through here, so neither the exclusion above nor the return can be got
    *  round by a caller. */
-  const openTeam = useCallback((id: number) => {
+  /** Which tab that page should open on, where a door named one. Held beside
+   *  `teamPageId` rather than in the URL, which is where the team page's tab has
+   *  always *not* been — it is a reading of one club rather than which data the
+   *  view shows, the same call `tside=` went the other way on. */
+  const [teamPageTab, setTeamPageTab] = useState<TeamPageTab | undefined>(undefined);
+  const openTeam = useCallback<TeamDoor>((id, tab) => {
     setTeamReturnKey(detailsKeyRef.current);
     setDetailsKey(null);
+    setTeamPageTab(tab);
     setTeamPageId(id);
   }, []);
   /** …and its mirror: opening a player puts away a club's page. `setDetailsKey`
@@ -5898,6 +5905,12 @@ export default function App() {
         should be fetching a league-wide table for itself. Lazy: nothing is
         requested until one of those surfaces asks. */}
     <ParkFactorsContext.Provider value={parkRead}>
+    {/* The one door into a club's page, for the park strip on a game preview —
+        a leaf inside three dialogs in four trees. `openTeam` is stable and is
+        already the single door the board row, a player's head and the header
+        search all come through; this puts it where a leaf can reach it without
+        six components agreeing to pass it on. */}
+    <TeamDoorContext.Provider value={openTeam}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -7139,7 +7152,14 @@ export default function App() {
           for the tick before it lands. */}
       {teamPageId !== null && teamById.has(teamPageId) && (
         <TeamDetails
+          /* **Keyed on the club and the tab it was opened for**, so a door that
+             names a tab gets a page that opens on it. `TeamDetails` reads
+             `initialTab` once, at mount; without the key a second door onto a
+             club already on screen would be read by a component that has
+             already mounted and would land on the tab the reader left. */
+          key={`${teamPageId}:${teamPageTab ?? ''}`}
           team={teamById.get(teamPageId) as TeamInfo}
+          initialTab={teamPageTab}
           side={teamSide}
           onSideChange={setTeamSide}
           /* The season roster the header search is already holding — the Roster
@@ -7200,6 +7220,7 @@ export default function App() {
         />
       )}
     </div>
+    </TeamDoorContext.Provider>
     </ParkFactorsContext.Provider>
     </HandednessContext.Provider>
     </RecentNewsContext.Provider>

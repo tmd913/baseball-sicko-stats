@@ -303,6 +303,18 @@ instant.
 
 ### Park
 
+**The page can be opened straight onto this tab.** `TeamDetails` takes an
+optional `initialTab`, read once at mount, and `App` keys the page on
+club-and-tab so a second door onto a club already on screen is read by a fresh
+component rather than by one that has already mounted. The only caller is the
+park strip on a game preview: pressing a venue's name there is a request for
+*this reading*, and landing the reader on the club's Overview would make the
+door a navigation rather than an answer. The tab is deliberately **not** in the
+URL, which is where this page's tab has always not been — it is a reading of one
+club rather than which data the view shows, the call `tside=` went the other way
+on.
+
+
 **A fact about the club's ground rather than about the club**, and it is on this
 page because a ballpark has no page of its own and nobody would look for one: a
 reader asking what Coors does to a hitter is on the Rockies' page already.
@@ -536,10 +548,10 @@ worse than no page.
 
 ## Measured
 
-**The bundle, `main` → this work.** JS **626.33 kB → 635.10 kB** raw, **186.25 →
-188.83 kB gzipped** (+2.58); CSS **165.97 → 168.36 kB** raw, **29.81 → 30.22 kB
-gzipped** (+0.41). **+2.99 kB gzipped in total** for a tab, a strip on three
-dialogs, a shared context and the route behind them.
+**The bundle, `main` → this work.** JS **626.33 kB → 636.24 kB** raw, **186.25 →
+189.22 kB gzipped** (+2.97); CSS **165.97 → 168.93 kB** raw, **29.81 → 30.31 kB
+gzipped** (+0.50). **+3.47 kB gzipped in total** for a tab, a strip on three
+dialogs, two shared contexts, the venue door and the route behind them.
 
 **The park payload** is **22,826 bytes of JSON, 4,423 gzipped** — 33 parks of 16
 indexes on 3 hands — read once a session and shared by all four surfaces.

@@ -289,6 +289,38 @@ export const ParkFactorsContext = createContext<ParkFactorsRead>({
  * asking for the table: there would be nothing to look up in it.
  */
 /**
+ * **The one door into a club's page.**
+ *
+ * `App::openTeam` and nothing else — the function that puts away whatever
+ * player page is open, remembers him for the way back, and opens the club. That
+ * exclusion and that return are the reason App calls it *the one door in*, and
+ * the reason this is a context rather than a prop: the park strip that wants it
+ * is a leaf inside three different dialogs, in four different trees, and one of
+ * those is inside a `map` in the feed. Threaded as an optional prop it would be
+ * six signatures and six chances for a call site to forget it — and a forgotten
+ * one does not fail, it silently stops being a link on one surface out of four.
+ *
+ * The default is a no-op, so a component rendered outside the provider draws
+ * its venue as plain text rather than as a door that does nothing.
+ */
+/**
+ * The team page's tabs. **Declared here rather than in `TeamDetails`** so the
+ * door below can name one without `hooks.ts` importing a component: that page
+ * already imports from this file, so this is the dependency running the way it
+ * already runs.
+ */
+export type TeamPageTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'park' | 'stats';
+
+/** Open a club's page, optionally on a named tab rather than its Overview. */
+export type TeamDoor = (teamId: number, tab?: TeamPageTab) => void;
+
+export const TeamDoorContext = createContext<TeamDoor | null>(null);
+
+export function useTeamDoor(): TeamDoor | null {
+  return useContext(TeamDoorContext);
+}
+
+/**
  * **The whole park table, asked for on mount** — for a surface that has no
  * venue to look up.
  *

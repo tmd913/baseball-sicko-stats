@@ -436,7 +436,17 @@ function GameRow({
   // app already holds, so it costs no request. See `ParkFactors.tsx`.
   const bats = useHandedness(report.id)?.bats ?? null;
   const known = opp !== undefined && 'board' in opp;
-  const expandable = isPitcher ? !(known && opp.board == null) : vsHand !== null;
+  /** Whether he has a platoon comparison at all — the test this row used to
+   *  make on the *starter* instead. */
+  const hasSplits = (report.splitVsLeft?.pa ?? 0) > 0 || (report.splitVsRight?.pa ?? 0) > 0;
+  /* **The park is knowable on a fixture nobody has been named for**, which is
+     what lets this row open without a starter. Read off `game.venueId` rather
+     than off the park table, which is fetched lazily and would turn the row
+     pressable after it had already drawn — see the feed's own note. */
+  const hasPark = game.venueId !== null;
+  const expandable = isPitcher
+    ? !(known && opp.board == null) || hasPark
+    : hasSplits || hasPark;
   // The weekday rides on the row's title rather than in the line. A fantasy
   // week runs Monday to Sunday and the day is worth having, but `prettyGameDate`
   // is how *this page* says a date — on the next-game line and on every
@@ -527,6 +537,7 @@ function GameRow({
                   ? 'The park as it plays to both hands — he faces whoever they write down.'
                   : undefined
               }
+              onNavigate={() => setOpen(false)}
             />
             {/* **What the box is looking at may itself be a guess**, and it says
                 so where the reader is: on a batter's dialog the half of his
@@ -556,6 +567,15 @@ function GameRow({
                     puts on the mound, so this is the half of his split that <em>would</em> apply.
                   </p>
                 )}
+                {/* Nobody named *and* nobody projected — the row opens on the
+                    strength of the park and the unmarked split, and says which
+                    of the two it is short of. */}
+                {!vs && (
+                  <p className="ovw-none">
+                    Nobody is on the mound for {oppAbbr} yet, named or projected, so neither half of
+                    his split is marked — the ballpark above is settled either way.
+                  </p>
+                )}
                 {/* The whole platoon comparison with this game's half marked,
                     rather than that half alone — the feed's Upcoming dialog
                     draws exactly this, for the reason `BatterSplitsTab` records:
@@ -563,10 +583,17 @@ function GameRow({
                 <BatterSplitsTab
                   vsLeft={report.splitVsLeft}
                   vsRight={report.splitVsRight}
-                  highlight={vsHand === 'L' ? 'left' : 'right'}
-                  highlightTitle={`${vs?.full ?? handThrows(vsHand)} throws ${
-                    vsHand === 'L' ? 'left' : 'right'
-                  }-handed, so this is the half that applies to this game.`}
+                  /* Null where neither club has named nor projected anybody —
+                     the whole comparison unmarked, the player page's own Splits
+                     tab. See the feed's `UpcomingRow`. */
+                  highlight={vsHand === null ? null : vsHand === 'L' ? 'left' : 'right'}
+                  highlightTitle={
+                    vsHand
+                      ? `${vs?.full ?? handThrows(vsHand)} throws ${
+                          vsHand === 'L' ? 'left' : 'right'
+                        }-handed, so this is the half that applies to this game.`
+                      : undefined
+                  }
                 />
               </>
             )}
