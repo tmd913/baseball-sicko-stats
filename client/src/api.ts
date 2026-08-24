@@ -1,5 +1,6 @@
 import type {
   BatterGameLog,
+  GameLogGap,
   EspnOwnership,
   MatchupWindow,
   EspnRoster,
@@ -817,7 +818,12 @@ export const api = {
     return request(`/api/players/${playerId}/news`);
   },
   // Every game of the player's season, newest first — the Game Log tab.
-  async gameLog(playerId: number): Promise<{ kind: 'batter'; games: BatterGameLog[] }> {
+  // `gaps` rides beside `games` rather than merged into it: everything that
+  // already read a game log reads exactly the list it always did, and only the
+  // tab that draws the season's silences asks for them. See `GameLogGap`.
+  async gameLog(
+    playerId: number,
+  ): Promise<{ kind: 'batter'; games: BatterGameLog[]; gaps: GameLogGap[] }> {
     return request(`/api/players/${playerId}/gamelog`);
   },
   async pitcherGameLog(

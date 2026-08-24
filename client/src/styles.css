@@ -5968,6 +5968,73 @@ button.start-line:focus-visible {
 .glog-rate {
   color: var(--muted);
 }
+
+/* **The two rows that are not games** — a day he did not play, and a stretch he
+   was not available for. Both are the season's own silence made visible, and
+   both are drawn *quieter* than the rows around them: a log is read for what a
+   man did, and a row saying he did nothing must not compete with one saying he
+   went 3-for-4.
+
+   `--faint` rather than a color, which is this app's standing rule — color is
+   spent on state, and the state a reader needs off these rows is already in
+   the words on them. The one thing that keeps its color is the opponent cell's
+   result chip on a `dnp` row: that game had a winner whether or not he was in
+   it, and the chip is a fact about the game rather than about him. */
+.glog-gap > .glog-date,
+.glog-note {
+  color: var(--faint);
+}
+.glog-note {
+  /* The cell eats every stat column. Left-aligned against a table of
+     right-aligned numbers, because it is a sentence and not a quantity — and
+     padded to clear the sticky date column's edge rather than sitting against
+     it. */
+  text-align: left;
+  padding: 0 10px;
+  white-space: nowrap;
+  background: var(--bg);
+}
+/* **The sentence is pinned, and the cell holding it is not** — which is not a
+   style choice but the only arrangement that works, and it cost a measurement
+   to find out.
+
+   Sticking the *cell* is the obvious cut and it does nothing at all: a sticky
+   box may only be shifted **within its containing block**, which for a table
+   cell is the table, and this cell already runs to the table's right edge. With
+   no room to move right it is clamped to a shift of zero. Measured at 390px
+   with the pane scrolled 400px across, `position: sticky; left: 191px` on the
+   `td` left it at `left: -209` — exactly where it would have been unstuck. The
+   span inside it has the whole cell to slide along, so it pins.
+
+   The offset is the date and opponent columns' own width, read at runtime by
+   `GameLogTable`: the date column is `width: 1%` and sizes to its content, so
+   109px at 1200 and 79px at 390, and there is no one number to declare. One
+   offset covers both shapes — a `dnp` row's sentence begins after two cells and
+   an `absence` row's after the one cell that spans both, which is the same
+   edge. */
+.glog-note-in {
+  position: sticky;
+  /* `sticky` does not apply to an inline box. */
+  display: inline-block;
+  left: var(--glog-pin, 0);
+}
+/* The zebra stripe needs no rule of its own here: `.glog-note` is a `td`, so
+   `.glog-table tbody tr:nth-child(even) td` above already paints it
+   `--row-alt`, and at two classes and three elements that selector beats this
+   one. The `--bg` above is the odd row's ground, which is the same value
+   `.glog-date` — the other pinned cell in the row — declares. */
+/* The state itself is the reading; the game count beside it is the scale. So
+   the state carries the weight and the count stays faint. */
+.glog-gap-status {
+  color: var(--muted);
+  font-weight: 600;
+}
+/* A range has no one opponent, so the date cell takes that column too — and
+   with two columns to fill it no longer needs the played row's tight
+   `white-space`. */
+.glog-gap-span {
+  white-space: nowrap;
+}
 /* The season row: the totals over every game in the log, not just the page on
    screen. Pinned to the bottom of the box the way the summary table's is. */
 .glog-table tfoot th,

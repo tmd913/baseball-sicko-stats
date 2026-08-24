@@ -8,6 +8,7 @@ import {
 import { api } from '../api';
 import type {
   BatterGameLog,
+  GameLogGap,
   PitcherGameLog,
   PitcherSeasonStats,
   PlayerPercentiles,
@@ -791,7 +792,9 @@ export function PlayerDetails({
   // The season game log backs the Game Log tab — a whole season of rows, so it
   // loads lazily on first open like the two above it.
   const [gameLog, setGameLog] = useState<
-    { kind: 'batter'; games: BatterGameLog[] } | { kind: 'pitcher'; games: PitcherGameLog[] } | null
+    | { kind: 'batter'; games: BatterGameLog[]; gaps: GameLogGap[] }
+    | { kind: 'pitcher'; games: PitcherGameLog[] }
+    | null
   >(null);
   const [gameLogError, setGameLogError] = useState<string | null>(null);
   const [gameLogLoading, setGameLogLoading] = useState(false);

@@ -1000,6 +1000,134 @@ can fight a scroll restore. Measured both ways: grown to **60** rows at
 `scrollTop` 1,206, out to the Overview tab and back gives **20** rows at
 `scrollTop` **0**, which is what an unmounted tab reopened is.
 
+### The season's silences: the days his club played and he did not
+
+**A game log is a list of games he appeared in, and for its whole life the days
+it left out were left out identically.** Aaron Judge's log stopped on May 31 and
+said nothing about why; a reader could not tell a benching from the rib stress
+fracture that actually did it, because a hot streak that ended and six weeks on
+the injured list are the same silence in a list of appearances. The tab now
+fills the season in.
+
+**Two shapes, because the two silences are not the same size.**
+
+| | drawn as | why |
+| --- | --- | --- |
+| **a day off** (`dnp`) | a log row with the date, the opponent and its result chip, and one cell reading `Did not play` | it *is* a game — it had a winner whether or not he was in it |
+| **a stretch** (`absence`) | one row: the date range, the state, and how many of his club's games it cost | forty near-identical rows would bury the season he did play |
+
+Judge's log at 1200×900 now opens `Jul 19 – Aug 23 · 60-day IL · 33 games`,
+`Jul 17 · vs LAD · L 1-2 · Did not play`, `Jun 2 – Jul 12 · 10-day IL ·
+37 games`, and then May 31 and the season he played. The **fifteen dashes were
+rejected**: a row of `—` across every stat column says "did not play" fifteen
+times in a language the reader has to translate, where one cell says it once.
+The same argument the Stats tab's `.stats-none` already makes about a span he
+does not appear on.
+
+#### The two lists ride side by side, and nothing that read a log had to change
+
+`/api/players/:playerId/gamelog` answers `{ kind, games, gaps }`. **`games` is
+untouched** — the same list, in the same order, with the same fields — which is
+why the Overview's five-game preview and the sticky season-totals row took none
+of this: they read `games` and get exactly what they always got. The preview
+drops `gaps` at the call site rather than merely leaving it untyped, since the
+table weaves whatever it is handed, and *"how he has been going"* over five rows
+is not a reading that survives three of those rows being injured-list stretches.
+
+The client weaves the two into one ordered list (`weave`), newest first, an
+absence sorting on the **last** of the games it stands for so it lands directly
+under the game he came back for. Paging counts **rows, not games** — the two
+were the same number only while a log held games alone, and a season with six
+weeks of injured list in it has more rows than games.
+
+#### Where he was is read from his transactions, and the club is the strong signal
+
+`server/src/stints.ts` folds `/api/v1/transactions` into the states he passed
+through. Probed before it was built on: Judge returns 6 transactions carrying
+both injured-list placements, the retroactive re-file of the first and his
+activation; Joshua Báez returns 6 carrying an option to Memphis in March and a
+recall on 2026-08-15, which is the whole of why his season log begins in the
+middle of August.
+
+**A club id is a fact and a description is prose, so the club is read first.**
+Whether `toTeam.id` is one of the thirty settles an option, a recall, a trade, a
+waiver claim and a free-agent signing without reading a word of English — they
+differ in their sentences and not in what this needs from them. Only the
+**injured list** needs the sentence at all, being the one state where he is on
+his major-league club and still unavailable.
+
+**A third set was needed, and the player it is most obviously wrong about
+found it.** The first cut read *any* club that is not one of the thirty as the
+minors, and turned `United States activated RF Aaron Judge` — the World Baseball
+Classic, 2026-02-05 — into a stint reading **"Minors — United States"** running
+to the middle of April. A national team is not a demotion. So the 201 affiliated
+minor-league clubs are their own set (one request, cached a day), and a move to a
+club in neither set **leaves the state where it was**: the right answer for a
+winter league, an independent league or a country, and the file's standing rule
+that an unclassifiable row must not invent a six-week absence.
+
+**A retroactive placement is a second transaction, and it is read as prose
+because there is nowhere else to read it.** Judge was placed on the 10-day list
+on June 2 and the same placement re-filed on June 5 "retroactive to June 2,
+2026"; taking the filing date would start the stint three days after it began.
+
+#### The window is the whole season, which is a correction
+
+The first cut stopped at his last played game, on the reasoning that the season
+past it had not happened for him. Measured on Judge — who last played on May 31
+and has been on the injured list since June 2 — that reasoning deleted **every
+row explaining why**: 59 games, 0 gaps, and a log that simply stopped in May.
+`final` alone is the honest cut. A game still being played is one he may yet come
+into and a postponement is not a game anybody missed, which is `schedule.ts`'s
+own rule.
+
+The other end has a rule of its own: **before his first appearance, silence is
+not availability.** A date ahead of his debut that no stint covers is one nothing
+is known about, and a `dnp` row there would claim he was on the bench.
+
+#### The sentence is pinned, and the cell holding it is not
+
+Found by driving the table rather than by reading it. At **390px with the pane
+scrolled 400px across**, the three gap rows rendered as **empty bands**: the date
+stayed pinned and every word explaining them had scrolled out of the pane. A row
+whose entire content is a sentence cannot let the sentence scroll away.
+
+Sticking the *cell* is the obvious cut and it does nothing at all. A sticky box
+may only be shifted **within its containing block**, which for a table cell is
+the table, and this cell already runs to the table's right edge — with no room to
+move right it is clamped to a shift of zero. Measured: `position: sticky;
+left: 191px` on the `td` left it at `left: -209`, exactly where it would have
+been unstuck. The span inside it has the whole cell to slide along, so it pins.
+
+The offset is **measured, not declared** — the date column is `width: 1%` and
+sizes to its own content, 109px at 1200 and 79px at 390, which is this repo's
+standing test for reading a value at runtime (`--research-pin-left` is the same
+rule one board over). **One offset serves both shapes**, which looks as though it
+should be two: a `dnp` row's sentence begins after the date cell *and* the
+opponent cell, an `absence` row's after the one cell spanning both for its date
+range, and those are the same edge.
+
+Measured after: at 390 scrolled 400, the three sentences sit at **191, 79→191 and
+191** and all three are on screen; row height is **44.55px** at both widths,
+unchanged, and the page overflows by **0**.
+
+#### Measured across the population
+
+| player | played | dnp | absence |
+| --- | --- | --- | --- |
+| Manny Machado | 128 | 3 | 0 |
+| Nolan Arenado | 122 | 9 | 0 |
+| Juan Soto | 84 | 5 | 2 (`10-day IL` ×2, 15g and 27g) |
+| Aaron Judge | 59 | 1 | 2 (`10-day IL` 37g, `60-day IL` 33g) |
+| Joshua Báez | 10 | 0 | 2 (`Minors — Memphis` 121g, `Minors — Springfield` 1g) |
+
+An everyday player picks up a handful of rows and a season that was mostly
+missed collapses to two. Soto's log carries `2026-06-24` **twice**, which is a
+doubleheader and correct.
+
+**Bundle: 676.10 → 677.87 KB of JS** (199.52 → 200.01 gzipped) and **176.16 →
+176.46 KB of CSS** (31.53 → 31.59 gzipped).
+
 ### The Game Log's rows open the game
 
 **A press on a row of the Game Log opens that game** — for a **batter** as a feed, the same `PlayerDay` narrowed to the row's `gamePk` in the app's shared `Modal` (`PlayerDayModal`), and for a **pitcher** as the outing page itself, that box having had nothing of its own to say (see *A pitcher's game opens the outing, not a box in front of it* below, which is where the split is argued). The log is the season as the games it is made of, and until now a row was the end of the road: fourteen columns of what he did that night and no way to see any of it. A doubleheader is why either is keyed on the game rather than the date — two rows share one afternoon.

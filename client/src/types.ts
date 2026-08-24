@@ -982,6 +982,61 @@ export interface SeasonStats {
 }
 
 /**
+ * **A stretch of a player's season in one state** — on the injured list, in the
+ * minors, designated for assignment, on nobody's roster. Folded out of his
+ * transactions by `stints.ts`, whose file comment carries the reading.
+ *
+ * `status` is `null` for the stretches he was **available**, which is the state
+ * that makes a game he is missing from a day he did not get into rather than a
+ * day he was not there for. `to` is exclusive and `null` on the stint he is
+ * still in.
+ */
+export interface PlayerStint {
+  from: string; // "2026-06-02"
+  to: string | null;
+  status: string | null; // "10-day IL", "Minors — Memphis Redbirds", null
+  /** His major-league club through the stint, or null where he was on none of
+   *  them. It is here so the gap walk need not guess which club's fixtures a
+   *  day he did not play belongs to — the alternative was the club of his
+   *  nearest played game, which is wrong on exactly the days either side of a
+   *  trade, the days it would most be asked. */
+  club: number | null;
+  detail: string; // MLB's own sentence, for the row's title
+}
+
+/**
+ * **A row of a batter's game log that is not a game he played.**
+ *
+ * The log is a list of games he appeared in, and for its whole life the days it
+ * left out were left out identically whether he had the day off or was six
+ * weeks into a rib fracture. These are those days, and they come back beside the
+ * games rather than merged into them so that everything already reading
+ * `games` — the Overview's five-game preview, the season totals row — keeps
+ * reading exactly what it read before.
+ *
+ * Two shapes, because the two silences are not the same size. **A day off is a
+ * game**, with an opponent and a score and a result, and reads as a log row with
+ * dashes where the stats would be. **An absence is a stretch**, and a man who
+ * missed May reading as thirty near-identical rows would bury the season he did
+ * play; it collapses to one row naming the state and counting the games it cost.
+ */
+export type GameLogGap =
+  | ({ kind: 'dnp' } & GameLogEntry)
+  | {
+      kind: 'absence';
+      /** Inclusive, both ends — the first and last of *his club's games* the
+       *  stint covers, rather than the stint's own dates, so the range a row
+       *  prints is a range the reader can count games in. */
+      from: string;
+      to: string;
+      /** How many of his club's games it cost him. The one number that says how
+       *  much of the season this row is standing for. */
+      games: number;
+      status: string; // "10-day IL"
+      detail: string; // MLB's own sentence
+    };
+
+/**
  * One game in a player's season game log — the half that says which game it was.
  * The stats hang off the kind-specific interfaces below.
  */
