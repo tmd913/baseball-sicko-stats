@@ -995,6 +995,25 @@ export function scheduleColumns(
    *  day cell already works untouched: it was only ever drawn from `r.teamId`,
    *  the player id deciding the start border alone. */
   teams = false,
+  /**
+   * **What pressing an opponent opens**, or nothing — which is what the board
+   * did until now: it built these columns and never handed the cell a door, so
+   * `vs MIL` was plain text here while the identical cell on the roster table
+   * was a press. One cell, two behaviors, and no reason for it but that the
+   * argument was threaded on one side and not the other.
+   *
+   * Threaded as a parameter rather than read from `PreviewDoorContext` the way
+   * the summary table's cell reads it, because a column is not a component: the
+   * board builds this array in a `useMemo` where no hook of the cell's can
+   * reach, and the door needs the **row** as well as the fixture — the board's
+   * row being a `ResearchRow`, which the summary table's context is not typed
+   * for and should not be widened to hold. See `ResearchTable::openFixture`.
+   *
+   * **Absent on the team reading**, and the caller decides that rather than
+   * this function: a club row is not a man, and the dialog's two halves are his
+   * platoon split and the lineup he faces.
+   */
+  onPreview?: (row: ResearchRow, game: ScheduleGame) => void,
 ): Column[] {
   const today = index.today;
   const whose = teams ? 'this club plays' : 'his club plays';
@@ -1044,7 +1063,13 @@ export function scheduleColumns(
       day: 'numeric',
     }),
     format: (r: ResearchRow) => (
-      <ScheduleCell index={index} teamId={r.teamId} playerId={r.id} date={date} />
+      <ScheduleCell
+        index={index}
+        teamId={r.teamId}
+        playerId={r.id}
+        date={date}
+        onPreview={onPreview && ((g) => onPreview(r, g))}
+      />
     ),
     value: () => null,
     text: (r: ResearchRow) => dayText(index, r.teamId, date),
