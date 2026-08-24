@@ -678,6 +678,21 @@ export const api = {
     return request(`/api/games/${gamePk}`);
   },
   /**
+   * **The game's plays, as the feed draws them** — the day pipeline's own
+   * `PlayerReport`s narrowed to this one game, which the Plays tab hands
+   * straight to `playerDayEntries` and `FeedItem`.
+   *
+   * A read of its own, made when that tab opens: it is ~150KB raw (**21.5KB
+   * gzipped**, measured on gamePk 822696) against the game report's 11.5, and a
+   * reader who came for the box score never pays for it.
+   */
+  async gamePlays(gamePk: number): Promise<PlayerReport[]> {
+    const { reports } = await request<{ reports: PlayerReport[] }>(
+      `/api/games/${gamePk}/plays`,
+    );
+    return reports;
+  },
+  /**
    * **Every ballpark's park factors, all three hitter hands** — the team page's
    * Park tab, and the line a game preview draws.
    *

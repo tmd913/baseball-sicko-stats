@@ -1,6 +1,6 @@
 ---
 name: sicko-game-page
-description: The game page (GamePage) — one game as a full-screen page and its three tabs (Overview with the line score, decisions and scoring plays; Box Score with both clubs' lines, benches and bullpens; Plays), the two-club head, the three doors into it (the roster's opponent cell, a club's Results tab, a club's fixture rows), the game= URL param and its one step of memory back, and the server module behind it. Use when editing GamePage.tsx or server/src/game.ts or teamGames.ts, when changing what a game's page shows, when touching the /api/games/:gamePk or /api/teams/:id/games routes, or when a box score, line score or play stream reads wrongly.
+description: The game page (GamePage) — one game as a full-screen page and its three tabs (Overview with the line score and decisions, its cells doors onto a half-inning popup; Box Score, one club at a time; Plays, drawn as the feed's own items grouped by half-inning and paged an inning at a time), the two-club head, the three doors into it (the roster's opponent cell, a club's Results tab, a club's fixture rows), the game= URL param, the route stack behind Back and the tab and scroll a page comes back to, and the server modules. Use when editing GamePage.tsx or server/src/game.ts or teamGames.ts, when changing what a game's page shows, when touching the /api/games/:gamePk, /api/games/:gamePk/plays or /api/teams/:id/games routes, or when a box score, line score or play stream reads wrongly.
 ---
 
 # The game page
@@ -9,6 +9,10 @@ description: The game page (GamePage) — one game as a full-screen page and its
 rosters, and every play in the order it happened. Three tabs (**Overview · Box
 Score · Plays**), reachable from the summary table's opponent cell once a game
 is live or over, from a club's **Results** tab, and from a club's fixture rows.
+
+The **Plays** tab draws the *feed's own items* — `playerDayEntries` and
+`FeedItem`, off the day pipeline — so a change to a feed item shape reaches this
+page too, and so does the half-inning dialog a line-score cell opens.
 
 It is the **third** thing in this app to be a full-screen page, and it rides on
 **`DetailsShell.tsx`** like the other two: the fixed page, its layer, the pinned
@@ -27,13 +31,16 @@ before anything is moved between the two.
   before changing where the page is reached from. It covers: what makes a game a
   page rather than a dialog; the three tabs and the three different pages the
   Overview is (played, not played, postponed); why `x` in a line score is a
-  client-side judgment; the box score's slot arithmetic and the pitchers it
-  drops; the play stream's grouping and its live row; the two-club head; why a
-  name is a door only where `knownPlayers` can resolve it; the live poll and its
+  client-side judgment and why every other cell is a door onto a half-inning
+  dialog; the box score's club switch, its slot arithmetic and the pitchers it
+  drops; the play stream as feed items, its inning paging, the bare runs it
+  drops and the `sameGame` prop that came with it; the two-club head; why a name
+  is a door only where `knownPlayers` can resolve it; the live poll and its
   bumped sequence number; the server module's three reasons for existing and its
-  measured field filter; the three doors and `GameDoorContext`; and the rule that
-  `player=`, `team=` and `game=` are one page at a time with one step of memory
-  back.
+  measured field filter; the plays route and why it is the day pipeline; the
+  three doors and `GameDoorContext`; the route stack that makes `Back` undo
+  exactly one thing across all three pages; and the layout caches that let a
+  page come back on the tab and at the offset it was left.
 
 ## Related
 

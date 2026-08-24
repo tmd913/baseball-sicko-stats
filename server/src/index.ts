@@ -23,7 +23,7 @@ import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
 import { getParkFactors } from './parkFactors.js';
-import { getGameReport } from './game.js';
+import { getGamePlays, getGameReport } from './game.js';
 import { getTeamGames } from './teamGames.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
@@ -1805,6 +1805,33 @@ app.get(
       return;
     }
     res.json(await getGameReport(gamePk));
+  }),
+);
+
+/**
+ * **The game's plays, as the feed draws them** — every plate appearance and
+ * every base-running event, with the pitches, the batted ball, the expected
+ * numbers and the clip.
+ *
+ * The day pipeline's own `PlayerReport`s, narrowed to this one game, so that
+ * the client can draw them with `playerDayEntries` and `FeedItem` — the same
+ * two functions the roster's stream and the player page's Overview use, which
+ * is what stops the three readings disagreeing about what happened.
+ *
+ * **A route of its own rather than a field on `GameReport`**, and read when the
+ * tab opens: it is ~150KB and a `getDay`, and a reader who came for the box
+ * score never pays for it. See `game.ts::getGamePlays` for the measurements.
+ */
+app.get(
+  '/api/games/:gamePk/plays',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const gamePk = Number(req.params.gamePk);
+    if (!Number.isInteger(gamePk) || gamePk <= 0) {
+      res.status(400).json({ error: 'invalid gamePk' });
+      return;
+    }
+    res.json({ reports: await getGamePlays(gamePk) });
   }),
 );
 

@@ -5,13 +5,14 @@ import type {
   GameInning,
   GamePitcherLine,
   GamePitchingTotals,
-  GamePlay,
   GameReport,
   GameRosterMan,
   GameStatus,
   GameTeamLine,
 } from './types.js';
+import type { PlayerReport } from './types.js';
 import { isFinalStatus, isPostponedStatus, type GameStatusFields } from './mlbStats.js';
+import { getDay } from './savant.js';
 import { readBlob, writeBlob } from './storage.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
@@ -159,29 +160,10 @@ const FEED_FIELDS = [
   'winner',
   'loser',
   'save',
-  // ── liveData.plays ──────────────────────────────────────────────────────
-  'plays',
-  'allPlays',
-  'result',
   'type',
   'event',
   'eventType',
-  'description',
-  'rbi',
-  'awayScore',
-  'homeScore',
-  'isOut',
-  'about',
-  'atBatIndex',
-  'halfInning',
   'inning',
-  'isScoringPlay',
-  'hasOut',
-  'isComplete',
-  'count',
-  'matchup',
-  'batter',
-  'pitcher',
 ].join(',');
 
 const feedUrl = (gamePk: number) =>
@@ -192,8 +174,12 @@ const feedUrl = (gamePk: number) =>
  * to be filled** — a stored report deserializes with everything added since it
  * missing, so a stale one quietly serves nulls on a page whose whole content is
  * this object.
+ *
+ * **v2 narrowed `plays` to `scoringPlays`**, which is the same rule read the
+ * other way: what is stored changed meaning, so a v1 blob would answer the
+ * Overview with every play in the game where it now asks for five.
  */
-const REPORT_VERSION = 1;
+const REPORT_VERSION = 2;
 
 const blobKey = (gamePk: number) => `game-report-${gamePk}-v${REPORT_VERSION}.json`;
 
@@ -236,26 +222,6 @@ interface BoxTeam {
   bullpen?: number[];
 }
 
-interface FeedPlay {
-  result?: {
-    event?: string;
-    description?: string;
-    rbi?: number;
-    awayScore?: number;
-    homeScore?: number;
-    eventType?: string;
-  };
-  about?: {
-    atBatIndex?: number;
-    halfInning?: string;
-    inning?: number;
-    isScoringPlay?: boolean;
-  };
-  count?: { balls?: number; strikes?: number; outs?: number };
-  matchup?: { batter?: FeedPerson; pitcher?: FeedPerson };
-  atBatIndex?: number;
-}
-
 interface Feed {
   gameData?: {
     status?: GameStatusFields;
@@ -291,7 +257,6 @@ interface Feed {
       info?: { label?: string; value?: string }[];
     };
     decisions?: { winner?: FeedPerson; loser?: FeedPerson; save?: FeedPerson };
-    plays?: { allPlays?: FeedPlay[] };
   };
 }
 
@@ -583,55 +548,6 @@ function buildInnings(feed: Feed): GameInning[] {
   }));
 }
 
-/**
- * The play stream in the order it happened.
- *
- * **Every play, including the ones that are not plate appearances.** That is
- * the opposite call from `mlbStats.ts::isPlateAppearance`, and deliberately so:
- * that test exists because a caught stealing filed under the batter who was up
- * would be an extra at-bat on *his line*, where here there is no line to
- * corrupt and a stolen base is exactly the kind of thing a reader opens a play
- * stream to find. The two answer different questions about the same play.
- *
- * **`game_advisory` is dropped**, being MLB's own bookkeeping (a status change,
- * a delay) wearing the upcoming batter's matchup — a play that never happened.
- */
-function buildPlays(feed: Feed): GamePlay[] {
-  const out: GamePlay[] = [];
-  for (const play of feed.liveData?.plays?.allPlays ?? []) {
-    if (play.result?.eventType === 'game_advisory') continue;
-    const index = play.about?.atBatIndex ?? play.atBatIndex;
-    if (typeof index !== 'number') continue;
-    const batter = play.matchup?.batter;
-    const pitcher = play.matchup?.pitcher;
-    if (typeof batter?.id !== 'number' || typeof pitcher?.id !== 'number') continue;
-    // The same test `mlbStats.ts` makes for "the at-bat is still being played":
-    // MLB has given the play no result yet. Kept as one expression in both
-    // files so the stream and the day cannot disagree about which play is live.
-    const live = !play.result?.event;
-    out.push({
-      index,
-      inning: play.about?.inning ?? 0,
-      half: play.about?.halfInning?.toLowerCase() === 'bottom' ? 'bottom' : 'top',
-      desc: play.result?.description ?? '',
-      event: play.result?.event ?? null,
-      rbi: num(play.result?.rbi),
-      outs: num(play.count?.outs),
-      balls: num(play.count?.balls),
-      strikes: num(play.count?.strikes),
-      awayScore: num(play.result?.awayScore),
-      homeScore: num(play.result?.homeScore),
-      scoring: play.about?.isScoringPlay === true,
-      batterId: batter.id,
-      batterName: batter.fullName ?? '',
-      pitcherId: pitcher.id,
-      pitcherName: pitcher.fullName ?? '',
-      live,
-    });
-  }
-  return out;
-}
-
 function buildDecisions(feed: Feed): GameDecision[] {
   const d = feed.liveData?.decisions;
   const out: GameDecision[] = [];
@@ -680,7 +596,6 @@ function buildReport(gamePk: number, feed: Feed): GameReport {
     innings: buildInnings(feed),
     scheduledInnings: scheduled,
     decisions: buildDecisions(feed),
-    plays: buildPlays(feed),
     notes: (box?.info ?? [])
       // MLB puts the date in this list as a label with no value; everything
       // else is a genuine pair. A note with nothing on the right of it would
@@ -729,4 +644,69 @@ export async function getGameReport(gamePk: number): Promise<GameReport> {
     await writeBlob(key, JSON.stringify(report));
   }
   return report;
+}
+
+/**
+ * **The game's plays, as the feed draws them** — every plate appearance and
+ * every base-running event, with the pitches, the batted-ball detail, the
+ * expected numbers and the clip, exactly as the roster's stream and the player
+ * page's Overview have them.
+ *
+ * ## Why this is the day pipeline rather than a shape of this file's own
+ *
+ * The Plays tab drew its own thin sentence list first — MLB's description, the
+ * count, the score — and the answer to *"plays should be structured like they
+ * are on the feed"* is not to grow that list until it resembles a feed item. A
+ * feed item is a `PlateAppearanceCard`: the pitch sequence in the zone, the
+ * exit velocity and the distance, xBA and xwOBA, the win-expectancy swing and
+ * the video. Every one of those is already computed, per plate appearance, for
+ * **every player in every game** — `savant.ts::getDay` merges MLB's feed with
+ * Savant's day CSV and caches the result per date, which is the read the roster
+ * view makes anyway.
+ *
+ * So this hands back the day's own `PlayerReport`s, narrowed to the one game,
+ * and the client draws them with `playerDayEntries` and `FeedItem` — the same
+ * two functions the feed and the player page use. **The three readings cannot
+ * disagree about what happened**, which is the property `playerDayEntries` was
+ * kept as one function for in the first place.
+ *
+ * ## Batters only
+ *
+ * A pitcher's stream item is his **whole outing**, which is a different reading
+ * of this game and one the Box Score tab already holds — and his own base
+ * events are rows inside that outing rather than items (see
+ * `LiveFeed.tsx::baseEntries`, which states why). What is wanted here is the
+ * game play by play, and that is the batters' side: their plate appearances and
+ * their base running, which is every play there is.
+ *
+ * ## The cost
+ *
+ * One `getDay` for the game's date, which is cached per date in memory and
+ * snapshotted on disk once the day is settled — so a past game is a disk read
+ * and today's game is the copy the roster is already holding. Measured cold:
+ * **1,002ms** for 2026-08-13 and **385ms** for the live day, against **19** and
+ * **18** batters, **64** and **74** plate appearances, and payloads of
+ * **149,606** and **178,785** bytes. That is why it is a **route of its own,
+ * read when the tab opens** rather than a field on `GameReport`: a reader who
+ * came for the box score never pays for it.
+ */
+export async function getGamePlays(gamePk: number): Promise<PlayerReport[]> {
+  // The date off the game's own report rather than off the caller, which is
+  // what keeps the two reads talking about the same game: a settled report is
+  // a memory hit, and an unsettled one is a fetch this route would have had to
+  // make anyway to know which day to ask for.
+  const report = await getGameReport(gamePk);
+  if (!report.date) return [];
+  const day = await getDay(report.date);
+  const out: PlayerReport[] = [];
+  for (const [key, rep] of day.reports) {
+    if (!key.startsWith('batter-')) continue;
+    const game = rep.games.find((g) => g.gamePk === gamePk);
+    if (!game) continue;
+    // **Narrowed to the one game**, which is most of what makes the payload the
+    // size it is: a report holds every game of the range it was built for, and
+    // a man who played a doubleheader would otherwise send both.
+    out.push({ ...rep, games: [game] });
+  }
+  return out;
 }

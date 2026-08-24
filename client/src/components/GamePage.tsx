@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { formatStartTime, inningLabel, LIVE_POLL_MS, prettyGameDate } from '../lib';
 import { useDelayedFlag, useTeamDoor } from '../hooks';
+import type { GamePageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock } from './Loading';
+import { Modal } from './Modal';
+import { byPlayOrder, entryKey, FeedItem, playerDayEntries } from './LiveFeed';
+import type { FeedEntry } from './LiveFeed';
 import { TeamPhoto } from './PlayerIdentity';
 import type {
   GameBatterLine,
   GamePitcherLine,
-  GamePlay,
   GameReport,
   GameRosterMan,
   GameTeamLine,
+  PlayerReport,
   SeasonPlayer,
 } from '../types';
 
@@ -71,9 +75,43 @@ import type {
  * may write (`reqRef`). A block wait is drawn only where there is nothing on
  * screen yet and only past `WAIT_DELAY`.
  */
+/**
+ * **Every game and every play stream this tab has already read**, by `gamePk`.
+ *
+ * It is a **layout** cache rather than a network one, and it is here for the
+ * reason `PlateAppearanceCard`'s `clipUrls` is there: this page is unmounted
+ * and remounted every time a reader steps off it and back — the three pages
+ * being exclusive — and a remount that starts empty renders a box of nothing,
+ * which the browser clamps the restored scroll offset to 0 against. With the
+ * answer in hand the page renders at its full height in the **first** commit,
+ * and `DetailsShell`'s `initialScroll` lands where the reader left.
+ *
+ * It says nothing about freshness. Every mount still issues its read, and a
+ * live game still polls; what the cache changes is what is on screen while that
+ * is in flight, which is rule 1 of the loading system — *never over data*.
+ */
+const gameCache = new Map<number, GameReport>();
+const playsCache = new Map<number, PlayerReport[]>();
+/**
+ * …and **how far down the game the Plays tab was opened**, by `gamePk`.
+ *
+ * The same cache and the same reason. Restoring a scroll offset onto a page
+ * that has forgotten its paging restores nothing: the tab comes back one inning
+ * deep, which is a few thousand pixels tall, and the browser clamps a
+ * five-thousand-pixel offset to the bottom of it — measured, `scrollTop 0` and
+ * two half-innings where the reader left eight and 5,000.
+ *
+ * So how much of the game is open is part of the page the reader left, exactly
+ * as the scroll is, and it is kept in the same place.
+ */
+const shownMemo = new Map<number, number>();
+
 export function GamePage({
   gamePk,
   players,
+  initialTab,
+  onTabChange,
+  initialScroll,
   onClose,
   onOpenPlayer,
 }: {
@@ -89,11 +127,44 @@ export function GamePage({
    * keeps, one table wider.
    */
   players: SeasonPlayer[];
+  /** Which tab to open on. Absent means Overview; a **step back** to this page
+   *  names the one the reader left. Read once, at mount. */
+  initialTab?: GamePageTab;
+  /** …and which tab is showing now, told upwards so that step can be recorded.
+   *  Not the same thing as `initialTab`, and it deliberately does not go into
+   *  `App`'s render state — see `TeamDetails`, which makes the same split for
+   *  the same reason. */
+  onTabChange?: (tab: GamePageTab) => void;
+  /** Where this page was left, for a reader stepping back onto it — see
+   *  `DetailsShell`. */
+  initialScroll?: number;
   onClose: () => void;
   onOpenPlayer: (key: string) => void;
 }) {
-  const [tab, setTab] = useState<GameTab>('overview');
-  const [game, setGame] = useState<GameReport | null>(null);
+  const [tab, setTab] = useState<GameTab>(initialTab ?? 'overview');
+  useEffect(() => {
+    onTabChange?.(tab);
+  }, [tab, onTabChange]);
+  /**
+   * **A half-inning the reader pressed on the line score**, drawn as a popup
+   * over whatever tab they were on.
+   *
+   * The line score is the one picture of a game that is already *by inning*,
+   * and a reader looking at the `5` in the Nationals' fifth is asking what
+   * happened in it. A **dialog** is what that press deserves rather than a jump
+   * to the Plays tab: it is a detail about one thing, the page behind it does
+   * not move, and Escape or the backdrop puts it back — which is the argument
+   * `PlateAppearanceCard` already makes for the box it opens, one play smaller.
+   *
+   * It sent the reader to the Plays tab for a commit, and the machinery that
+   * took is what condemned it: the tab had to open its paging out to that
+   * inning, then scroll to it, then **hold** the target while every clip above
+   * it resolved and pushed it down the page. Three mechanisms to land a reader
+   * somewhere they did not ask to be, against one box holding the six plays
+   * they did ask for.
+   */
+  const [halfOpen, setHalfOpen] = useState<HalfRef | null>(null);
+  const [game, setGame] = useState<GameReport | null>(() => gameCache.get(gamePk) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -114,6 +185,7 @@ export function GamePage({
       api.game(gamePk).then(
         (g) => {
           if (!alive || reqRef.current !== req) return;
+          gameCache.set(gamePk, g);
           setGame(g);
           setError(null);
           setLoading(false);
@@ -146,6 +218,7 @@ export function GamePage({
       const req = (reqRef.current += 1);
       api.game(gamePk).then(
         (g) => {
+          gameCache.set(gamePk, g);
           if (reqRef.current === req) setGame(g);
         },
         () => {},
@@ -155,6 +228,70 @@ export function GamePage({
   }, [live, gamePk]);
 
   const wait = useDelayedFlag(loading && game === null);
+
+  /**
+   * **The Plays tab's own read**, lazy on first open of it.
+   *
+   * A route of its own rather than a field on the report, and the reason is
+   * measured: it is ~150KB (21.5KB gzipped) against the report's 11.5, and it
+   * costs a `getDay`. A reader who came for the box score never pays for it —
+   * the rule every read on the player page follows.
+   *
+   * It re-reads on the same twenty-second clock while the game is being played,
+   * and **quietly**: the stream that is on screen stands while the next answer
+   * is in flight, and a failed re-read leaves it there.
+   */
+  const [plays, setPlays] = useState<PlayerReport[] | null>(() => playsCache.get(gamePk) ?? null);
+  const [playsError, setPlaysError] = useState<string | null>(null);
+  const [playsLoading, setPlaysLoading] = useState(false);
+  const playsReq = useRef(0);
+  /** Whether this mount has asked. Marked **before** the read rather than after
+   *  it, which is what makes it a once-per-mount gate rather than a test of
+   *  what has landed — the rule `hooks.ts` states, read the other way round. */
+  const playsAsked = useRef(false);
+  const readPlays = useCallback(
+    (quiet: boolean) => {
+      const req = (playsReq.current += 1);
+      if (!quiet) setPlaysLoading(true);
+      api.gamePlays(gamePk).then(
+        (r) => {
+          if (playsReq.current !== req) return;
+          playsCache.set(gamePk, r);
+          setPlays(r);
+          setPlaysError(null);
+          setPlaysLoading(false);
+        },
+        (e: Error) => {
+          if (playsReq.current !== req) return;
+          if (!quiet) setPlaysError(e.message);
+          setPlaysLoading(false);
+        },
+      );
+    },
+    [gamePk],
+  );
+  useEffect(() => {
+    // Never marked before it is answered, and tested against the state we
+    // already hold rather than against a flag an effect cleanup could unset:
+    // StrictMode mounts, tears down and re-runs, and a mark set on the way out
+    // leaves the second pass returning early and the wait up for ever.
+    // **Two triggers, one read.** The Plays tab wants it, and so does a
+    // half-inning opened off the line score — which can happen on the Overview,
+    // before that tab has ever been touched. Whichever comes first pays for it
+    // and the other finds it done.
+    if (tab !== 'plays' && halfOpen === null) return;
+    // **Once per mount**, and quietly where the cache already has an answer:
+    // the read is what keeps a live game moving, and `plays` being seeded from
+    // the layout cache must not be mistaken for it having been made.
+    if (playsAsked.current) return;
+    playsAsked.current = true;
+    readPlays(plays !== null);
+  }, [tab, halfOpen, plays, readPlays]);
+  useEffect(() => {
+    if (!live || (tab !== 'plays' && halfOpen === null) || plays === null) return;
+    const t = setInterval(() => readPlays(true), LIVE_POLL_MS);
+    return () => clearInterval(t);
+  }, [live, tab, halfOpen, plays, readPlays]);
 
   /**
    * The keys this page may open, as a set.
@@ -178,6 +315,7 @@ export function GamePage({
       resetKey={gamePk}
       onClose={onClose}
       tabsLabel="Game sections"
+      initialScroll={initialScroll}
       head={<GameHead game={game} onOpenTeam={teamDoor} />}
       tabs={
         <>
@@ -195,9 +333,24 @@ export function GamePage({
     >
       {game ? (
         <>
-          {tab === 'overview' && <GameOverview game={game} openable={openable} onOpenPlayer={onOpenPlayer} />}
+          {tab === 'overview' && (
+            <GameOverview
+              game={game}
+              openable={openable}
+              onOpenPlayer={onOpenPlayer}
+              onOpenHalf={(inning, half) => setHalfOpen({ inning, half })}
+            />
+          )}
           {tab === 'box' && <GameBox game={game} openable={openable} onOpenPlayer={onOpenPlayer} />}
-          {tab === 'plays' && <GamePlays game={game} openable={openable} onOpenPlayer={onOpenPlayer} />}
+          {tab === 'plays' && (
+            <GamePlays
+              game={game}
+              reports={plays}
+              loading={playsLoading}
+              error={playsError}
+              onOpenPlayer={onOpenPlayer}
+            />
+          )}
         </>
       ) : error ? (
         /* **This page 502s honestly**, which is the route's own bargain and the
@@ -210,17 +363,44 @@ export function GamePage({
       ) : wait ? (
         <LoadingBlock>Reading the game</LoadingBlock>
       ) : null}
+      {game && halfOpen && (
+        <HalfInningDialog
+          game={game}
+          half={halfOpen}
+          reports={plays}
+          loading={playsLoading}
+          error={playsError}
+          onOpenPlayer={onOpenPlayer}
+          onClose={() => setHalfOpen(null)}
+        />
+      )}
     </DetailsShell>
   );
 }
+
+/** One half-inning, as the line score names it and the play stream draws it. */
+interface HalfRef {
+  inning: number;
+  /** MLB's own `Top` / `Bot`, which is what a `PlateAppearance` carries — so
+   *  the two ends of this are compared with `isBottom` rather than by string
+   *  equality, the line score speaking of `home` and `away`. */
+  half: string;
+}
+
+/** Whether a half is the bottom of the inning. MLB writes it `Bot` on a
+ *  `PlateAppearance`, `bottom` on a play and `Bottom` on a line score's
+ *  `inningState`, so the test is the prefix rather than any one of them. */
+const isBottom = (half: string) => half.toLowerCase().startsWith('bot');
 
 /** The three, written in strip order for the reason every tab union in this app
  *  is: a tab is a key and never an index, so the order is the order the buttons
  *  are written in and nothing stores a position.
  *
  *  **Not in the URL**, which is where both other details pages keep their tab:
- *  it is which reading of one game is on screen, where `game=` is which game. */
-type GameTab = 'overview' | 'box' | 'plays';
+ *  it is which reading of one game is on screen, where `game=` is which game.
+ *  The union itself lives in `hooks.ts` — see `GamePageTab`, which `App` names
+ *  when it puts a reader back where they were. */
+type GameTab = GamePageTab;
 
 /* ────────────────────────────────────────────────────────────────────────────
  * The head
@@ -382,12 +562,14 @@ function GameOverview({
   game,
   openable,
   onOpenPlayer,
+  onOpenHalf,
 }: {
   game: GameReport;
   openable: Set<string>;
   onOpenPlayer: (key: string) => void;
+  /** Open the Plays tab on one half-inning — the line score's own door. */
+  onOpenHalf: (inning: number, half: string) => void;
 }) {
-  const scoring = game.plays.filter((p) => p.scoring);
   const played = hasStarted(game);
   return (
     <div className="details-overview">
@@ -401,7 +583,7 @@ function GameOverview({
           three times over, which is a page saying the same non-thing at length.
           And a **postponement** is neither: it is one sentence, because there
           is nothing else true about a game that did not happen. */}
-      {played ? <LineScore game={game} /> : null}
+      {played ? <LineScore game={game} onOpenHalf={onOpenHalf} /> : null}
       {game.status.state === 'scheduled' && (
         <Probables game={game} openable={openable} onOpenPlayer={onOpenPlayer} />
       )}
@@ -431,23 +613,6 @@ function GameOverview({
               </li>
             ))}
           </ul>
-        </section>
-      )}
-      {played && (
-        <section className="ovw-block">
-          <div className="ovw-head-row">
-            <h2 className="ovw-head">Scoring Plays</h2>
-            {scoring.length > 0 && <span className="start-note">{scoring.length}</span>}
-          </div>
-          {scoring.length > 0 ? (
-            <ol className="game-play-list">
-              {scoring.map((p) => (
-                <PlayRow key={p.index} play={p} game={game} openable={openable} onOpenPlayer={onOpenPlayer} />
-              ))}
-            </ol>
-          ) : (
-            <p className="ovw-none">Nobody has scored.</p>
-          )}
         </section>
       )}
       <GameInfo game={game} />
@@ -533,14 +698,19 @@ const DECISION_TITLE: Record<'W' | 'L' | 'S', string> = {
  * than four columns wide and growing an inning under the reader every twenty
  * minutes. Extra innings simply take more.
  */
-function LineScore({ game }: { game: GameReport }) {
+function LineScore({
+  game,
+  onOpenHalf,
+}: {
+  game: GameReport;
+  onOpenHalf: (inning: number, half: string) => void;
+}) {
   const columns = Math.max(game.innings.length, game.scheduledInnings);
   const nums = Array.from({ length: columns }, (_, i) => i + 1);
   const over = game.status.state === 'final';
-  const cell = (runs: number | null, played: boolean) =>
-    runs !== null ? runs : over && played ? 'x' : '';
   const row = (which: 'away' | 'home') => {
     const side = game[which];
+    const half = which === 'home' ? 'Bot' : 'Top';
     return (
       <tr>
         <th scope="row" className="game-ls-team">
@@ -548,9 +718,35 @@ function LineScore({ game }: { game: GameReport }) {
         </th>
         {nums.map((n) => {
           const inning = game.innings[n - 1];
+          const runs = inning ? inning[which] : null;
+          /**
+           * **A half nobody played is not a door, and is the only cell that is
+           * not.** Two absences arrive as the same null (see the server's
+           * `buildInnings`): the bottom of the ninth with the home club ahead,
+           * which the game being over turns into the `x` below, and a half
+           * still being thrown, which has plays to read. So the test is the
+           * `x` itself rather than the null — everything else that MLB has an
+           * inning for was batted in.
+           */
+          const dead = !inning || (over && runs === null);
+          const label = runs !== null ? runs : over && inning ? 'x' : '';
           return (
             <td key={n} className="game-ls-cell">
-              {inning ? cell(inning[which], true) : ''}
+              {dead ? (
+                label
+              ) : (
+                /* The cell **is** the press, which is what makes a two-character
+                   target big enough: `.game-ls-door` fills it rather than
+                   wrapping the digits. */
+                <button
+                  type="button"
+                  className="game-ls-door"
+                  onClick={() => onOpenHalf(n, half)}
+                  title={`${isBottom(half) ? 'Bottom' : 'Top'} of the ${ordinalInning(n)} — the plays`}
+                >
+                  {label}
+                </button>
+              )}
             </td>
           );
         })}
@@ -648,11 +844,29 @@ function GameInfo({ game }: { game: GameReport }) {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * **Both clubs, away first**, each as four things: its batting lines, its
- * pitching lines, and the bench and bullpen who did not appear.
+ * **One club at a time, and the switch above the table is which.**
  *
- * Stacked rather than switched — see the file header. A box score read one club
- * at a time is a box score you cannot read across.
+ * It drew both stacked at first, on the argument that a game is two subjects
+ * and the reader is comparing them — a box score you cannot read across being
+ * most of what a box score is not for. That argument is right about a *line*
+ * score, which is two rows and is on the Overview; it is wrong about this,
+ * which is four tables and forty names a side. Nothing on the away club's
+ * batting line is read against a number on the home club's, and stacking them
+ * put ninety rows between a reader and the second half of what they opened.
+ *
+ * So the two clubs are two tabs, in `.view-switch`'s own shape — the same
+ * control the team page pins over its own two halves and the Park tab keeps
+ * inside itself, which is `role="tablist"` and two `role="tab"` buttons. They
+ * are named by **abbreviation**, which is what every table in the app calls a
+ * club and what the head three lines up has just said.
+ *
+ * **Away leads**, the order every line score in this app is written in and the
+ * order the game is played in.
+ *
+ * It is not on the page's own strip, where it would read as `Overview · CHC ·
+ * WSH · Plays`: that strip names the *kind* of reading a tab holds, and two
+ * clubs are two subjects rather than two readings. The same division the team
+ * page makes between its strip and its side switch.
  */
 function GameBox({
   game,
@@ -663,36 +877,48 @@ function GameBox({
   openable: Set<string>;
   onOpenPlayer: (key: string) => void;
 }) {
-  if (game.away.batters.length === 0 && game.home.batters.length === 0) {
-    return (
-      <div className="details-overview">
-        {/* The lineup is the cause, and it is named rather than the game being
-            called empty: clubs post one an hour or two out, so before that this
-            page has both rosters and no box score at all. */}
+  const [side, setSide] = useState<'away' | 'home'>('away');
+  const shown = game[side];
+  const posted = game.away.batters.length > 0 || game.home.batters.length > 0;
+  return (
+    <div className="details-overview">
+      <div className="game-box-tools">
+        <div className="view-switch" role="tablist" aria-label="Which club">
+          {(['away', 'home'] as const).map((which) => (
+            <button
+              key={which}
+              type="button"
+              role="tab"
+              className={`view-tab${side === which ? ' active' : ''}`}
+              aria-selected={side === which}
+              onClick={() => setSide(which)}
+              title={game[which].name}
+            >
+              {game[which].abbr}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* The lineup is the cause, and it is named rather than the game being
+          called empty: clubs post one an hour or two out, so before that this
+          page has both rosters and no box score at all. */}
+      {!posted && (
         <p className="ovw-none">
           {game.status.state === 'scheduled'
             ? 'Neither club has posted a lineup yet.'
             : 'No box score for this game.'}
         </p>
+      )}
+      {posted ? (
+        <BoxSide side={shown} openable={openable} onOpenPlayer={onOpenPlayer} />
+      ) : (
         <BoxRoster
-          side={game.away}
+          side={shown}
           started={hasStarted(game)}
           openable={openable}
           onOpenPlayer={onOpenPlayer}
         />
-        <BoxRoster
-          side={game.home}
-          started={hasStarted(game)}
-          openable={openable}
-          onOpenPlayer={onOpenPlayer}
-        />
-      </div>
-    );
-  }
-  return (
-    <div className="details-overview">
-      <BoxSide side={game.away} openable={openable} onOpenPlayer={onOpenPlayer} />
-      <BoxSide side={game.home} openable={openable} onOpenPlayer={onOpenPlayer} />
+      )}
     </div>
   );
 }
@@ -1037,48 +1263,147 @@ function handToken(hand: string | null, kind: 'batter' | 'pitcher'): string {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * **The game as it happened**, grouped by half-inning.
+ * **The game as it happened, drawn as the feed draws it.**
  *
- * The grouping is the whole of the reading: a play stream without it is four
- * hundred sentences, and with it a reader can find the fifth and read the four
- * plays that turned it. Each heading names the half and the club that was
- * batting, because "Top 5th" alone leaves the reader to remember which side is
- * away.
+ * It was a list of MLB's sentences with the pitcher under each — accurate,
+ * short, and not what a reader of this app means by a play. A play here is a
+ * **`PlateAppearanceCard`**: the pitch sequence in the zone, the exit velocity
+ * and the distance, xBA and xwOBA, the win-expectancy swing, the video, and the
+ * colored rail that says what the outcome was. So this tab draws the same
+ * `FeedItem` the roster's stream and the player page's Overview draw, off the
+ * same `playerDayEntries`, and the three readings of what happened cannot
+ * disagree.
  *
- * **`All` / `Scoring` is a filter and not a second list.** A scoring-plays
- * reading already exists on the Overview and is the summary; this is the same
- * stream cut down, which is what lets a reader who has found the inning they
- * want widen back out to it in place.
+ * **The base-running comes with it**, which the sentence list had no shape for:
+ * a steal, a wild pitch, a run scored are items of their own in the feed and
+ * are items of their own here, in play order under the at-bat they happened on.
+ *
+ * ## Grouped by half-inning, and read forwards
+ *
+ * The grouping is the whole of the reading: a stream without it is a hundred
+ * cards, and with it a reader can find the fifth and read the four plays that
+ * turned it. Each heading names the half **and the club that was batting**,
+ * because "Top 5th" alone leaves the reader to remember which side is away.
+ *
+ * **Forwards**, where the feed reads newest-first — `byPlayOrder`, which is the
+ * feed's own comparator negated and is exported for exactly this. A roster's
+ * stream is *what has just happened*; a game is a narrative, and its own
+ * comparator puts cause before effect within a play (the single, then the steal
+ * it set up, then the run).
+ *
+ * ## What is not here
+ *
+ * **A pitcher's outing.** In the feed his stream item is the whole appearance,
+ * which is a different reading of this game and one the Box Score tab already
+ * holds; his base events are rows inside it rather than items (see
+ * `LiveFeed.tsx::baseEntries`). So the server sends batter reports alone, and
+ * every play in the game is on one of them.
  */
 function GamePlays({
   game,
-  openable,
+  reports,
+  loading,
+  error,
   onOpenPlayer,
 }: {
   game: GameReport;
-  openable: Set<string>;
+  /** The day pipeline's own reports, narrowed to this game — `null` until the
+   *  tab's own read lands. */
+  reports: PlayerReport[] | null;
+  loading: boolean;
+  error: string | null;
   onOpenPlayer: (key: string) => void;
 }) {
   const [scoringOnly, setScoringOnly] = useState(false);
-  const halves = useMemo(() => {
-    const out: { key: string; inning: number; half: 'top' | 'bottom'; plays: GamePlay[] }[] = [];
-    for (const p of game.plays) {
-      if (scoringOnly && !p.scoring) continue;
-      const key = `${p.inning}-${p.half}`;
-      const last = out[out.length - 1];
-      if (last && last.key === key) last.plays.push(p);
-      else out.push({ key, inning: p.inning, half: p.half, plays: [p] });
-    }
-    return out;
-  }, [game.plays, scoringOnly]);
+  /**
+   * **How many innings of the whole game are drawn**, and the reason the tab
+   * has a page at all.
+   *
+   * A game is seventy plays, each a card with its film under it, and drawn
+   * whole that is a **35,747px** page — forty screens — with **65** clip
+   * lookups fired the moment the tab opens (measured, gamePk 822696). The feed
+   * has the same problem across a roster's day and the same answer: it opens on
+   * `FEED_PAGE_SIZE` items and grows by a press.
+   *
+   * **The page here is an inning**, because that is what a game is read in —
+   * about six to ten plays, which is the feed's own page size arrived at from
+   * the other direction. One to start, and each press of `Show more` adds one
+   * more.
+   *
+   * **Only on `All`.** The `Scoring` cut is a dozen plays over the whole game
+   * and is the summary a reader switched to *because* it is short; paging it
+   * would be a control answering a problem that filter had already solved.
+   */
+  const [shownInnings, setShownInnings] = useState(() => shownMemo.get(game.gamePk) ?? 1);
+  useEffect(() => {
+    shownMemo.set(game.gamePk, shownInnings);
+  }, [game.gamePk, shownInnings]);
+  /**
+   * Back to the first inning when the **cut** changes, which is what makes the
+   * two readings independent: a reader who has opened six innings of `All`,
+   * looked at `Scoring` and come back has asked for the game again, not for the
+   * six innings they had.
+   *
+   * **On the cut alone**, and `reports` is deliberately not a dependency. It
+   * was, on the reasoning that a new game is a new page — but a new game
+   * remounts this whole component (`GamePage` is keyed on `gamePk`), so the
+   * only thing that dependency ever fired on was the tab's own read *landing*,
+   * null → answer. That put it after the effect below and undid it: pressing
+   * the fifth on the line score opened the Plays tab on the fifth and then, a
+   * beat later, on the first. Measured — `innings drawn 2` where the fifth
+   * needs ten.
+   */
+  const lastCut = useRef(scoringOnly);
+  useEffect(() => {
+    /**
+     * **Not on the mount**, which is the one run of this effect that is not a
+     * change of cut: a page being stepped back onto opens where it was left,
+     * and a reset here would undo the seed above before the reader saw it.
+     *
+     * The test is **the value we already hold**, not a first-run flag. A flag
+     * set on the way out of the effect is the trap `RULES.md` names and this
+     * codebase has found four times: React StrictMode runs a mount's effects,
+     * tears them down and runs them again, so the second pass saw the flag
+     * already spent and reset the paging — measured, a page left eight
+     * half-innings deep came back two, and the scroll offset restored onto it
+     * clamped to 0.
+     */
+    if (lastCut.current === scoringOnly) return;
+    lastCut.current = scoringOnly;
+    setShownInnings(1);
+  }, [scoringOnly]);
+  const halves = useMemo(() => buildHalves(reports, scoringOnly), [reports, scoringOnly]);
 
-  if (game.plays.length === 0) {
+  /** The innings the game actually has, which is what the button counts down —
+   *  not `scheduledInnings`, since a game can go twelve and a rain-shortened
+   *  one stops at seven. */
+  const lastInning = halves.length > 0 ? halves[halves.length - 1].inning : 0;
+  /* The `Scoring` cut is never paged, so `shown` is the whole game there. */
+  const shown = scoringOnly ? halves : halves.filter((h) => h.inning <= shownInnings);
+  const moreInnings = scoringOnly ? 0 : Math.max(0, lastInning - shownInnings);
+
+  const wait = useDelayedFlag(loading && reports === null);
+
+  if (!reports) {
+    if (error) {
+      return (
+        <div className="details-overview">
+          <div className="details-status details-error">Couldn&rsquo;t read the plays: {error}</div>
+        </div>
+      );
+    }
+    if (wait) return <LoadingBlock>Reading the plays</LoadingBlock>;
+    return null;
+  }
+  if (reports.length === 0) {
     return (
       <div className="details-overview">
         <p className="ovw-none">
           {game.status.state === 'scheduled'
             ? 'The game hasn’t started.'
-            : 'No plays for this game.'}
+            : game.status.state === 'postponed'
+              ? 'This game was not played.'
+              : 'No plays for this game.'}
         </p>
       </div>
     );
@@ -1086,6 +1411,10 @@ function GamePlays({
   return (
     <div className="details-overview">
       <div className="game-plays-tools">
+        {/* **A filter and not a second list.** The Overview's Scoring Plays
+            block is the summary; this is the same stream cut down, which is
+            what lets a reader who has found the inning they want widen back out
+            to it in place. */}
         <div className="view-switch" role="tablist" aria-label="Which plays">
           {([false, true] as const).map((only) => (
             <button
@@ -1107,96 +1436,206 @@ function GamePlays({
            is a fact about the button above it. */
         <p className="ovw-none">No scoring plays — press All for the whole game.</p>
       ) : (
-        halves.map((h) => (
+        shown.map((h) => (
           <section className="ovw-block game-half" key={h.key}>
             <div className="ovw-head-row">
               <h2 className="ovw-head">
-                {h.half === 'top' ? 'Top' : 'Bottom'} {ordinalInning(h.inning)}
+                {isBottom(h.half) ? 'Bottom' : 'Top'} {ordinalInning(h.inning)}
                 <span className="game-half-club">
                   {' · '}
-                  {h.half === 'top' ? game.away.abbr : game.home.abbr} batting
+                  {isBottom(h.half) ? game.home.abbr : game.away.abbr} batting
                 </span>
               </h2>
             </div>
-            <ol className="game-play-list">
-              {h.plays.map((p) => (
-                <PlayRow key={p.index} play={p} game={game} openable={openable} onOpenPlayer={onOpenPlayer} />
+            <div className="feed-list game-play-feed">
+              {h.entries.map((e) => (
+                /* `sameGame` drops the matchup off every item: the page's head
+                   carries it above every tab, and the same seven characters on
+                   a hundred rows is the mark that marks nothing. The **film
+                   stays** — it is what a feed item is, and what keeps seventy
+                   of them off the page is the inning page above rather than
+                   taking the clip away from the six that are on it. */
+                <FeedItem key={entryKey(e)} entry={e} onOpenDetails={onOpenPlayer} sameGame />
               ))}
-            </ol>
+            </div>
           </section>
         ))
+      )}
+      {moreInnings > 0 && (
+        /* **The feed's own control**, folded onto rather than restyled:
+           `.feed-more` with the count of what is left inside it, which is the
+           button a reader of this app has already met at the foot of the
+           roster's stream. What it counts is innings rather than items, that
+           being what this page's page is. */
+        <button
+          type="button"
+          className="feed-more game-plays-more"
+          onClick={() => setShownInnings((n) => n + 1)}
+        >
+          Show the {ordinalInning(shownInnings + 1)}
+          <span className="feed-more-count">{moreInnings}</span>
+        </button>
       )}
     </div>
   );
 }
 
+/** One half-inning of the stream: what to head it with, and what happened. */
+interface HalfBlock {
+  key: string;
+  inning: number;
+  half: string;
+  entries: FeedEntry[];
+}
+
 /**
- * One play.
+ * **Every play in the game, in the order it happened, grouped by half-inning.**
  *
- * The sentence is **MLB's own**, unedited — it names the batter, what he did,
- * where it went and who scored, in one line, and no rewriting of it here could
- * be more accurate or shorter.
+ * `playerDayEntries` is called per man and the results merged, which is what
+ * `LiveFeed` does across a roster — one function, so a play cannot read one way
+ * here and another there. `liveEvents` are folded in beside `entries` because
+ * on this page there is no Live section to pin them to: a steal taken behind
+ * the batter at the plate belongs in the inning it happened in.
  *
- * What is added around it is the two things the sentence does not say: the
- * **score after** it, and the **pitcher** who threw it. The score rides only on
- * a play that changed it, which is the rule *a mark that would be on every row
- * marks nothing* — a running score down every row of four hundred is a column
- * of the same two numbers.
- *
- * **The live at-bat has no sentence**, MLB not having given it a result, so it
- * draws the count and the two men instead. It is the one row that says what is
- * happening rather than what happened, and it is marked.
+ * A module function rather than a hook, because **two** surfaces build it: the
+ * Plays tab and the dialog a line-score cell opens. One grouping, so the fifth
+ * inning cannot read one way in the tab and another in the box.
  */
-function PlayRow({
-  play,
+function buildHalves(reports: PlayerReport[] | null, scoringOnly: boolean): HalfBlock[] {
+  if (!reports) return [];
+  const all: FeedEntry[] = [];
+  for (const report of reports) {
+    const day = playerDayEntries(report);
+    all.push(...day.entries, ...day.liveEvents);
+  }
+  all.sort(byPlayOrder);
+  const out: HalfBlock[] = [];
+  for (const e of all) {
+    if (isBareRun(e)) continue;
+    if (scoringOnly && !changedTheScore(e)) continue;
+    const { inning, half } = entryInning(e);
+    const key = `${inning}-${half}`;
+    const last = out[out.length - 1];
+    if (last && last.key === key) last.entries.push(e);
+    else out.push({ key, inning, half, entries: [e] });
+  }
+  return out;
+}
+
+/**
+ * **One half-inning, as a popup** — what a cell on the line score opens.
+ *
+ * A dialog rather than a jump into the Plays tab, which is what that press did
+ * for a commit. The reasoning is `PlateAppearanceCard`'s, one play larger: this
+ * is *a detail about one thing*, the page behind it does not move, and Escape
+ * or the backdrop puts it back.
+ *
+ * The tab version is what condemns it. To land a reader on the fifth it had to
+ * open the paging out to that inning, scroll to it, and then **hold** the
+ * target while every clip in the four innings above resolved and pushed it down
+ * the page — measured, the block finishing 5px below the fold before the
+ * holding was added. Three mechanisms to put a reader somewhere they had not
+ * asked to be, against one box holding the six plays they had.
+ *
+ * It draws the **same items** as the tab, off the same `buildHalves`, so a half
+ * cannot read one way in the box and another in the stream. The `Scoring` cut
+ * is deliberately not applied: a reader who pressed the fifth asked for the
+ * fifth.
+ */
+function HalfInningDialog({
   game,
-  openable,
+  half,
+  reports,
+  loading,
+  error,
   onOpenPlayer,
+  onClose,
 }: {
-  play: GamePlay;
   game: GameReport;
-  openable: Set<string>;
+  half: HalfRef;
+  reports: PlayerReport[] | null;
+  loading: boolean;
+  error: string | null;
   onOpenPlayer: (key: string) => void;
+  onClose: () => void;
 }) {
-  return (
-    <li
-      className={`game-play${play.scoring ? ' game-play-scoring' : ''}${play.live ? ' game-play-live' : ''}`}
-    >
-      <div className="game-play-line">
-        {play.live ? (
-          <span className="game-play-desc">
-            <PlayerName
-              id={play.batterId}
-              name={play.batterName}
-              kind="batter"
-              openable={openable}
-              onOpenPlayer={onOpenPlayer}
-            />
-            {' at the plate — '}
-            {play.balls}-{play.strikes}, {play.outs} {play.outs === 1 ? 'out' : 'outs'}
-          </span>
-        ) : (
-          <span className="game-play-desc">{play.desc}</span>
-        )}
-        {play.scoring && (
-          <span className="game-play-score" title="the score after this play">
-            {game.away.abbr} {play.awayScore}–{play.homeScore} {game.home.abbr}
-          </span>
-        )}
-      </div>
-      <div className="game-play-sub">
-        <PlayerName
-          id={play.pitcherId}
-          name={play.pitcherName}
-          kind="pitcher"
-          openable={openable}
-          onOpenPlayer={onOpenPlayer}
-          className="game-play-arm"
-        />
-        {play.event && <span className="game-play-event">{play.event}</span>}
-      </div>
-    </li>
+  const block = useMemo(
+    () =>
+      buildHalves(reports, false).find(
+        (h) => h.inning === half.inning && isBottom(h.half) === isBottom(half.half),
+      ) ?? null,
+    [reports, half],
   );
+  const wait = useDelayedFlag(loading && reports === null);
+  return (
+    <Modal
+      title={`${isBottom(half.half) ? 'Bottom' : 'Top'} ${ordinalInning(half.inning)} · ${
+        isBottom(half.half) ? game.home.abbr : game.away.abbr
+      } batting`}
+      titleId="game-half-dialog"
+      onClose={onClose}
+    >
+      {block ? (
+        <div className="feed-list game-play-feed">
+          {block.entries.map((e) => (
+            /* `sameGame` drops the matchup, which the page behind this box has
+               said and the box's own title has narrowed. */
+            <FeedItem key={entryKey(e)} entry={e} onOpenDetails={onOpenPlayer} sameGame />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="details-status details-error">Couldn&rsquo;t read the plays: {error}</div>
+      ) : reports === null ? (
+        wait ? <LoadingBlock>Reading the plays</LoadingBlock> : null
+      ) : (
+        /* A half the line score has and the play stream has not: an older
+           cached day, or a half still being thrown when the read went out. */
+        <p className="ovw-none">No plays for this half-inning.</p>
+      )}
+    </Modal>
+  );
+}
+
+/** Which half-inning a stream item happened in. Two shapes, one question — a
+ *  plate appearance carries it directly and a base event carries it on the play
+ *  it happened on, which is the same play. */
+function entryInning(e: FeedEntry): { inning: number; half: string } {
+  if (e.type === 'pa') return { inning: e.pa.inning, half: e.pa.half };
+  if (e.type === 'base') return { inning: e.evs[0].inning, half: e.evs[0].half };
+  // A pitcher's outing has no one inning, and the server sends no pitcher
+  // reports — this is the exhaustiveness branch rather than a case.
+  return { inning: 0, half: 'Top' };
+}
+
+/**
+ * **A run that is nothing but a run**, which on this page is a play already
+ * drawn.
+ *
+ * In the feed a runner crossing the plate is an item of its own and has to be:
+ * the stream is a *roster's*, and the man who scored is very often on it while
+ * the man who drove him in is not — so without it the run would go unreported.
+ * Here both men are on the page by construction, and the at-bat above says the
+ * same thing twice over: MLB's own description ends *"Jorbit Vivas scores"* and
+ * the score on the item's head has already moved.
+ *
+ * **Only where the run is the whole of the item.** `groupBaseEvents` gathers
+ * one play's events into one item, so a steal of home is a steal *and* a run
+ * and a runner who comes in on a wild pitch is a wild pitch *and* a run — those
+ * are plays no at-bat carries, and they keep both badges. What is dropped is
+ * the item whose only badge is `RUN SCORED`.
+ */
+function isBareRun(e: FeedEntry): boolean {
+  return e.type === 'base' && e.evs.every((ev) => ev.kind === 'run');
+}
+
+/** **Whether the play put a run on the board**, which is what the `Scoring`
+ *  filter asks. An RBI on the plate appearance, or a runner crossing the plate
+ *  on his own — the two ways a run is recorded, and the second is why this is
+ *  not a test on `rbi` alone (a run scored on a wild pitch has no RBI). */
+function changedTheScore(e: FeedEntry): boolean {
+  if (e.type === 'pa') return e.pa.rbi > 0;
+  if (e.type === 'base') return e.evs.some((ev) => ev.kind === 'run');
+  return false;
 }
 
 /** `1st`, `2nd`, `3rd`, … — an inning is always read as an ordinal, and this is

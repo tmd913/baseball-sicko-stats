@@ -440,6 +440,7 @@ function FeedAtBat({
   onOpenDetails,
   grouped = false,
   multiGame = false,
+  sameGame = false,
 }: {
   report: PlayerReport;
   game: PlayerGame;
@@ -454,6 +455,20 @@ function FeedAtBat({
    * it does, the matchup is the only thing saying which game a play belongs to
    * (the game blocks that used to say it went with the Games view). */
   multiGame?: boolean;
+  /**
+   * **Every item on the page is from the same game and the page has said so** —
+   * a game's own Plays tab, whose head carries the matchup and the score above
+   * every tab. The item keeps its identity row (whose play this was is the one
+   * thing that page cannot say for it) and drops the matchup, which would
+   * otherwise be the same seven characters on all sixty-four rows: *a mark that
+   * would be on every row marks nothing*.
+   *
+   * It is a third flag rather than a reading of `grouped` because the three
+   * name three different things: `grouped` is *the header above me says who*,
+   * `multiGame` is *and it cannot say which game*, and this is *the page says
+   * which game*. Two of them being false is what the roster's flat stream is.
+   */
+  sameGame?: boolean;
 }) {
   // The outcome's color rides on the *item*, not the card, so one rail runs
   // the header, the at-bat and the clip — who it was, what he did and the
@@ -474,7 +489,7 @@ function FeedAtBat({
             {!grouped && (
               <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
             )}
-            <span className="feed-context">{matchup(game)}</span>
+            {!sameGame && <span className="feed-context">{matchup(game)}</span>}
           </div>
         )}
         <FeedScore game={game} away={pa.awayScore} home={pa.homeScore} />
@@ -627,6 +642,7 @@ function FeedBaseEvent({
   onOpenDetails,
   grouped = false,
   multiGame = false,
+  sameGame = false,
 }: {
   report: PlayerReport;
   game: PlayerGame;
@@ -641,6 +657,20 @@ function FeedBaseEvent({
    * it does, the matchup is the only thing saying which game a play belongs to
    * (the game blocks that used to say it went with the Games view). */
   multiGame?: boolean;
+  /**
+   * **Every item on the page is from the same game and the page has said so** —
+   * a game's own Plays tab, whose head carries the matchup and the score above
+   * every tab. The item keeps its identity row (whose play this was is the one
+   * thing that page cannot say for it) and drops the matchup, which would
+   * otherwise be the same seven characters on all sixty-four rows: *a mark that
+   * would be on every row marks nothing*.
+   *
+   * It is a third flag rather than a reading of `grouped` because the three
+   * name three different things: `grouped` is *the header above me says who*,
+   * `multiGame` is *and it cannot say which game*, and this is *the page says
+   * which game*. Two of them being false is what the roster's flat stream is.
+   */
+  sameGame?: boolean;
 }) {
   // Everything but the badges belongs to the play rather than to either event:
   // one inning, one situation, one description (both were read off the same
@@ -673,7 +703,7 @@ function FeedBaseEvent({
             {!grouped && (
               <FeedPlayerName playerKey={playerKey(report)} name={report.name} onOpen={onOpenDetails} />
             )}
-            <span className="feed-context">{matchup(game)}</span>
+            {!sameGame && <span className="feed-context">{matchup(game)}</span>}
           </div>
         )}
         <FeedScore game={game} away={lead.awayScore} home={lead.homeScore} />
@@ -1244,11 +1274,15 @@ export function FeedItem({
   onOpenDetails,
   grouped = false,
   multiGame = false,
+  sameGame = false,
 }: {
   entry: FeedEntry;
   onOpenDetails: (key: string) => void;
   grouped?: boolean;
   multiGame?: boolean;
+  /** Every item on the page is from one game and the page says which — see
+   *  `FeedAtBat`. The game page's Plays tab is the caller. */
+  sameGame?: boolean;
 }) {
   if (entry.type === 'base') {
     return (
@@ -1259,6 +1293,7 @@ export function FeedItem({
         onOpenDetails={onOpenDetails}
         grouped={grouped}
         multiGame={multiGame}
+        sameGame={sameGame}
       />
     );
   }
@@ -1281,6 +1316,7 @@ export function FeedItem({
       onOpenDetails={onOpenDetails}
       grouped={grouped}
       multiGame={multiGame}
+      sameGame={sameGame}
     />
   );
 }

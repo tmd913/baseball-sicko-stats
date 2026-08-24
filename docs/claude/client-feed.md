@@ -1690,6 +1690,36 @@ the lineup he faces*.
 0.2KB over the wire between them, for a card that replaced a card, a marker, an
 identity block and the paragraphs above restated where the rules are.
 
+### A third caller: a game's own Plays tab
+
+`playerDayEntries` and `FeedItem` are drawn by a **third** surface now — the
+game page's Plays tab (`client-game-page.md`), which asks the server for the day
+pipeline's reports narrowed to one game and lays the same items out grouped by
+half-inning.
+
+That is the property this file's one-function rule was for, one caller wider:
+the roster's stream, the player page's Overview and a game's play-by-play cannot
+disagree about what happened, because there is one function that says.
+
+**One prop came with it, and it is a fact about the page rather than about the
+item.** `grouped` already meant *the header above me says who* and `multiGame`
+*and it cannot say which game*; **`sameGame`** is the third thing a page can
+know — *the page says which game*, so the item keeps its identity row and drops
+the matchup. On a game's Plays tab `CHC vs WSH` would be the same seven
+characters on all sixty-five rows, which is *a mark that would be on every row
+marks nothing*.
+
+**There was a second prop and it is gone.** `showClip` turned the inline film
+off on that page, where seventy items with a clip apiece make a 35,747px page
+and fire 65 clip lookups on open (measured, gamePk 822696). It worked and it
+took the best of a feed item with it, so the game page **pages by inning**
+instead and the clip stays where it belongs — one prop removed with its last
+reader, which is this codebase's own rule.
+
+It defaults to the feed's own behavior, so nothing on this view or the player
+page's Overview changed — checked: 14 items, 14 matchups and 4 inline clips on
+the live roster after it landed.
+
 ### The rail is 5px, and two of its grays were one gray
 
 **Reported as: it is hard to tell some of the bars apart.** The rail is the

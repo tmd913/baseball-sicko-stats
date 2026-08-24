@@ -39,6 +39,7 @@ export function DetailsShell({
   chromeExtra,
   tabs,
   className,
+  initialScroll,
   children,
 }: {
   /**
@@ -76,6 +77,20 @@ export function DetailsShell({
   tabs: ReactNode;
   /** A modifier on the view box — the game log's fixed-height column. */
   className?: string;
+  /**
+   * **Where this page was left**, for a page the reader is coming *back* to.
+   *
+   * The three pages are exclusive and one at a time, so a step back through
+   * `App`'s route stack unmounts and remounts rather than uncovering — which
+   * throws away the scroll along with everything else. `App` reads the offset
+   * at the moment a door is pressed and hands it back here, so a reader who was
+   * forty plays down a game, pressed a name, and came back is where they were.
+   *
+   * **Only on the mount that restores it**, which the ref below is for: a tab
+   * change is still a reset (a tab is a different reading of the subject, not a
+   * place in one), and so is a different subject.
+   */
+  initialScroll?: number;
   children: ReactNode;
 }) {
   // This view covers the page but scrolls in its own box, so the list behind it
@@ -109,8 +124,34 @@ export function DetailsShell({
   // now be pressed from 1,700px down a percentile card — and what the next tab
   // has at that offset is somebody else's rows, or nothing at all. A tab is a
   // different reading of the subject, not a place in one.
+  /**
+   * **Which page-and-tab this effect last ran for**, so that the run which is a
+   * *mount* can be told from the run which is a **change**.
+   *
+   * The obvious spelling — a `firstRun` flag spent on the way out — is the trap
+   * `RULES.md` names and this codebase has found four times: React StrictMode
+   * runs a mount's effects, tears them down and runs them again, so the second
+   * pass sees the flag already spent and takes the change branch. Measured
+   * before this: a page restored to 5,000px was put straight back to 0 by its
+   * own second mount pass.
+   *
+   * Testing the value we already hold has no such second face. `null` is the
+   * mount, an equal key is StrictMode running it again, and a different one is
+   * the reader changing tab.
+   */
+  const lastReset = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (viewRef.current) viewRef.current.scrollTop = 0;
+    if (!viewRef.current) return;
+    const key = `${resetKey}\u0000${tab}`;
+    // A mount takes the offset the caller was left at, where there is one;
+    // a tab change and a new subject are the reset this effect has always been.
+    viewRef.current.scrollTop = lastReset.current === null || lastReset.current === key
+      ? initialScroll ?? 0
+      : 0;
+    lastReset.current = key;
+    // `initialScroll` is deliberately not a dependency: it is read once, at
+    // mount, and a caller that recomputed it would otherwise yank the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, resetKey]);
 
   useLayoutEffect(() => {

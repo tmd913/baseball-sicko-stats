@@ -2416,34 +2416,6 @@ export interface GameDecision {
   name: string;
 }
 
-/** One play, as the stream reads it. */
-export interface GamePlay {
-  /** MLB's `atBatIndex` — the play's identity and its order in one. */
-  index: number;
-  inning: number;
-  half: 'top' | 'bottom';
-  /** MLB's own sentence. Empty on the at-bat still being played, which has no
-   *  result yet — see `live`. */
-  desc: string;
-  /** `Home Run`, `Strikeout`, … or null on the live at-bat. */
-  event: string | null;
-  rbi: number;
-  /** Outs **after** the play, which is what MLB's `count` carries. */
-  outs: number;
-  balls: number;
-  strikes: number;
-  awayScore: number;
-  homeScore: number;
-  scoring: boolean;
-  batterId: number;
-  batterName: string;
-  pitcherId: number;
-  pitcherName: string;
-  /** The at-bat being played now — MLB has given it no result, which is the
-   *  same test `mlbStats.ts` makes for "still being played". */
-  live: boolean;
-}
-
 /** **One game, whole** — what `/api/games/:gamePk` answers with. */
 export interface GameReport {
   gamePk: number;
@@ -2464,7 +2436,6 @@ export interface GameReport {
    *  number a line score's empty columns are drawn out to. */
   scheduledInnings: number;
   decisions: GameDecision[];
-  plays: GamePlay[];
   /** The box score's own footnotes — pitches-strikes, umpires, first pitch.
    *  MLB's labels and values, unedited. */
   notes: { label: string; value: string }[];

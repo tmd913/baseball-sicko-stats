@@ -97,7 +97,7 @@ import {
   useResumed,
   useStickyChromeOffset,
 } from './hooks';
-import type { FantasySlot, GameDoor, TeamDoor, TeamPageTab } from './hooks';
+import type { FantasySlot, GameDoor, GamePageTab, TeamDoor, TeamPageTab } from './hooks';
 
 /**
  * **One of the three pages, as a step the reader took to reach it.**
@@ -108,10 +108,20 @@ import type { FantasySlot, GameDoor, TeamDoor, TeamPageTab } from './hooks';
  * back to a club must land the reader on the list they pressed a row of, not
  * on its Overview.
  */
-type PageRef =
+type PageStep =
   | { kind: 'player'; key: string }
   | { kind: 'team'; id: number; tab: TeamPageTab | undefined }
-  | { kind: 'game'; gamePk: number };
+  | { kind: 'game'; gamePk: number; tab: GamePageTab | undefined };
+
+/**
+ * A page, and **where the reader was standing on it** — the offset its own
+ * scroller was at when they pressed the door that took them off it.
+ *
+ * It is read at the moment of the press rather than followed with a listener,
+ * which is the whole of why it costs nothing: one `scrollTop` off the one
+ * `.details-view` there can be, taken exactly when it matters.
+ */
+type PageRef = PageStep & { scroll?: number };
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
@@ -565,6 +575,25 @@ export default function App() {
    *  always *not* been — it is a reading of one club rather than which data the
    *  view shows, the same call `tside=` went the other way on. */
   const [teamPageTab, setTeamPageTab] = useState<TeamPageTab | undefined>(undefined);
+  /** …and the same for a game's page, which a step back names so that a reader
+   *  who was reading the Plays and pressed a name comes back to the Plays. */
+  const [gamePageTab, setGamePageTab] = useState<GamePageTab | undefined>(undefined);
+  /**
+   * **Where the page now opening was last left**, for a step *back* — undefined
+   * for a page being opened rather than returned to, which is the difference
+   * between the two and is what makes a fresh page open at the top. Read once
+   * by `DetailsShell`, at mount.
+   *
+   * **Only the game's page takes it today**, and that is a limit rather than a
+   * choice: restoring an offset onto a page whose content has not arrived
+   * restores nothing — the browser clamps it against a box of nothing. The game
+   * page can because it holds its answers in a module cache and renders at full
+   * height in the first commit (see `GamePage`'s `gameCache`); the club's and
+   * the player's re-read on every mount, so the same prop on them would land on
+   * 0 about as often as it worked. The mechanism is `DetailsShell`'s and waits
+   * for them.
+   */
+  const [backScroll, setBackScroll] = useState<number | undefined>(undefined);
   /** The game whose page is open — `player=`'s and `team=`'s third sibling, and
    *  seeded last for the reason above. */
   const [gamePagePk, setGamePagePk] = useState<number | null>(() => {
@@ -645,15 +674,28 @@ export default function App() {
   const noteTeamTab = useCallback((tab: TeamPageTab) => {
     teamTabRef.current = tab;
   }, []);
+  /** The same for a game's page, and for the same reason: the strip is that
+   *  page's own state, and what a step back needs is the tab the reader was
+   *  actually on rather than the one a door named. */
+  const gameTabRef = useRef<GamePageTab | undefined>(undefined);
+  const noteGameTab = useCallback((tab: GamePageTab) => {
+    gameTabRef.current = tab;
+  }, []);
 
   /** Which page is on screen, as a step. Null on the view itself, which is what
    *  makes the bottom of the stack empty rather than a page nobody opened. */
   const currentPage = useCallback((): PageRef | null => {
-    if (detailsKeyRef.current !== null) return { kind: 'player', key: detailsKeyRef.current };
+    /* The one `.details-view` there can be — the three pages are exclusive, so
+       whichever is open is the one being left. */
+    const scroll = document.querySelector('.details-view')?.scrollTop;
+    const step = (page: PageStep): PageRef => ({ ...page, scroll });
+    if (detailsKeyRef.current !== null) return step({ kind: 'player', key: detailsKeyRef.current });
     if (teamPageRef.current !== null) {
-      return { kind: 'team', id: teamPageRef.current, tab: teamTabRef.current };
+      return step({ kind: 'team', id: teamPageRef.current, tab: teamTabRef.current });
     }
-    if (gamePkRef.current !== null) return { kind: 'game', gamePk: gamePkRef.current };
+    if (gamePkRef.current !== null) {
+      return step({ kind: 'game', gamePk: gamePkRef.current, tab: gameTabRef.current });
+    }
     return null;
   }, []);
   /** Put one page on screen and the other two away — the single place the three
@@ -664,6 +706,8 @@ export default function App() {
     setTeamPageId(page?.kind === 'team' ? page.id : null);
     setTeamPageTab(page?.kind === 'team' ? page.tab : undefined);
     setGamePagePk(page?.kind === 'game' ? page.gamePk : null);
+    setGamePageTab(page?.kind === 'game' ? page.tab : undefined);
+    setBackScroll(page?.scroll);
   }, []);
   /** Open a page, remembering the one it was opened from. */
   const openPage = useCallback(
@@ -708,7 +752,7 @@ export default function App() {
   /** **The one door into a game's page** — the summary table's opponent cell,
    *  and a club's fixture and result rows. */
   const openGame = useCallback<GameDoor>(
-    (gamePk) => openPage({ kind: 'game', gamePk }),
+    (gamePk) => openPage({ kind: 'game', gamePk, tab: undefined }),
     [openPage],
   );
   // Where the page is, in two parts rather than one flat list of four views.
@@ -7489,8 +7533,18 @@ export default function App() {
           of *that* fact rather than a blank screen. */}
       {gamePagePk !== null && (
         <GamePage
-          key={gamePagePk}
+          /* **Keyed on the game and the tab it was opened for**, so a step back
+             onto this page is read by a fresh component that opens where the
+             reader left. `GamePage` reads `initialTab` once, at mount — the
+             team page's own bargain, and made here for the same reason. */
+          key={`${gamePagePk}:${gamePageTab ?? ''}`}
           gamePk={gamePagePk}
+          initialTab={gamePageTab}
+          initialScroll={backScroll}
+          /* Which tab it is actually showing, so `openPage` can record it. It
+             lands in a ref rather than in the state above, which the key is
+             built from — see `gameTabRef`. */
+          onTabChange={noteGameTab}
           /* The season roster the header search already holds — every name in a
              box score is a door only where this list can resolve him, which is
              `detailsPlayer`'s own standing rule read from the other side. */

@@ -41,8 +41,7 @@ them.
 **Three different pages, and which one is the game's own state.** That is the
 whole of this tab's design and it was got wrong first.
 
-- A game that has been played is the **line score**, the **decisions** and the
-  **scoring plays**.
+- A game that has been played is the **line score** and the **decisions**.
 - One that has not is **who is pitching it** — `Probables`, away over home, a
   club that has named nobody drawing nothing rather than `TBD` (the fixture
   row's own rule: clubs name a starter about three days out, so past the front
@@ -54,6 +53,17 @@ Drawn the first way for all three, a scheduled game came out as two rows of
 empty line-score cells, a `Decisions` heading with nothing under it and *Nothing
 has been played yet* — a page saying the same non-thing at length. Seen at
 1200×1400 on gamePk 823585 before the split.
+
+**There was a `Scoring Plays` block and it has gone.** It was five of MLB's
+sentences with the score beside each, and the Plays tab's `Scoring` cut is the
+same reading in the app's own items one tab along — so the block was a second
+answer free to drift from the first. Its going took a good deal with it: the
+`GamePlay` type, `buildScoringPlays`, the `scoringPlays` field on `GameReport`,
+`PlayRow` and ten `.game-play*` rules, all of which had that one block as their
+last reader. The report went **11,482 → 7,352 bytes** with the field.
+
+**The line score's cells are doors**, which is the other thing that changed
+here: see *A half-inning as a popup* below.
 
 `hasStarted` is the one test the three blocks make and it is written once, as a
 test for the two states that *did* happen rather than a test against
@@ -91,6 +101,40 @@ would have grown two innings nobody played and drawn `x` in both. The client
 pads the *columns* instead, so a game in the fourth is drawn against the nine it
 is heading for rather than growing one under the reader every twenty minutes.
 
+#### A half-inning as a popup
+
+**Every cell of the line score that was batted in is a door**, and what it opens
+is a **dialog** holding that half-inning's plays — the same feed items the Plays
+tab draws, off the same `buildHalves`, so a half cannot read one way in the box
+and another in the stream.
+
+The line score is the one picture of a game that is already *by inning*, and a
+reader looking at the `5` in the Nationals' fifth is asking what happened in it.
+A dialog is what that press deserves: it is a detail about one thing, the page
+behind it does not move, and Escape or the backdrop puts it back — which is the
+argument `PlateAppearanceCard` already makes for the box it opens, one play
+smaller.
+
+**It sent the reader to the Plays tab for a commit, and the machinery that took
+is what condemned it.** To land somebody on the fifth it had to open that tab's
+paging out to the fifth, scroll to it, and then **hold** the target while every
+clip in the four innings above resolved and pushed it down the page — measured,
+the block finishing 5px below the fold before the holding was added, and needing
+a `ResizeObserver`, a wheel listener and a timeout to stay put. Three mechanisms
+to put a reader somewhere they had not asked to be, against one box holding the
+six plays they had.
+
+**A half nobody played is the one cell that is not a door**, and the test is the
+`x` rather than the null: two absences arrive as the same missing number (see
+the server's `buildInnings`), and the one that is still being thrown has plays
+to read. The cell **is** the press — `.game-ls-door` fills it rather than
+wrapping the digits, one or two characters not being a target — and it carries
+no underline and no color of its own, because a line score is a picture and a
+grid of eighteen dotted numbers would be a picture of the links.
+
+The dialog's read is the Plays tab's own route, so **whichever of the two the
+reader reaches first pays for it** and the other finds it done.
+
 **Game Info prints MLB's labels and values unedited** — pitches-strikes per
 pitcher, the umpires, first pitch, the attendance, the weather. They are prose
 off the wire rather than fields, MLB's list differs game to game (a pitch-timer
@@ -101,12 +145,27 @@ reads as two facts that happen to agree.
 
 ### Box Score
 
-**Both clubs at once, away first, and no side switch.** The team page pins a
-Batting/Pitching switch above every tab and this page deliberately has none: a
-club is one subject with two halves, so a switch there is *which half am I
-reading*; a game is **two** subjects and the reader is comparing them. A box
-score read one club at a time is a box score you cannot read across, which is
-most of what a box score is for.
+**One club at a time, and the switch above the table is which.**
+
+It drew **both stacked** for a commit, on the argument that a game is two
+subjects and the reader is comparing them — a box score you cannot read across
+being most of what a box score is not for. That argument is right about a *line*
+score, which is two rows and is on the Overview; it is wrong about this, which
+is four tables and forty names a side. Nothing on the away club's batting line
+is read against a number on the home club's, and stacking them put **ninety
+rows** between a reader and the second half of what they opened.
+
+So the two clubs are two tabs, in **`.view-switch`**'s own shape — the same
+control the team page pins over its own two halves and the Park tab keeps inside
+itself, which is `role="tablist"` and two `role="tab"` buttons. They are named by
+**abbreviation**, which is what every table in the app calls a club and what the
+head three lines up has just said. **Away leads**, the order every line score in
+this app is written in.
+
+It is **not on the page's own strip**, where it would read as `Overview · CHC ·
+WSH · Plays`: that strip names the *kind* of reading a tab holds, and two clubs
+are two subjects rather than two readings. The same division the team page makes
+between its strip and its side switch.
 
 It is the **roster** reading as well as the stat one — the bench and the bullpen
 under each club's two tables — because MLB files them as one thing and splitting
@@ -155,33 +214,104 @@ results; a third color would say they were a third outcome.
 
 ### Plays
 
-**The game as it happened, grouped by half-inning.** The grouping is the whole
-of the reading: a play stream without it is four hundred sentences, and with it
-a reader can find the fifth and read the four plays that turned it. Each heading
-names the half **and the club that was batting**, because "Top 5th" alone leaves
-the reader to remember which side is away.
+**The game as it happened, drawn as the feed draws it.**
 
-**The sentence is MLB's own, unedited.** It names the batter, what he did, where
-it went and who scored, in one line, and no rewriting here could be more
-accurate or shorter. What is added around it is the two things it does not say:
-the **score after** it and the **pitcher** who threw it.
+It was a list of MLB's sentences with the pitcher under each — accurate, short,
+and not what a reader of this app means by a play. A play here is a
+**`PlateAppearanceCard`**: the pitch sequence in the zone, the exit velocity and
+the distance, xBA and xwOBA, the win-expectancy swing, and the colored rail that
+says what the outcome was. So this tab draws the same **`FeedItem`** the
+roster's stream and the player page's Overview draw, off the same
+**`playerDayEntries`**, and the three readings of what happened cannot disagree
+— which is the property that function was kept as one function for.
 
-**The score rides only on a play that changed it** — *a mark that would be on
-every row marks nothing*. A running score down every row of four hundred is a
-column of the same two numbers.
+**The base-running comes with it**, which the sentence list had no shape for: a
+steal, a wild pitch, a run scored are items of their own in the feed and are
+items of their own here, in play order under the at-bat they happened on.
+`liveEvents` are folded in beside `entries`, because on this page there is no
+Live section to pin them to — a steal taken behind the batter at the plate
+belongs in the inning it happened in.
 
-**The live at-bat has no sentence**, MLB not having given it a result, so it
-draws the count and the two men instead. It is the one row that says what is
-happening rather than what happened, and it is marked in the app's live green
-where a scoring play takes the app's one amber.
+**Grouped by half-inning**, which is the whole of the reading: a stream without
+it is a hundred cards, and with it a reader can find the fifth and read the four
+plays that turned it. Each heading names the half **and the club that was
+batting**, because "Top 5th" alone leaves the reader to remember which side is
+away.
+
+**Read forwards**, where the feed reads newest-first — `byPlayOrder`, which is
+the feed's own comparator negated and is exported for exactly this. A roster's
+stream is *what has just happened*; a game is a narrative, and that comparator
+puts cause before effect within a play (the single, then the steal it set up,
+then the run).
+
+**A pitcher's outing is not here.** In the feed his stream item is the whole
+appearance, which is a different reading of this game and one the Box Score tab
+already holds; his base events are rows inside it rather than items (see
+`LiveFeed.tsx::baseEntries`). So the server sends batter reports alone, and
+every play in the game is on one of them.
+
+**A run that is nothing but a run is dropped.** In the feed a runner crossing
+the plate is an item of its own and has to be: that stream is a *roster's*, and
+the man who scored is very often on it while the man who drove him in is not.
+Here both are on the page by construction and the at-bat above says it twice
+over — MLB's description ends *"Jorbit Vivas scores"* and the score on the
+item's own head has already moved. **Only where the run is the whole of the
+item**: `groupBaseEvents` gathers one play's events into one, so a steal of home
+is a steal *and* a run and a runner who comes in on a wild pitch is a wild pitch
+*and* a run — those are plays no at-bat carries, and they keep both badges.
+Measured on gamePk 822696: 71 items become **65**, and the one base item left is
+a stolen base.
+
+#### `sameGame`, and one inning at a time
+
+`FeedItem` gained one prop for this caller, and it is not a reading of
+`grouped`: that one means *the header above me says who*, `multiGame` means *and
+it cannot say which game*, and **`sameGame`** is *the page says which game*. It
+drops the matchup off the identity row, `CHC vs WSH` on all sixty-five rows
+being the mark that marks nothing.
+
+**What keeps seventy cards off the page is a page, not a thinner card.** There
+was a second prop for a while, `showClip`, which turned the inline film off
+here: measured on gamePk 822696, 71 items with a clip apiece make a **35,747px**
+page — forty screens — and fire **65** clip lookups the moment the tab opens.
+Taking the film away fixed both numbers and took the best of a feed item with
+it, so it went, and the tab **pages** instead.
+
+**The page is an inning**, because that is what a game is read in — six to ten
+plays, which is `FEED_PAGE_SIZE` arrived at from the other direction. One to
+start, and each press of the feed's own `Show more` adds one more, the button
+naming the inning it will open and counting how many are left. Measured: the tab
+opens at **3,327px with 6 clip lookups** and reaches the whole game in eight
+presses.
+
+**Only on `All`.** The `Scoring` cut is a dozen plays over the whole game and is
+the summary a reader switched to *because* it is short; paging it would be a
+control answering a problem that filter had already solved.
+
+**The reset is on the cut alone.** It watched `reports` too, on the reasoning
+that a new game is a new page — but a new game remounts the whole component
+(`GamePage` is keyed on `gamePk`), so the only thing that dependency ever fired
+on was the read *landing*, which undid whatever the reader had opened. And the
+test for "this run is the mount" is **the value already held** rather than a
+first-run flag: a flag spent on the way out is the trap `RULES.md` names and this
+codebase has found four times, StrictMode running a mount's effects, tearing
+them down and running them again.
 
 **`All` / `Scoring` is a filter and not a second list.** A scoring-plays reading
 already exists on the Overview and is the summary; this is the same stream cut
 down, which is what lets a reader who has found the inning they want widen back
-out to it in place. Its empty state names the **control** rather than the game —
-*No scoring plays — press All for the whole game* — because a message reading
-"nobody scored" would claim a fact about the game where this is a fact about the
-button above it.
+out to it in place. `Scoring` is *did a run cross the plate* rather than a test
+on `rbi` alone — a run scored on a wild pitch has no RBI and is a base event, so
+the test is `pa.rbi > 0` or an event of kind `run`. Its empty state names the
+**control** rather than the game — *No scoring plays — press All for the whole
+game* — because a message reading "nobody scored" would claim a fact about the
+game where this is a fact about the button above it.
+
+**The read is lazy and its own route.** `/api/games/:gamePk/plays` is ~150KB raw
+(**21.5KB gzipped**) against the report's 11.5, and it costs a `getDay` — so it
+is made when the tab opens, the rule every read on the player page follows. It
+re-reads on the same twenty-second clock while the game is being played, and
+quietly.
 
 ---
 
@@ -302,8 +432,14 @@ leaf-matched, and a name left off does not fail, it returns a column of nothing.
 The cut matters twice over: a settled game pays it once ever, and a **live** one
 pays it every twenty seconds for as long as somebody is watching.
 
-The built report is **29,501 bytes** for a finished game (822696), 33,065 for a
-live one mid-eighth (823745), 4,369 for one nobody has played (823585).
+The built report is **8,227 bytes** for a finished game (822696), and it was
+**29,501** when this page was first written. It shed the play list in two
+steps, and both are the same rule: *a field nobody reads is a field nobody
+misses.* The Plays tab moved onto the day pipeline, which left the Overview's
+five-row *Scoring Plays* block as the only reader of sixty-four plays
+(`scoringPlays`, `REPORT_VERSION` 2); then that block went, the Plays tab's
+`Scoring` cut being the same reading in the app's own items — and `GamePlay`,
+`buildScoringPlays`, `PlayRow` and ten stylesheet rules went with it.
 
 ### The cache, and what may be frozen
 
@@ -336,14 +472,35 @@ six fields would be a second thing every reader of a status has to know about.
 Those six belong to the *day* pipeline, which builds them from the `offense`
 block this cut of the feed does not ask for.
 
-### Every play, including the ones that are not plate appearances
+### The plays route, and why it is the day pipeline
 
-The opposite call from `mlbStats.ts::isPlateAppearance`, deliberately: that test
-exists because a caught stealing filed under the batter who was up would be an
-extra at-bat on *his line*, where here there is no line to corrupt and a stolen
-base is exactly the kind of thing a reader opens a play stream to find. The two
-answer different questions about the same play. `game_advisory` is dropped,
-being MLB's own bookkeeping wearing the upcoming batter's matchup.
+**`GET /api/games/:gamePk/plays`** → the day's own `PlayerReport`s, narrowed to
+this one game.
+
+The Plays tab drew a thin sentence list first, and the answer to *"plays should
+be structured like they are on the feed"* is not to grow that list until it
+resembles a feed item. A feed item is a `PlateAppearanceCard`: the pitch
+sequence, the exit velocity, xBA and xwOBA, the win-expectancy swing. Every one
+of those is already computed, per plate appearance, for **every player in every
+game** — `savant.ts::getDay` merges MLB's feed with Savant's day CSV and caches
+the result per date, which is the read the roster view makes anyway.
+
+So the route hands back that, and the client draws it with `playerDayEntries`
+and `FeedItem`. **Batters only**: a pitcher's stream item is his whole outing,
+which the Box Score tab already holds, and his base events are rows inside it
+rather than items.
+
+Measured cold: **1,002ms** for 2026-08-13 and **385ms** for the live day,
+against **19** and **18** batters, **64** and **74** plate appearances, and
+payloads of **149,606** and **178,785** bytes (**21,465 gzipped**). That is why
+it is a route of its own read when the tab opens rather than a field on
+`GameReport`: a reader who came for the box score never pays for it.
+
+`game_advisory` is dropped from `scoringPlays` too, being MLB's own bookkeeping
+wearing the upcoming batter's matchup — it cannot be a scoring play, but the
+test stays: that loop is the one place `allPlays` is read, and a filter that
+depends on another filter's shape is how a payload comes to include something
+nobody meant.
 
 ---
 
@@ -441,6 +598,49 @@ its own through `onTabChange` and it lands in a ref.
 re-render the whole app on every navigation to change a value two callbacks
 read.
 
+### A page comes back as it was left
+
+A step onto a page carries **which tab** it was showing and **where its scroller
+was**, so a reader who was forty plays down the Plays tab, pressed a name, and
+came back is where they were.
+
+**The tab** is `gameTabRef`, and it is the same split `TeamDetails` makes:
+`gamePageTab` is the tab a *door* named and the page's key is built from it, so
+following the strip with it would remount the page on every press of a tab.
+`GamePage` reports its own through `onTabChange` and it lands in a ref.
+
+**The scroll** is read at the moment the door is pressed — one `scrollTop` off
+the one `.details-view` there can be — and handed back through `DetailsShell`'s
+`initialScroll`. That is the cheap half. The expensive half is that **restoring
+an offset onto a page whose content has not arrived restores nothing**: the
+three pages are exclusive, so a step back unmounts and remounts, and the browser
+clamps 5,000px against a box of nothing.
+
+So `GamePage` keeps three module-level caches — the game, its plays, and how far
+down the game the Plays tab was opened — and they are **layout** caches rather
+than network ones, exactly as `PlateAppearanceCard`'s `clipUrls` is. Every mount
+still issues its read and a live game still polls; what they change is what is
+on screen while that is in flight, which is rule 1. With them the page renders
+at full height in the *first* commit and the offset lands: measured, `5000 /
+13385` with eight half-innings and twenty-six clips at the **80ms** sample, and
+unchanged at four seconds.
+
+**`DetailsShell` had to be taught to tell a mount from a change**, and the
+obvious spelling was wrong for the reason above: a `firstRun` flag spent on the
+way out is spent again by StrictMode's second pass, which then took the change
+branch and put a page restored to 5,000px straight back to 0. It compares the
+page-and-tab key it last ran for instead — `null` is the mount, an equal key is
+StrictMode running it again, a different one is the reader changing tab.
+
+**Only the game's page takes it**, and that is a limit rather than a choice: the
+club's and the player's re-read on every mount, so the same prop on them would
+land on 0 about as often as it worked — measured, both come back at 0. The
+mechanism is the shell's and waits for their reads to be cached.
+
+**A fresh open still opens at the top** and a **tab change still resets** —
+measured, both 0. A step back is the only thing that restores, which is the
+difference between arriving at a page and returning to one.
+
 **It is not in the URL**, which is where everything about *which* page is open
 lives. A route is what the reader did rather than where they are, and a link
 carrying it would promise a recipient pages he was never on — so a reload of
@@ -513,14 +713,35 @@ Final · Aug 13 · Nationals Park`; the line score `CHC 0 0 0 0 0 0 0 0 0 | 0 1 
 and `WSH 0 0 0 1 5 0 0 1 x | 7 10 0`, the `x` in the ninth; `W Cade Cavalli · L
 Kevin Gausman`; five scoring plays; thirteen Game Info rows.
 
-**Box Score**: four tables, **11 · 2 · 9 · 2** rows — the two batting tables
-nine and eleven with the substitutes indented under their slots (Tyrone Taylor
-`PH` under Seiya Suzuki, James Triantos `2B` under Michael Busch) and **no
-pitchers on the end of either**. `BENCH 2 · BULLPEN 11 · BENCH 4 · BULLPEN 11`
-under them. At 390 the name column pins and the stats scroll under it.
+**Box Score**: `CHC | WSH` above the tables, `CHC` lit; two tables at a time,
+the batting one eleven rows with the substitutes indented under their slots
+(Tyrone Taylor `PH` under Seiya Suzuki, James Triantos `2B` under Michael Busch)
+and **no pitchers on the end of it**, `BENCH 2 · BULLPEN 11` under them. Pressing
+`WSH` swaps the heading to `Washington Nationals` and the tables with it. Kevin
+Gausman's `(L, 6-11)` draws red. At 390 the name column pins and the stats
+scroll under it, with the page's own overflow at 0.
 
-**Plays**: **17** half-innings, **64** plays; the `Scoring` filter cuts it to
-**5**, which is the Overview's own count.
+**Plays**: opens on **one inning** — 2 half-innings, 6 feed items, 6 clips, a
+**3,327px** page — each item with its headshot, its outcome rail, its situation
+glyph, the pitcher it was against, the batted ball and its film. `Show the 2nd`
+with **8** innings left counts down a press at a time to the whole game:
+**17** half-innings and **65** items, **64** at-bats and **1** base event, the
+six bare runs dropped as the at-bats' own. **0** `feed-context` matchups, which
+is `sameGame`. The gap under the `All / Scoring` row is **24px**, the tab's own
+block rhythm, where it was 4. **The roster's own feed is untouched**: 14 items,
+14 matchups, 4 inline clips, and its runs still items of their own.
+
+**A half-inning off the line score**: pressing the Nationals' `5` opens a dialog
+titled `Bottom 5th · WSH batting` holding **10** items, with the Overview still
+lit behind it; Escape closes the dialog and leaves the page. The `x` in the
+ninth is the one cell that is not a door. At 390 the same box, same title, same
+ten items, page overflow 0.
+
+**A page comes back as it was left**: eight half-innings deep and scrolled to
+5,000, pressing a batter's name and coming back gives `5000 / 13385` with all
+eight and twenty-six clips at the **80ms** sample. Box Score → a name → `Back`
+returns on **Box Score**; Plays → a name → **Plays**; Plays → a crest → a club →
+`Back` → **Plays**. A fresh open is 0 and a tab change is 0.
 
 **A game nobody has played** (823585, MIL at NYM): the head reads `MIL @ NYM ·
 7:10 PM`; the Overview is `Probable Pitchers · MIL Kyle Harrison · NYM Zac
@@ -582,10 +803,12 @@ sideways to 127 inside its own box with the page's own overflow at 0.
   fixtures (`?start=2026-08-24`) draws four `aria-haspopup="dialog"` cells, and
   pressing one still raises the preview with the URL unchanged.
 
-**Bundle, `main` → this work.** JS **646.21 → 667.00 kB** raw, **192.22 →
-196.40 kB gzipped** (+4.18); CSS **169.51 → 175.03 kB** raw, **30.45 → 31.33 kB
-gzipped** (+0.88). **+5.06 kB gzipped in total** for a page, three tabs, two
-routes' worth of client, a tab on the club's page, the route stack that replaced
-three separate returns, and the stylesheet's own three hundred lines. The shell is the reason it is not more: the box, the chrome, the
+**Bundle, `main` → this work.** JS **646.21 → 669.48 kB** raw, **192.22 →
+197.24 kB gzipped** (+5.02); CSS **169.51 → 174.72 kB** raw, **30.45 → 31.31 kB
+gzipped** (+0.86). **+5.88 kB gzipped in total** for a page, three tabs, three
+routes' worth of client, a tab on the club's page, a half-inning dialog, the
+route stack that replaced three separate returns, and the stylesheet's own three
+hundred lines. The Plays tab costs almost none of it: it is `FeedItem` and
+`playerDayEntries`, which the bundle was already carrying. The shell is the reason it is not more: the box, the chrome, the
 strip's scrolling and the Escape ladder are the same code the other two pages
 were already carrying.
