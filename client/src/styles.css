@@ -11348,6 +11348,146 @@ button.start-line:focus-visible {
 .research-clear:hover {
   color: var(--text);
 }
+
+/* ---- The turn filter ------------------------------------------------------
+   `Starting` — the pitching board's day picker, and the `Start` column it
+   splices in. The whole of the design is in `TurnPicker.tsx` and in
+   `schedule.tsx`'s *The turn filter*; what is here is the two shapes.
+
+   **The panel is one item and stretches to the row**, where `.research-panel`
+   centers what it holds: that base rule is a wrapping row of *controls* — a
+   search field beside its Clear, a stat select beside an operator and a
+   threshold — and this panel is a single scroller that has to be as wide as the
+   box or its arrows sit somewhere other than its ends. It carried a `Clear` and
+   a hint line under the strip once, which is what the column direction was for;
+   both are gone (see `TurnPicker.tsx`) and the direction stays only to keep the
+   one child stretching rather than centering. */
+.research-turn-panel {
+  flex-direction: column;
+  align-items: stretch;
+}
+/* `ScrollRow` bleeds out through its container's gutter and back in by the
+   bar's, which is right in `.view-tools` — the row it was written for — and
+   wrong in here: this one is inside the head's own padding, and the bleed put
+   the first and last chip 12px outside the box the panel is. Taken back at the
+   one call site that is not that row. */
+.research-turn-panel .tool-scroll {
+  margin-inline: 0;
+  /* **And it is held to the panel's width**, which `flex: 1 1 100%` does not do
+     here: that basis is the *main* axis, and this panel's main axis is the
+     column — so the strip took its width from its content and ran 1,453px wide
+     inside a 346px box at 390 (measured while it still drew 28 days), clipped by
+     the head with no scroller and no arrows, three quarters of them unreachable.
+     Measured before → after at 390: the strip 1453.5 → 346.0, with the box
+     scrolling and both arrows drawn. */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.turn-day-run {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+/* A day, in the two words `dayWords` writes it in and the count the board would
+   be left with. A small aimed target, so it keeps its hover at every width —
+   the app's rule scopes hover on pressable *surfaces*, not on pills. */
+.turn-day {
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 46px;
+  padding: 4px 7px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  line-height: 1.15;
+  cursor: pointer;
+}
+.turn-day:hover {
+  color: var(--text);
+}
+.turn-day:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.turn-day-wk {
+  font-size: 11px;
+  font-weight: 700;
+}
+.turn-day-date {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+/* The count reads as the chip's own value — the number of rows that press
+   leaves — so it takes the weight the two lines above it give up. */
+.turn-day-n {
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+/* Nought is drawn and drawn quietly. A day nobody on *this* board starts is a
+   fact about the board the reader has built, and blanking it would leave the
+   chip looking unmeasured rather than empty. */
+.turn-day-n.none {
+  color: var(--faint);
+  font-weight: 700;
+}
+/* Picked. It takes the lit-control clothing the whole bar already wears
+   (`.research-toggle.on`), rather than a selection color of its own — which is
+   what makes a day read as a control that is *on* rather than as a cell that is
+   selected, and every one of them can be pressed off again. */
+.turn-day.on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.turn-day.on .turn-day-date,
+.turn-day.on .turn-day-n.none {
+  color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* The `Start` column's cell. Deliberately **not** folded onto `.sched-cell`:
+   that one is a single day of the grid and this is a list of days, and two
+   things that merely resemble each other are two things that will one day
+   differ — a change to the grid's cell must not reach a column that is not in
+   it. What they do share is the tier modifiers (`.sched-vs-projected` and
+   `.sched-vs-estimated`), which travel, exactly as they travel to the player
+   page's own next-start line. */
+.research-turn-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+/* **The day and the club on one line**, which is the board's own trade: width
+   is free here and height is not. A range of five days can hold two turns, and
+   at two lines apiece that is four in a 58px row; on one line each it is two,
+   and what it costs is ~40px of a table that already scrolls sideways at every
+   width. The same argument the opposing-starter line settles in the grid. */
+.research-turn {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* **Two marks, one to a segment.** The day carries how sure the turn is and the
+   club is the door onto the game, and they are on separate spans because they
+   would otherwise be two underlines on one run of text: `.opp-door` is dotted
+   and the estimated tier is dashed, and a descendant cannot cancel an
+   ancestor's decoration — it only adds its own. Marking the day is the honest
+   half as well as the free one: the club plays that day whatever happens, and
+   what is being guessed is that he is the one starting. */
+.research-turn-day {
+  font-variant-numeric: tabular-nums;
+}
+.research-turn-opp {
+  color: var(--muted);
+  font-weight: 600;
+}
 /* ---- The head of the board ------------------------------------------------
    **What the table is, held above the table.** The control set scrolls away
    with the rows now (it is the pane's first child — see `ResearchTable.tsx`),
@@ -14984,10 +15124,21 @@ button.start-line:focus-visible {
    ladder about the same fact — announced, our reading of his slot, his club's
    rotation standing in. Only the two *modifiers* travel; `.sched-vs` itself
    stays with the grid, being the 10px caption that cell's width argues for. */
-.sched-vs-projected {
+.sched-vs-projected,
+/* The research board's `Start` column takes the same italic for **both**
+   unannounced tiers on one line, which is the shape `.sched-sp-projected,
+   .sched-sp-estimated` below already has: the word carries the caveat and the
+   tier is then said by the mark under the *day*. It cannot take
+   `.sched-vs-estimated` whole, that rule's underline being the one thing that
+   collides with the door on the same line — see `.research-turn-day`. */
+.research-turn-guess {
   font-style: italic;
 }
-.sched-vs-estimated {
+.sched-vs-estimated,
+/* …and the dashed underline of that third tier, on the day alone. Folded onto
+   the rule rather than restated, this being the same mark about the same fact —
+   the italic it brings with it is a no-op on a line already slanted. */
+.research-turn-est {
   font-style: italic;
   text-decoration: underline dashed color-mix(in srgb, var(--faint) 85%, transparent);
   text-underline-offset: 2px;

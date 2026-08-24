@@ -1,6 +1,6 @@
 ---
 name: sicko-research
-description: The research board — the whole league over a season or a window, its 39-44 columns and their picker, the sort, the include buttons and the watchlist star, the padlock and news marks, the position row and what a fantasy position means, the window tabs, the stat filter builder, percentile rank badges, paging, and the board's own Schedule view. Use when editing ResearchTable.tsx, researchColumns.tsx, ColumnPicker.tsx, columnRanks.tsx, LockMark.tsx or NewsMark.tsx; when adding a stat column; or when the board's sort, filters, pinned columns or scroll reset behave wrongly.
+description: The research board — the whole league over a season or a window, its 39-44 columns and their picker, the sort, the include buttons and the watchlist star, the padlock and news marks, the position row and what a fantasy position means, the window tabs, the stat filter builder, the turn filter that narrows the pitching board to the men starting on chosen days, percentile rank badges, paging, and the board's own Schedule view. Use when editing ResearchTable.tsx, researchColumns.tsx, ColumnPicker.tsx, columnRanks.tsx, TurnPicker.tsx, LockMark.tsx or NewsMark.tsx; when adding a stat column; or when the board's sort, filters, pinned columns or scroll reset behave wrongly.
 ---
 
 # The research board
@@ -18,7 +18,7 @@ touching the board; several of its rules are the record of a reversal.
 ## What to read
 
 - **Read `docs/claude/client-research.md`** before editing `ResearchTable.tsx`,
-  `researchColumns.tsx`, `ColumnPicker.tsx` or `columnRanks.tsx`, before adding
+  `researchColumns.tsx`, `ColumnPicker.tsx`, `columnRanks.tsx` or `TurnPicker.tsx`, before adding
   or reordering a column, and before changing anything about the board's
   controls. It covers: the sticky name and sorted columns and the derived
   `--research-pin-left`; the sort, its reserved arrow box and its reset rule;
@@ -26,8 +26,9 @@ touching the board; several of its rules are the record of a reversal.
   the watchlist unioned on top; the roster baseball, the padlock and the news
   mark, and when each suppresses itself; the position row and ESPN eligibility;
   the window tabs; the column picker's press-and-press reorder; `DEFAULT_OFF`;
-  the filter builder; the percentile rank badges and their population; and every
-  empty state naming its own cause.
+  the filter builder; the turn filter (`Starting` — the pitching board's day
+  strip, the `Start` column it splices in, and `turn=`); the percentile rank
+  badges and their population; and every empty state naming its own cause.
 
 ## Related
 

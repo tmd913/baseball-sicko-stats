@@ -963,16 +963,32 @@ export function ScheduleCell({
   );
 }
 
+/**
+ * A day in the two words this app says it in — `Today` or `Fri`, and `8/15`.
+ *
+ * **Exported because three surfaces write a day now**: this view's column
+ * header, the turn filter's day strip and the `Start` column that filter
+ * splices in. `Today` is a fact about the *window's* today rather than about a
+ * clock — see `ScheduleIndex.today` — so a tab left open past the 3am rollover
+ * cannot come to head one column `Today` and mark another day so in the strip
+ * beside it.
+ */
+export function dayWords(date: string, today: string): { day: string; date: string } {
+  const d = new Date(`${date}T12:00:00`);
+  return {
+    day: date === today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }),
+    date: `${d.getMonth() + 1}/${d.getDate()}`,
+  };
+}
+
 /** `Fri` over `8/15`, and `Today` over today's — two lines, so the column is as
  *  narrow as the matchup under it rather than as wide as its own header. */
 export function DayHead({ date, today }: { date: string; today: string }) {
-  const d = new Date(`${date}T12:00:00`);
+  const w = dayWords(date, today);
   return (
     <span className="sched-head">
-      <span className="sched-head-day">
-        {date === today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' })}
-      </span>
-      <span className="sched-head-date">{`${d.getMonth() + 1}/${d.getDate()}`}</span>
+      <span className="sched-head-day">{w.day}</span>
+      <span className="sched-head-date">{w.date}</span>
     </span>
   );
 }
@@ -1089,4 +1105,405 @@ export function scheduleColumns(
     text: (r: ResearchRow) => dayText(index, r.teamId, date),
   }));
   return kind === 'pitcher' && !teams ? [games, starts, ...days] : [games, ...days];
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * The turn filter — *which pitchers are due to start on these days*
+ * ---------------------------------------------------------------------------
+ *
+ * The research board's own control, and the one question the whole league is
+ * the right population for: **who is starting on Friday.** It is how a manager
+ * streams a start — pick the days, read the board, and every stat column the
+ * picker offers is right there beside the men who are pitching in them.
+ *
+ * It lives here rather than in `ResearchTable.tsx` because the fact it selects
+ * on is this module's: *is he starting that game* is `startTierOn`, one
+ * definition, and the filter reads it through an ordinary `ScheduleIndex`
+ * (`buildTurnIndex`) rather than through a second structure of its own. See
+ * there for why.
+ *
+ * **It is not the Schedule view and does not turn it on.** That view swaps the
+ * stat columns out for the days ahead; this one leaves them exactly where they
+ * are and takes *rows* away, which is the half of the board a filter is
+ * allowed to touch — the same partition Search and Filters sit on, and the
+ * reason those two stay on the bar in schedule mode while Columns and Ranks
+ * go. The two compose: a schedule of the men starting this weekend is both
+ * controls doing their own half.
+ */
+
+/**
+ * **How far ahead the filter can be pointed** — a fortnight, which is `Next 14`
+ * and is the same fourteen days the Schedule view's own long span draws.
+ *
+ * The window the server answers with is 28 days and the strip drew all of them
+ * first. Two weeks is what a manager plans, the far half of a month of
+ * projections is a guess about a rotation that has not happened yet, and 28
+ * chips is a strip that scrolls at every width there is where 14 fits outright
+ * on a desktop. It is a count of **days the schedule has** rather than of
+ * calendar days, exactly as `Next 14` is — see `buildScheduleIndex`.
+ */
+export const TURN_DAYS = 14;
+
+/**
+ * The index the turn filter reads: the next fortnight, off the same builder and
+ * the same rules as the Schedule view's own.
+ *
+ * **It is `buildScheduleIndex` with a span rather than an index of its own**,
+ * which is what the second version of this came to. The first built a whole-
+ * window index behind a span value (`'window'`) that no control offered and
+ * `sched=` could never say — a fourth kind of span invented to describe a run
+ * of days that turned out, once the strip was cut to a fortnight, to be exactly
+ * the span the app already had a name and a number for. What it needs of the
+ * index is what `14` gives it: `byTeam` cut to those days, and `rotations` and
+ * `starters` read off the **whole** window regardless, so a pitcher's club is
+ * still derived from every game his slot touches.
+ *
+ * **No matchup**, deliberately: this is not a fantasy week, and a reader whose
+ * league runs three-week periods should not be handed a filter that quietly
+ * means something different from the one his leaguemate sees.
+ */
+export function buildTurnIndex(
+  win: ScheduleWindow,
+  pitchers: PitcherLookup | null = null,
+): ScheduleIndex {
+  return buildScheduleIndex(win, TURN_DAYS, null, pitchers);
+}
+
+/**
+ * The days picked — **a set, not a range**, held sorted and never empty (the
+ * filter is off instead).
+ *
+ * It was a range for one commit, two presses picking the ends and everything
+ * between them coming with them. That is the shape a *calendar* has and the
+ * wrong one for this control: the question is which days you can start
+ * somebody, and *Monday and Thursday* — a two-start week around an off day, or
+ * the two days of a fantasy week you have a slot free — is not a run of days
+ * with the middle swept in. Ends were also a mode the strip had to be in and
+ * had to say it was in (`Press another day for a range`), where a toggle is
+ * one rule that never needs explaining.
+ */
+export type TurnDays = readonly string[];
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Every calendar day from `a` to `b` inclusive, for the `..` form below. */
+function daysBetween(a: string, b: string): string[] {
+  const out: string[] = [];
+  for (let d = a; d <= b; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+/**
+ * `turn=2026-08-24,2026-08-27` — the days, comma-separated; and a run of them
+ * may be written `2026-08-24..2026-08-26`, which is what `turnDaysParam`
+ * writes and what a link shared before this was a set still says. Anything
+ * unreadable — including absence — is off.
+ *
+ * **`turn=` rather than `starts=`, and the reason is the param an inch away.**
+ * The date bar writes `start=` and `end=`, and a query string carrying
+ * `start=2026-08-20&starts=2026-08-28` is two params that mean two different
+ * things and *look* like one typed twice — the app's own "two params must never
+ * mean two things" trap, read at the level of the eye rather than the parser. A
+ * turn is what this app has called a start since the `GS` column was written
+ * ("the turns his rotation slot puts him in"), so the vocabulary was already
+ * there.
+ *
+ * **A run that arrives backwards is read forwards** rather than dropped, and a
+ * day that appears twice appears once, both being the falls-back-rather-than-
+ * empties rule applied to the malformations that have an obvious reading. A
+ * *part* that cannot be read at all takes the whole param with it: half a set
+ * of days is a filter the reader never asked for.
+ */
+export function toTurnDays(v: string | null): string[] | null {
+  if (!v) return null;
+  const days = new Set<string>();
+  for (const part of v.split(',')) {
+    const [a, b = a] = part.split('..');
+    if (!ISO_DAY.test(a) || !ISO_DAY.test(b)) return null;
+    for (const d of a <= b ? daysBetween(a, b) : daysBetween(b, a)) days.add(d);
+  }
+  return days.size > 0 ? [...days].sort() : null;
+}
+
+/** …and back, with consecutive days folded into a `a..b` run. A fortnight
+ *  picked one chip at a time is then eleven characters in the query string
+ *  rather than a hundred and sixty, and the two forms round-trip. */
+export function turnDaysParam(days: TurnDays): string {
+  const parts: string[] = [];
+  for (let i = 0; i < days.length; i += 1) {
+    const from = days[i];
+    while (i + 1 < days.length && days[i + 1] === addDays(days[i], 1)) i += 1;
+    parts.push(from === days[i] ? from : `${from}..${days[i]}`);
+  }
+  return parts.join(',');
+}
+
+/**
+ * The days cut to the ones this index actually holds, or **null where none of
+ * them survive**.
+ *
+ * A link is shared on Tuesday and opened on Friday, and the days it names may
+ * by then be behind the window's first — the schedule this app reads runs
+ * **ahead of today** and never a day back — or past the fortnight the strip
+ * offers. A filter selecting on days the board can say nothing about is one
+ * that empties it in silence, which is the one thing an unrecognized value must
+ * not do; so what is left is kept and the rest goes, and the strip then marks
+ * exactly the days in force. It is also what drops an **off day** a `..` run
+ * swept up: the index holds the days the schedule has, and a day nobody plays
+ * is not one of them.
+ *
+ * Returns the array it was handed where nothing changed, so a settling pass
+ * costs no render.
+ */
+export function clampTurnDays(days: TurnDays, index: ScheduleIndex): string[] | null {
+  const held = new Set(index.dates);
+  const kept = days.filter((d) => held.has(d));
+  if (kept.length === 0) return null;
+  return kept.length === days.length ? (days as string[]) : kept;
+}
+
+/** One turn as the filter reads it — the day, the game it is, and how sure. */
+export interface Turn {
+  date: string;
+  game: ScheduleGame;
+  tier: StartTier;
+}
+
+/**
+ * The turns he is due on the days picked, soonest first.
+ *
+ * **`startTierOn` per game, which is the `GS` column's own test** — so a man
+ * the filter lets through on Friday is a man the grid draws a box round on
+ * Friday, and neither can say the other is wrong. A postponement is not a turn,
+ * exactly as it is not a game in `gameCount`.
+ */
+export function turnsOnDays(
+  index: ScheduleIndex,
+  teamId: number | null,
+  playerId: number,
+  days: ReadonlySet<string>,
+): Turn[] {
+  if (teamId === null) return [];
+  const out: Turn[] = [];
+  for (const date of index.dates) {
+    if (!days.has(date)) continue;
+    for (const g of gamesOn(index, teamId, date)) {
+      if (g.state === 'postponed') continue;
+      const tier = startTierOn(index, g, teamId, playerId);
+      if (tier) out.push({ date, game: g, tier });
+    }
+  }
+  return out;
+}
+
+/** `Fri 8/28`, or `Today 8/24` on the day the window opens on — a day in the
+ *  strip, in the chip, and in the column, written once. */
+export function turnDayLabel(date: string, today: string): string {
+  const w = dayWords(date, today);
+  return `${w.day} ${w.date}`;
+}
+
+/**
+ * What the chip says the board is cut to.
+ *
+ * **Runs are named as runs and scattered days as themselves** — `Fri 8/28 – Sun
+ * 8/30`, `Mon 8/24 · Thu 8/27` — because that is how the reader picked them and
+ * a set of three that happens to be consecutive is a weekend rather than three
+ * facts. Past **three** groups it gives up and counts: `6 days` is shorter than
+ * the run of dates and no less true, the strip a line above being where which
+ * days is actually read off. The full list is always on the chip's own title.
+ */
+export function turnDaysLabel(days: TurnDays, today: string): string {
+  const groups: string[] = [];
+  for (let i = 0; i < days.length; i += 1) {
+    const from = days[i];
+    while (i + 1 < days.length && days[i + 1] === addDays(days[i], 1)) i += 1;
+    groups.push(
+      from === days[i]
+        ? turnDayLabel(from, today)
+        : `${turnDayLabel(from, today)} – ${turnDayLabel(days[i], today)}`,
+    );
+    if (groups.length > 3) return `${days.length} days`;
+  }
+  return groups.join(' · ');
+}
+
+/** Every day picked, spelled out — the chip's title, and what the label above
+ *  gives up when it counts instead. */
+export function turnDaysTitle(days: TurnDays, today: string): string {
+  return days.map((d) => turnDayLabel(d, today)).join(' · ');
+}
+
+/** The column's key, named here so the board and the sort agree — the shape
+ *  `SCHED_GAMES_KEY` and `SCHED_STARTS_KEY` already take. */
+export const TURN_KEY = 'turnDay';
+
+/**
+ * **`Start` — the day he is due, spliced in while the filter is on.**
+ *
+ * A filtered row has to say *why it is on screen*, which is the argument the
+ * position cell already makes on this board for printing the whole eligibility
+ * list rather than two codes and a `+3`. `Starting Fri – Sun` narrows six
+ * hundred pitchers to forty and then says nothing about which of the three days
+ * any of them is pitching on, which is the half of the answer a manager is
+ * actually choosing between.
+ *
+ * So the column is **the filter's own**, present exactly while it is and absent
+ * otherwise: it is not in `allColumns`, the picker never offers it and no
+ * threshold can be typed against it — a day is not a number a reader can hold
+ * an opinion about, which is the same reason the opponent column is `text` and
+ * out of the builder. In schedule mode it is not spliced at all: the day
+ * columns *are* this fact, drawn 14 wide.
+ *
+ * **The opponent rides with it**, because the day is half of a streaming
+ * decision and the club is the other half — `Fri 8/28 @ ATL`. It is plain text
+ * where the grid's own cell is a door onto the game preview, and deliberately:
+ * that cell is the *fixture*, drawn under a header naming the day, where this
+ * one is a caption on a start. The Schedule view is one press away and every
+ * fixture in it opens.
+ *
+ * **The three tiers are the app's ladder and they travel as modifiers**, the
+ * way the player page's Schedule tab takes them: upright where his club has
+ * named him, italic where it is our reading of his own slot, italic under a
+ * dashed line where it is his club's rotation standing in. Nothing new is
+ * declared for them here.
+ */
+export function turnColumn(
+  index: ScheduleIndex,
+  days: ReadonlySet<string>,
+  /**
+   * **What pressing a start opens** — the same two doors the roster table's
+   * opponent cell chooses between, and for the same reason: *what is this game*
+   * before it is played, *how did it go* after.
+   *
+   * Absent leaves the line the plain text it was, which is the rule
+   * `OpponentPress` keeps for every cell with nothing behind it.
+   */
+  doors?: {
+    /** A fixture nobody has played — the preview dialog. */
+    preview?: (row: ResearchRow, game: ScheduleGame) => void;
+    /** One already under way or finished — the game's own page. */
+    game?: (gamePk: number) => void;
+  },
+): Column {
+  /** Where each day sits in the window, for the sort — an ordinal rather than a
+   *  date string, so the column orders soonest-first through a `value` like
+   *  every other numeric column rather than through the `text` path. */
+  const ordinal = new Map(index.dates.map((d, i) => [d, i]));
+  /**
+   * His turns, worked once per row rather than once per read of the column.
+   *
+   * The sort asks `value` twice per comparison — 750 rows is ~19 comparisons
+   * each — and the formatter asks for the same list again, so the naive shape
+   * is a 28-day scan run forty times per pitcher on every sort. The cache is
+   * scoped to this column object, which is rebuilt whenever the index or the
+   * range moves, so it can never answer for a range that is no longer in force.
+   */
+  const cache = new Map<number, Turn[]>();
+  const turns = (r: ResearchRow): Turn[] => {
+    let t = cache.get(r.id);
+    if (!t) cache.set(r.id, (t = turnsOnDays(index, r.teamId, r.id, days)));
+    return t;
+  };
+  return {
+    key: TURN_KEY,
+    label: 'Start',
+    group: 'Schedule',
+    title:
+      'The day he is due to start on the days you picked, and who against — ' +
+      'upright where his club has announced him, italic where it is his rotation slot',
+    // Soonest first: the reader picked these days to find somebody to start,
+    // and the nearest turn is the one there is least still to go wrong with.
+    ascFirst: true,
+    format: (r) => {
+      const list = turns(r);
+      if (list.length === 0) return '—';
+      return (
+        <span className="research-turn-cell">
+          {list.map((t) => {
+            const played = t.game.state === 'live' || t.game.state === 'final';
+            // **The opponent is the door, and the day carries the caveat** —
+            // which is the grid's own division of one cell into two marks, and
+            // here it is forced as well as consistent: a door wears a dotted
+            // underline and an *estimated* turn wears a dashed one, and a
+            // descendant cannot cancel an ancestor's decoration — so the two on
+            // one run of text is two underlines a pixel apart. Each mark on its
+            // own segment says one thing each, and marking the **day** is the
+            // honest half anyway: the club plays that day whatever happens, and
+            // what is being guessed is that he is the one starting.
+            const press = played
+              ? doors?.game && (() => doors.game!(t.game.gamePk))
+              : doors?.preview && (() => doors.preview!(r, t.game));
+            const day = turnDayLabel(t.date, index.today);
+            const opp = opponentText(t.game, r.teamId as number);
+            return (
+              <span
+                key={t.game.gamePk}
+                className={`research-turn${t.tier === 'announced' ? '' : ' research-turn-guess'}`}
+                title={press ? undefined : `${day} — ${TIER_TITLE[t.tier]}`}
+              >
+                <span
+                  className={`research-turn-day${
+                    t.tier === 'estimated' ? ' research-turn-est' : ''
+                  }`}
+                >
+                  {day}
+                </span>
+                <span className="research-turn-opp">
+                  {' '}
+                  <OpponentPress
+                    onPress={press ?? null}
+                    label={opp}
+                    opens={played ? 'page' : 'dialog'}
+                    title={`${day} ${opp} — ${TIER_TITLE[t.tier]}${
+                      press ? ` — open the ${played ? 'game' : 'matchup'}` : ''
+                    }`}
+                  />
+                </span>
+              </span>
+            );
+          })}
+        </span>
+      );
+    },
+    value: (r) => {
+      const first = turns(r)[0];
+      return first ? (ordinal.get(first.date) ?? null) : null;
+    },
+  };
+}
+
+/**
+ * How many of these rows are due a turn on each day of the window — the number
+ * under every chip in the strip.
+ *
+ * **Counted over the board the reader has already narrowed**, not over the
+ * league: `12` under Friday on a board of free-agent starters is the number of
+ * rows that press will leave, which is the only reading of it that can be acted
+ * on. A day nobody on the board starts is `0` and is still pressable — the
+ * board then says so in words and names this control, which is what an empty
+ * state owes; a disabled chip would leave the reader to work out that the
+ * board, and not the schedule, is what has no starter on Thursday.
+ *
+ * **A doubleheader is one day, not two.** The count is of *rows*, so a man who
+ * would somehow be due both ends of one is counted once — where `startTally`,
+ * counting turns, counts two.
+ */
+export function turnCounts(index: ScheduleIndex, rows: ResearchRow[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    if (r.teamId === null) continue;
+    const days = index.byTeam.get(r.teamId);
+    if (!days) continue;
+    for (const [date, games] of days) {
+      for (const g of games) {
+        if (g.state === 'postponed') continue;
+        if (!startTierOn(index, g, r.teamId, r.id)) continue;
+        out.set(date, (out.get(date) ?? 0) + 1);
+        break;
+      }
+    }
+  }
+  return out;
 }
