@@ -8254,9 +8254,30 @@ button.start-line:focus-visible {
    rather than interposing a scroll container. The box with the height in it is
    `.research-condensed-inner`, and it is safe for the same reason the head is:
    its one child is the run, 346px wide inside 390 at every offset, with the
-   run's own overflow already clipped by `.tool-scroll-box` one level in. */
+   run's own overflow already clipped by `.tool-scroll-box` one level in.
+
+   **The banner and the empty state join them**, found while sweeping the top of
+   the pane for what was left of the third report and measured the same way — a
+   150px horizontal wheel over each, with the two rendered into the pane by hand
+   so the state could be read at all. `.research-scroll.scrollLeft` after:
+   **150 on the error banner and 150 on the empty state**, against 0 on the row
+   and 0 on the head. They are the same kind of box for the third and fourth
+   time — a sticky child of the pane with the pane as its nearest scrollable
+   ancestor — and they are what sits *directly under the head*, which is the
+   band being pointed at. Neither has a descendant that leaves it: each is a box
+   of paragraphs with a ground and a border of its own. After: **0, 0**.
+
+   The banner's own 18px separator below it stays pane, and is left as one: the
+   banner has a visible border and a ground, so that gap cannot become padding
+   without growing the box the reader sees as the banner — which is the
+   difference between it and the tools row's own bottom margin further down this
+   file, whose ground is the pane's same flat value. It is also all but unreachable: the banner is drawn
+   behind a failed read, and a read that failed has no rows, so the pane has
+   nothing to scroll sideways underneath it. */
 .research-scroll > .view-tools,
 .research-scroll > .research-head,
+.research-scroll > .error-banner,
+.research-scroll > .empty-state,
 .research-condensed-inner {
   overflow: hidden;
   overscroll-behavior-x: none;
@@ -8336,6 +8357,55 @@ button.start-line:focus-visible {
    Transactions has no bar — so both keep the gap. */
 .view-tools:not(:has(+ .date-bar)):not(:has(+ .league-view > .date-bar)) {
   margin-bottom: var(--tools-band-gap);
+}
+/* **And inside the board's pane that gap is padding, because there a margin is
+   *pane*.**
+
+   This is the fault the `overflow: hidden` rule above answers, one box further
+   out. The row is a scroll container now and so is the head, and between them
+   the rule directly above lays 12px that is inside neither — a margin is in no
+   box at all, so the nearest scrollable ancestor of every pixel of that strip
+   is the pane, and the pane is what scrolls sideways. Reported a third time as
+   *still able to scroll the table sideways with a finger in the top section,
+   with a small scrollbar there that goes away when it sticks*, and that is
+   exactly this band: the one part of the top of the pane still handing the
+   gesture on, and a strip of the tools row's own bottom margin, so it leaves
+   with the row at the stick.
+
+   Swept rather than probed, the two earlier rounds having each fixed the box
+   that was named and left the next one standing: a 150px horizontal wheel at
+   390, every 4px from the top of the pane to the bottom of the head and at
+   eight x positions across each line. `.research-scroll.scrollLeft` after was
+   **150 at every x on y = 244–255, and 0 on every other line** — one 12px band,
+   the full width of the pane. After: **0 across the whole sweep**. (The sweep
+   also lights up x = 387 at every y, which is the pane's own overlay scrollbar
+   hit region and not this: a touch device has none, and dragging a scrollbar is
+   the gesture working.)
+
+   Padding rather than a margin, which is the reverse of the reading the rule
+   above states and is right for the same reason that one was. What a margin
+   buys there is *the space between two different things*; what makes that space
+   a hole here is that the two different things are in a box that scrolls. The
+   row's ground and the pane's are the same value — measured rgb(28, 27, 34)
+   against rgb(28, 27, 34), and neither is a container reading, both being the
+   flat page color — so the 12px paints identically either way and nothing
+   moves. The row is not spacing anything else with it: it already declares
+   `padding-block: var(--tools-band-gap) 0`, and this is that 0.
+
+   **Four classes, and the fourth is the whole reason this is written out.** The
+   rule it overrides looks like three — a class and two `:not(:has())` — but
+   `:has()` takes the specificity of its most specific argument and the second
+   argument is `.league-view > .date-bar`, which is **two**. So that selector is
+   (0,4,0), and `.research-view .research-scroll > .view-tools` at (0,3,0) lost
+   to it silently: measured in the running app, injecting the three-class form
+   left `margin-bottom` at **12px** while the four-class form took **7px** on
+   the same probe. Same family as the media-query trap this file records five
+   times — a rule that overrides a scoped one has to be scoped at least as
+   hard — with the twist that here the count is not the one the selector
+   reads. */
+.app.research-mode .research-scroll > .view-tools {
+  margin-bottom: 0;
+  padding-bottom: var(--tools-band-gap);
 }
 /* **The band starts where the chrome ends.** The bar above closes itself with a
    hairline and its own shadow, and 14px of page between the two would be the
