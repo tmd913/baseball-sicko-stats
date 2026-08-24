@@ -345,7 +345,14 @@ export function usePreviewDoor(): ((t: PreviewTarget) => void) | null {
  * already imports from this file, so this is the dependency running the way it
  * already runs.
  */
-export type TeamPageTab = 'overview' | 'schedule' | 'roster' | 'splits' | 'park' | 'stats';
+export type TeamPageTab =
+  | 'overview'
+  | 'schedule'
+  | 'results'
+  | 'roster'
+  | 'splits'
+  | 'park'
+  | 'stats';
 
 /** Open a club's page, optionally on a named tab rather than its Overview. */
 export type TeamDoor = (teamId: number, tab?: TeamPageTab) => void;
@@ -354,6 +361,31 @@ export const TeamDoorContext = createContext<TeamDoor | null>(null);
 
 export function useTeamDoor(): TeamDoor | null {
   return useContext(TeamDoorContext);
+}
+
+/**
+ * **The one door into a game's page**, and `TeamDoorContext`'s exact twin —
+ * `App::openGame` and nothing else, which is the function that puts away
+ * whatever page is open, remembers it for the way back, and opens the game.
+ *
+ * A context rather than a prop for the reason that one is: the callers are
+ * leaves. The summary table's opponent cell is inside a `map` inside a row
+ * inside one of two tables drawn in two places; a club's fixture row and its
+ * result row are two more, one tab apart. Threaded as an optional prop it would
+ * be five signatures and five chances for a call site to forget it — and a
+ * forgotten one does not fail, it silently stops being a link on one surface
+ * out of five.
+ *
+ * Null outside the provider, and every caller draws plain text rather than a
+ * door that does nothing — the rule `OpponentPress` already keeps for a cell
+ * with nothing behind it.
+ */
+export type GameDoor = (gamePk: number) => void;
+
+export const GameDoorContext = createContext<GameDoor | null>(null);
+
+export function useGameDoor(): GameDoor | null {
+  return useContext(GameDoorContext);
 }
 
 /**

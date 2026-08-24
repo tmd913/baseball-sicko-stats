@@ -37,6 +37,8 @@ import type {
   TeamHitting,
   TeamHittingWindow,
   TeamInfo,
+  TeamGameResult,
+  GameReport,
   ParkFactors,
   TeamSplitSide,
   EspnRosterPlayer,
@@ -649,6 +651,31 @@ export const api = {
   async teams(): Promise<TeamInfo[]> {
     const { teams } = await request<{ teams: TeamInfo[] }>('/api/teams');
     return teams;
+  },
+  /**
+   * **A club's season, backwards** — every game it has played or is playing,
+   * with the score in it. The Results tab on its page.
+   *
+   * Not the schedule window: that one is the forward fortnight every surface in
+   * the app shares and is deliberately thin, a game ahead having no score. The
+   * score is the whole of what this carries.
+   */
+  async teamGames(teamId: number): Promise<TeamGameResult[]> {
+    const { games } = await request<{ games: TeamGameResult[] }>(
+      `/api/teams/${teamId}/games`,
+    );
+    return games;
+  },
+  /**
+   * **One game, whole** — the line score, both clubs' box scores and rosters,
+   * and the play stream. The game page.
+   *
+   * Read on open and, while the game is being played, again every
+   * `LIVE_POLL_MS` — the same clock the roster's own report keeps, so a reader
+   * with both open never sees two answers about one game a beat apart.
+   */
+  async game(gamePk: number): Promise<GameReport> {
+    return request(`/api/games/${gamePk}`);
   },
   /**
    * **Every ballpark's park factors, all three hitter hands** — the team page's

@@ -47,6 +47,7 @@ import { BaseballMark } from './components/BaseballMark';
 import { ScrollRow } from './components/TabStrip';
 import { PlayerAdder } from './components/PlayerAdder';
 import { TeamDetails } from './components/TeamDetails';
+import { GamePage } from './components/GamePage';
 import { PlayerOrderEditor } from './components/PlayerOrderEditor';
 import { LiveFeed, FEED_PAGE_SIZE, newPlays } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
@@ -86,6 +87,7 @@ import {
   MutedContext,
   PlayerStatusContext,
   HandednessContext,
+  GameDoorContext,
   ParkFactorsContext,
   TeamDoorContext,
   RecentNewsContext,
@@ -95,7 +97,21 @@ import {
   useResumed,
   useStickyChromeOffset,
 } from './hooks';
-import type { FantasySlot, TeamDoor, TeamPageTab } from './hooks';
+import type { FantasySlot, GameDoor, TeamDoor, TeamPageTab } from './hooks';
+
+/**
+ * **One of the three pages, as a step the reader took to reach it.**
+ *
+ * Three shapes because there are three pages, and they are tagged rather than
+ * sniffed for the reason `PreviewTarget` is: the club's needs its **tab**
+ * carried with it, which neither of the other two has any notion of. A step
+ * back to a club must land the reader on the list they pressed a row of, not
+ * on its Overview.
+ */
+type PageRef =
+  | { kind: 'player'; key: string }
+  | { kind: 'team'; id: number; tab: TeamPageTab | undefined }
+  | { kind: 'game'; gamePk: number };
 import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
@@ -517,21 +533,16 @@ export default function App() {
    * `detailsKey` above: a page over whatever view is behind it, seeded from the
    * link so a shared one reopens it.
    *
-   * The two are **mutually exclusive by construction**, and the pair of setters
-   * below is the one place that is enforced. They are not a stack: a player
-   * opened from a club's roster *replaces* the club, exactly as a player opened
-   * from another player's Overview already replaces him — one page at one
-   * layer, and one press of Escape to leave it. Stacking them would need a
-   * second `.details-view` above 50 and would then have to answer what happens
-   * when the reader walks a chain of six.
+   * The three page parameters — `player=`, `team=` and `game=` — are **mutually
+   * exclusive by construction**, and the setters below are the one place that
+   * is enforced. They are one page at one layer: a page opened from another
+   * *replaces* it rather than stacking over it, which is what keeps this to a
+   * single `.details-view` and one press of Escape to leave whatever is on
+   * screen.
    *
-   * **`teamReturnKey` below is one step of memory and not that stack**: the
-   * club page remembers the *one* player it was opened from so `Back` can
-   * return to him, and nothing remembers what was behind him.
-   *
-   * On the way *in*, a link carrying both takes the **player**, which is the
-   * older parameter and the one an existing link can have: a hand-made URL is
-   * the only way to produce the pair, and falling back beats emptying the view.
+   * On the way *in*, a link carrying more than one takes the **oldest**
+   * parameter it can — player, then team — a hand-made URL being the only way
+   * to produce the set, and falling back beating emptying the view.
    */
   const [teamPageId, setTeamPageId] = useState<number | null>(() => {
     if (readKeys(initialParams.get('player'))[0]) return null;
@@ -549,71 +560,157 @@ export default function App() {
   const [teamSide, setTeamSide] = useState<PlayerKind>(() =>
     initialParams.get('tside') === 'pitching' ? 'pitcher' : 'batter',
   );
-  /**
-   * **The player whose page a club's page was opened from**, so `Back` returns
-   * to *him* rather than to the view behind both of them.
-   *
-   * The two pages are still not a stack — this is one step of memory, not a
-   * history — and that is the whole of the distinction. A reader on Judge's
-   * page who presses `NYY` has asked *about the Yankees, from Judge*, and a
-   * back button that drops him on the roster board has undone two things with
-   * one press, which is the rule every dialog in this app already keeps. Open a
-   * club any other way (the board's team row, the header search) and there is
-   * nobody behind it, so `Back` closes to the view as it always did.
-   *
-   * **Not in the URL**, unlike everything about *which page is open*: it is the
-   * route taken rather than the page arrived at, and a link that carried it
-   * would promise a reader a page he was never on. So a reload of `?team=147`
-   * closes to the view — which is exactly what the same link handed to somebody
-   * else does, and the two agreeing is the point.
-   *
-   * Cleared by `openPlayer`, which every door into a player's page goes
-   * through: a player opened *from the club page* — a roster row, a fixture's
-   * starter — replaces the club rather than returning to it, so what is behind
-   * him is the view again.
-   */
-  const [teamReturnKey, setTeamReturnKey] = useState<string | null>(null);
-  /** `detailsKey` as the last commit left it, so `openTeam` can read who is on
-   *  screen without taking him as a dependency — it is handed to four callers
-   *  and would otherwise be a new function every time a player page opened. */
-  const detailsKeyRef = useRef<string | null>(detailsKey);
-  useEffect(() => {
-    detailsKeyRef.current = detailsKey;
-  }, [detailsKey]);
-  /** Open a club's page, putting away any player's — and remembering him. The
-   *  one door in — the board row, a player's own head and the header search all
-   *  come through here, so neither the exclusion above nor the return can be got
-   *  round by a caller. */
   /** Which tab that page should open on, where a door named one. Held beside
    *  `teamPageId` rather than in the URL, which is where the team page's tab has
    *  always *not* been — it is a reading of one club rather than which data the
    *  view shows, the same call `tside=` went the other way on. */
   const [teamPageTab, setTeamPageTab] = useState<TeamPageTab | undefined>(undefined);
-  const openTeam = useCallback<TeamDoor>((id, tab) => {
-    setTeamReturnKey(detailsKeyRef.current);
-    setDetailsKey(null);
-    setTeamPageTab(tab);
-    setTeamPageId(id);
+  /** The game whose page is open — `player=`'s and `team=`'s third sibling, and
+   *  seeded last for the reason above. */
+  const [gamePagePk, setGamePagePk] = useState<number | null>(() => {
+    if (readKeys(initialParams.get('player'))[0]) return null;
+    const team = Number(initialParams.get('team'));
+    if (Number.isInteger(team) && team > 0) return null;
+    const raw = Number(initialParams.get('game'));
+    return Number.isInteger(raw) && raw > 0 ? raw : null;
+  });
+
+  /* ── The route in ─────────────────────────────────────────────────────────
+   *
+   * **`Back` undoes exactly one thing, and there are three pages it can undo
+   * to.** That is the app-wide rule every dialog here already keeps, and it is
+   * what this block exists to make true of the pages as well.
+   *
+   * It was **one step of memory per page** before, and the step was spent on
+   * the way in: a club opened from a player remembered him, and a player opened
+   * from that club remembered nobody — so a reader who walked *player → club →
+   * one of its games* got back to the game and then, from the club he pressed
+   * inside it, straight out to the view. Reported as **"back button from game
+   * page closes previous pages too"** and reproduced: a crest on a game's page
+   * opened `?team=112` and one press of `Back` left `?preset=Today`, with the
+   * game he came from nowhere.
+   *
+   * So it is a **stack of where the reader has been**, `pageStackRef`, and the
+   * objection the old comment raised against one — *what happens when a reader
+   * walks a chain of six* — has an answer that reads better than the memory
+   * did: he presses `Back` six times. What that objection was really about is
+   * **rendering** six pages at once, which nothing here does: one page is on
+   * screen, the rest are a route, and a route costs a small array.
+   *
+   * It is **not in the URL**, which is where everything about *which* page is
+   * open lives. A route is what the reader did rather than where they are, and
+   * a link carrying it would promise a recipient pages he was never on — so a
+   * reload of `?game=…` closes to the view, which is exactly what the same link
+   * handed to somebody else does, and the two agreeing is the point.
+   *
+   * A **ref rather than state**, because nothing renders it: a stack in state
+   * would re-render the whole app on every navigation to change a value only
+   * two callbacks read.
+   * ────────────────────────────────────────────────────────────────────────── */
+
+  /** How many steps back are kept. A reader can walk a chain as long as they
+   *  like — club, a game, a man in it, his club — and this is only the point
+   *  past which the oldest step is dropped rather than the array growing for
+   *  the life of the session. Twelve is far past any route anybody walks. */
+  const PAGE_HISTORY = 12;
+  const pageStackRef = useRef<PageRef[]>([]);
+  /** `detailsKey` as the last commit left it, so the doors can read who is on
+   *  screen without taking him as a dependency — they are handed to a dozen
+   *  callers, several through a context, and would otherwise be new functions
+   *  every time any page opened. */
+  const detailsKeyRef = useRef<string | null>(detailsKey);
+  useEffect(() => {
+    detailsKeyRef.current = detailsKey;
+  }, [detailsKey]);
+  const teamPageRef = useRef<number | null>(null);
+  useEffect(() => {
+    teamPageRef.current = teamPageId;
+  }, [teamPageId]);
+  const gamePkRef = useRef<number | null>(null);
+  useEffect(() => {
+    gamePkRef.current = gamePagePk;
+  }, [gamePagePk]);
+  /**
+   * **The tab the club's page is actually showing**, which `teamPageTab` above
+   * is not: that one is the tab a *door* named, and the page's key is built from
+   * it — so following the strip with it would remount the page on every press
+   * of a tab. `TeamDetails` reports its own, and it lands here rather than in
+   * state for the same reason.
+   *
+   * It is what makes a step back land where the reader was standing. Without
+   * it, `Back` from a game opened off a club's **Results** tab returned him to
+   * that club's *Overview* — measured in a browser before this ref existed.
+   */
+  const teamTabRef = useRef<TeamPageTab | undefined>(undefined);
+  const noteTeamTab = useCallback((tab: TeamPageTab) => {
+    teamTabRef.current = tab;
   }, []);
-  /** …and its mirror: opening a player puts away a club's page. `setDetailsKey`
-   *  is handed to a dozen callers, so the clearing has to ride with it rather
-   *  than beside it. */
-  const openPlayer = useCallback((key: string | null) => {
-    setTeamPageId(null);
-    setTeamReturnKey(null);
-    setDetailsKey(key);
-  }, []);
-  /** **Leaving a club's page**, which is one of two things: back to the player
-   *  it was opened from, or closed. `Back` and Escape are the same door out —
-   *  `DetailsShell` gives both to `onClose` — so a returning press is a
-   *  returning key too, which is what stops the two disagreeing. */
-  const closeTeam = useCallback(() => {
-    if (teamReturnKey !== null) {
-      openPlayer(teamReturnKey);
-      return;
+
+  /** Which page is on screen, as a step. Null on the view itself, which is what
+   *  makes the bottom of the stack empty rather than a page nobody opened. */
+  const currentPage = useCallback((): PageRef | null => {
+    if (detailsKeyRef.current !== null) return { kind: 'player', key: detailsKeyRef.current };
+    if (teamPageRef.current !== null) {
+      return { kind: 'team', id: teamPageRef.current, tab: teamTabRef.current };
     }
-    setTeamPageId(null);
-  }, [teamReturnKey, openPlayer]);
+    if (gamePkRef.current !== null) return { kind: 'game', gamePk: gamePkRef.current };
+    return null;
+  }, []);
+  /** Put one page on screen and the other two away — the single place the three
+   *  parameters are made exclusive, so the exclusion cannot be got round by a
+   *  caller. `null` is the view. */
+  const showPage = useCallback((page: PageRef | null) => {
+    setDetailsKey(page?.kind === 'player' ? page.key : null);
+    setTeamPageId(page?.kind === 'team' ? page.id : null);
+    setTeamPageTab(page?.kind === 'team' ? page.tab : undefined);
+    setGamePagePk(page?.kind === 'game' ? page.gamePk : null);
+  }, []);
+  /** Open a page, remembering the one it was opened from. */
+  const openPage = useCallback(
+    (page: PageRef) => {
+      const from = currentPage();
+      if (from) {
+        pageStackRef.current = [...pageStackRef.current, from].slice(-PAGE_HISTORY);
+      }
+      showPage(page);
+    },
+    [currentPage, showPage],
+  );
+  /** **Leaving a page** — one step back, or out to the view. `Back` and Escape
+   *  are the same door out (`DetailsShell` gives both to `onClose`), so a
+   *  returning press is a returning key too, which is what stops the two
+   *  disagreeing. */
+  const closePage = useCallback(() => {
+    const stack = pageStackRef.current;
+    const back = stack.length > 0 ? stack[stack.length - 1] : null;
+    pageStackRef.current = stack.slice(0, -1);
+    showPage(back);
+  }, [showPage]);
+  /** **The one door into a player's page** — a roster row, a board row, a name
+   *  in a box score, the header search. `null` is the door out, which is what
+   *  the page's own close has always passed. */
+  const openPlayer = useCallback(
+    (key: string | null) => {
+      if (key === null) {
+        closePage();
+        return;
+      }
+      openPage({ kind: 'player', key });
+    },
+    [closePage, openPage],
+  );
+  /** **The one door into a club's page** — the board's team rows, a player's
+   *  head, the header search, a game's crest. */
+  const openTeam = useCallback<TeamDoor>(
+    (id, tab) => openPage({ kind: 'team', id, tab }),
+    [openPage],
+  );
+  /** **The one door into a game's page** — the summary table's opponent cell,
+   *  and a club's fixture and result rows. */
+  const openGame = useCallback<GameDoor>(
+    (gamePk) => openPage({ kind: 'game', gamePk }),
+    [openPage],
+  );
   // Where the page is, in two parts rather than one flat list of four views.
   //
   // The top tier is **Roster or Research**, which is the real division: Roster
@@ -3462,14 +3559,20 @@ export default function App() {
     }
     if (detailsKey) p.set('player', detailsKey);
     // The club's page, which is `player=`'s twin: a page over whatever view is
-    // behind it. The two are mutually exclusive in state, so at most one of
-    // them is ever written and a link describes exactly one page.
+    // behind it. The three are mutually exclusive in state (`showPage`), so at
+    // most one of them is ever written and a link describes exactly one page.
     if (teamPageId !== null) p.set('team', String(teamPageId));
     // …and which side of the ball it is reading. Scoped to `team=`, which is
     // the page that draws it — a side with no club to be a side *of* would name
     // a reading that is not in force, the rule `cut=` and `mt=` follow — and
     // written only off the default.
     if (teamPageId !== null && teamSide === 'pitcher') p.set('tside', 'pitching');
+    // …and the game's page, the third of the set and exclusive with both — so
+    // at most one of `player`, `team` and `game` is ever written and a link
+    // describes exactly one page. Its **tab** is not here, which is where both
+    // other pages keep theirs: a tab is which reading of one subject is on
+    // screen, where these three are which subject.
+    if (gamePagePk !== null) p.set('game', String(gamePagePk));
     // Scoped to `player=`, which is the page that draws it — a cut with no
     // player to be a cut *of* would name a lens that is not in force, which is
     // the rule `proj=` and `mt=` already follow.
@@ -3600,6 +3703,7 @@ export default function App() {
     detailsKey,
     teamPageId,
     teamSide,
+    gamePagePk,
     statsCut,
     view,
     researchPos,
@@ -5991,6 +6095,13 @@ export default function App() {
         search all come through; this puts it where a leaf can reach it without
         six components agreeing to pass it on. */}
     <TeamDoorContext.Provider value={openTeam}>
+    {/* …and the one door into a game's page, which is the same argument one
+        subject over: the callers are the summary table's opponent cell (inside
+        a `map` inside a row inside one of two tables drawn in two places) and
+        two of the club page's tabs. `openGame` is stable, and it is where the
+        exclusion with the other two pages and the one step of memory back are
+        both enforced. */}
+    <GameDoorContext.Provider value={openGame}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -7303,14 +7414,17 @@ export default function App() {
           scheduleError={scheduleError}
           onNeedSchedule={needSchedule}
           pitcherLookup={pitcherLookup}
-          onClose={() => openPlayer(null)}
+          /* One step back — to whatever page this one was opened from, or out
+             to the view. The same `closePage` the other two pages take, `Back`
+             and Escape both being `DetailsShell`'s one door out. */
+          onClose={closePage}
         />
       )}
 
-      {/* **The club's page, on the same rung as the player's** — the two are
-          mutually exclusive in state (see `openTeam` / `openPlayer`), so this
-          and the block above it can never both be on screen and neither has to
-          clear the other's layer.
+      {/* **The club's page, on the same rung as the player's** — the three
+          pages are mutually exclusive in state (see `showPage`, which is the
+          one place that is enforced), so this and the blocks around it can
+          never both be on screen and none has to clear another's layer.
 
           It draws only for a club the teams table can name: an id nobody has
           heard of opens nothing, which is `detailsPlayer`'s own standing rule
@@ -7353,9 +7467,39 @@ export default function App() {
           onShowRanksChange={setShowRanks}
           rankPopulations={teamRankPopulations}
           onNeedRankPopulations={loadTeamRankPopulations}
-          /* Back to the player it was opened from, where there is one — see
-             `closeTeam`. */
-          onClose={closeTeam}
+          /* Which tab it is actually showing, for the one thing that needs it:
+             a game opened from here remembers the tab as well as the club. See
+             `teamTabRef`, which is where it lands — not the state the page's
+             key is built from. */
+          onTabChange={noteTeamTab}
+          /* One step back — see `closePage`. */
+          onClose={closePage}
+        />
+      )}
+
+      {/* **The game's page, on the same rung as the other two** — the three
+          are mutually exclusive in state (see `showPage`), so at most one of
+          these three blocks is ever on screen and none of them has to clear
+          another's layer.
+
+          Unlike the club's, it draws for any id at all: a game is named by its
+          own payload rather than by a table the client holds, so there is no
+          equivalent of "a club nobody has heard of" to decline — an id MLB does
+          not know answers 502 and the page says so, which is the honest reading
+          of *that* fact rather than a blank screen. */}
+      {gamePagePk !== null && (
+        <GamePage
+          key={gamePagePk}
+          gamePk={gamePagePk}
+          /* The season roster the header search already holds — every name in a
+             box score is a door only where this list can resolve him, which is
+             `detailsPlayer`'s own standing rule read from the other side. */
+          players={knownPlayers}
+          /* Every name on the page is a door into a player's — through
+             `openPlayer`, so the game's page is put away as it opens. */
+          onOpenPlayer={openPlayer}
+          /* One step back — see `closePage`. */
+          onClose={closePage}
         />
       )}
 
@@ -7388,6 +7532,7 @@ export default function App() {
         />
       )}
     </div>
+    </GameDoorContext.Provider>
     </TeamDoorContext.Provider>
     </ParkFactorsContext.Provider>
     </HandednessContext.Provider>

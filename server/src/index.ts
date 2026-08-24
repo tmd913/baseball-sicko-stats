@@ -23,6 +23,8 @@ import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
 import { getParkFactors } from './parkFactors.js';
+import { getGameReport } from './game.js';
+import { getTeamGames } from './teamGames.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, SPLIT_CUTS, TEAM_HITTING_WINDOWS } from './types.js';
@@ -1746,6 +1748,63 @@ app.get(
     }
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
     res.json(await getTeamWindows(teamId, kind));
+  }),
+);
+
+/**
+ * **A club's season, backwards** — every game it has played or is playing, with
+ * the score in it. The Results tab on its page, and the doors into a game's own
+ * page that tab is made of.
+ *
+ * It is the mirror of `/api/schedule` rather than a second copy of it: that one
+ * is the forward window every surface in the app shares, deliberately thin
+ * because a game ahead has no score. This one is a season and the score is the
+ * whole of what it carries — which is what makes the tab possible, the team
+ * page's own document having refused a game log on exactly the grounds that
+ * *"the scores are not on the wire"*.
+ *
+ * **Fixtures are not in it.** A row here with two dashes where the score goes
+ * would be the Schedule tab's answer at lower resolution, in a list whose one
+ * column is the score.
+ */
+app.get(
+  '/api/teams/:teamId/games',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const teamId = Number(req.params.teamId);
+    if (!Number.isInteger(teamId) || teamId <= 0) {
+      res.status(400).json({ error: 'invalid teamId' });
+      return;
+    }
+    res.json({ games: await getTeamGames(teamId) });
+  }),
+);
+
+/**
+ * **One game, whole** — the line score, both clubs' box scores and rosters, and
+ * the play stream. The game page, which a live or finished opponent cell and a
+ * club's Results tab both open.
+ *
+ * **This route 502s honestly**, which is the `/api/schedule` exception and the
+ * same test: the answer *is* the page. Everywhere else in this server a dead
+ * upstream costs its own column and nothing more, because there is a table
+ * around it still standing; here there is nothing else on screen, and a page of
+ * dashes would be indistinguishable from a game nobody played.
+ *
+ * See `game.ts` for why this reads the feed again rather than widening
+ * `StatsApiGame`, and for the measured cost of the field filter it reads it
+ * with.
+ */
+app.get(
+  '/api/games/:gamePk',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const gamePk = Number(req.params.gamePk);
+    if (!Number.isInteger(gamePk) || gamePk <= 0) {
+      res.status(400).json({ error: 'invalid gamePk' });
+      return;
+    }
+    res.json(await getGameReport(gamePk));
   }),
 );
 

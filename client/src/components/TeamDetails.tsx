@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { fmt, formatStartTime, prettyGameDate, surname, teamColor, teamLogoUrl } from '../lib';
-import { useDelayedFlag } from '../hooks';
-import type { TeamPageTab } from '../hooks';
+import {
+  fmt,
+  formatStartTime,
+  inningLabel,
+  prettyGameDate,
+  surname,
+  teamColor,
+  teamLogoUrl,
+} from '../lib';
+import { useDelayedFlag, useGameDoor } from '../hooks';
+import type { GameDoor, TeamPageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine } from './Loading';
 import { OpponentSection } from './OpponentTable';
 import { ParkTable } from './ParkFactors';
 import { PlayerWindowTable } from './PlayerWindowTable';
-import { buildScheduleIndex, gamesOn, opponentText, spanPhrase } from './schedule';
+import { buildScheduleIndex, gamesOn, OpponentPress, opponentText, spanPhrase } from './schedule';
 import type { PitcherLookup } from './schedule';
 import type {
   PlayerKind,
@@ -18,6 +26,7 @@ import type {
   ScheduleWindow,
   SeasonPlayer,
   SplitCut,
+  TeamGameResult,
   TeamHitting,
   TeamInfo,
 } from '../types';
@@ -147,6 +156,7 @@ export function TeamDetails({
   rankPopulations,
   onNeedRankPopulations,
   initialTab,
+  onTabChange,
 }: {
   team: TeamInfo;
   /**
@@ -196,11 +206,35 @@ export function TeamDetails({
    *  park strip's. Read once, at mount — a page already open does not jump
    *  under the reader because something re-rendered. */
   initialTab?: TeamPageTab;
+  /** **Which tab is showing**, reported upwards for one caller: a game opened
+   *  from this page remembers the tab it was opened from, so its `Back` returns
+   *  the reader to the list they pressed a row of. Not the same thing as
+   *  `initialTab`, which is the tab a *door* named — see the effect below. */
+  onTabChange?: (tab: TeamPageTab) => void;
 }) {
   /** **The tab the page opens on.** `overview` unless a door named one — the
    *  park strip on a game preview opens straight onto `park`, that being the
    *  reading its reader pressed the venue's name to get. */
   const [tab, setTab] = useState<TeamTab>(initialTab ?? 'overview');
+  /**
+   * **Which tab is showing, told upwards** — for one caller and one purpose: a
+   * game opened from this page remembers the club *and the tab*, so `Back` from
+   * that game returns the reader to the list they pressed a row of rather than
+   * to the Overview.
+   *
+   * It has to be reported rather than read, because the tab is deliberately
+   * **not** in the URL and deliberately **not** App's state: `initialTab` is the
+   * tab a *door* named, and App keys this page on it, so making that state
+   * follow the strip would remount the page on every press of it. This is the
+   * one fact App needs and it goes into a ref, not into the key.
+   */
+  useEffect(() => {
+    onTabChange?.(tab);
+  }, [tab, onTabChange]);
+  /** The door onto a game's page, which two tabs on this page hand out — every
+   *  row of `Results`, and every fixture on `Schedule` and the Overview. Read
+   *  off the context for the reason that context exists: the rows are leaves. */
+  const gameDoor = useGameDoor();
 
   /**
    * **The club's row on all five spans**, read once per club and side and shared
@@ -392,6 +426,28 @@ export function TeamDetails({
           <DetailsTabButton id="schedule" tab={tab} onPick={setTab}>
             Schedule
           </DetailsTabButton>
+          {/* **`Results` is `Schedule` read the other way** — what the club has
+              played, newest first, with the score in it — and the two are the
+              page's one pair of tabs that answer the same kind of question
+              about different halves of the season.
+
+              **This is the tab the page's own document said could not exist.**
+              It refused a game log on the grounds that *"a club's game log is
+              its schedule with the scores in it, and the scores are not on the
+              wire"* — `ScheduleGame` being deliberately thin, that window
+              being the forward one. They are on the wire now, on a route of
+              this tab's own (`/api/teams/:id/games`), and what changed the
+              bargain is that every row is a **door**: a game has a page, so a
+              list of games is a list of doors rather than a table of numbers
+              that would have to grow to be worth the trip.
+
+              It sits directly behind `Schedule` because the two are one
+              reading split at today, and ahead of `Roster` because a club is
+              opened for what it has been doing before it is opened for who is
+              on it. */}
+          <DetailsTabButton id="results" tab={tab} onPick={setTab}>
+            Results
+          </DetailsTabButton>
           {/* **Roster is a club's own tab and has no player-page twin**, which is
               the whole of what makes this page worth having: it is the one place
               in the app that answers "who plays for them", and every row of it
@@ -460,6 +516,7 @@ export function TeamDetails({
             onNeedSchedule={onNeedSchedule}
             pitcherLookup={pitcherLookup}
             onOpenDetails={onOpenDetails}
+            onOpenGame={gameDoor}
             limit={PREVIEW}
             onSeeAll={() => setTab('schedule')}
           />
@@ -475,9 +532,12 @@ export function TeamDetails({
             onNeedSchedule={onNeedSchedule}
             pitcherLookup={pitcherLookup}
             onOpenDetails={onOpenDetails}
+            onOpenGame={gameDoor}
           />
         </div>
       )}
+
+      {tab === 'results' && <TeamResults team={team} onOpenGame={gameDoor} />}
 
       {tab === 'roster' && (
         <TeamRoster
@@ -700,6 +760,7 @@ function TeamGames({
   onNeedSchedule,
   pitcherLookup,
   onOpenDetails,
+  onOpenGame,
   limit,
   onSeeAll,
 }: {
@@ -709,6 +770,8 @@ function TeamGames({
   onNeedSchedule: () => void;
   pitcherLookup: PitcherLookup;
   onOpenDetails: (key: string) => void;
+  /** The game's own page, off the matchup in the middle of the row. */
+  onOpenGame: GameDoor | null;
   limit?: number;
   onSeeAll?: () => void;
 }) {
@@ -775,6 +838,7 @@ function TeamGames({
               teamId={team.id}
               pitcherLookup={pitcherLookup}
               onOpenDetails={onOpenDetails}
+              onOpenGame={onOpenGame}
             />
           ))}
         </ol>
@@ -823,11 +887,13 @@ function TeamGameRow({
   teamId,
   pitcherLookup,
   onOpenDetails,
+  onOpenGame,
 }: {
   game: ScheduleGame;
   teamId: number;
   pitcherLookup: PitcherLookup;
   onOpenDetails: (key: string) => void;
+  onOpenGame: GameDoor | null;
 }) {
   const isHome = game.homeId === teamId;
   const mineId = isHome ? game.homeProbableId : game.awayProbableId;
@@ -849,8 +915,21 @@ function TeamGameRow({
           {time && game.state !== 'postponed' ? ` · ${time}` : ''}
         </span>
         {/* `vs SEA` / `@ SEA`, off the schedule's own wording so this row and
-            the two wide tables' cells say a fixture the same way. */}
-        <span className="ovw-next-opp">{opponentText(game, teamId)}</span>
+            the two wide tables' cells say a fixture the same way — and **the
+            door onto the game's own page**, in `OpponentPress`'s own box, which
+            is where every other opponent in this app is a press.
+
+            A **postponement** is not a door: there is no game to read, and the
+            row already says `PPD`. That is the same cut the summary table's
+            cell makes, one state wide. */}
+        <span className="ovw-next-opp">
+          <OpponentPress
+            onPress={onOpenGame && game.state !== 'postponed' ? () => onOpenGame(game.gamePk) : null}
+            label={opponentText(game, teamId)}
+            opens="page"
+            title={`${game.away} at ${game.home} — the game’s page`}
+          />
+        </span>
         <span className="team-game-arms">
           <StarterName id={mineId} lookup={pitcherLookup} onOpen={onOpenDetails} />
           {/* **The `vs` belongs to the man on the right**, which is what makes
@@ -909,6 +988,180 @@ function StarterName({
           the row's own tooltip. */}
       {surname(man.name)}
     </button>
+  );
+}
+
+/**
+ * **The club's season, backwards** — every game it has played or is playing,
+ * newest first, and every row a door onto that game's own page.
+ *
+ * ## What it is, against the tab beside it
+ *
+ * `Schedule` is the forward fortnight with both announced starters on it;
+ * this is the season behind today with the **score** on it. They are one
+ * reading split at the present moment, which is why they sit next to each
+ * other in the strip, and they are two tabs rather than one list because they
+ * are drawn from two different reads and answer two different questions — a
+ * manager plans forwards and judges backwards.
+ *
+ * **Newest first**, and that is the whole of the ordering argument: a club's
+ * page is opened to ask how they have been going, and the answer to that is at
+ * the *end* of a season read the usual way up. The row a reader wants is the
+ * first one.
+ *
+ * ## What a row says, and what it does not
+ *
+ * The day, the matchup, and a chip carrying the result — `W 5–3`, `L 2–7`, or
+ * `Live 3-1` with the half-inning beside it. The chip is **`.glog-res`**, the
+ * game log's own, folded onto rather than restyled: it is the same object (a
+ * result beside an opponent) and the game log's version already carries the
+ * three tones and the reason each is the color it is. A row that drew its own
+ * would be a second definition of a win.
+ *
+ * There is deliberately **no stat line**. Runs and hits per game are on the
+ * Stats tab's spans and in the box score one press away, and a row that carried
+ * them would be a table where this is an index — the same call the Roster tab
+ * makes about ranking.
+ *
+ * ## The read
+ *
+ * Lazy, on first open of the tab, keyed on the club — so a page opened on any
+ * other tab never pays for it, which is the rule every read on the player page
+ * follows. It is **not** keyed on the side switch, and that is a fact about
+ * games rather than an omission: a club's result is its result, and there is no
+ * batting reading of a 5–3 win.
+ */
+function TeamResults({ team, onOpenGame }: { team: TeamInfo; onOpenGame: GameDoor | null }) {
+  const [games, setGames] = useState<TeamGameResult[] | null>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+  /* Never marked before it is answered — the rule this file already keeps twice
+     over: StrictMode mounts, tears down and re-runs, so a mark set on the way
+     *out* of an effect whose cleanup discards the answer leaves the second pass
+     returning early and the wait up for ever. The mark is the sequence test
+     too: a stale answer is one whose key is no longer current. */
+  const req = useRef<string | null>(null);
+  useEffect(() => {
+    const key = String(team.id);
+    if (req.current === key) return;
+    req.current = key;
+    setLoading(true);
+    setError(false);
+    api.teamGames(team.id).then(
+      (g) => {
+        if (req.current !== key) return;
+        setGames(g);
+        setLoading(false);
+      },
+      () => {
+        if (req.current !== key) return;
+        req.current = null; // allow a retry on the next open of the tab
+        setError(true);
+        setLoading(false);
+      },
+    );
+  }, [team.id]);
+  /* Rule 2: a block wait only where there is nothing to show, and only past
+     `WAIT_DELAY` — a club already read comes back in a tick, and a wait that
+     flashes reads as the page breaking. */
+  const wait = useDelayedFlag(loading && games === null);
+
+  if (games && games.length > 0) {
+    return (
+      <div className="details-overview">
+        <section className="ovw-block ovw-starts">
+          <div className="ovw-head-row">
+            <h2 className="ovw-head">Results</h2>
+            {/* The count, in the head, for the reason the Roster tab's is: it is
+                the answer to the question the heading asks, and a list of a
+                hundred and thirty rows is one a reader scrolls rather than
+                counts. */}
+            <span className="start-note" title={`Games ${team.name} have played this season`}>
+              {games.length}
+            </span>
+          </div>
+          <ol className="start-list">
+            {games.map((g) => (
+              <TeamResultRow key={g.gamePk} game={g} onOpenGame={onOpenGame} />
+            ))}
+          </ol>
+        </section>
+      </div>
+    );
+  }
+  if (wait) return <LoadingBlock>Reading {team.name}&rsquo;s games</LoadingBlock>;
+  if (loading) return null;
+  return (
+    <div className="details-overview">
+      {/* Two causes and two sentences — a read that failed and a club with
+          nothing behind it are different facts, and one "no games" would claim
+          the second in both cases. */}
+      <p className="ovw-none">
+        {error
+          ? `Couldn’t read ${team.name}’s games.`
+          : `${team.name} haven’t played a game this season.`}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One played game: the day, the matchup, the result.
+ *
+ * **The score is the club's own first**, which is the one place this app turns
+ * a line score round: everywhere else `TOR 3–2 NYY` is away-first because the
+ * reader is looking at a *game*, and here they are looking at one club's season
+ * down a column — where the number that has to be in the same place on every
+ * row is theirs. The chip's tooltip names both sides so nothing is lost.
+ */
+function TeamResultRow({ game, onOpenGame }: { game: TeamGameResult; onOpenGame: GameDoor | null }) {
+  const score =
+    game.teamScore !== null && game.opponentScore !== null
+      ? `${game.teamScore}–${game.opponentScore}`
+      : null;
+  const decided = game.won !== null && game.state === 'final';
+  /* The game log's own four tones, reached by the same three tests: decided, a
+     game still being played, one that stopped and is not over, and one with a
+     score and no result — which on a final game is a tie. */
+  const tone = decided
+    ? game.won
+      ? 'w'
+      : 'l'
+    : game.state === 'live'
+      ? 'live'
+      : game.state === 'postponed'
+        ? 'held'
+        : 'none';
+  const label = decided ? (game.won ? 'W' : 'L') : game.state === 'live' ? 'Live' : game.state === 'postponed' ? 'PPD' : null;
+  const half = game.state === 'live' ? inningLabel(game.inningState, game.inning) : null;
+  return (
+    <li className="start-row">
+      <div className="start-line">
+        <span className="ovw-next-when">{prettyGameDate(game.date)}</span>
+        <span className="ovw-next-opp">
+          <OpponentPress
+            onPress={onOpenGame && game.state !== 'postponed' ? () => onOpenGame(game.gamePk) : null}
+            label={`${game.home ? 'vs' : '@'} ${game.opponent}`}
+            opens="page"
+            title={`${game.opponent} — the game’s page`}
+          />
+        </span>
+        <span className="team-result-mark">
+          <span
+            className={`glog-res glog-res-${tone}`}
+            title={
+              decided
+                ? `${game.won ? 'Won' : 'Lost'}${score ? ` ${score}` : ''}`
+                : `${game.detailedState}${score ? ` — ${score} so far` : ''}`
+            }
+          >
+            {label}
+            {label && score ? ` ${score}` : score}
+          </span>
+          {half && <span className="team-result-half">{half}</span>}
+        </span>
+      </div>
+    </li>
   );
 }
 

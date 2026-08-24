@@ -18,7 +18,14 @@ import {
 } from './schedule';
 import type { ScheduleIndex } from './schedule';
 import type { FantasySlot } from '../hooks';
-import { PreviewDoorContext, useEligible, useFantasyRoster, useFullPage, usePreviewDoor } from '../hooks';
+import {
+  PreviewDoorContext,
+  useEligible,
+  useFantasyRoster,
+  useFullPage,
+  useGameDoor,
+  usePreviewDoor,
+} from '../hooks';
 import type { PreviewTarget } from '../hooks';
 import { UpcomingPreview, canPreview } from './LiveFeed';
 import { SchedulePreview, canPreviewFixture } from './PlayerSchedule';
@@ -74,19 +81,6 @@ function pickGame(report: PlayerReport): PlayerGame | null {
 }
 
 /**
- * One club's abbreviation inside a line score. **Only the opposing one is a
- * door** — the other is the player's own club, whose page he is one press from
- * on his own row already (the headshot and the name open him, and his head
- * carries the club chip). A line score with both sides linked would offer the
- * reader a choice they did not ask for and make the row's own targets harder to
- * hit.
- */
-function OppSide({ abbr, opponent, onPress }: { abbr: string; opponent: PlayerGame; onPress: (() => void) | null }) {
-  if (abbr !== opponent.opponent) return <>{abbr}</>;
-  return <OpponentPress onPress={onPress} label={abbr} />;
-}
-
-/**
  * The opponent / game cell: the matchup before first pitch, the live score +
  * inning while it's on, the final score once it's over.
  *
@@ -99,41 +93,74 @@ function OppSide({ abbr, opponent, onPress }: { abbr: string; opponent: PlayerGa
  */
 function OpponentCell({ r, game }: { r: PlayerReport; game: PlayerGame | null }) {
   const openPreview = usePreviewDoor();
+  const openGame = useGameDoor();
   if (!game) return <td className="sum-opp sum-opp-empty">—</td>;
   /* **Only a game nobody has played is a preview.** The dialog is a reading of
      a matchup *before* it — his split against the man they have named, or the
      lineup waiting for him — and once there is a score the cell is showing one,
-     which is the answer. So a live or final opponent stays plain text. */
+     which is the answer. */
   const press =
     openPreview && game.status.state === 'scheduled' && canPreview(r, game)
       ? () => openPreview({ kind: 'game', report: r, game })
       : null;
-  const { kind, sides, detail } = gameStatusView(game);
+  /**
+   * **…and a game that has been played opens the game.**
+   *
+   * That slot used to be plain text, and the reasoning for it was sound as far
+   * as it went: the preview answers *what is this game* and a cell already
+   * showing `TOR 3–2 NYY` has answered it. What it left unanswered is the
+   * question a score raises — **how** — and there was nowhere in the app to
+   * send a reader who asked it. There is now: the box score, both rosters and
+   * every play, on the game's own page.
+   *
+   * So the cell's one press means two things across the game's life, and they
+   * do not overlap: a fixture opens the preview, a result opens the page. It is
+   * the same press in the same place either way, which is what stops it reading
+   * as two controls.
+   *
+   * A **postponement** opens neither, and that is not an omission: there is no
+   * game to read. Its cell says `PPD` and the schedule is where the makeup
+   * lands.
+   */
+  const gamePress =
+    openGame && (game.status.state === 'live' || game.status.state === 'final')
+      ? () => openGame(game.gamePk)
+      : null;
+  const { kind, sides, score, detail } = gameStatusView(game);
   const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
   const scheduled = kind === 'scheduled';
   const sp = scheduled ? game.probablePitcher : null;
   /**
-   * **The opposing club is a door to its page, in whichever of the two shapes
-   * this cell is drawing.**
+   * **The whole cell is one door, in whichever of the two shapes it is
+   * drawing** — and what is behind it is what the shape says.
    *
-   * Before first pitch the cell writes the matchup, so the door is the whole of
-   * `vs HOU` — prefix and abbreviation being one fact and eleven characters
-   * being a small enough target already. Once there is a score the cell stops
-   * writing a matchup and writes `TOR 3–2 NYY` instead, where the only thing
-   * that names a club is an abbreviation in the middle of a line: so the door
-   * shrinks to that abbreviation and the digits stay plain text. That is why
-   * `gameStatusView` hands back `sides` as well as `score` — a link cannot be
-   * put through the middle of a finished string.
+   * Before first pitch the cell writes a matchup, so the door is `vs HOU` and
+   * it opens the **preview**: prefix and abbreviation are one fact and eleven
+   * characters are a small enough target already. Once there is a score the
+   * cell writes `TOR 3–2 NYY`, and the whole of *that* is the door onto the
+   * **game's page** — the same argument, one string longer: a result is one
+   * fact and splitting the press off part of it would halve the target for no
+   * gain.
+   *
+   * **It drew the two clubs separately for a while and no longer does.** The
+   * reasoning then was that a link cannot be put through the middle of a
+   * finished string, so `gameStatusView` hands back `sides` beside `score` and
+   * the abbreviation alone was to be the link. That was written for a door onto
+   * a *club's* page, which is not what a reader looking at a score is asking
+   * for — and while it stood, the branch was unreachable anyway: a scheduled
+   * game has no `sides` and a played one had nothing to open. The line is one
+   * press again, and `sides` survives as the test for which shape this is.
    */
   const main =
-    sides === null ? (
+    sides === null || score === null ? (
       <OpponentPress onPress={press} label={matchup} />
     ) : (
-      <>
-        <OppSide abbr={sides.away} opponent={game} onPress={press} />
-        {` ${sides.awayScore}–${sides.homeScore} `}
-        <OppSide abbr={sides.home} opponent={game} onPress={press} />
-      </>
+      <OpponentPress
+        onPress={gamePress}
+        label={score}
+        opens="page"
+        title={`${game.awayTeam} at ${game.homeTeam} — the game’s page`}
+      />
     );
   return (
     <td className={`sum-opp sum-opp-${kind}`}>

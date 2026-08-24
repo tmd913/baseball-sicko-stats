@@ -752,19 +752,33 @@ export function OpponentPress({
   onPress,
   label,
   title,
+  opens = 'dialog',
 }: {
   /** What opens, or null where there is nothing to. */
   onPress: (() => void) | null;
   /** What the cell already says — `vs MIL`, `@ TOR`, or a bare `MIL`. */
   label: string;
   title?: string;
+  /**
+   * **Which of the two things this press opens**, and the only reason the
+   * component needs telling: `aria-haspopup="dialog"` is a promise to a screen
+   * reader that a dialog is coming back, and a cell whose game has been
+   * *played* opens a full page instead — a game's own, with its box score and
+   * its plays. Announcing that as a dialog would be the one thing this app's
+   * overlay rules are careful about, said wrongly.
+   *
+   * `dialog` is the default because it is what the cell has always opened and
+   * what every fixture still opens. See `SummaryTable.tsx::OpponentCell`, which
+   * chooses between them on the game's state.
+   */
+  opens?: 'dialog' | 'page';
 }) {
   if (!onPress) return <>{label}</>;
   return (
     <button
       type="button"
       className="opp-door"
-      aria-haspopup="dialog"
+      aria-haspopup={opens === 'dialog' ? 'dialog' : undefined}
       onClick={(e) => {
         // The row around this has its own press targets — the headshot and the
         // name open the player. Nothing here should reach them.
