@@ -952,7 +952,6 @@ function StartRow({
             <GamePark
               venueId={start.venueId}
               handNote="The park as it plays to both hands — he faces whoever they write down."
-              onNavigate={() => setOpen(false)}
             />
             {/* **A projected row's dialog must not read as a claim about a game
                 he has been named for.** The row says `Projected` and goes muted;

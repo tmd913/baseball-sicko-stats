@@ -1154,12 +1154,6 @@ export function UpcomingPreview({
                 ? 'The park as it plays to both hands — he faces whoever they write down.'
                 : undefined
             }
-            /* This dialog can be opened from a view rather than from an
-               overlay — the feed, and the summary table's opponent cell — where
-               `openTeam` does not put it away the way it puts a player page
-               away. Without this the club's page opens *underneath* a box the
-               reader then has to dismiss by hand. */
-            onNavigate={onClose}
           />
           {isPitcher ? (
             <OpponentSection
