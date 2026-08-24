@@ -1,6 +1,12 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode, RefObject } from 'react';
-import type { BatterGameLog, PitcherGameLog, PlayerKind } from '../types';
+import type {
+  BatterGameLog,
+  GameLogEntry,
+  GameLogGap,
+  PitcherGameLog,
+  PlayerKind,
+} from '../types';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
 import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
@@ -78,7 +84,7 @@ const PAGE_SIZE = 20;
  * be read) and which MLB labels `Suspended: Rain`. The label is checked against
  * that wire spelling and the full one rides the chip's `title`.
  */
-function stateLabel(g: BatterGameLog | PitcherGameLog): string | null {
+function stateLabel(g: GameLogEntry): string | null {
   if (g.state === 'live') {
     // MLB's `detailedState` here is "In Progress", "Warmup", "Delayed: Rain",
     // "Manager challenge" and the rest. Only a delay is worth its own word: it
@@ -111,7 +117,7 @@ function stateLabel(g: BatterGameLog | PitcherGameLog): string | null {
  * the `W`'s: both are `--hit`, and a chip reading `Live 5-5` can be mistaken for
  * nothing, where a bare green `5-5` beside a column of `W 5-3`s could be.
  */
-function Opponent({ g }: { g: BatterGameLog | PitcherGameLog }) {
+function Opponent({ g }: { g: GameLogEntry }) {
   const score =
     g.teamScore !== null && g.opponentScore !== null ? `${g.teamScore}-${g.opponentScore}` : null;
   const decided = g.win !== null;
@@ -208,16 +214,85 @@ function HitsPerAb({ g }: { g: BatterGameLog }) {
   );
 }
 
+/**
+ * **A day his club played and he did not**, drawn as the row it is rather than
+ * as fifteen dashes.
+ *
+ * The columns to the right of the opponent are all quantities of something he
+ * did, and a row of `—` across every one of them says "did not play" fifteen
+ * times in a language the reader has to translate. One cell says it once. What
+ * it keeps is the left of the row — the date, and the opponent cell with its
+ * result chip — because those are facts about the game, which happened whether
+ * he was in it or not, and they are what make the row worth drawing at all.
+ *
+ * It is **not pressable**. Every other row of this table opens that game as his
+ * feed, and his feed for a game he was not in is empty by construction — a door
+ * onto a blank room is worse than no door.
+ */
+function DnpRow({ gap }: { gap: Extract<GameLogGap, { kind: 'dnp' }> }) {
+  return (
+    <tr className="glog-gap">
+      <th className="glog-date" scope="row">
+        {prettyGameDate(gap.date)}
+      </th>
+      <Opponent g={gap} />
+      <td className="glog-note" colSpan={BATTER_COLUMNS.length}>
+        <span className="glog-note-in">Did not play</span>
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * **A stretch he was not available for**, as one row.
+ *
+ * A man who missed six weeks is thirty-seven rows of "did not play" if this is
+ * drawn a game at a time, and thirty-seven rows of anything is the season he
+ * *did* play pushed off the screen. So the row names the state, the dates it
+ * ran between and the number of his club's games it cost — which is the one
+ * number that says how much of the season it is standing for — and MLB's own
+ * sentence for it rides the title, where "Right rib stress fracture" is a
+ * detail worth having and not worth a column.
+ *
+ * The date cell eats the opponent's: a stretch has no one opponent, and the
+ * range is the wider thing to print.
+ */
+function AbsenceRow({ gap }: { gap: Extract<GameLogGap, { kind: 'absence' }> }) {
+  const span =
+    gap.from === gap.to
+      ? prettyGameDate(gap.from)
+      : `${prettyGameDate(gap.from)} – ${prettyGameDate(gap.to)}`;
+  return (
+    <tr className="glog-gap is-absence" title={gap.detail || undefined}>
+      <th className="glog-date glog-gap-span" scope="row" colSpan={2}>
+        {span}
+      </th>
+      <td className="glog-note" colSpan={BATTER_COLUMNS.length}>
+        <span className="glog-note-in">
+          <span className="glog-gap-status">{gap.status}</span>
+          {' · '}
+          {gap.games} {gap.games === 1 ? 'game' : 'games'}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
 function BatterRows({
-  games,
+  rows,
   onOpen,
 }: {
-  games: BatterGameLog[];
+  rows: BatterRow[];
   onOpen: (g: BatterGameLog) => void;
 }) {
   return (
     <>
-      {games.map((g) => (
+      {rows.map((row) => {
+        if (row.kind === 'dnp') return <DnpRow key={`dnp-${row.gamePk}`} gap={row} />;
+        if (row.kind === 'absence')
+          return <AbsenceRow key={`abs-${row.from}-${row.status}`} gap={row} />;
+        const g = row.game;
+        return (
         <tr
           key={`${g.gamePk}-${g.date}`}
           title={g.summary}
@@ -256,7 +331,8 @@ function BatterRows({
           <td className="glog-num glog-rate">{g.seasonSlg}</td>
           <td className="glog-num glog-rate">{g.seasonOps}</td>
         </tr>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -487,8 +563,47 @@ function PitcherTotals({ games }: { games: PitcherGameLog[] }) {
 
 /** The log as the two routes hand it back — the pair every piece here reads. */
 type Log =
-  | { kind: 'batter'; games: BatterGameLog[] }
+  | {
+      kind: 'batter';
+      games: BatterGameLog[];
+      /** The days his club played and he did not — see `GameLogGap`. Optional
+       *  because the **Overview**'s five-game preview deliberately asks for none
+       *  of them: that block is "how he has been going", and five rows of which
+       *  is three injured-list stretches is not that reading. The tab is where
+       *  the season gets filled in. */
+      gaps?: GameLogGap[];
+    }
   | { kind: 'pitcher'; games: PitcherGameLog[] };
+
+/**
+ * **One row of a batter's log**, which is a game he played or one of the two
+ * silences around it.
+ *
+ * They arrive from the server as two lists — `games` untouched so that every
+ * older reader of it reads exactly what it always did — and are woven into one
+ * here, which is the only place that wants them interleaved.
+ */
+type BatterRow = { kind: 'game'; game: BatterGameLog } | GameLogGap;
+
+/** Newest first, which is the order both lists already arrive in and the order
+ *  a log is read. An absence sorts on the **last** of the games it stands for,
+ *  so it lands directly under the game he came back for. A game and a gap can
+ *  never share a date — a gap is a game he has no row for — except across a
+ *  doubleheader, where the played half sorting first is the reading that puts
+ *  what he did above what he missed. */
+function weave(games: BatterGameLog[], gaps: GameLogGap[]): BatterRow[] {
+  const rows: BatterRow[] = [
+    ...games.map((game) => ({ kind: 'game' as const, game })),
+    ...gaps,
+  ];
+  const dateOf = (r: BatterRow): string =>
+    r.kind === 'game' ? r.game.date : r.kind === 'absence' ? r.to : r.date;
+  return rows.sort((a, b) => {
+    const d = dateOf(b).localeCompare(dateOf(a));
+    if (d !== 0) return d;
+    return (a.kind === 'game' ? 0 : 1) - (b.kind === 'game' ? 0 : 1);
+  });
+}
 
 /**
  * The table itself, with nobody's chrome around it.
@@ -531,9 +646,60 @@ function GameLogTable({
   onScroll?: () => void;
 }) {
   const pitching = log.kind === 'pitcher';
+  // The batter's rows, games and silences woven together. Memoized because the
+  // sort is over the whole season and this component re-renders on every page
+  // the reader grows the table by — 150 games and 40 gaps re-sorted twenty
+  // times over is work with no answer to show for it. A pitcher has no gaps and
+  // the empty array is stable, so his table sorts nothing.
+  const rows = useMemo(
+    () => (log.kind === 'batter' ? weave(log.games, log.gaps ?? []) : []),
+    [log],
+  );
+  /**
+   * **Where a gap row's message pins**, measured rather than declared.
+   *
+   * The date column is `width: 1%` — it sizes to its own content, which is a
+   * date in a font this app does not choose — so its width is 109px at 1200 and
+   * 79px at 390 and there is no *one* number to write down. That is this repo's
+   * standing test for measuring at runtime (`--research-pin-left` is the same
+   * rule on the board next door).
+   *
+   * **One offset serves both row shapes**, which is worth stating because it
+   * looks as though it should be two. A `dnp` row's sentence begins after the
+   * date cell *and* the opponent cell; an `absence` row's begins after the one
+   * cell that spans both of them for its date range. Those are the same edge,
+   * so the two rows pin to the same number rather than to two that would have
+   * to be kept equal.
+   *
+   * **The fault it fixes was found by driving the table, not by reading it.**
+   * At 390px with the pane scrolled 400px right, the three gap rows on Aaron
+   * Judge's log rendered as **empty bands**: their date stayed pinned and every
+   * word explaining them — `60-day IL · 33 games`, `Did not play` — had
+   * scrolled out of the pane. A row whose entire content is a sentence cannot
+   * let the sentence scroll away.
+   */
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  useLayoutEffect(() => {
+    const t = tableRef.current;
+    if (!t) return;
+    const head = t.querySelector('thead tr');
+    if (!head) return;
+    const measure = (): void => {
+      const date = head.children[0]?.getBoundingClientRect().width ?? 0;
+      const opp = head.children[1]?.getBoundingClientRect().width ?? 0;
+      t.style.setProperty('--glog-pin', `${Math.round(date + opp)}px`);
+    };
+    measure();
+    // The columns resize with the pane — the overlay's own width, the expand
+    // button's full-page mode — so one reading at mount is a reading that goes
+    // stale the first time either moves.
+    const ro = new ResizeObserver(measure);
+    ro.observe(t);
+    return () => ro.disconnect();
+  }, [rows.length, pitching]);
   return (
     <div className="glog-scroll" ref={scrollRef} onScroll={onScroll}>
-      <table className="glog-table">
+      <table className="glog-table" ref={tableRef}>
         <thead>
           <tr>
             <th className="glog-date" scope="col">
@@ -558,7 +724,7 @@ function GameLogTable({
               onOpen={onOpen}
             />
           ) : (
-            <BatterRows games={log.games.slice(0, shown)} onOpen={onOpen} />
+            <BatterRows rows={rows.slice(0, shown)} onOpen={onOpen} />
           )}
         </tbody>
         {totals && (
@@ -719,9 +885,14 @@ export function GameLog(
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // The research board's mechanism, whole — the scroll handler, the beat, and
   // the guard for a pane taller than a page. See `paging.tsx`.
+  // **The count is rows, not games.** The two were the same number for as long
+  // as a log held only games he played; a season with six weeks of injured list
+  // in it has more rows than games, and paging on the games would stop the
+  // table growing while there were still rows under the fold.
+  const total = log.kind === 'batter' ? log.games.length + (log.gaps?.length ?? 0) : log.games.length;
   const { onScroll, loadingMore, hasMore } = usePagedRows({
     scrollRef,
-    total: log.games.length,
+    total,
     shown,
     pageSize: PAGE_SIZE,
     onShown: setShown,

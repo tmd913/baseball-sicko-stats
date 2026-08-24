@@ -9,7 +9,7 @@ import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './sa
 import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getXwobaSeries } from './xwoba.js';
-import { getBatterGameLog, getPitcherGameLog } from './gameLog.js';
+import { getBatterLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
 import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
@@ -2130,7 +2130,10 @@ app.get(
       res.json({ kind: 'pitcher', games: await getPitcherGameLog(playerId, season) });
       return;
     }
-    res.json({ kind: 'batter', games: await getBatterGameLog(playerId, season) });
+    // `gaps` rides beside `games` rather than merged into it — see
+    // `gameLog.ts::getBatterLog`. Everything already reading `games` reads
+    // exactly the list it always has.
+    res.json({ kind: 'batter', ...(await getBatterLog(playerId, season)) });
   }),
 );
 

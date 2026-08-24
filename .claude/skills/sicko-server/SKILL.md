@@ -28,7 +28,7 @@ a table of dashes.
   says it moved, and why exactly two blobs are re-read for it.
 
 - **Read `docs/claude/server.md`** before adding or changing a route, or
-  touching `etDate.ts`, `schedule.ts`, `rotations.ts`, `gameLog.ts`,
+  touching `etDate.ts`, `schedule.ts`, `rotations.ts`, `gameLog.ts`, `stints.ts`,
   `nextGame.ts`, `news.ts`, `recentNews.ts`, `rotowire.ts`, `projectedStarts.ts`,
   `revisions.ts` or `warmer.ts`. It covers the 3am ET baseball day and why one module
   deliberately no longer reads it, every endpoint and what it answers, the

@@ -10,6 +10,7 @@ import {
 } from '../lib';
 import type {
   BatterGameLog,
+  GameLogGap,
   NextGameInfo,
   PitcherGameLog,
   PitcherSeasonStats,
@@ -115,8 +116,12 @@ export function OverviewTab({
   season: SeasonStats | null;
   pitcherSeason: PitcherSeasonStats | null;
   seasonLoading: boolean;
+  /** The Overview's preview draws **games only** — it takes the log's `gaps`
+   *  and passes none of them on. "How he has been going" over five rows is not
+   *  a reading that survives three of those rows being injured-list stretches;
+   *  the Game Log tab is where the season gets filled in. */
   gameLog:
-    | { kind: 'batter'; games: BatterGameLog[] }
+    | { kind: 'batter'; games: BatterGameLog[]; gaps?: GameLogGap[] }
     | { kind: 'pitcher'; games: PitcherGameLog[] }
     | null;
   gameLogLoading: boolean;
@@ -287,7 +292,9 @@ export function OverviewTab({
 
       {gameLog ? (
         <GameLogPreview
-          log={gameLog}
+          // Games only — the gaps are dropped here rather than merely left
+          // untyped, since the table weaves whatever it is handed.
+          log={gameLog.kind === 'batter' ? { kind: 'batter', games: gameLog.games } : gameLog}
           playerId={playerId}
           name={name}
           onSeeAll={() => onTab('gamelog')}

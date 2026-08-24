@@ -1,13 +1,16 @@
 import type {
   BatterGameLog,
   GameLogEntry,
+  GameLogGap,
   GameStatus,
   PitcherGameLog,
   PitchingCredit,
+  PlayerStint,
 } from './types.js';
 import { getSeasonArsenal, type Appearances } from './pitcherArsenal.js';
 import { fipLike } from './leagueRates.js';
 import { stateOf, type StatusFields } from './schedule.js';
+import { getPlayerStints, statusOn } from './stints.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
@@ -64,10 +67,15 @@ async function getTeamAbbrevs(): Promise<Map<number, string>> {
 
 interface ScheduleResponse {
   dates?: {
+    date?: string;
     games?: {
       gamePk?: number;
+      officialDate?: string;
       status?: StatusFields;
-      teams?: { away?: { score?: number }; home?: { score?: number } };
+      teams?: {
+        away?: { score?: number; team?: { id?: number } };
+        home?: { score?: number; team?: { id?: number } };
+      };
       lineups?: { homePlayers?: { id?: number }[]; awayPlayers?: { id?: number }[] };
     }[];
   }[];
@@ -88,6 +96,17 @@ interface ScheduledGame {
   // neither, which is why an unlisted batter gets no spot rather than a guess.
   homeLineup: number[];
   awayLineup: number[];
+  /** The three fields below are the gap walk's alone — a played row is found by
+   *  `gamePk` and never needs to ask who was playing or when. Filling a batter's
+   *  season in means asking the opposite question ("which of *his club's* games
+   *  has no row?"), which cannot be answered from a map keyed on the games he
+   *  was in. `date` is MLB's `officialDate`, which is the day a game belongs to
+   *  rather than the day it started — the same distinction the app's 3am
+   *  baseball day is built on, and it is what keeps a game finishing after
+   *  midnight from being counted on a date its club has another game on. */
+  date: string;
+  homeId: number;
+  awayId: number;
 }
 
 type Schedule = Map<number, ScheduledGame>;
@@ -126,8 +145,9 @@ async function getSchedule(season: number): Promise<Schedule> {
   }
   const url =
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${season}&gameType=R` +
-    `&hydrate=lineups&fields=dates,games,gamePk,status,abstractGameState,codedGameState,` +
-    `detailedState,teams,away,home,score,lineups,homePlayers,awayPlayers,id`;
+    `&hydrate=lineups&fields=dates,date,games,gamePk,officialDate,status,abstractGameState,` +
+    `codedGameState,detailedState,teams,away,home,score,team,lineups,homePlayers,` +
+    `awayPlayers,id`;
   try {
     const res = await fetch(url, { headers: UA });
     if (!res.ok) throw new Error(`schedule returned ${res.status}`);
@@ -148,6 +168,9 @@ async function getSchedule(season: number): Promise<Schedule> {
           awayScore: typeof away === 'number' ? away : null,
           homeLineup: ids(g.lineups?.homePlayers),
           awayLineup: ids(g.lineups?.awayPlayers),
+          date: g.officialDate ?? d.date ?? '',
+          homeId: g.teams?.home?.team?.id ?? 0,
+          awayId: g.teams?.away?.team?.id ?? 0,
         });
       }
     }
@@ -468,3 +491,180 @@ export async function getPitcherGameLog(
   return games;
 }
 
+
+/**
+ * **The days his club played and he did not**, which is the other half of a
+ * season and the half a game log has never carried.
+ *
+ * `stats(type=[gameLog])` answers *which games did he appear in*, and a reader
+ * looking at a log with nothing between June 2 and July 13 cannot tell a
+ * benching from a rib fracture. Both readings are in the same silence, and the
+ * log drew them the same way by drawing neither.
+ *
+ * **Two shapes, because the two silences are not the same size.** A day off is a
+ * *game* — it has an opponent, a score and a result — and comes back as an
+ * ordinary log entry with no stats on it. An absence is a *stretch*: a man who
+ * missed six weeks would otherwise arrive as forty near-identical rows burying
+ * the season he did play, so consecutive games lost to one state collapse into
+ * one row that names the state and counts them.
+ *
+ * **Only games that are `final` count.** A game still being played is one he may
+ * yet come into, and a postponement is not a game anybody missed — which is
+ * `schedule.ts`'s own rule, read here through the `state` this file already
+ * classified rather than off the status keys a second time.
+ *
+ * **Which club's fixtures to walk is read off the stint, not off his nearest
+ * game.** The two agree everywhere except either side of a trade, which is
+ * exactly where the question gets asked; where the stints know no club — a
+ * player with no transactions at all, which is most of them — it falls back to
+ * the club of his nearest played game, and where he has played nothing at all it
+ * returns nothing rather than inventing a club to walk.
+ */
+function buildBatterGaps(
+  games: BatterGameLog[],
+  sched: Schedule,
+  stints: PlayerStint[],
+  abbrevs: Map<number, string>,
+): GameLogGap[] {
+  if (games.length === 0) return [];
+  const played = new Set(games.map((g) => g.gamePk));
+
+  // His club on the day of each game he played, oldest first — the fallback the
+  // stints are read against.
+  const byGame: { date: string; club: number }[] = [];
+  for (const g of [...games].reverse()) {
+    const sg = sched.get(g.gamePk);
+    if (!sg) continue;
+    const club = g.home ? sg.homeId : sg.awayId;
+    if (club) byGame.push({ date: g.date, club });
+  }
+  if (byGame.length === 0) return [];
+
+  const clubOn = (date: string): number => {
+    for (let i = stints.length - 1; i >= 0; i--) {
+      const st = stints[i];
+      if (st.from <= date && (st.to === null || date < st.to) && st.club !== null) return st.club;
+    }
+    let club = byGame[0].club;
+    for (const b of byGame) {
+      if (b.date > date) break;
+      club = b.club;
+    }
+    return club;
+  };
+
+  const firstPlayed = byGame[0].date;
+  // **Every final game of his club's season, not every game up to his last
+  // appearance** — and the difference is the row a reader most wants. The first
+  // cut stopped at his last played game on the reasoning that the season past
+  // it had not happened for him; measured on Aaron Judge, who last played on
+  // 2026-05-31 and has been on the injured list since June 2, that reasoning
+  // deleted **every** row explaining why: 59 games, 0 gaps, and a log that
+  // simply stopped in May with nothing to say about it. A game still being
+  // played and a game not yet played are excluded by `final` alone, which is
+  // the honest cut and the only one needed.
+  const season = [...sched.entries()]
+    .filter(([, g]) => g.state === 'final' && g.date)
+    .sort((a, b) => (a[1].date < b[1].date ? -1 : a[1].date > b[1].date ? 1 : 0));
+
+  const out: GameLogGap[] = [];
+  // The absence being accumulated, if the last game was one. A run ends when the
+  // status changes, when he plays, or when the season does.
+  let run: { status: string; detail: string; from: string; to: string; games: number } | null = null;
+  const closeRun = (): void => {
+    if (!run) return;
+    out.push({
+      kind: 'absence',
+      from: run.from,
+      to: run.to,
+      games: run.games,
+      status: run.status,
+      detail: run.detail,
+    });
+    run = null;
+  };
+
+  for (const [gamePk, g] of season) {
+    const club = clubOn(g.date);
+    const home = g.homeId === club;
+    if (!home && g.awayId !== club) continue;
+    if (played.has(gamePk)) {
+      closeRun();
+      continue;
+    }
+    const st = statusOn(stints, g.date);
+    // **Before his first appearance, silence is not availability.** A date
+    // ahead of his debut that no stint covers is one nothing is known about —
+    // he may not have been signed, or the transaction that would say so may be
+    // one this file could not read — and a `dnp` row there would claim he was
+    // on the bench. Nothing is drawn instead, which is the standing rule that a
+    // join fails to null rather than to a guess.
+    if (!st?.status && g.date < firstPlayed) {
+      closeRun();
+      continue;
+    }
+    if (st?.status) {
+      if (run && run.status === st.status) {
+        run.to = g.date;
+        run.games += 1;
+      } else {
+        closeRun();
+        run = { status: st.status, detail: st.detail, from: g.date, to: g.date, games: 1 };
+      }
+      continue;
+    }
+    closeRun();
+    const oppId = home ? g.awayId : g.homeId;
+    out.push({
+      kind: 'dnp',
+      gamePk,
+      date: g.date,
+      home,
+      opponentId: oppId,
+      opponent: abbrevs.get(oppId) ?? '—',
+      // The same gate a played row takes: a result exists only where the game
+      // is over, and every game reaching here is.
+      win: home ? g.homeScore! > g.awayScore! : g.awayScore! > g.homeScore!,
+      state: g.state,
+      detailedState: g.detailedState,
+      teamScore: (home ? g.homeScore : g.awayScore) ?? null,
+      opponentScore: (home ? g.awayScore : g.homeScore) ?? null,
+      summary: '',
+    });
+  }
+  closeRun();
+
+  // Newest first, which is the order the log is read in and the order the rows
+  // these interleave with already arrive in.
+  return out.reverse();
+}
+
+/**
+ * **A batter's log and the season around it** — the games he played, and the
+ * days his club played without him.
+ *
+ * The two ride side by side rather than merged, and that is the whole of why
+ * nothing already reading a game log had to change: the Overview's five-game
+ * preview and the season totals row read `games` and get exactly the list they
+ * have always got. Only the Game Log tab asks for `gaps`, and only it draws
+ * them.
+ */
+export async function getBatterLog(
+  playerId: number,
+  season: number = new Date().getFullYear(),
+): Promise<{ games: BatterGameLog[]; gaps: GameLogGap[] }> {
+  const [games, abbrevs, sched] = await Promise.all([
+    getBatterGameLog(playerId, season),
+    getTeamAbbrevs(),
+    getSchedule(season),
+  ]);
+  // A failed transactions read costs the absence rows and nothing else — every
+  // day he did not play then reads as a day he did not play, which is true and
+  // merely less informative. `getPlayerStints` already swallows its own error;
+  // this catch is the one for a thrown abbreviation map.
+  const stints = await getPlayerStints(playerId, season, new Set(abbrevs.keys())).catch((err) => {
+    console.error('player stints failed:', err);
+    return [] as PlayerStint[];
+  });
+  return { games, gaps: buildBatterGaps(games, sched, stints, abbrevs) };
+}
