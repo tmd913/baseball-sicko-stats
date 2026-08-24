@@ -1,8 +1,14 @@
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
-import type { FocusEvent, PointerEvent } from 'react';
-import type { ArmAngleInfo, MovementSample, SeasonArsenalPitch } from '../types';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, PointerEvent, ReactNode } from 'react';
+import type {
+  ArmAngleInfo,
+  MovementSample,
+  PitchMix,
+  PitcherGame,
+  SeasonArsenalPitch,
+} from '../types';
 import { pitchStyle } from '../lib';
-import { useDismissable } from '../hooks';
+import { TAP_SLOP, useDismissable } from '../hooks';
 import { InfoKey } from './InfoKey';
 import { pitchDirections } from './Arsenal';
 
@@ -108,6 +114,210 @@ function pitchButtonProps(pitchType: string, sel: PitchSelection) {
 }
 
 /**
+ * **What the two charts read: a pitch, its own numbers, and the baseline it is
+ * drawn against — whatever that baseline is.**
+ *
+ * The charts used to take a `SeasonArsenalPitch` and read `leagueHBreak` /
+ * `leagueVelo` off it directly, which was true of the only caller there was and
+ * stopped being true the moment an outing wanted the same pictures: on a game
+ * chart the blob behind a pitch is **his own season**, and a field called
+ * `league` holding a season figure is a name that lies to the next reader.
+ *
+ * So the comparison is named for its *role* rather than for one caller's
+ * population, and each caller adapts into it (`seasonChartPitches`,
+ * `gameChartPitches`). Nothing else about the two charts differs — the same
+ * butterfly, the same cloud, the same callouts — which is the point: an outing's
+ * arsenal is the same question asked against a nearer baseline.
+ *
+ * The fields the charts never read are not here at all. A `SeasonArsenalPitch`
+ * carries the season's BA/SLG/wOBA against and a `PitchMix` its whiff rate;
+ * neither picture draws them, and carrying them through would invite the next
+ * change to draw one of them off whichever caller happened to have it.
+ */
+export interface ChartPitch {
+  pitchType: string;
+  /** Share of the pitches in *this* view (0-1) — a season, a game, or one hand
+   *  of either, so a split's usage adds to 100%. */
+  share: number;
+  velo: number | null;
+  hBreak: number | null;
+  vBreak: number | null;
+  /** The baseline this pitch is read against: the league's average for a season
+   *  chart, his own season's for a game one. */
+  baseVelo: number | null;
+  baseHBreak: number | null;
+  baseVBreak: number | null;
+  /** How wide that baseline is, in inches — the hatched blob's radii. Null
+   *  draws no blob, which is the honest reading of "we cannot say how wide". */
+  baseHRange: number | null;
+  baseVRange: number | null;
+}
+
+/** A season row, read against the league. */
+export function seasonChartPitches(pitches: SeasonArsenalPitch[]): ChartPitch[] {
+  return pitches.map((p) => ({
+    pitchType: p.pitchType,
+    share: p.share,
+    velo: p.velo,
+    hBreak: p.hBreak,
+    vBreak: p.vBreak,
+    baseVelo: p.leagueVelo,
+    baseHBreak: p.leagueHBreak,
+    baseVBreak: p.leagueVBreak,
+    baseHRange: p.leagueHRange,
+    baseVRange: p.leagueVRange,
+  }));
+}
+
+/** A game row, read against the pitcher's own season. */
+export function gameChartPitches(mix: PitchMix[]): ChartPitch[] {
+  return mix.map((m) => ({
+    pitchType: m.pitchType,
+    share: m.share,
+    velo: m.avgVelo,
+    hBreak: m.hBreak,
+    vBreak: m.vBreak,
+    baseVelo: m.seasonVelo,
+    baseHBreak: m.seasonHBreak,
+    baseVBreak: m.seasonVBreak,
+    baseHRange: m.seasonHRange,
+    baseVRange: m.seasonVRange,
+  }));
+}
+
+/**
+ * What the hatched blob and the `vs` callouts are measured against, said in the
+ * three places the chart has to say it.
+ *
+ * A season chart derives its own from the pitcher's hand — `RHP AVG`, because a
+ * right-hander throws 0.9–2.0 mph harder at every pitch type and a blended
+ * figure marks a lefty down for being left-handed. A game chart overrides it
+ * with his season, which no hand can be read off.
+ */
+export interface ChartBaseline {
+  /** The callouts' own upper case: `RHP AVG`, `SEASON AVG`. */
+  label: string;
+  /** The legend's sentence case, beside `Usage` and `MPH`: `RHP avg`, `Season`. */
+  short: string;
+  /** What the hatch swatch in the plot's own corner says the blobs are. Not
+   *  `label`: that one names the population *for his hand* because the callout
+   *  above it is a comparison against exactly that line, where the key stands
+   *  over all five blobs at once and a season chart's have always read `MLB
+   *  AVG`. */
+  key: string;
+  /** How the resting hint names it — `the league`, `his season` — in
+   *  `Pick a pitch to compare it with …`. */
+  against: string;
+  /** How the info key names the blob. What the blob *is* is the whole of the
+   *  difference between the two readings, so it is spelled out rather than
+   *  described generically. */
+  blob: ReactNode;
+}
+
+/**
+ * The pitch selection the two charts share — **owned by whoever draws them
+ * both**, because picking out the slider in one has to pick it out in the
+ * other: they are two views of one arsenal, and a selection each would be two
+ * answers to "which pitch am I looking at" on one screen.
+ *
+ * **Two pieces of state, not one**, which is what makes a press mean something a
+ * hover does not: `preview` is where the pointer or the keyboard is, `picked` is
+ * what was pressed, and what is lit is the first of those that exists. See
+ * `PitchSelection` above for the whole of the rule and for the two faults a
+ * single `hovered` produced.
+ *
+ * ### A tap anywhere else unpins, and a scroll does not
+ *
+ * That is the other half of a press meaning something: on touch there is no
+ * pointer to move away, so without the first clause a tapped pitch would stay
+ * lit until the reader remembered which one it was and tapped it again.
+ *
+ * **The second clause is what this used to get wrong.** It cleared on the
+ * `pointerdown` itself, and on a touch device a *scroll* begins with a
+ * `pointerdown` on whatever happens to be under the finger — so dragging the
+ * page anywhere but on a pitch button unpinned the pitch, which is the one
+ * gesture a reader makes constantly while reading a chart taller than a phone.
+ * Reported as the arsenal page dropping its touch highlight on scroll.
+ *
+ * So the press only **arms** and the release decides: a gesture that stayed
+ * within `TAP_SLOP` of where it started is a tap and clears the pin, and one
+ * that travelled further is a drag and does not. A scroll the browser takes
+ * over fires `pointercancel` and no `pointerup` at all, which disarms without
+ * ever reaching the test.
+ *
+ * **`PairRow` in `PlayerDetails.tsx` already had all of this**, and its comment
+ * is this bug stated one card over — *"the card is a list of rows inside a
+ * scroller, and toggling on pointerdown meant every flick that happened to start
+ * on a row flipped it"*. The percentile card was fixed and the arsenal pin was
+ * written afterwards without it. Same constant, deliberately: two numbers for
+ * one question is two numbers to keep true, which is why `TAP_SLOP` lives in
+ * `hooks.ts` and not beside either reader.
+ *
+ * **Arming is judged on where the gesture started**, not where it ended: a drag
+ * that begins on a pitch button and releases on the page is that button's
+ * gesture, and a press that begins on the page and releases over a button is the
+ * page's.
+ *
+ * Deliberately **not `useDismissable`**, though it is the same shape: that hook
+ * also spends the press (`swallowNextClick`), because a popover is *in the
+ * reader's way* and a press past it is aimed at getting rid of it. A lit pitch
+ * covers nothing, so the press that clears it should also do what it was aimed
+ * at — a first tap on the next tab must switch tabs, not be eaten. Nothing here
+ * calls `preventDefault` or `stopPropagation`, so the click that follows a
+ * clearing tap still lands on whatever it was aimed at.
+ *
+ * `[data-pitch]` rather than the two class names, so the test names the thing (a
+ * pitch button) rather than either chart's markup.
+ */
+export function usePitchSelection(): PitchSelection {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  // Turning a preview *off* only clears its own: focus can leave one button
+  // while the pointer sits on another, and an unconditional clear takes the
+  // wrong one down.
+  const onPreview = useCallback(
+    (pitchType: string, on: boolean) =>
+      setPreview((cur) => (on ? pitchType : cur === pitchType ? null : cur)),
+    [],
+  );
+  const onPick = useCallback(
+    (pitchType: string) => setPicked((cur) => (cur === pitchType ? null : pitchType)),
+    [],
+  );
+
+  useEffect(() => {
+    if (picked === null) return;
+    let armed: { x: number; y: number } | null = null;
+    const onDown = (e: globalThis.PointerEvent) => {
+      const t = e.target as Element | null;
+      armed = t?.closest?.('[data-pitch]') ? null : { x: e.clientX, y: e.clientY };
+    };
+    const onUp = (e: globalThis.PointerEvent) => {
+      const start = armed;
+      armed = null;
+      if (!start) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) <= TAP_SLOP) setPicked(null);
+    };
+    const onCancel = () => {
+      armed = null;
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+  }, [picked]);
+
+  return useMemo(
+    () => ({ selected: preview ?? picked, picked, onPreview, onPick }),
+    [preview, picked, onPreview, onPick],
+  );
+}
+
+/**
  * Black or white on a pitch's own color, whichever a reader can actually see.
  *
  * The pitch palette is a fixed vocabulary spanning a crimson four-seamer and a
@@ -210,13 +420,16 @@ export function PitchUsageChart({
   vsLeft,
   selection,
 }: {
+  /** Which season these are, printed before the title. Null on an outing's own
+   *  chart, where the pitches are one night's and a year on the title would be
+   *  the wrong span for them. */
   season: number | null;
-  pitches: SeasonArsenalPitch[];
-  vsRight: SeasonArsenalPitch[] | null;
-  vsLeft: SeasonArsenalPitch[] | null;
+  pitches: ChartPitch[];
+  vsRight: ChartPitch[] | null;
+  vsLeft: ChartPitch[] | null;
   selection: PitchSelection;
 }) {
-  const shareIn = (list: SeasonArsenalPitch[] | null, type: string): number | null =>
+  const shareIn = (list: ChartPitch[] | null, type: string): number | null =>
     list ? (list.find((p) => p.pitchType === type)?.share ?? 0) : null;
 
   // One scale across all three columns — see UsageBar for why it is relative.
@@ -606,8 +819,13 @@ function ArmAnglePanel({
 }
 
 /** The hatched swatch that says what the blobs behind the clouds are, in the
- *  bottom corner the arm does not want. */
-function HatchKey({ side }: { side: 'left' | 'right' }) {
+ *  bottom corner the arm does not want.
+ *
+ *  **It says what the blobs actually are**, which is the baseline's own label
+ *  rather than the word `MLB` — that was the one place the chart named the
+ *  league in markup instead of reading it, and on an outing's copy it stood over
+ *  blobs drawn from the pitcher's own season. */
+function HatchKey({ side, label }: { side: 'left' | 'right'; label: string }) {
   const left = side === 'left';
   const cx = left ? 18 : VIEW - 18;
   return (
@@ -619,7 +837,7 @@ function HatchKey({ side }: { side: 'left' | 'right' }) {
         y={KEY_Y + 3.5}
         textAnchor={left ? 'start' : 'end'}
       >
-        MLB AVG
+        {label}
       </text>
     </g>
   );
@@ -643,16 +861,25 @@ export function MovementChart({
   season,
   hand,
   armAngle,
+  baseline,
   pitches,
   samples,
   selection,
 }: {
+  /** Which season these are, printed before the title. Null on an outing's own
+   *  chart — see `PitchUsageChart`. */
   season: number | null;
-  /** His throwing arm, which names the league line he is measured against. */
+  /** His throwing arm. It names the league line a season chart is measured
+   *  against, and on either chart it decides whether a pitch moving to his
+   *  throwing side is a tail or a break. */
   hand: 'R' | 'L' | null;
   /** His arm slot, drawn in the corner. Null draws nothing. */
   armAngle: ArmAngleInfo | null;
-  pitches: SeasonArsenalPitch[];
+  /** What the blob and the callouts compare against. Defaults to the league
+   *  line for his hand, which is what a season chart wants; an outing overrides
+   *  it with his own season. */
+  baseline?: ChartBaseline;
+  pitches: ChartPitch[];
   samples: MovementSample[];
   selection: PitchSelection;
 }) {
@@ -689,13 +916,29 @@ export function MovementChart({
 
   if (!shown.length) return null;
 
-  // What the league line is called on this page. `pitchLeague.ts` is split by
-  // the pitcher's hand, so where the server knows it the label names the
-  // population the figures actually come from; where it doesn't, the blended
-  // table is what is being shown and the label says so.
-  const avgLabel = hand === 'R' ? 'RHP AVG' : hand === 'L' ? 'LHP AVG' : 'LEAGUE AVG';
-  // The same fact in the legend's own sentence case, beside `Usage` and `MPH`.
-  const rowAvgLabel = hand === 'R' ? 'RHP avg' : hand === 'L' ? 'LHP avg' : 'Lg avg';
+  // What the baseline is called on this page. Defaulted rather than required,
+  // because the season chart's own answer is a function of a prop it already
+  // has: `pitchLeague.ts` is split by the pitcher's hand, so where the server
+  // knows it the label names the population the figures actually come from;
+  // where it doesn't, the blended table is what is being shown and the label
+  // says so.
+  const base: ChartBaseline = baseline ?? {
+    label: hand === 'R' ? 'RHP AVG' : hand === 'L' ? 'LHP AVG' : 'LEAGUE AVG',
+    short: hand === 'R' ? 'RHP avg' : hand === 'L' ? 'LHP avg' : 'Lg avg',
+    key: 'MLB AVG',
+    against: 'the league',
+    blob: (
+      <>
+        The hatched blob behind each color is where the average of that pitch sits for
+        pitchers of <b>his own hand</b>, drawn as wide as the league's own spread —
+        average is a cloud too, so daylight narrower than the blob is not a difference.
+        (A right-hander throws about two miles an hour harder than a left-hander at
+        every pitch type, which is why the comparison is split.)
+      </>
+    ),
+  };
+  const avgLabel = base.label;
+  const rowAvgLabel = base.short;
   // What the *cloud* can honor. A pitch with no measured break is on the usage
   // butterfly and on no part of this chart, so it lights nothing here rather
   // than dimming everything against a blob that is not drawn.
@@ -703,16 +946,18 @@ export function MovementChart({
   const hot = sel !== null && types.has(sel) ? sel : null;
   const focus = hot ? (shown.find((p) => p.pitchType === hot) ?? null) : null;
 
-  // The two callouts: how his pitch differs from the league's own. Horizontal
+  // The two callouts: how his pitch differs from the baseline behind it — the
+  // league's own pitch on a season chart, his own season's on an outing's.
+  // Horizontal
   // break is compared as a MAGNITUDE (its sign is only which way his arm goes),
   // where rise is signed — a lower induced break literally is more drop.
   const hDiff =
-    focus && focus.leagueHBreak !== null && focus.hBreak !== null
-      ? Math.abs(focus.hBreak) - Math.abs(focus.leagueHBreak)
+    focus && focus.baseHBreak !== null && focus.hBreak !== null
+      ? Math.abs(focus.hBreak) - Math.abs(focus.baseHBreak)
       : null;
   const vDiff =
-    focus && focus.leagueVBreak !== null && focus.vBreak !== null
-      ? focus.vBreak - focus.leagueVBreak
+    focus && focus.baseVBreak !== null && focus.vBreak !== null
+      ? focus.vBreak - focus.baseVBreak
       : null;
 
   // **Tail or break**, which is a fact about his arm rather than about the
@@ -793,27 +1038,31 @@ export function MovementChart({
             drop gravity gives every pitch. The rings are inches; the solid ones are
             labeled and the dashed ones halve them.
           </p>
-          <p>
-            The hatched blob behind each color is where the average of that pitch
-            sits for pitchers of <b>his own hand</b>, drawn as wide as the league's own
-            spread — average is a cloud too, so daylight narrower than the blob is not a
-            difference. (A right-hander throws about two miles an hour harder than a
-            left-hander at every pitch type, which is why the comparison is split.)
-          </p>
-          <p>
-            The arm in the bottom corner is <b>his own slot</b> — how far above
-            horizontal his arm is at release, where 0° is a true sidearm and 90° would
-            be straight over the top. It is drawn on the side he throws from, and it
-            opens onto where the ball actually leaves his hand.
-          </p>
+          {/* The one paragraph the two readings do not share: what the blob
+              behind each color *is* is the whole of the difference between a
+              season chart and an outing's. See `ChartBaseline`. */}
+          <p>{base.blob}</p>
+          {/* Gated on the mark being drawn. An outing's chart has no arm — the
+              slot is a season-long figure off Savant's own leaderboard, and a
+              key that explains a corner the reader is looking at and cannot see
+              is worse than one paragraph shorter. */}
+          {armAngle && (
+            <p>
+              The arm in the bottom corner is <b>his own slot</b> — how far above
+              horizontal his arm is at release, where 0° is a true sidearm and 90° would
+              be straight over the top. It is drawn on the side he throws from, and it
+              opens onto where the ball actually leaves his hand.
+            </p>
+          )}
           <p>Pick a pitch below to single it out and see how it compares.</p>
         </InfoKey>
       </figcaption>
 
       {/* **Two blocks, and they answer two different questions.** On the left,
           what the pitch actually does — its rise or drop, its tail or break.
-          On the right, how that compares with the same pitch thrown by the rest
-          of his own hand. They were one run of chips saying both at once
+          On the right, how that compares with the baseline the chart is drawn
+          against (the rest of his own hand on a season chart; his own season on
+          an outing's). They were one run of chips saying both at once
           (`Break 3.5" · 3.0" less than league`), which reads as one fact and is
           two.
 
@@ -846,7 +1095,7 @@ export function MovementChart({
         </span>
         <span className="mv-callouts-live">
           {focus === null ? (
-            <span className="mv-hint">Pick a pitch to compare it with the league</span>
+            <span className="mv-hint">Pick a pitch to compare it with {base.against}</span>
           ) : (
             <>
               <span className="mv-cal-group">
@@ -982,23 +1231,23 @@ export function MovementChart({
 
           {/* League averages, behind the pitcher's own dots. */}
           {shown.map((p) => {
-            if (p.leagueHBreak === null || p.leagueVBreak === null) return null;
+            if (p.baseHBreak === null || p.baseVBreak === null) return null;
             // The spread is always filled by the current server (there is a
             // default behind it), so this only bites in the window where a new
             // client is talking to an older build. A blob whose width we cannot
             // state is not drawn at all — `rx="NaN"` is an invalid attribute
             // that silently paints nothing anyway, and "we don't know how wide
             // the league is here" is the honest reading of a missing field.
-            if (!Number.isFinite(p.leagueHRange) || !Number.isFinite(p.leagueVRange)) return null;
+            if (p.baseHRange === null || p.baseVRange === null) return null;
             const dim = hot !== null && hot !== p.pitchType;
             return (
               <ellipse
                 key={`lg-${p.pitchType}`}
                 className={`mv-league${dim ? ' dim' : ''}`}
-                cx={CX + px(p.leagueHBreak)}
-                cy={CY - px(p.leagueVBreak)}
-                rx={px(p.leagueHRange)}
-                ry={px(p.leagueVRange)}
+                cx={CX + px(p.baseHBreak)}
+                cy={CY - px(p.baseVBreak)}
+                rx={px(p.baseHRange)}
+                ry={px(p.baseVRange)}
                 fill={`url(#hatch-${uid}-${p.pitchType.replace(/\W/g, '')})`}
               />
             );
@@ -1058,7 +1307,7 @@ export function MovementChart({
               panelId={armPanelId}
             />
           )}
-          <HatchKey side={hand === 'L' ? 'right' : 'left'} />
+          <HatchKey side={hand === 'L' ? 'right' : 'left'} label={base.key} />
         </svg>
 
         {armAngle && armOpen && (
@@ -1121,7 +1370,7 @@ export function MovementChart({
                 <span className="mv-legend-val">{pctText(p.share)}</span>
                 <span className="mv-legend-val">{p.velo === null ? '—' : p.velo.toFixed(1)}</span>
                 <span className="mv-legend-val mv-legend-lg">
-                  {p.leagueVelo === null ? '—' : p.leagueVelo.toFixed(1)}
+                  {p.baseVelo === null ? '—' : p.baseVelo.toFixed(1)}
                 </span>
               </button>
             );
@@ -1129,5 +1378,135 @@ export function MovementChart({
         </div>
       </div>
     </figure>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One outing, read against his season
+// ---------------------------------------------------------------------------
+
+/**
+ * The **same two pictures for one night's work** — what he threw in this game,
+ * and where it moved, with his own season in the place the league occupies on
+ * his player page.
+ *
+ * ### Why the baseline moves and nothing else does
+ *
+ * A season chart answers *what kind of pitcher is this*, and the population
+ * worth answering it against is the rest of the league. An outing answers a
+ * different question with the same shapes — *was tonight his usual stuff* — and
+ * the only baseline that can answer it is the pitcher himself. Against the
+ * league, a night on which a good pitcher's slider lost three inches still reads
+ * as an above-average slider, which is the fact and not the question. So the
+ * charts are handed his season as the baseline (`gameChartPitches`) and told
+ * what to call it (`GAME_BASELINE`); every other rule — the butterfly's one
+ * scale, the cloud's outlines, the shared selection, what is lit and what a
+ * press means — is the same code and cannot drift from the page next door.
+ *
+ * ### The cloud is every pitch, not a sample
+ *
+ * The season plot draws **one dot per percent** of his pitches, because a
+ * starter throws 2,000+ a season and past a few hundred dots a cloud says less
+ * rather than more. A game is already bounded by a pitch count — 95 on a long
+ * start, a dozen for a reliever — so there is nothing to sample: every pitch he
+ * threw is a dot, and the densities are the usage for free.
+ *
+ * That is also why the pitches have to arrive per pitch rather than per type.
+ * `PitchMix` has carried a game's mean break since it was written and a mean
+ * cannot say how *tight* tonight's sliders were, which on a one-game chart is
+ * most of the reading — so `Pitch` carries `hBreak`/`vBreak` and the cloud is
+ * built from the batters he faced.
+ *
+ * ### No arm, and no year on the titles
+ *
+ * The arm slot is a **season** figure off Savant's own arm-angle leaderboard —
+ * there is no such thing as tonight's slot — so drawing it here would be a
+ * season fact in the corner of a chart whose whole claim is that it is about one
+ * game, and it would cost the outing page a Savant read for a corner. The corner
+ * is left to the hatch key alone, which is what a chart with no arm angle
+ * already does. The titles drop their year for the same reason: `2026 Pitch
+ * Usage` over one afternoon's pitches names the wrong span.
+ */
+const GAME_BASELINE: ChartBaseline = {
+  label: 'SEASON AVG',
+  short: 'Season',
+  key: 'SEASON AVG',
+  against: 'his season',
+  blob: (
+    <>
+      The hatched blob behind each color is where that pitch usually sits{' '}
+      <b>for him</b>, over his whole season, drawn as wide as his own pitch-to-pitch
+      spread — his slider is a cloud over a season too, so a single dot outside the
+      blob is an ordinary miss. What says something is the shape of the night: a
+      cloud sitting off its blob, or spread much wider than it.
+    </>
+  ),
+};
+
+/**
+ * A game's pitches as movement points, one per pitch.
+ *
+ * Off `facedBatters` rather than a list of its own: those are the same pitches
+ * the game's `PitchMix` is aggregated from, and a second array beside them would
+ * be two answers to what he threw. A pitch with no type or no measured break is
+ * dropped — Statcast misses one now and then, and a dot at the origin is a claim
+ * that a pitch did not move.
+ */
+export function gameMovementSamples(pg: PitcherGame): MovementSample[] {
+  const out: MovementSample[] = [];
+  for (const fb of pg.facedBatters) {
+    for (const p of fb.pitches) {
+      if (!p.pitchType || p.hBreak === null || p.vBreak === null) continue;
+      out.push({ pitchType: p.pitchType, hBreak: p.hBreak, vBreak: p.vBreak });
+    }
+  }
+  return out;
+}
+
+/** The outing's Arsenal tab: the usage butterfly and the movement cloud, both
+ *  for this game and both read against his season. See `GAME_BASELINE`. */
+export function GameArsenalCharts({
+  pg,
+  hand,
+}: {
+  pg: PitcherGame;
+  /** Which arm he throws with, off his report — MLB's own code, so it is a bare
+   *  `string` and is narrowed here rather than at the call site. It decides
+   *  whether a pitch moving to his throwing side is called a tail or a break;
+   *  the baseline labels are his season's either way. */
+  hand: string | null;
+}) {
+  const selection = usePitchSelection();
+  const arm = hand === 'R' || hand === 'L' ? hand : null;
+  const pitches = useMemo(() => gameChartPitches(pg.pitchMix), [pg.pitchMix]);
+  const vsRight = useMemo(
+    () => (pg.vsRight ? gameChartPitches(pg.vsRight.pitchMix) : null),
+    [pg.vsRight],
+  );
+  const vsLeft = useMemo(
+    () => (pg.vsLeft ? gameChartPitches(pg.vsLeft.pitchMix) : null),
+    [pg.vsLeft],
+  );
+  const samples = useMemo(() => gameMovementSamples(pg), [pg]);
+  if (!pg.pitchMix.length) return null;
+  return (
+    <div className="arsenal-charts">
+      <PitchUsageChart
+        season={null}
+        pitches={pitches}
+        vsRight={vsRight}
+        vsLeft={vsLeft}
+        selection={selection}
+      />
+      <MovementChart
+        season={null}
+        hand={arm}
+        armAngle={null}
+        baseline={GAME_BASELINE}
+        pitches={pitches}
+        samples={samples}
+        selection={selection}
+      />
+    </div>
   );
 }

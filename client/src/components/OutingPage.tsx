@@ -10,6 +10,7 @@ import { LoadingBlock } from './Loading';
 import { DialogLayerContext, DIALOG_LAYER } from './Modal';
 import { InningsList } from './Innings';
 import { ArsenalSection, GameLine, OpponentSection, outingBar } from './PitcherCard';
+import { GameArsenalCharts } from './ArsenalCharts';
 import { matchupLine } from './PlayerCard';
 
 /**
@@ -37,10 +38,26 @@ import { matchupLine } from './PlayerCard';
  * table between them, and they were being read through a `--card-column` box
  * inside another one.
  *
- * **Line leads and is the default**, because it is what a reader opens an
- * outing for: the decision, the innings, the pitch count, the counting stats
- * and the rates in one strip. The innings are the follow-up question, which is
- * the same order the sections had on the card this is descended from.
+ * ### Line leads and is the default; Arsenal is second
+ *
+ * **The strip runs `Line · Arsenal · Innings · Opponent`.** Line leads because
+ * it is what a reader opens an outing for: the decision, the innings, the pitch
+ * count, the counting stats and the rates in one strip.
+ *
+ * **Arsenal sits directly behind it**, where it used to trail the lot. It is the
+ * reading of an outing that is *only about him* — what he threw and where it
+ * moved, against the same pitches over his whole season — where the innings are
+ * what happened around him and the opponent is who he faced. That is the same
+ * place it holds on the player page one screen up (second, behind the Overview),
+ * so a reader crossing from a man's season to one of his nights finds the two
+ * arsenals in the same position in both strips.
+ *
+ * **Which tab a page opens on is a separate question and did not move.** A
+ * finished outing opens on Line and a live one on **Innings** (see
+ * `defaultOutingTab`) — a game still being thrown is a narrative rather than a
+ * result. Order is where a reading *lives*; the default is which question was
+ * asked, and this page has answered them separately since the live case was
+ * written.
  *
  * ### What it borrows
  *
@@ -197,9 +214,9 @@ export function OutingPage({
     ? []
     : [
         { key: 'line', label: 'Line' },
+        ...(pg.pitchMix.length > 0 ? [{ key: 'arsenal' as const, label: 'Arsenal' }] : []),
         { key: 'innings', label: 'Innings' },
         ...(game!.opponentHitting ? [{ key: 'opponent' as const, label: 'Opponent' }] : []),
-        ...(pg.pitchMix.length > 0 ? [{ key: 'arsenal' as const, label: 'Arsenal' }] : []),
       ];
 
   return createPortal(
@@ -286,7 +303,17 @@ export function OutingPage({
                   bare
                 />
               )}
-              {active === 'arsenal' && <ArsenalSection pg={pg} bare />}
+              {active === 'arsenal' && (
+                <>
+                  {/* The two pictures first, the rows under them — see the note
+                      on this page's tab order. `report.throws` is the hand: the
+                      charts read it to tell a tail from a break, and it is a
+                      fact about the man rather than about the night, so his
+                      report is where it comes from. */}
+                  <GameArsenalCharts pg={pg} hand={report.throws} />
+                  <ArsenalSection pg={pg} bare />
+                </>
+              )}
             </>
           ) : pending?.error ? (
             <div className="details-status details-error">⚠ {pending.error}</div>

@@ -513,18 +513,19 @@ const CHAPTERS: Chapter[] = [
             then his news, his season line and his last five games. Each block links to
             the tab holding the whole of it.
           </dd>
-          <dt>Percentile Rankings</dt>
-          <dd>
-            Where he ranks in the league on each metric. A row pairing an actual with
-            its expected (wOBA/xwOBA, ERA/xERA) shows the expected number; press it for
-            both ends.
-          </dd>
           <dt>Arsenal</dt>
           <dd>
             Pitchers only: <strong>Pitch Usage</strong>, what he throws to each hand,
             and <strong>Movement Profile</strong>, where each pitch breaks against the
             league, with his arm angle in the corner. Pick a pitch in one and it lights
-            in both.
+            in both. The same two pictures sit on each of his outings, drawn against
+            this season instead of the league.
+          </dd>
+          <dt>Percentile Rankings</dt>
+          <dd>
+            Where he ranks in the league on each metric. A row pairing an actual with
+            its expected (wOBA/xwOBA, ERA/xERA) shows the expected number; press it for
+            both ends.
           </dd>
           <dt>Splits</dt>
           <dd>
@@ -573,6 +574,14 @@ const CHAPTERS: Chapter[] = [
             The outing: decision, IP, pitch count and strike rate, then the results, the
             rates and the contact he gave up.
           </dd>
+          <dt>Arsenal</dt>
+          <dd>
+            The same two pictures his player page leads with — what he threw and where
+            it moved — but drawn against <em>his own season</em> rather than the
+            league, so the question is whether tonight was his usual stuff. Under them,
+            a row per pitch type: usage, velo, spin and movement against that season,
+            and what hitters have done against it.
+          </dd>
           <dt>Innings</dt>
           <dd>
             A bar per half-inning. Press one and the inning opens as the batters he
@@ -584,11 +593,6 @@ const CHAPTERS: Chapter[] = [
             How the lineup he is facing hits — overall and against his hand — with each
             number's league rank beneath it, over a span and a home/away cut you pick.
             On a pitcher who has not taken the ball yet, this <em>is</em> the page.
-          </dd>
-          <dt>Arsenal</dt>
-          <dd>
-            A row per pitch type: usage, velo, spin and movement against his own season,
-            and what hitters did against it.
           </dd>
         </dl>
         <p className="tut-note">

@@ -17,6 +17,14 @@ export interface Pitch {
   szTop: number | null;
   szBot: number | null;
   zone: number | null;
+  /** Where the pitch broke, inches, in the app's usual convention: positive
+   *  `hBreak` toward third base and positive `vBreak` a rise, for a pitcher of
+   *  either hand (see `MovementSample`). These are the individual pitches an
+   *  outing's Movement Profile draws its cloud from — the per-type averages on
+   *  `PitchMix` cannot stand in for them, the spread *within* a pitch type
+   *  being what that chart is read for. */
+  hBreak: number | null;
+  vBreak: number | null;
   launchSpeed: number | null;
   launchAngle: number | null;
   hitDistance: number | null;
@@ -496,6 +504,13 @@ export interface PitchMix {
   seasonSpin: number | null;
   seasonHBreak: number | null;
   seasonVBreak: number | null;
+  /** How wide his own season is for this pitch type, in inches — the standard
+   *  deviation of the season's per-pitch break. An outing's Movement Profile
+   *  draws it as the hatched blob the night's dots are read against, the way the
+   *  season chart draws the league's own spread. Null where his season holds
+   *  fewer than two of the type. */
+  seasonHRange: number | null;
+  seasonVRange: number | null;
   leagueVelo: number | null;
   leagueSpin: number | null;
   leagueHBreak: number | null;

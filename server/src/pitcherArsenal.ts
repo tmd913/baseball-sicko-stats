@@ -36,8 +36,30 @@ export interface PitchUsage {
   strikes: number; // of those, the ones not ruled a ball (CSV `type` !== 'B')
 }
 
+/**
+ * How far **his own** pitches of a type stray from his own average for it — the
+ * standard deviation of the season's per-pitch break, in inches.
+ *
+ * The direct analogue of `pitchLeague.ts`'s `LEAGUE_SPREAD` one level down, and
+ * deliberately a different quantity from it: that table is the spread of *per-
+ * pitcher means* (how much pitchers differ from each other), where this is the
+ * spread *within one pitcher* (how much his own sliders differ from one
+ * another). Each is the right cloud for the chart that draws it — the season
+ * plot's dots are pitchers' pitches measured against the league, and the game
+ * plot's dots are one night's pitches measured against his season, which is a
+ * question only his own scatter can answer.
+ *
+ * Null where fewer than two of that type carried a break, a standard deviation
+ * of one reading being zero rather than unknown — and a zero-width blob is a
+ * point drawn as a claim about spread.
+ */
+export interface PitchSpread {
+  hRange: number | null;
+  vRange: number | null;
+}
+
 /** A pitch type's full season profile: usage + movement/velo baseline + results. */
-export interface SeasonPitch extends ArsenalPitch, PitchResults, PitchUsage {}
+export interface SeasonPitch extends ArsenalPitch, PitchResults, PitchUsage, PitchSpread {}
 
 /** A pitcher's season arsenal, keyed by full pitch name ("4-Seam Fastball"). */
 export type Arsenal = Map<string, SeasonPitch>;
@@ -192,8 +214,14 @@ interface StoredArsenals {
 // hours, correctly, off a blob nothing could tell was stale. v6 is his throwing
 // hand, which picks the per-hand league line — a v5 blob deserializes with it
 // null, which falls the chart back to the blended figure and the word "League",
-// so that one degrades rather than lying.
-const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v6.json`;
+// so that one degrades rather than lying. **v7 is his own per-pitch-type spread**
+// (`PitchSpread`), which an outing's Movement Profile draws as the season blob a
+// night's pitches are read against: a v6 blob deserializes with `hRange`/`vRange`
+// undefined, and the game chart then draws its dots over nothing at all — a
+// cloud with no baseline behind it, on the one chart whose whole claim is the
+// comparison. It is a field read straight back out of the blob, which is the
+// test this file applies.
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v7.json`;
 
 const NO_BATTED_BALLS: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
 
@@ -513,6 +541,24 @@ function aggregate(records: Record<string, string>[]): Arsenal {
 
   const mean = (xs: number[]) =>
     xs.length ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10) / 10 : null;
+  /**
+   * How far his own pitches of a type stray from his own average for it — the
+   * population standard deviation, rounded to the tenth of an inch the rest of
+   * this file's break figures are in. See `PitchSpread` for why it is his
+   * scatter rather than the league's.
+   *
+   * **Two readings, not one.** A single pitch has a standard deviation of zero,
+   * which the movement plot would draw as a blob with no width — a claim that
+   * every one of his sliders breaks identically, made off one slider. Null is
+   * the honest answer and the chart draws nothing for it, which is the same rule
+   * `aggregate` already applies to a type with fewer than two velo readings.
+   */
+  const spread = (xs: number[]): number | null => {
+    if (xs.length < 2) return null;
+    const m = xs.reduce((s, x) => s + x, 0) / xs.length;
+    const v = xs.reduce((s, x) => s + (x - m) ** 2, 0) / xs.length;
+    return Math.round(Math.sqrt(v) * 10) / 10;
+  };
   const r3 = (n: number) => Math.round(n * 1000) / 1000;
   const data: Arsenal = new Map();
   for (const [name, a] of agg) {
@@ -525,6 +571,8 @@ function aggregate(records: Record<string, string>[]): Arsenal {
       spin: a.spin.length ? Math.round(a.spin.reduce((s, x) => s + x, 0) / a.spin.length) : null,
       hBreak: mean(a.hb),
       vBreak: mean(a.vb),
+      hRange: spread(a.hb),
+      vRange: spread(a.vb),
       pa: a.pa || null,
       ba: a.ab ? r3(a.hits / a.ab) : null,
       slg: a.ab ? r3(a.tb / a.ab) : null,
