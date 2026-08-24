@@ -11490,6 +11490,16 @@ button.start-line:focus-visible {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+/* **Two marks, one to a segment.** The day carries how sure the turn is and the
+   club is the door onto the game, and they are on separate spans because they
+   would otherwise be two underlines on one run of text: `.opp-door` is dotted
+   and the estimated tier is dashed, and a descendant cannot cancel an
+   ancestor's decoration — it only adds its own. Marking the day is the honest
+   half as well as the free one: the club plays that day whatever happens, and
+   what is being guessed is that he is the one starting. */
+.research-turn-day {
+  font-variant-numeric: tabular-nums;
+}
 .research-turn-opp {
   color: var(--muted);
   font-weight: 600;
@@ -15130,10 +15140,21 @@ button.start-line:focus-visible {
    ladder about the same fact — announced, our reading of his slot, his club's
    rotation standing in. Only the two *modifiers* travel; `.sched-vs` itself
    stays with the grid, being the 10px caption that cell's width argues for. */
-.sched-vs-projected {
+.sched-vs-projected,
+/* The research board's `Start` column takes the same italic for **both**
+   unannounced tiers on one line, which is the shape `.sched-sp-projected,
+   .sched-sp-estimated` below already has: the word carries the caveat and the
+   tier is then said by the mark under the *day*. It cannot take
+   `.sched-vs-estimated` whole, that rule's underline being the one thing that
+   collides with the door on the same line — see `.research-turn-day`. */
+.research-turn-guess {
   font-style: italic;
 }
-.sched-vs-estimated {
+.sched-vs-estimated,
+/* …and the dashed underline of that third tier, on the day alone. Folded onto
+   the rule rather than restated, this being the same mark about the same fact —
+   the italic it brings with it is a no-op on a line already slanted. */
+.research-turn-est {
   font-style: italic;
   text-decoration: underline dashed color-mix(in srgb, var(--faint) 85%, transparent);
   text-underline-offset: 2px;

@@ -29,6 +29,7 @@ import { api } from '../api';
 import {
   PlayerStatusContext,
   useFullPage,
+  useGameDoor,
   useHandedness,
   usePlayerStatus,
   usePublishedHeight,
@@ -1119,11 +1120,29 @@ export function ResearchTable({
    * draws the wait. Fetching 450 splits to make 450 cells pressable is the
    * alternative, and it is not one.
    */
-  const [fixture, setFixture] = useState<{ row: ResearchRow; game: ScheduleGame } | null>(null);
+  /**
+   * The fixture whose preview is open — **and the index it was opened from**.
+   *
+   * Two surfaces raise this box now: the Schedule view's grid, off the span
+   * index, and the turn filter's `Start` column, off the whole-window one. The
+   * index has to travel with the fixture rather than be looked up at the draw
+   * site, because at that point there is no telling which of the two a game
+   * came from — and the dialog reads the index for the man the other club is
+   * throwing, which is the half of it a reader opened it for.
+   */
+  const [fixture, setFixture] = useState<{
+    row: ResearchRow;
+    game: ScheduleGame;
+    index: ScheduleIndex;
+  } | null>(null);
   /* Keyed on whose preview is open, so a club line read for one man is dropped
      when the next opens — `useOpponentBoards`'s own contract, and the summary
      table holds it exactly this way. */
   const { opps, load: loadOpponent } = useOpponentBoards(fixture?.row.id ?? 0);
+  /** The door onto a game's own page, for a start that has already been made —
+   *  the same context the roster table's opponent cell reads, and null outside
+   *  the provider, which leaves those starts the plain text they were. */
+  const openGame = useGameDoor();
   /**
    * His platoon split, by MLB id, read lazily and **kept for the board's
    * lifetime** — which is the one place this departs from the club cache above.
@@ -1160,8 +1179,8 @@ export function ResearchTable({
    * handful of men under no team — and it opens nothing rather than opening a
    * box that would have to say so.
    */
-  const openFixture = useCallback(
-    (row: ResearchRow, game: ScheduleGame) => {
+  const openFixtureIn = useCallback(
+    (row: ResearchRow, game: ScheduleGame, index: ScheduleIndex) => {
       if (row.teamId === null) return;
       if (row.kind === 'pitcher') {
         const oppId = game.homeId === row.teamId ? game.awayId : game.homeId;
@@ -1169,9 +1188,19 @@ export function ResearchTable({
       } else {
         loadSplits(row.id);
       }
-      setFixture({ row, game });
+      setFixture({ row, game, index });
     },
     [loadOpponent, loadSplits],
+  );
+  /** The grid's door — the span index, which is the one its cells are drawn
+   *  from. Null while the mode is off, which is what leaves those cells plain
+   *  text; there are none to press then anyway. */
+  const openFixture = useMemo(
+    () =>
+      schedule
+        ? (row: ResearchRow, game: ScheduleGame) => openFixtureIn(row, game, schedule)
+        : undefined,
+    [openFixtureIn, schedule],
   );
   /* His hand, for the accented row of the lineup a pitcher's dialog draws. The
      board's rows already read this map for the `L/R` under a name, so the
@@ -1227,6 +1256,36 @@ export function ResearchTable({
       ? { range: turnRange, index: turnIndex }
       : null;
 
+  /**
+   * **What a start in the `Start` column opens** — the same pair of doors the
+   * roster table's opponent cell has, chosen on the game's own state: a fixture
+   * opens the preview (the park, the man the other club is throwing, the lineup
+   * waiting for him), and one already under way or finished opens the game's
+   * page.
+   *
+   * It was plain text for one commit, on the argument that the grid's cell is
+   * the *fixture* and this one is a caption on a start. That is a distinction
+   * without a difference to a reader: it names a club on a day, which is the
+   * one thing this app has made pressable wherever it appears — and a filter
+   * that puts forty starts on screen and lets none of them be opened is the
+   * board's own `vs MIL` fault, which this file records under the Schedule
+   * view, made twice.
+   *
+   * Off the **whole-window** index rather than the span's, so a start four
+   * weeks out opens exactly as tonight's does.
+   */
+  const turnDoors = useMemo(
+    () =>
+      activeTurn
+        ? {
+            preview: (row: ResearchRow, game: ScheduleGame) =>
+              openFixtureIn(row, game, activeTurn.index),
+            game: openGame ?? undefined,
+          }
+        : undefined,
+    [activeTurn?.index, openFixtureIn, openGame],
+  );
+
   const columns = useMemo(() => {
     if (schedule) return scheduleColumns(schedule, kind, teams, teams ? undefined : openFixture);
     const byKey = new Map(allColumns.map((c) => [c.key, c]));
@@ -1252,7 +1311,9 @@ export function ResearchTable({
      * Not in schedule mode, where the day columns already *are* this fact,
      * drawn fourteen wide.
      */
-    return activeTurn ? [turnColumn(activeTurn.index, activeTurn.range), ...stats] : stats;
+    return activeTurn
+      ? [turnColumn(activeTurn.index, activeTurn.range, turnDoors), ...stats]
+      : stats;
   }, [
     allColumns,
     orderedKeys,
@@ -1262,6 +1323,7 @@ export function ResearchTable({
     openFixture,
     activeTurn?.range,
     activeTurn?.index,
+    turnDoors,
   ]);
   /**
    * Which keys the sort's fallback will accept. Out of schedule mode that is
@@ -2854,6 +2916,18 @@ export function ResearchTable({
    */
   const turnChip = activeTurn ? turnRangeLabel(activeTurn.range, activeTurn.index.today) : null;
 
+  /**
+   * Whether the surface that raised the open preview is **still on screen** —
+   * the grid's span index, or the turn filter's window one. Identity is the
+   * test rather than a flag: both are memoized objects that go null or change
+   * the moment their control does, so a fixture opened from the grid closes
+   * when the grid does even with the filter still on, and one opened from a
+   * start closes when the days are cleared or the reader crosses to the
+   * batters.
+   */
+  const fixtureLive =
+    !!fixture && (fixture.index === schedule || fixture.index === activeTurn?.index);
+
   const panels = (
     <>
       {searchOpen && (
@@ -3078,11 +3152,13 @@ export function ResearchTable({
           not in the cell that opened it. The same reasoning, and the same
           placement, as the summary table's own.
 
-          `schedule` is tested as well as `fixture` because the mode can be
-          pressed off with the dialog open: the cell that raised this box would
-          be gone, and a preview of a fixture the board is no longer showing is
-          a box about nothing. */}
-      {fixture && schedule && fixture.row.teamId !== null && (
+          `fixtureLive` is tested as well as `fixture` because the surface that
+          raised this box can be pressed off with it open — the Schedule mode,
+          or the turn filter — and a preview of a fixture the board is no longer
+          showing is a box about nothing. It compares the index the fixture came
+          from against the two that are in force, which is the same test read
+          for either door and needs no flag saying which opened it. */}
+      {fixture && fixtureLive && fixture.row.teamId !== null && (
         <SchedulePreview
           report={{
             id: fixture.row.id,
@@ -3096,11 +3172,11 @@ export function ResearchTable({
           splits={fixture.row.kind === 'pitcher' ? undefined : (splits[fixture.row.id] ?? {})}
           onRetrySplits={() => loadSplits(fixture.row.id)}
           game={fixture.game}
-          index={schedule}
+          index={fixture.index}
           teamId={fixture.row.teamId}
           name={fixture.row.name}
           isPitcher={fixture.row.kind === 'pitcher'}
-          tier={startTierOn(schedule, fixture.game, fixture.row.teamId, fixture.row.id)}
+          tier={startTierOn(fixture.index, fixture.game, fixture.row.teamId, fixture.row.id)}
           opp={
             opps[
               fixture.game.homeId === fixture.row.teamId

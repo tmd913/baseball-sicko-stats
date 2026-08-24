@@ -1980,16 +1980,25 @@ export default function App() {
    * while the filter is on, so a reader who never presses `Starting` pays
    * nothing for it.
    *
-   * **No pitcher lookup, deliberately.** That argument is what `buildStarters`
-   * costs — the club derivation and the 750 game-sides behind it — and it buys
-   * the name of *the other club's* starter, which this filter never draws: a
-   * row here is the man pitching, and what its cell says beside the day is who
-   * he faces. So it needs no season roster and no wait on one, which is why
-   * this index has no `playersLoading` in its gate where the grid's has.
+   * **It carries the pitcher lookup, and that was not free to skip.** The
+   * argument buys `buildStarters` — the club derivation and the 750 game-sides
+   * behind it — and the `Start` column itself never draws the other club's man,
+   * so the first version left it out. What needs it is the **dialog that column
+   * opens**: `SchedulePreview` reads `opposingStarter` off the index it is
+   * handed, so an index built without the lookup opens a preview that cannot
+   * name the man on the mound, which is the half of it a reader opened it for.
+   *
+   * So it takes `playersLoading` in its gate as the grid's index does, and for
+   * a related reason rather than the same one: there it is the *height* of a
+   * cell that depends on the names, here it is whether a dialog can answer at
+   * all.
    */
   const turnIndex = useMemo(
-    () => (turnWanted && scheduleWindow ? buildWindowIndex(scheduleWindow) : null),
-    [turnWanted, scheduleWindow],
+    () =>
+      turnWanted && scheduleWindow && !playersLoading
+        ? buildWindowIndex(scheduleWindow, pitcherLookup)
+        : null,
+    [turnWanted, scheduleWindow, pitcherLookup, playersLoading],
   );
   /** The turn filter asks for the window the way the matchup page's team pages
    *  do — through the flag, rather than by owning the span the Schedule view is

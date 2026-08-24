@@ -1331,7 +1331,24 @@ export const TURN_KEY = 'turnDay';
  * dashed line where it is his club's rotation standing in. Nothing new is
  * declared for them here.
  */
-export function turnColumn(index: ScheduleIndex, range: TurnRange): Column {
+export function turnColumn(
+  index: ScheduleIndex,
+  range: TurnRange,
+  /**
+   * **What pressing a start opens** — the same two doors the roster table's
+   * opponent cell chooses between, and for the same reason: *what is this game*
+   * before it is played, *how did it go* after.
+   *
+   * Absent leaves the line the plain text it was, which is the rule
+   * `OpponentPress` keeps for every cell with nothing behind it.
+   */
+  doors?: {
+    /** A fixture nobody has played — the preview dialog. */
+    preview?: (row: ResearchRow, game: ScheduleGame) => void;
+    /** One already under way or finished — the game's own page. */
+    game?: (gamePk: number) => void;
+  },
+): Column {
   /** Where each day sits in the window, for the sort — an ordinal rather than a
    *  date string, so the column orders soonest-first through a `value` like
    *  every other numeric column rather than through the `text` path. */
@@ -1366,19 +1383,49 @@ export function turnColumn(index: ScheduleIndex, range: TurnRange): Column {
       if (list.length === 0) return '—';
       return (
         <span className="research-turn-cell">
-          {list.map((t) => (
-            <span
-              key={t.game.gamePk}
-              className={`research-turn${t.tier === 'announced' ? '' : ` sched-vs-${t.tier}`}`}
-              title={`${turnDayLabel(t.date, index.today)} — ${TIER_TITLE[t.tier]}`}
-            >
-              {turnDayLabel(t.date, index.today)}
-              <span className="research-turn-opp">
-                {' '}
-                {opponentText(t.game, r.teamId as number)}
+          {list.map((t) => {
+            const played = t.game.state === 'live' || t.game.state === 'final';
+            // **The opponent is the door, and the day carries the caveat** —
+            // which is the grid's own division of one cell into two marks, and
+            // here it is forced as well as consistent: a door wears a dotted
+            // underline and an *estimated* turn wears a dashed one, and a
+            // descendant cannot cancel an ancestor's decoration — so the two on
+            // one run of text is two underlines a pixel apart. Each mark on its
+            // own segment says one thing each, and marking the **day** is the
+            // honest half anyway: the club plays that day whatever happens, and
+            // what is being guessed is that he is the one starting.
+            const press = played
+              ? doors?.game && (() => doors.game!(t.game.gamePk))
+              : doors?.preview && (() => doors.preview!(r, t.game));
+            const day = turnDayLabel(t.date, index.today);
+            const opp = opponentText(t.game, r.teamId as number);
+            return (
+              <span
+                key={t.game.gamePk}
+                className={`research-turn${t.tier === 'announced' ? '' : ' research-turn-guess'}`}
+                title={press ? undefined : `${day} — ${TIER_TITLE[t.tier]}`}
+              >
+                <span
+                  className={`research-turn-day${
+                    t.tier === 'estimated' ? ' research-turn-est' : ''
+                  }`}
+                >
+                  {day}
+                </span>
+                <span className="research-turn-opp">
+                  {' '}
+                  <OpponentPress
+                    onPress={press ?? null}
+                    label={opp}
+                    opens={played ? 'page' : 'dialog'}
+                    title={`${day} ${opp} — ${TIER_TITLE[t.tier]}${
+                      press ? ` — open the ${played ? 'game' : 'matchup'}` : ''
+                    }`}
+                  />
+                </span>
               </span>
-            </span>
-          ))}
+            );
+          })}
         </span>
       );
     },
