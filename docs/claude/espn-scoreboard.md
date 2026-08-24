@@ -107,6 +107,15 @@ that has nothing to do with today, already recorded below: it counts a playoff
 week only for the teams still in the winners' bracket — measured, the eight
 teams on a bye are short by exactly their week's total.)
 
+*(**Superseded**: `season` is `Regular Season` now — periods `1 … regularPeriods`
+through the same `getSpanTotals` path as the halves, so it takes the live day
+like they do and it is no longer ESPN's line. The quirk in the parenthesis is
+what settled it: a column three teams in twelve carry an extra fortnight in is a
+column nobody can rank. See **Client — the League rankings**, *`Season` is
+`Regular Season`*. ESPN's line survives as the fallback for a league that
+publishes no matchup count, where there is no boundary to cut a bracket out at,
+and there the paragraph above still holds word for word.)*
+
 **Measured through the route**: a live scoreboard is **698ms** cold against the
 536ms it was, and **2.1ms** warm; a settled week is **1.8ms**; the live rankings
 span **743ms** cold and **1.5ms** warm. The response itself is unchanged in size
@@ -186,6 +195,55 @@ triple **sums to the ten categories on 216 of 216 sides** and **matches ESPN's
 own `cumulativeScore` on 216 of 216**, with the winner it implies agreeing with
 ESPN's `winner` on 108 of 108. See **Client — the League view**, *The headline is
 a triple*.
+
+**A category *neither* side has a figure for is a tie; one only one side has is
+skipped.** The two absences are different facts and the split is the whole of the
+rule. A side ESPN reports as **ineligible** for a category is absent from
+`scores` by `sideFrom`'s own rule, and counting that as a loss is the fault the
+skip exists to prevent — but ineligibility is a fact about *one* side, so the
+other still has its figure and the skip still answers it.
+
+Both sides absent is the other thing entirely, and it is **the first minute of
+every week**: a side that has thrown no innings has no denominator, so ESPN
+reports no ERA and no WHIP for either of them. (That is the same absence
+`withAddedComponents`' `createRates` was found and answered on the projection's
+side of the house; this is the live card's half of it, and it went unnoticed
+longer because a skipped category *looks* like nothing.) Measured on the live
+12-team league at the top of period 20, all six matchups: `scoreByStat` carries
+every counting category **and OPS** as `0` from the first minute — ESPN having
+nothing to divide — and carries neither **47 (ERA)** nor **41 (WHIP)** at all.
+Skipped, the headline read **`0-0-8`** on a ten-category league, which says two
+of the ten are somebody's and does not say whose. Level on nothing is what they
+are, so they are level: **`0-0-10`**.
+
+Which also means **only a rate can reach the tie**, and that is what keeps the
+ineligibility rule intact rather than merely mostly intact: a counting category
+ESPN sends as `0` from the first minute is *present*, so a counting category that
+is genuinely absent is genuinely ineligible — and ineligible for one side, not
+for both.
+
+**Re-checked against the settled weeks, where the change must do nothing.**
+Periods 18 and 19 through the route after: every side's triple still **sums to
+the ten categories** and the winner it implies is unmoved (18: `2-7-1`/`7-2-1`,
+`3-7-0`/`7-3-0`, `5-2-3`/`2-5-3`, `4-5-1`/`5-4-1`, `1-9-0`/`9-1-0`,
+`4-4-2`/`4-4-2`). A week in which innings were thrown has ERA and WHIP on both
+sides and never reaches the new branch.
+
+**And the blob went to `-v3` with nothing gaining a field**, which is the other
+half of the cache-version rule: a version guards the *meaning* of what is stored
+as well as its shape. The tally is computed once, on the way in, and a settled
+period is read back with **no freshness test at all** — so a week in which a side
+threw no innings would have gone on serving the old skip long after every live
+week counted them tied. The two answers cannot be told apart by looking, which is
+exactly when a stale blob is worth least.
+
+**The client draws the same line, in two places, deliberately.**
+`LeagueView::outcome` colors the Scoreboard's cells and `LeagueMatchup::winnerOf`
+draws the matchup page's rows and its per-side-of-the-ball group tallies; both
+now return `tie` for two absences and `null` for one, so the tally a card prints
+and the cells under it cannot disagree about a category. The two titles that
+would have read `— to —: level` and `ERA: — — tied` say *neither side has a
+figure yet* and *no figure yet* instead.
 
 **A bye is a real shape.** A matchup with a `home` and no `away` is what a
 playoff round looks like — period 19 of the live league is 2 matchups and **8
@@ -700,6 +758,13 @@ the **winners' bracket** in the live period 19, whose stats ESPN counts toward
 the season line while the consolation ladder's are not yet counted. Every team
 is reproduced by *some* prefix, to machine precision, which is what makes the
 summation trustworthy.
+
+*(That verification is also what made moving `season` off ESPN's line safe rather
+than hopeful: the summation **is** ESPN's line, to machine precision, for
+whichever prefix ESPN happens to have counted. Taking the prefix `1..18` for
+every team is therefore not a different arithmetic — it is the same one with the
+bracket left out on purpose, which is what the reader asked for and what the
+"eight teams and four teams" split above shows they need.)*
 
 **So all five spans are served and none is faked.** `matchup` and `season` are
 **ESPN's own numbers** — the current period's `scoreByStat` and `valuesByStat`

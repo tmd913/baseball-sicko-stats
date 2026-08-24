@@ -3314,9 +3314,19 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
  * acquisition count at all while the live one had them — measured before the
  * bump, `undefined` on every side of period 18 against a working 19. Bump it
  * whenever a side or a matchup gains a field.
+ *
+ * **`-v3` is nothing gaining a field and `tallyCategories` changing its mind**,
+ * which is the other half of the same rule: a version guards the *meaning* of
+ * what is stored as well as its shape. `wins/losses/ties` are computed once, on
+ * the way in, and a settled week is read back with no freshness test at all —
+ * so a week in which a side threw no innings would have gone on serving the
+ * tally that skipped ERA and WHIP long after every live week counted them as
+ * tied. The blobs are one ESPN request each to rebuild and the two answers
+ * cannot be told apart by looking, which is exactly when a stale one is worth
+ * least and costs most.
  */
 const scoreboardBlobKey = (leagueId: number, period: number) =>
-  `espn-scoreboard-${leagueId}-${period}-v2.json`;
+  `espn-scoreboard-${leagueId}-${period}-v3.json`;
 
 const scoreboardCache = new Map<string, { matchups: EspnMatchup[]; fetchedAt: number }>();
 const scoreboardInFlight = new Map<string, Promise<EspnMatchup[]>>();
@@ -3631,9 +3641,32 @@ function sideFrom(
  * two *projected* sides, and it must reach the same verdict from the same
  * numbers as the card it replaces — one function rather than two that agree
  * today. `lowerBetter` is honored here, so ERA and WHIP need no case anywhere
- * else; a category either side is missing a figure for is **skipped** rather
- * than counted, which is what keeps a side ineligible for one from being
- * recorded as losing it.
+ * else.
+ *
+ * **A category *neither* side has a figure for is a tie; one only one side has
+ * is skipped.** The two absences are different facts and the split is the whole
+ * of the rule. A side ESPN reports as *ineligible* for a category is absent
+ * from `scores` by `sideFrom`'s own rule, and counting that as a loss is the
+ * fault the skip exists to prevent — but it is a fact about **one** side, so
+ * the other still has its figure and the skip still answers it.
+ *
+ * Both sides absent is the other thing entirely, and it is the first minute of
+ * every week: a side that has thrown no innings has no denominator, so ESPN
+ * reports **no ERA and no WHIP** for either of them (see `withAddedComponents`,
+ * where the projection's own version of this was already found and answered).
+ * Measured on the live 12-team league at the top of period 20, every one of the
+ * six matchups: `scoreByStat` carries all eight counting and OPS categories as
+ * `0` from the first minute — ESPN having nothing to divide — and carries
+ * neither 47 (ERA) nor 41 (WHIP) at all. Skipped, the headline read **0-0-8**
+ * on a ten-category league, which says two of the ten are somebody's and does
+ * not say whose. Level on nothing is what they actually are, so they are level:
+ * **0-0-10**.
+ *
+ * Which also means **only a rate can reach the tie**, and that is what keeps
+ * the ineligibility rule intact rather than merely mostly intact: a counting
+ * category ESPN sends as `0` from the first minute is present, so a counting
+ * category that is genuinely absent is genuinely ineligible — and it is
+ * ineligible for one side, not for both.
  */
 export function tallyCategories(
   mine: Record<number, number>,
@@ -3646,7 +3679,13 @@ export function tallyCategories(
   for (const cat of categories) {
     const h = mine[cat.statId];
     const a = theirs[cat.statId];
-    if (typeof h !== 'number' || typeof a !== 'number') continue;
+    const hasH = typeof h === 'number';
+    const hasA = typeof a === 'number';
+    if (!hasH && !hasA) {
+      ties++;
+      continue;
+    }
+    if (!hasH || !hasA) continue;
     if (h === a) ties++;
     else if (cat.lowerBetter ? h < a : h > a) wins++;
     else losses++;
@@ -4773,6 +4812,33 @@ export async function getRankings(
     meta.regularPeriods == null
       ? []
       : meta.periods.filter((p) => p.period > meta.regularPeriods!).map((p) => p.period);
+  /**
+   * **The regular season, as a list of matchup periods** — the same cut
+   * `halvesOf` makes, undivided.
+   *
+   * This is what the `season` span is drawn from now, where it used to be
+   * ESPN's own published season line read straight off `meta.teams[].values`.
+   * That line was free and was answering a different question: **it includes
+   * the playoffs**, so on the checked league a `Season` column in late August
+   * carried periods 19 and 20 — a bracket two teams in twelve are playing in —
+   * mixed into the eighteen weeks every team played. Reported as exactly that.
+   *
+   * **And it fixes a quirk that was documented rather than fixed.** ESPN counts
+   * a playoff week only for the teams still in the winners' bracket, so the
+   * eight sides on a bye were short by their week's own total against the four
+   * who were not: a column nobody could rank fairly. Summing the periods gives
+   * every team the weeks it actually played and nothing else.
+   *
+   * `p.first`/`p.last` are tested for `halvesOf`'s own reason — a matchup period
+   * ESPN has filed no scoring periods under is a week with no days in it — and
+   * an empty list is what makes the fallback below possible.
+   */
+  const regular =
+    meta.regularPeriods == null
+      ? []
+      : meta.periods
+          .filter((p) => p.period <= meta.regularPeriods! && p.first && p.last)
+          .map((p) => p.period);
   const halves = halvesOf(meta.periods, meta.regularPeriods);
 
   const dated = async (first: number, last: number) => {
@@ -4808,7 +4874,58 @@ export async function getRankings(
       live: true,
     });
   }
-  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
+  /**
+   * **`Regular Season`, and it says so because it is one.** The label was
+   * `Season` while the figures were ESPN's own line, which runs to whatever has
+   * been played including the bracket; this is the eighteen weeks every team
+   * played, so the word that was a summary is a claim now and the label has to
+   * carry it.
+   *
+   * **It is dated and it carries its periods**, where it carried neither: the
+   * span *is* a run of weeks now, so the bar states them like every other cut
+   * (`Regular Season · Weeks 1–18`) rather than falling back to the "ESPN's own
+   * season line" note the client keeps for the case below.
+   *
+   * **And `live` is answered rather than declared `false`.** The old flag was
+   * false because ESPN's line and the week being played were different
+   * questions; this span *contains* the current period while the regular season
+   * is on, so it is live in the one sense that flag has ever meant — these
+   * figures include a week still being played — and it stops being live the day
+   * the bracket starts, which is exactly when the numbers stop moving.
+   *
+   * **The fallback is ESPN's line under its old name**, for a league that
+   * publishes no matchup count: there is no boundary to cut the playoffs out at,
+   * so there is nothing to promise, and `Regular Season` over a figure that may
+   * include a bracket would be the claim this change exists to stop making. It
+   * is the same league that is offered no halves and no playoffs span, for the
+   * same missing number.
+   */
+  if (regular.length > 0) {
+    const { start, end } = await dated(regular[0], regular[regular.length - 1]);
+    spans.push({
+      span: 'season',
+      label: 'Regular Season',
+      periods: [regular[0], regular[regular.length - 1]],
+      start,
+      end,
+      live: current != null && regular.includes(current),
+    });
+  } else {
+    spans.push({
+      span: 'season',
+      label: 'Season',
+      periods: null,
+      start: null,
+      end: null,
+      // **A running total is live while the season is on**, which is the same
+      // question the four spans above answer: do these figures include a week
+      // still being played. It read `false` here for years and the client
+      // carried a named exception to make the poll work anyway (`rankings.span
+      // === 'season'`); answered honestly, the flag is the only thing either
+      // side has to look at.
+      live: current != null,
+    });
+  }
   for (const [key, label, list] of [
     ['first', 'First half', halves?.first ?? []],
     ['second', 'Second half', halves?.second ?? []],
@@ -4917,15 +5034,21 @@ export async function getRankings(
       ? { period: current, scoringPeriodId: latest }
       : null;
 
-  if (asked === 'season') {
-    // **ESPN's own published season line, left exactly as it comes** — which
-    // means it, too, stops at yesterday, and deliberately so: this column is
-    // the number the manager sees on ESPN's own site, and a figure of ours that
-    // silently disagreed with it would be worse than one that lags with it.
-    // (ESPN's season line has a second quirk of its own that has nothing to do
-    // with today: it counts a playoff week only for the teams still in the
-    // winners' bracket — measured, the eight teams on a bye are short by
-    // exactly their week's own total.)
+  if (asked === 'season' && regular.length === 0) {
+    // **ESPN's own published season line, left exactly as it comes** — the
+    // fallback for a league that publishes no matchup count, and so no boundary
+    // to cut a bracket out at. It stops at yesterday, deliberately: this column
+    // is then the number the manager sees on ESPN's own site, and a figure of
+    // ours that silently disagreed with it would be worse than one that lags
+    // with it.
+    //
+    // **This used to be the `season` branch outright**, and the two things
+    // wrong with it are why it is a fallback now. It includes the playoffs, so
+    // a `Season` column in late August carried a bracket two teams in twelve
+    // were playing. And it counts a playoff week only for the teams still in
+    // the winners' bracket — measured, the eight sides on a bye short by
+    // exactly their week's own total. Both were documented rather than fixed;
+    // summing the regular-season periods answers both.
     for (const t of meta.teams) values[t.id] = onlyCategories(t.values);
   } else if (asked === 'week' && weekPeriod != null) {
     // **One settled week, exactly as `matchup` reads the live one** — the same
@@ -4947,12 +5070,19 @@ export async function getRankings(
       values[Number(id)] = liveDay ? withRates(v) : onlyCategories(v);
     }
   } else {
+    // **Four spans through one branch now**, the regular season having become a
+    // run of matchup periods like the three beside it: one `mScoreboard` read
+    // filtered to the list, counting stats added and rates rebuilt from the
+    // components they add up from. `season` is the widest of the four and costs
+    // no more than any of them — the filter takes the whole list in one request.
     const list =
-      asked === 'first'
-        ? (halves?.first ?? [])
-        : asked === 'second'
-          ? (halves?.second ?? [])
-          : playoffs;
+      asked === 'season'
+        ? regular
+        : asked === 'first'
+          ? (halves?.first ?? [])
+          : asked === 'second'
+            ? (halves?.second ?? [])
+            : playoffs;
     if (list.length > 0) {
       const frozen = current == null || !list.includes(current);
       const raw = await getSpanTotals(creds, list, frozen, liveDay, force);

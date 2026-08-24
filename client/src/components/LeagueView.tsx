@@ -302,13 +302,24 @@ function SideIdentity({
  * arithmetic is checked against ESPN's answer on 1,080 finished categories. A
  * category one side is ineligible for (absent from `scores`) is `null`: not a
  * win, not a loss, and not drawn as either.
+ *
+ * **A category *neither* side has a figure for is a tie**, which is a different
+ * absence and the one the first minute of every week produces: no innings
+ * thrown is no denominator, so ESPN reports no ERA and no WHIP for either team
+ * and two of the ten categories are level on nothing. The split — one side
+ * missing is `null`, both missing is `tie` — is `tallyCategories`' own, and the
+ * two are the same arithmetic deliberately: the tally the card prints and the
+ * color of the cells under it must not be able to disagree about a category.
  */
 function outcome(
   mine: number | undefined,
   theirs: number | undefined,
   cat: EspnCategory,
 ): 'win' | 'loss' | 'tie' | null {
-  if (typeof mine !== 'number' || typeof theirs !== 'number') return null;
+  const hasMine = typeof mine === 'number';
+  const hasTheirs = typeof theirs === 'number';
+  if (!hasMine && !hasTheirs) return 'tie';
+  if (!hasMine || !hasTheirs) return null;
   if (mine === theirs) return 'tie';
   return (cat.lowerBetter ? mine < theirs : mine > theirs) ? 'win' : 'loss';
 }
@@ -557,7 +568,9 @@ function MatchupCard({
                     {g.categories.map((c) => {
                       const v = side.scores[c.statId];
                       const state = other ? outcome(v, other.scores[c.statId], c) : null;
-                      const note = `${c.name}: ${fmtValue(v, c)}${
+                      const note = `${
+                        typeof v === 'number' ? `${c.name}: ${fmtValue(v, c)}` : `${c.name}: no figure yet`
+                      }${
                         state === 'win'
                           ? ' — winning'
                           : state === 'loss'

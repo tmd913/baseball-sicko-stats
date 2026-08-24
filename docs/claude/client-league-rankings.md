@@ -758,6 +758,75 @@ Driven rather than assumed: the desktop pill and the phone `<select>` each write
 `Second half` → `Weeks 10–18 · Jun 1 – Aug 9`), the select keeps its
 value across the reload, and sorting is untouched.
 
+### `Season` is `Regular Season`, and it is a run of weeks rather than ESPN's line
+
+**Reported: the season column should be the regular season and should not
+include the playoffs.** It was both of those things wrong, and the second was
+worse than a label.
+
+**What it was.** `asked === 'season'` read ESPN's own published season line
+straight off `meta.teams[].values` — free, and the number the manager sees on
+ESPN's own site, which was the argument for it. It carries **whatever has been
+played, bracket included**, so a `Season` column in late August had two playoff
+weeks in it.
+
+**And ESPN credits a playoff week only to the teams still in the winners'
+bracket**, which this file already recorded as a quirk and did not act on. That
+is what made it a broken table rather than a mislabeled one: the four teams who
+played matchup period 19 carried an extra week of counting stats into a ranking
+against the eight on a bye who did not. Measured on the live league, `Season`
+before → `Regular Season` after, home runs:
+
+| team | before | after | its period-19 total |
+| --- | --- | --- | --- |
+| 1 | 219 | **201** | 18 |
+| 4 | 229 | **218** | 11 |
+| 5 | 198 | **189** | 9 |
+| 2 | 188 | 188 | 14 — *not credited* |
+| 3 | 185 | 185 | 15 — *not credited* |
+| 6 | 232 | 232 | 29 — *not credited* |
+
+Period 19's two matchups were 5 v 12 and 4 v 1, and those are exactly the rows
+that moved. Every team *has* playoff figures — a bye side carries the period's
+own totals, which is why the right-hand column is filled for all six — so this
+was not "the bracket teams have played more baseball": it was ESPN's line
+counting the same fortnight for three teams in twelve and not the rest.
+
+**What it is.** The same cut `halvesOf` makes, undivided — periods `1 …
+regularPeriods` that the schedule actually carries — through the branch the two
+halves and the playoffs already go through: one `mScoreboard` read filtered to
+the list, counting stats added, rates rebuilt from the components they add up
+from. **One request, not eighteen**: `filterMatchupPeriodIds` takes the whole
+list, and it is minute-cached while it reaches the live week and blobbed once it
+does not, exactly as the halves are. So the widest of the four spans costs no
+more than the narrowest.
+
+**The label had to move with it.** `Season` was a summary of whatever ESPN had;
+`Regular Season` is a claim, and the span can now back it. It gains its periods
+and its dates with the name — `Regular Season · Weeks 1–18` over `Mar 25 – Aug
+9` — where it had neither and the client fell back to printing `ESPN's own
+season line`. That fallback is still there and still correct, for the one league
+this cannot be done for: **no matchup count published means no boundary to cut a
+bracket out at**, so there is nothing to promise, and the span keeps ESPN's line
+under its old name. It is the same league that is offered no halves and no
+playoffs span, for the same missing number.
+
+**`live` is answered instead of declared, and the client's exception went with
+it.** The flag read `false` on the grounds that it meant *do these figures
+include a week still being played* while the poll wanted *can they change at
+all* — so `App.tsx` carried a named exception (`rankings.span === 'season' || …`)
+to poll it anyway. The two questions have the same answer and always did. As a
+run of periods the span answers honestly: live while the regular season is being
+played, settled the day the bracket starts. The exception was therefore not
+merely redundant but **backwards** — during the playoffs it polled eighteen
+settled weeks every minute to be told they had not moved. `rankSpanLive` is the
+span's own flag and nothing else now. (The fallback span above is marked live
+while a period is current, for the same reason: a running total is live.)
+
+**`lspan=season` is untouched**, the key being the key and only the label and
+the arithmetic having changed — so every link in the wild opens on the same cut
+under its new name.
+
 ### The Projected reading: where the table is heading
 
 **A rank is read to answer *where will I finish*, and the table could only say
@@ -1129,7 +1198,8 @@ weeks go up and the days come down:
 | --- | --- | --- |
 | `matchup` | `CURRENT MATCHUP · WEEK 19` | `Aug 10 – Aug 21 · so far` |
 | a picked week | `WEEK 12` | `Jun 15 – Jun 21` |
-| `season` | `SEASON` | `ESPN's own season line` |
+| `season` | `REGULAR SEASON · WEEKS 1–18` | `Mar 25 – Aug 9` |
+| `season`, no matchup count | `SEASON` | `ESPN's own season line · so far` |
 | `first` | `FIRST HALF · WEEKS 1–9` | `Mar 25 – May 31` |
 | projected | `WEEK 19 · PROJECTED` | `to Aug 23 · 3 days still to play` |
 

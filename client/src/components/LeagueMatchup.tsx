@@ -151,13 +151,25 @@ type MatchupSpanScope = 'roster' | 'feed' | 'projected';
 
 /** The winner of one category, from the two figures. `outcome`'s twin in
  *  `LeagueView.tsx` and deliberately the same arithmetic: ESPN fills its own
- *  `result` only once a matchup is over, so a live week would say nothing. */
+ *  `result` only once a matchup is over, so a live week would say nothing.
+ *
+ *  **Including the two absences, which are different facts.** One side missing
+ *  a figure is `null` — that side is ineligible for the category and marking it
+ *  as losing would be a claim about a week it cannot play. *Neither* side
+ *  having one is a tie: no innings thrown is no denominator, so at the top of
+ *  every week ESPN reports no ERA and no WHIP for either team and the two are
+ *  level on nothing. `tallyCategories` on the server draws the same line, which
+ *  is what keeps this page's group tallies and the server's whole-matchup one
+ *  from disagreeing about the same category. */
 function winnerOf(
   left: number | undefined,
   right: number | undefined,
   cat: EspnCategory,
 ): 'left' | 'right' | 'tie' | null {
-  if (typeof left !== 'number' || typeof right !== 'number') return null;
+  const hasLeft = typeof left === 'number';
+  const hasRight = typeof right === 'number';
+  if (!hasLeft && !hasRight) return 'tie';
+  if (!hasLeft || !hasRight) return null;
   if (left === right) return 'tie';
   return (cat.lowerBetter ? left < right : left > right) ? 'left' : 'right';
 }
@@ -509,7 +521,15 @@ function MovesColumn({
  *  they always were — one is which page you are on, the other is a lens over the
  *  page you are on — and the tab is named for what it holds rather than being
  *  kept clear of a word nothing else uses any more. */
-function SummaryToggle({ on, onToggle, title }: { on: boolean; onToggle: () => void; title: string }) {
+export function SummaryToggle({
+  on,
+  onToggle,
+  title,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  title: string;
+}) {
   return (
     <button
       type="button"
@@ -551,6 +571,79 @@ function SummaryToggle({ on, onToggle, title }: { on: boolean; onToggle: () => v
   );
 }
 
+/**
+ * **The door onto this page from the Roster**, and the one control in that row
+ * that is not a reading of the table under it.
+ *
+ * It replaces the `Matchup` tab. A tab says *which page of the app you are on*
+ * and there are three of those; this week's opponent is a page you open off
+ * your own roster and come back from — which is what `player=`, `team=`,
+ * `game=` and a Scoreboard card already are. So it is a **door**, and it is
+ * drawn as one: no `aria-pressed` and no `.on`, there being no state to be in,
+ * and `aria-haspopup="dialog"` because what it opens covers the page and is
+ * left by a Back row.
+ *
+ * **First in the run, where the readings follow it**, and that is the row's own
+ * order rather than a preference: `Feed`, `Schedule`, `Projected` and `Summary`
+ * are four readings of the table below, and this is not one of them — it leaves
+ * the table entirely. A control that leaves reads before the four that stay, the
+ * same way the app's tab strip reads above the row this sits in.
+ *
+ * **The glyph is crossed swords**, which is the one mark for this that a reader
+ * already knows — a head-to-head, in the vocabulary every scoreboard and every
+ * game in the genre uses. Two drawings were tried and thrown away first, and
+ * both failed the same test: *is this legible as a thing rather than as a
+ * shape?* A bar chart either side of a center spine reads as a **plus sign** at
+ * 19px, and `FeedGlyph` two buttons along is already two columns of horizontal
+ * strokes; two arrowheads facing each other read as `> <` and mean nothing in
+ * particular. Swords are unmistakable at a glance and collide with none of the
+ * four beside them — `ScheduleGlyph` a landscape calendar, `ProjectedGlyph` a
+ * rising line, `FeedGlyph` a list, the summary card portrait.
+ *
+ * **`strokeWidth` 2, not the summary card's 2.2**, and that is the one thing the
+ * denser mark costs: this is eight strokes reaching all four corners of the box
+ * where its neighbours are three or four in the middle of one, so the heavier
+ * stroke closed the gap the two blades cross in. 19px like the rest of the run.
+ */
+export function MatchupButton({ onOpen, title }: { onOpen: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      className="matchup-open"
+      aria-haspopup="dialog"
+      onClick={onOpen}
+      title={title}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width={19}
+        height={19}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        {/* The blade running up-left, and its hilt in the opposite corner: a
+            guard across the grip, the grip itself, and a pommel. The notch at
+            the tip (`V3h3`) is what makes it a point rather than a line — at
+            19px it is the difference between a sword and a slash. */}
+        <path d="M14.5 17.5 3 6V3h3l11.5 11.5" />
+        <path d="m13 19 6-6M16 16l4 4M19 21l2-2" />
+        {/* …and its mirror, tip up-right, hilt bottom-left. */}
+        <path d="M14.5 6.5 18 3h3v3l-3.5 3.5" />
+        <path d="m5 14 4 4M7 17l-3 3M3 19l2 2" />
+      </svg>
+      {/* Its own class rather than `.summary-toggle-label` beside it: that name
+          belongs to the control it was written for, and an unstyled hook shared
+          between two buttons is the first half of two buttons that have to be
+          told apart later. */}
+      <span className="matchup-open-label">Matchup</span>
+    </button>
+  );
+}
+
 function SideHead({
   side,
   team,
@@ -584,7 +677,6 @@ export default function LeagueMatchupView({
   initialReading,
   onReading,
   onClose,
-  standalone,
   onOpenDetails,
   projection,
   projected,
@@ -630,24 +722,15 @@ export default function LeagueMatchupView({
    *  the rule `onSideTeam` follows one line up. */
   onReading?: (reading: MatchupReading) => void;
   onClose: () => void;
-  /**
-   * **The same page, as a tab rather than as a box over one.**
-   *
-   * This component is drawn in two places and they are the same page: the
-   * League view's Scoreboard opens a *card* as a page over itself, and the
-   * `Matchup` tab opens the reader's own week as a page of the app. What
-   * differs is not the matchup but what is behind it — an overlay covers a
-   * view and has to pin it, inert it, take its focus and give it back on
-   * Escape; a tab has nothing behind it to do any of that to.
-   *
-   * So the flag turns off exactly those four and the way out that goes with
-   * them (`onClose` is never called, and the Back row is not drawn — the tab
-   * strip above is the navigation). Everything the page *is* — the three
-   * readings, the strip, the dates, the tools, the bars — is untouched, which
-   * is the point: two drawings of one page, not two pages that resemble each
-   * other.
-   */
-  standalone?: boolean;
+  /* **`standalone` stood here and is gone with the `Matchup` tab.** It was the
+     same page drawn as a *page* rather than as a box over one — no body lock,
+     no focus capture, no inert background, no Escape and no Back row, there
+     being nothing behind a tab to do any of that to — and it took a
+     fixed-height column of its own in the stylesheet (`.app.matchup-mode`,
+     `.mup-view.mup-page`) to get what an overlay has for free. The tab is a
+     button on the Roster now (`App.tsx::matchupButton`) opening this same
+     overlay, so there is one drawing again and every door reaches it the same
+     way. */
   onOpenDetails: (key: string) => void;
   /**
    * **Where this week is heading**, and the reader's own lens on it — the
@@ -708,11 +791,11 @@ export default function LeagueMatchupView({
    */
   pitcherLookup: PitcherLookup | null;
 }) {
-  // Both off in the standalone reading — see `standalone`. A page does not pin
-  // the document it is part of, and there is no background outside a tab.
-  useLockBodyScroll(!standalone);
+  // A box over a view pins the document behind it, takes its focus and gives it
+  // back — unconditionally now, this page having one drawing again.
+  useLockBodyScroll(true);
   const viewRef = useRef<HTMLDivElement | null>(null);
-  useOverlayFocus(viewRef, undefined, !standalone);
+  useOverlayFocus(viewRef, undefined, true);
   /**
    * **The way back up, on the one page in the app whose scroll App cannot
    * see.** App's own `↑` reads `window.scrollY`, and this box is the scroller:
@@ -1195,10 +1278,6 @@ export default function LeagueMatchupView({
    * table box lives *inside* this overlay and answers for itself.
    */
   useEffect(() => {
-    // Nothing to close in the standalone reading, and that is the whole test:
-    // one press of Escape undoes exactly one thing, so a listener that answers
-    // and then does nothing would swallow the press a dialog above it wanted.
-    if (standalone) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (viewRef.current?.querySelector('.is-expanded')) return;
@@ -1207,7 +1286,7 @@ export default function LeagueMatchupView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, standalone]);
+  }, [onClose]);
 
   // Turning the Schedule view on is what asks App for the window; it is one
   // read per session, shared with the roster views' own copy of this mode.
@@ -1299,7 +1378,7 @@ export default function LeagueMatchupView({
             Scoreboard card this was opened from. As the `Matchup` tab it is a
             page of the app and the tab strip above is how you leave it, so a
             Back button here would be a control pointing at nothing. */}
-        {!standalone && <BackButton onClose={onClose} />}
+        <BackButton onClose={onClose} />
         {/* Printed rather than navigable. The arrows are the Scoreboard's,
             which is the page about *which* week; here the week is context the
             numbers cannot be read without — a live period's totals cover the
@@ -1610,6 +1689,11 @@ export default function LeagueMatchupView({
   ) => {
     const pair = `${fmtValue(l, c)} to ${fmtValue(r, c)}`;
     if (w === null) return `${c.name} — ${pair}`;
+    // The one tie with no figures in it — a rate neither side has a
+    // denominator for yet — says so, rather than reading `— to —: level`, which
+    // is three dashes and no sentence.
+    if (w === 'tie' && typeof l !== 'number' && typeof r !== 'number')
+      return `${c.name} — neither side has a figure yet, so it is level`;
     if (w === 'tie') return `${c.name} — ${pair}: level`;
     return `${c.name} — ${pair}: ${w === 'left' ? awayName : homeName} ahead`;
   };
@@ -2109,7 +2193,7 @@ export default function LeagueMatchupView({
       <div
         ref={viewRef}
         tabIndex={-1}
-        className={`mup-view${standalone ? ' mup-page' : ''}${
+        className={`mup-view${
           sideTeamId !== null && reading !== 'feed' ? ' roster-mode' : ''
         }`}
       >
