@@ -1214,6 +1214,147 @@ under his old club's days and his new club's run has none of them, which reads a
 an absence that ended when he arrived — so he is projected on his time here,
 which is `clubFor`'s own answer to the same question one file over.
 
+### A short record is pulled toward its own position
+
+**A season-and-recent blend is a question about which of a man's own records to
+believe, and it cannot answer the question underneath both of them: how much to
+believe him at all.** Joshua Báez was recalled on 2026-08-15 and hit three home
+runs in his first games. Nothing in a blend of his own season and his own last
+month can know that ten games is not a rate, so the projection carried that pace
+straight into the week ahead — reported as *"players that just debuted or
+returned from injury that get off to hot starts should not be assumed to
+continue that pace"*, and it was doing exactly that.
+
+The fix is the oldest one in the subject: pull a rate toward the population it
+came from, in proportion to how little of it there is — `own × n/(n+K) +
+baseline × K/(n+K)`.
+
+**The population is his own position**, and a pitcher's is his own **role**. A
+short-sample catcher pulled toward a league that is 40% designated hitters and
+corner outfielders would be trading one bias for another. The baselines are
+summed rather than averaged — the group's counts over the group's plate
+appearances, not the mean of its members' rates, so a 12-PA September call-up
+does not weigh as much as a 600-PA everyday shortstop in the figure he is pulled
+toward — and a group under 2,000 plate appearances (1,500 outs) **falls back to
+the whole population**, since the point of a baseline is that it is the stable
+thing and a thin position is another small sample wearing a population's
+clothes. Both are built from the season boards `buildContext` already holds, so
+neither is a read.
+
+#### K was swept against what actually happened
+
+The season board minus the 30-day board is an *early* half and the 30-day board a
+*late* one. Each player's early rate is regressed at a given K and scored against
+his own late rate, weighted by the late sample it is judged on. **362 batters**
+with 20+ plate appearances either side over the ten counting stats a projection
+is built from, and **390 pitchers** with 15+ outs either side over seven. Mean
+absolute error per 1,000 plate appearances or outs:
+
+| K (PA) | 20–74 PA | 75–199 | 200–399 | 400+ | all |
+| --- | --- | --- | --- | --- | --- |
+| **0** (as it was) | 47.692 | 33.382 | 27.867 | 24.879 | 28.947 |
+| 100 | 35.041 | 31.181 | 26.627 | 24.357 | 27.256 |
+| **150** | **35.042** | **31.134** | **26.464** | **24.318** | **27.162** |
+| 200 | 35.100 | 31.167 | 26.410 | 24.342 | 27.155 |
+| 300 | 35.301 | 31.326 | 26.441 | 24.491 | 27.256 |
+
+| K (outs) | 15–59 outs | 60–179 | 180–399 | all |
+| --- | --- | --- | --- | --- |
+| **0** (as it was) | 90.635 | 58.936 | 46.779 | 55.881 |
+| 60 | 71.555 | 54.691 | 45.558 | 51.710 |
+| **150** | **70.379** | **53.927** | **45.045** | **51.044** |
+| 300 | 70.208 | 54.305 | 45.217 | 51.268 |
+
+**The curve is flat between 125 and 225 and the ends are what decide it.** A
+short record improves enormously — **26.5%** on the batters inside 75 plate
+appearances and **22.3%** on the pitchers inside 60 outs, which is the Báez case
+and the just-off-the-injured-list case — and a long one barely moves, **2.3%** at
+400+ plate appearances. That second half is the property that makes this safe to
+apply to *everybody* rather than to a flagged few: a full season regresses to
+itself. 150 is within 0.05% of the best figure in every bucket of both tables, so
+one number serves where two picked per bucket would only be fitting the noise. A
+pitcher's is in outs and a batter's in plate appearances — the same number and
+not the same quantity, so they are two constants.
+
+#### Blend first, then regress
+
+The order is stated because it is not obvious and it is not symmetric. The blend
+asks *which of his own records to believe*; the regression asks *how much to
+believe him at all*. Regressing first would mix a league rate into the season
+figure and then blend that against a raw 30-day one, which weights the baseline
+by how recently he played rather than by how little he has played. The evidence
+count is his **season** plate appearances, because that is what he has actually
+done — the 30-day window is a subset of it, not an addition to it.
+
+**A pitcher's `outsPer` is the one figure left alone.** How long he goes is a
+fact about his job rather than about how well he has thrown: a rookie starter's
+five innings is not a small sample of a starter's six, it is what his club is
+letting him do, and pulling it toward the role would project innings nobody is
+going to give him. It is also the denominator every rate rides on, so moving it
+would move all of them a second time.
+
+#### Measured through the engine, on the live roster
+
+Projected over 2026-08-24 to 08-30, before → after:
+
+| | chances | PA | H/AB | HR | R | RBI |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Joshua Báez** (10 games) | 5.70 | 23.40 → **20.60** | 2.80/20.60 → **4.00/18.30** | 2.30 → **0.90** | 2.80 → **2.50** | 5.10 → **2.80** |
+| **Manny Machado** (128 games) | 6.00 | 25.90 → 25.00 | 5.10/22.80 → 5.00/22.10 | 0.80 → 0.80 | 2.90 → 2.80 | 3.00 → 2.90 |
+
+Báez's home runs for the week fall by **61%** and his runs batted in by 45%,
+which is the complaint answered; his batting average goes the *other* way
+(.136 → .219), because ten games that were three home runs and little else are a
+small sample in both directions and the regression does not care which way it is
+wrong. Machado, on a full season, moves by a tenth of a unit or not at all.
+Tarik Skubal over two starts: ER 4.70 → 5.00, H 9.60 → 10.10, K 11.30 → 11.10 —
+a strong pitcher with a big sample nudged very slightly toward his role.
+
+**Nothing is drawn differently.** A regressed projection is still a projection
+and the app already says so — the dashed chip, the muted row. A mark meaning
+"this one is regressed harder than that one" would be a mark on every row, and a
+mark that would be on every row marks nothing.
+
+### ERA and WHIP at the start of a period, which were absent
+
+**Reported as *"projections for matchups are not including ERA/WHIP at the
+beginning of the matchup"*, and it was measured before it was fixed.** Read off
+the live league at the opening of period 20 on 2026-08-24, ESPN's own
+`scoreByStat` for both sides is:
+
+```
+{"0":0,"1":0,"3":0,"4":0,"5":0,"10":0,"12":0,"13":0,"18":0,"20":0,"21":0,
+ "23":0,"34":0,"37":0,"39":0,"45":0,"48":0,"53":0,"57":0,"60":0,"83":0}
+```
+
+Every **component** is there at zero — `34` outs, `37` hits allowed, `39` walks,
+`45` earned runs — and `18` (OPS) is there at zero too. **`41` (WHIP) and `47`
+(ERA) are absent altogether**, because there is no denominator to divide by yet.
+They are two of the ten categories this league scores.
+
+`withAddedComponents`' standing rule is that today's day *"can move a number
+ESPN already gave this side and can never invent one"* — a category absent from
+`scores` is one the side is ineligible for, and putting it back as a zero-based
+total would read as the best score in the league in a `lowerBetter` category.
+That rule is right about **today** and wrong about **the end of the week**: a
+side that has not pitched yet is not ineligible, it is early. So the projection
+passes `createRates`, and two guards keep it honest:
+
+- **Only a `DERIVED` rate may be created, never a counting category.** ESPN sends
+  a counting stat as `0` from the first minute of a week, so a counting category
+  that is genuinely absent is genuinely ineligible — and the identity this file
+  is measured on stays true where it was about something.
+- **The zero denominator is its own guard.** All nine `DERIVED` rules return
+  `null` on an empty denominator, so a side with no pitching to project produces
+  no ERA rather than a `0.00`. The dangerous case cannot be reached from here.
+
+Measured through the route on the live league, before → after: **8 categories
+per side → 10**, on every side of every matchup; the two added are `41` and `47`
+and no counting category moved. Team 6 now projects `ERA 3.42 / WHIP 1.142`
+against team 12's `3.11 / 1.142`, and the tallies follow — `4-2-2 → 5-3-2` and
+`2-4-2 → 3-5-2`, one of the two new categories to each side, which is what
+those figures say. **422ms cold and 1.5ms warm**, unchanged.
+
 ### What it deliberately does not do
 
 - **It does not project today's games that are already under way.** A `live` or

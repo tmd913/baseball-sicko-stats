@@ -165,6 +165,135 @@ const RECENT_FULL_PA = 100;
 const RECENT_FULL_OUTS = 90;
 
 /**
+ * **How much of a league-average player is mixed into a short record**, and
+ * both numbers are measured rather than picked.
+ *
+ * The blend above answers *season against last month*. It does not answer the
+ * question underneath both of them, which is **how much either is worth
+ * believing**. Joshua Báez was recalled on 2026-08-15 and hit three home runs in
+ * his first games; nothing in a season-and-recent blend of *his own* record can
+ * know that ten games is not a rate, so the projection carried that pace into
+ * the week ahead. The fix is the oldest one in the subject: pull a rate toward
+ * the population it came from, in proportion to how little of it there is —
+ * `own × n/(n+K) + baseline × K/(n+K)`.
+ *
+ * **The population is his own position** (a catcher is pulled toward catchers)
+ * and a pitcher's is his own **role** (a starter toward starters), because the
+ * average those two groups sit at is not the league's and pulling a
+ * short-sample catcher toward a league that is 40% designated hitters and
+ * corner outfielders would be trading one bias for another.
+ *
+ * **K was swept against what actually happened.** The season board minus the
+ * 30-day board is an *early* half, the 30-day board is a *late* one; each
+ * player's early rate is regressed at a given K and scored against his own late
+ * rate, weighted by the late sample it is judged on. **362 batters** with 20+
+ * plate appearances either side, over the ten counting stats a projection is
+ * built from, and **390 pitchers** with 15+ outs either side over seven:
+ *
+ * | K (PA) | 20-74 PA | 75-199 | 200-399 | 400+ | all |
+ * | --- | --- | --- | --- | --- | --- |
+ * | **0** (as it was) | 47.692 | 33.382 | 27.867 | 24.879 | 28.947 |
+ * | 100 | 35.041 | 31.181 | 26.627 | 24.357 | 27.256 |
+ * | **150** | **35.042** | **31.134** | **26.464** | **24.318** | **27.162** |
+ * | 200 | 35.100 | 31.167 | 26.410 | 24.342 | 27.155 |
+ * | 300 | 35.301 | 31.326 | 26.441 | 24.491 | 27.256 |
+ *
+ * | K (outs) | 15-59 outs | 60-179 | 180-399 | all |
+ * | --- | --- | --- | --- | --- |
+ * | **0** (as it was) | 90.635 | 58.936 | 46.779 | 55.881 |
+ * | 60 | 71.555 | 54.691 | 45.558 | 51.710 |
+ * | **150** | **70.379** | **53.927** | **45.045** | **51.044** |
+ * | 300 | 70.208 | 54.305 | 45.217 | 51.268 |
+ *
+ * (mean absolute error per 1,000 plate appearances or outs.)
+ *
+ * **The curve is flat between 125 and 225 and the ends are what decide it.** A
+ * short record improves enormously — **26.5%** on the batters inside 75 plate
+ * appearances, **22.3%** on the pitchers inside 60 outs, which is the Báez case
+ * and the just-off-the-injured-list case — and a long one barely moves, **2.3%**
+ * at 400+ plate appearances, which is the property that makes this safe to apply
+ * to everybody rather than to a flagged few. 150 is within 0.05% of the best
+ * figure in every bucket of both tables, so one number serves where two
+ * chosen per bucket would only be fitting the noise.
+ *
+ * A pitcher's is in **outs** and a batter's in **plate appearances**; they are
+ * the same number and not the same quantity, so they are two constants.
+ *
+ * **Nothing about this is drawn differently.** A regressed projection is still a
+ * projection and the app already says so — the dashed chip, the muted row. A
+ * mark meaning "this one is regressed harder than that one" would be a mark on
+ * every row, and a mark that would be on every row marks nothing.
+ */
+const REGRESS_PA = 150;
+const REGRESS_OUTS = 150;
+
+/**
+ * **A group's own per-unit rates**, summed rather than averaged: the counts over
+ * the units, which is the rate the group actually produced and not the mean of
+ * its members' rates. A 12-plate-appearance September call-up should not weigh
+ * as much as a 600-PA everyday shortstop in the figure he is pulled toward.
+ */
+interface Baseline {
+  units: number;
+  counts: Map<string, number>;
+}
+
+/**
+ * The baselines a short record is pulled toward, keyed by position for batters
+ * and by role for pitchers, with the whole population under `''` as the
+ * fallback.
+ *
+ * **A thin group falls back rather than being trusted**, because the point of a
+ * baseline is that it is the stable thing: a position with 2,000 units behind it
+ * is a population, and one with 300 is another small sample wearing a
+ * population's clothes.
+ */
+type Baselines = Map<string, Baseline>;
+
+const BASELINE_MIN_PA = 2000;
+const BASELINE_MIN_OUTS = 1500;
+
+function buildBaselines(
+  rows: ResearchRow[],
+  keyOf: (r: ResearchRow) => string | null,
+  unitOf: (r: ResearchRow) => number,
+  fields: readonly (keyof ResearchRow)[],
+): Baselines {
+  const out: Baselines = new Map();
+  const into = (key: string, r: ResearchRow, units: number): void => {
+    let b = out.get(key);
+    if (!b) {
+      b = { units: 0, counts: new Map() };
+      out.set(key, b);
+    }
+    b.units += units;
+    for (const f of fields) b.counts.set(f as string, (b.counts.get(f as string) ?? 0) + num(r[f] as number));
+  };
+  for (const r of rows) {
+    const units = unitOf(r);
+    if (units <= 0) continue;
+    const key = keyOf(r);
+    if (key === null) continue;
+    into('', r, units);
+    if (key !== '') into(key, r, units);
+  }
+  return out;
+}
+
+/** The rate a group produced for one field, or the whole population's where the
+ *  group is too thin to be one. */
+function baseRate(bases: Baselines, key: string, field: string, min: number): number {
+  const b = bases.get(key);
+  if (b && b.units >= min) return (b.counts.get(field) ?? 0) / b.units;
+  const all = bases.get('');
+  return all && all.units > 0 ? (all.counts.get(field) ?? 0) / all.units : 0;
+}
+
+/** `own × n/(n+K) + base × K/(n+K)` — the whole of the regression. */
+const regress = (own: number, base: number, n: number, k: number): number =>
+  n <= 0 ? base : (own * n + base * k) / (n + k);
+
+/**
  * **How many of his club's games in a row a man has to miss before the stretch
  * reads as an absence rather than as bench time.**
  *
@@ -391,28 +520,79 @@ function projectBatter(
   mults: number[],
   playShare: number,
   into: Bucket,
+  /** What a short record is pulled toward — his own position's rates, or the
+   *  whole population's where his position is too thin to be one. See
+   *  `REGRESS_PA`. */
+  bases: Baselines,
 ): void {
   const pa = num(row.pa);
   const games = num(row.games);
   if (pa <= 0 || games <= 0 || mults.length === 0 || playShare <= 0) return;
 
   const w = recentWeight(num(recent?.pa), RECENT_FULL_PA);
-  const per = (s: number | null, r: number | null | undefined): number =>
-    blend(num(s) / pa, recent && num(recent.pa) > 0 ? num(r) / num(recent.pa) : null, w);
+  const posKey = row.position || '';
+  /**
+   * **Blend his two windows, then pull the result toward his position.**
+   *
+   * The order matters and this is the only place it is stated: the blend is a
+   * question about *which of his own records to believe*, and the regression is
+   * a question about *how much to believe him at all*. Regressing first would
+   * mix a league rate into a season figure and then blend that against a raw
+   * 30-day one, which weights the baseline by how recently he played rather
+   * than by how little he has played.
+   *
+   * The evidence count is his **season** plate appearances rather than the
+   * blend's notional sample, because that is what he has actually done and the
+   * 30-day window is a subset of it, not an addition to it.
+   */
+  const per = (field: keyof ResearchRow, s: number | null, r: number | null | undefined): number =>
+    regress(
+      blend(num(s) / pa, recent && num(recent.pa) > 0 ? num(r) / num(recent.pa) : null, w),
+      baseRate(bases, posKey, field as string, BASELINE_MIN_PA),
+      pa,
+      REGRESS_PA,
+    );
 
-  const paPerGame = blend(pa / games, recent && num(recent.games) > 0 ? num(recent.pa) / num(recent.games) : null, w);
-  const hRate = per(row.hits, recent?.hits);
-  const d2Rate = per(row.doubles, recent?.doubles);
-  const d3Rate = per(row.triples, recent?.triples);
-  const hrRate = per(row.hr, recent?.hr);
-  const bbRate = per(row.walks, recent?.walks);
-  const rRate = per(row.runs, recent?.runs);
-  const rbiRate = per(row.rbi, recent?.rbi);
-  const sbRate = per(row.sb, recent?.sb);
-  const csRate = per(row.cs, recent?.cs);
-  const kRate = per(row.strikeouts, recent?.strikeouts);
-  const abRate = per(row.ab, recent?.ab);
-  const obp = blend(num(row.obp), recent && num(recent.pa) > 0 ? recent.obp : null, w);
+  // **Per game rather than per plate appearance**, so the baseline it is pulled
+  // toward has to be too: the position's plate appearances over the position's
+  // games, which is where in the order that position tends to hit.
+  const basePaPerGame = (() => {
+    const b = bases.get(posKey);
+    const pick = b && b.units >= BASELINE_MIN_PA ? b : bases.get('');
+    const g = pick?.counts.get('games') ?? 0;
+    return pick && g > 0 ? pick.units / g : pa / games;
+  })();
+  const paPerGame = regress(
+    blend(pa / games, recent && num(recent.games) > 0 ? num(recent.pa) / num(recent.games) : null, w),
+    basePaPerGame,
+    pa,
+    REGRESS_PA,
+  );
+  const hRate = per('hits', row.hits, recent?.hits);
+  const d2Rate = per('doubles', row.doubles, recent?.doubles);
+  const d3Rate = per('triples', row.triples, recent?.triples);
+  const hrRate = per('hr', row.hr, recent?.hr);
+  const bbRate = per('walks', row.walks, recent?.walks);
+  const rRate = per('runs', row.runs, recent?.runs);
+  const rbiRate = per('rbi', row.rbi, recent?.rbi);
+  const sbRate = per('sb', row.sb, recent?.sb);
+  const csRate = per('cs', row.cs, recent?.cs);
+  const kRate = per('strikeouts', row.strikeouts, recent?.strikeouts);
+  const abRate = per('ab', row.ab, recent?.ab);
+  // **OBP is regressed like the counts, and toward the same population's own.**
+  // It is not one of the summed fields — it is a rate off the row — so its
+  // baseline is rebuilt from the parts the group does carry: hits and walks
+  // over plate appearances, which is the position's on-base rate short of the
+  // hit-by-pitch the board does not carry per player.
+  const baseObp =
+    baseRate(bases, posKey, 'hits', BASELINE_MIN_PA) +
+    baseRate(bases, posKey, 'walks', BASELINE_MIN_PA);
+  const obp = regress(
+    blend(num(row.obp), recent && num(recent.pa) > 0 ? recent.obp : null, w),
+    baseObp,
+    pa,
+    REGRESS_PA,
+  );
   // Everything that is neither an at-bat nor a walk: hit by pitch, sacrifice
   // flies, sacrifice hits. His own season share of it, which is what keeps a
   // bunter's at-bats from being over-counted.
@@ -522,6 +702,8 @@ function projectPitcher(
    * the week and none of the back of it.
    */
   appearanceShare = 1,
+  /** His role's rates, for the short-record regression — see `REGRESS_OUTS`. */
+  bases: Baselines = new Map(),
 ): void {
   const outs = num(row.outs);
   const games = num(row.games);
@@ -530,23 +712,38 @@ function projectPitcher(
   if (outs <= 0 || denom <= 0 || mults.length === 0 || appearanceShare <= 0) return;
 
   const w = recentWeight(num(recent?.outs), RECENT_FULL_OUTS);
-  const per = (s: number | null | undefined, r: number | null | undefined): number =>
-    blend(num(s) / outs, recent && num(recent.outs) > 0 ? num(r) / num(recent.outs) : null, w);
+  const roleKey = baselineRole(row);
+  /** Blend his two windows, then pull toward his role's — the batter's rule one
+   *  function up, in outs, and argued there. */
+  const per = (field: keyof ResearchRow, s: number | null | undefined, r: number | null | undefined): number =>
+    regress(
+      blend(num(s) / outs, recent && num(recent.outs) > 0 ? num(r) / num(recent.outs) : null, w),
+      baseRate(bases, roleKey, field as string, BASELINE_MIN_OUTS),
+      outs,
+      REGRESS_OUTS,
+    );
 
   const recentDenom = starterView ? num(recent?.gamesStarted) : num(recent?.games);
+  // **`outsPer` is left alone**, deliberately, and it is the one figure here
+  // that is. It is how long he goes, which is a fact about his job rather than
+  // about how well he has thrown — a rookie starter's five innings is not a
+  // small sample of a starter's six, it is what his club is letting him do, and
+  // pulling it up toward the role would project innings nobody is going to give
+  // him. It is also the denominator every rate above rides on, so moving it
+  // would move all of them a second time.
   const outsPer = blend(
     outs / denom,
     recent && recentDenom > 0 ? num(recent.outs) / recentDenom : null,
     w,
   );
-  const hRate = per(row.hits, recent?.hits);
-  const bbRate = per(row.walks, recent?.walks);
-  const kRate = per(row.strikeouts, recent?.strikeouts);
-  const hrRate = per(row.hr, recent?.hr);
-  const erRate = per(row.earnedRuns, recent?.earnedRuns);
-  const rRate = per(row.runs, recent?.runs);
-  const hbpRate = per(row.hitBatsmen, recent?.hitBatsmen);
-  const tbfRate = per(row.battersFaced, recent?.battersFaced);
+  const hRate = per('hits', row.hits, recent?.hits);
+  const bbRate = per('walks', row.walks, recent?.walks);
+  const kRate = per('strikeouts', row.strikeouts, recent?.strikeouts);
+  const hrRate = per('hr', row.hr, recent?.hr);
+  const erRate = per('earnedRuns', row.earnedRuns, recent?.earnedRuns);
+  const rRate = per('runs', row.runs, recent?.runs);
+  const hbpRate = per('hitBatsmen', row.hitBatsmen, recent?.hitBatsmen);
+  const tbfRate = per('battersFaced', row.battersFaced, recent?.battersFaced);
   // Per appearance rather than per out — a decision and a save are things that
   // happen to an outing, not to an inning.
   // A loss is the one decision an opener can still take, so it keeps his rate.
@@ -597,7 +794,30 @@ interface Pools {
   seasonHitting: Map<number, TeamHittingSplit>;
   leagueTeamOps: number;
   leaguePitcherWoba: number;
+  /** What a short record is pulled toward — see `REGRESS_PA`. Batters by
+   *  position, pitchers by role, both with the whole population as fallback. */
+  batBase: Baselines;
+  pitBase: Baselines;
 }
+
+/** The counting fields a batter's projection is built out of, which are exactly
+ *  the fields its baseline needs. */
+const BAT_FIELDS = [
+  'pa', 'ab', 'hits', 'doubles', 'triples', 'hr', 'runs', 'rbi', 'walks', 'strikeouts', 'sb', 'cs',
+  // Not a rate the projection uses, but the denominator of the one figure that
+  // is per *game* rather than per plate appearance — see `basePaPerGame`.
+  'games',
+] as const;
+const PIT_FIELDS = [
+  'hits', 'walks', 'strikeouts', 'hr', 'earnedRuns', 'runs', 'hitBatsmen', 'battersFaced',
+] as const;
+
+/** **Which role a pitcher's record belongs to**, for the baseline alone. It is
+ *  the crude test — more than half his outings were starts — rather than
+ *  `roleOf`'s, because a baseline wants a man filed under the population his
+ *  *season* came from, where `roleOf` answers what he is doing this week. */
+const baselineRole = (r: ResearchRow): string =>
+  num(r.gamesStarted) > num(r.games) / 2 ? 'SP' : 'RP';
 
 const byId = (rows: ResearchRow[]): Map<number, ResearchRow> =>
   new Map(rows.map((r) => [r.id, r]));
@@ -1180,7 +1400,7 @@ function projectOneBatter(
   });
   const recent = pools.batRecent.get(id) ?? null;
   const share = playShareOf(ctx, 'batter', id, row.teamId, row, recent);
-  projectBatter(row, recent, mults, share, into);
+  projectBatter(row, recent, mults, share, into, pools.batBase);
   // What the projection is actually built on, which is what the reader is
   // told: his club's remaining games times the share of them he plays.
   return { games: mults.length * share, placed: true };
@@ -1223,7 +1443,16 @@ function projectOnePitcher(
   if (currentRole(ctx, id, row, pools.pitRecent.get(id) ?? null, row.teamId) === 'starter') {
     const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
     const startsAreHisRecord = num(row.gamesStarted) * 2 > num(row.games);
-    projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, startsAreHisRecord, into, true);
+    projectPitcher(
+      row,
+      pools.pitRecent.get(id) ?? null,
+      mults,
+      startsAreHisRecord,
+      into,
+      true,
+      1,
+      pools.pitBase,
+    );
     return { starts: mults.length, reliefGames: 0, placed: true };
   }
   // A reliever's chances are his club's games times how often he has actually
@@ -1243,7 +1472,7 @@ function projectOnePitcher(
   // longer one besides. See `projectPitcher`'s `appearanceShare`.
   const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, pools.pitRecent.get(id) ?? null);
   const mults = games.map((g) => pitcherGameMult(pools, id, oppOf(g)));
-  projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, into, false, rate);
+  projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, into, false, rate, pools.pitBase);
   return { starts: 0, reliefGames: mults.length * rate, placed: true };
 }
 
@@ -1896,6 +2125,15 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
     seasonHitting,
     leagueTeamOps: meanTeamOps(seasonHitting),
     leaguePitcherWoba: meanPitcherWoba(pitSeason.rows),
+    // Both off the season boards already in hand — no read of their own, which
+    // is the rule every input to this context is held to.
+    batBase: buildBaselines(
+      batSeason.rows,
+      (r) => (r.positionType === 'Pitcher' ? null : r.position || ''),
+      (r) => num(r.pa),
+      BAT_FIELDS,
+    ),
+    pitBase: buildBaselines(pitSeason.rows, baselineRole, (r) => num(r.outs), PIT_FIELDS),
   };
 
   // How many days of the span still have a game to be played — the same test
@@ -1986,8 +2224,14 @@ async function build(
       const made = project(side.teamId);
       return {
         teamId: side.teamId,
+        // `true`: a rate the side has no denominator for **yet** may be
+        // created from the projected components. At the start of a period
+        // nobody has pitched, so ESPN reports no ERA and no WHIP, and the rule
+        // that stops today's day inventing a category the side is ineligible
+        // for was also stopping the projection from answering for two of the
+        // ten. See `withAddedComponents`' `createRates`.
         scores: categoryScores(
-          withAddedComponents(side.scores, made.bucket, board.categories),
+          withAddedComponents(side.scores, made.bucket, board.categories, true),
           board.categories,
         ),
         wins: 0,
