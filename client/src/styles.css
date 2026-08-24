@@ -4534,15 +4534,82 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  /* **Shrink to the innings rather than to the page.** Every other table in
-     this app is `width: 100%` because every other one is a row of stat columns
-     that wants the slack; a line score is twelve narrow numbers, and at 1200px
-     `100%` spread them 100px apart — a picture read across, drawn so wide the
-     eye cannot. `max-content` capped at the box is what gives it both readings:
-     compact where there is room, and scrolling in its own box on a phone, which
-     is the rule every wide thing here follows. */
-  width: max-content;
-  max-width: 100%;
+  /* **It takes its container and the gutters that container has to give**, so
+     the box reaches the glass on a phone and stops level with its siblings on a
+     desktop. Which of the two applies is a question about the width available
+     and not about the device, so it is one expression and not a breakpoint.
+
+     **What stood here was `width: max-content; max-width: 100%`**, on the
+     argument that a line score is twelve narrow numbers and `100%` at 1200
+     spread them 100px apart — a picture read across, drawn so wide the eye
+     cannot. The argument is right and **the declaration never did it**:
+     `.game-ls-team` carries `width: 1%`, and a percentage width on a cell
+     defeats the intrinsic sizing of the box above it, so `max-content` resolved
+     to the container every time. Measured at 1200, before this rule and after
+     the club's percentage was left in place: the table **1166px, the full
+     page**, which is the width the comment was written to prevent. The cap is
+     doing the job the sizing was supposed to — `.ovw-column` holds the block to
+     `--card-column`, so at 1440 the table is **800 at x=320** with its
+     siblings, which is what the reading actually wanted.
+
+     **On a phone it is the last table on this page that stopped short.** The
+     Box Score is in the `--table-bleed` list above and the line score was not,
+     so measured at 390 on gamePk 823099 the two tables on one page sat at
+     **x=0 w=390** and **x=16 w=358** — one page telling a reader twice, and
+     differently, where its left edge is. Now both are 390, and the innings get
+     the 32px back: gamePk 824798 went ten and scrolled 15px over, and fits.
+
+     **`margin-inline: auto` cannot express this and was not tried**, because
+     `.details-tabstrip` already measured why: a box whose used width exceeds its
+     containing block gets auto margins of *zero*, not the negative pair
+     centering would imply, so it bleeds the whole 32 to the right alone. What
+     is written instead is how much gutter there is *left to take* —
+     `--card-column` less the container, floored at 0 and capped at the bleed —
+     which is 16 where the block is at the pane's padding edge and **0 where the
+     block is already capped**, the term going to zero exactly when the box stops
+     being adjacent to the padding it would be reclaiming. Both percentages
+     resolve against the one containing block, a margin percentage and a width
+     percentage having the same reference, and the pair is free to go negative.
+     In the 32px band of viewports between the two it takes what is there. */
+  --ls-bleed: max(0px, min(var(--table-bleed, 0px), calc(var(--card-column) - 100%)));
+  width: calc(100% + 2 * var(--ls-bleed));
+  margin-inline: calc(-1 * var(--ls-bleed));
+}
+/* **The sides of the box go with the bleed**, which is the second half of the
+   rule the three wide tables state further down: a rounded corner and a hairline
+   sitting on the very edge of the screen read as a card that has been clipped
+   rather than as a table that spans. Drawn both ways at 390 and the stripped
+   one is plainly the band it now is; drawn both ways at 1440 the *kept* one is
+   plainly right, the rows running off into nothing on either side without it.
+   So it genuinely is two treatments and the question is only what picks between
+   them.
+
+   **A breakpoint, because the term above cannot reach `border-width`.** Every
+   other part of this is written as one continuous expression off `--ls-bleed`,
+   and that was tried here first: `border-left-width: max(0px, 1px -
+   var(--ls-bleed))` **fails**, percentages being illegal in `border-width`, so
+   the declaration is thrown out and the border falls back to `medium` —
+   measured, 3px on every side at both widths, which is the bug and not the
+   feature. `border-radius` does take it, but half a rule expressed one way and
+   half the other is worse than either.
+
+   **816 is derived and then measured, not chosen.** The bleed is spent in full
+   while the pane is `--card-column` less `--table-bleed` or narrower, which is a
+   viewport of `--card-column` + `--table-bleed` — 800 + 16. Swept at 700, 780,
+   800, 810, 816, 817, 824, 831, 832, 833 and 900: the box sits at **x=0 through
+   816**, at **x=1, 8 and 15 across 817–831** as the bleed runs out, and at
+   **x=16 from 832 up**, where it is the capped block itself. So the strip ends
+   exactly where the box stops touching the glass, and the 15px band above it
+   keeps its card while it drifts off the edge — which is the coherent way round.
+
+   It sits **after** the rule it overrides, which a media query has to: it adds
+   no specificity, and nothing later in this file touches these three. */
+@media (max-width: 816px) {
+  .game-ls-scroll {
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+  }
 }
 .game-ls-table {
   border-collapse: separate;
@@ -5124,10 +5191,38 @@ body {
    The Today block needs a class of its own to be reached — its section carried
    no modifier, the cap having sat on `.player-day` inside it, which centered the
    content and left the heading behind. */
+/* **`.ovw-column` is the game page's whole share of this rule**, folded on
+   rather than given a cap of its own that agrees with it today: a line score, a
+   list of decisions, a half-inning of plays and MLB's own footnotes are the
+   same kind of block as the day, the starts and the news — read across a line
+   rather than scanned down a column — and there is one width for that kind.
+
+   The game page had **no** capped block on any of its three tabs, which is what
+   made it the odd one of the three full-screen pages. Measured at 1440, before:
+   every block on Overview and on Plays at **x=16, 1408 wide**, under a head and
+   a tab strip that are 680 and centered — a page flush left under chrome that
+   is not. The player page's own cards were **800 at x=320** on the same screen
+   and the team page's `Next Games` likewise, so the number was never in
+   question; the game page simply never asked for it. After: the same 800 at
+   x=320, which is the point — this is not a new width, it is the existing one
+   reaching a page that had been left out of it.
+
+   **The Plays tab is the sharpest case.** It draws the *feed's own items*, and
+   `.live-feed` measures **800 at x=320** at 1440 — so the same plate-appearance
+   card was 800 wide on the Feed view and 1408 wide here, which is one object
+   with two layouts and no reason on screen for either.
+
+   **The Box Score is deliberately not in this list.** It is four stat tables and
+   a roster, which is the *other* kind — scanned down a column, taking the window
+   and bleeding to the edges — and its counterparts are the player page's Season
+   and Last 5 and the team page's Season, none of which is capped either. The
+   division is the one `.details-overview` above already draws between its two
+   kinds of block; the game page just needed to be on both sides of it. */
 .ovw-day,
 .ovw-starts,
 .ovw-news,
-.ovw-note {
+.ovw-note,
+.ovw-column {
   max-width: var(--card-column);
   margin-inline: auto;
 }

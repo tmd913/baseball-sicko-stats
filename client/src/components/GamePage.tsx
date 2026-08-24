@@ -588,12 +588,12 @@ function GameOverview({
         <Probables game={game} openable={openable} onOpenPlayer={onOpenPlayer} />
       )}
       {game.status.state === 'postponed' && (
-        <p className="ovw-none">
+        <p className="ovw-none ovw-column">
           {game.status.detailedState || 'This game was not played.'}
         </p>
       )}
       {game.decisions.length > 0 && (
-        <section className="ovw-block">
+        <section className="ovw-block ovw-column">
           <div className="ovw-head-row">
             <h2 className="ovw-head">Decisions</h2>
           </div>
@@ -643,7 +643,7 @@ function Probables({
   const sides = [game.away, game.home].filter((s) => s.probablePitcherId !== null);
   if (sides.length === 0) return null;
   return (
-    <section className="ovw-block">
+    <section className="ovw-block ovw-column">
       <div className="ovw-head-row">
         <h2 className="ovw-head">Probable Pitchers</h2>
       </div>
@@ -757,7 +757,7 @@ function LineScore({
     );
   };
   return (
-    <section className="ovw-block">
+    <section className="ovw-block ovw-column">
       <div className="ovw-head-row">
         <h2 className="ovw-head">Line Score</h2>
       </div>
@@ -823,7 +823,7 @@ function GameInfo({ game }: { game: GameReport }) {
   const notes = game.notes.filter((n) => !mine.has(n.label));
   if (facts.length === 0 && notes.length === 0) return null;
   return (
-    <section className="ovw-block">
+    <section className="ovw-block ovw-column">
       <div className="ovw-head-row">
         <h2 className="ovw-head">Game Info</h2>
       </div>
@@ -1398,7 +1398,7 @@ function GamePlays({
   if (reports.length === 0) {
     return (
       <div className="details-overview">
-        <p className="ovw-none">
+        <p className="ovw-none ovw-column">
           {game.status.state === 'scheduled'
             ? 'The game hasn’t started.'
             : game.status.state === 'postponed'
@@ -1410,7 +1410,7 @@ function GamePlays({
   }
   return (
     <div className="details-overview">
-      <div className="game-plays-tools">
+      <div className="game-plays-tools ovw-column">
         {/* **A filter and not a second list.** The Overview's Scoring Plays
             block is the summary; this is the same stream cut down, which is
             what lets a reader who has found the inning they want widen back out
@@ -1434,10 +1434,10 @@ function GamePlays({
         /* The filter names itself and the control that set it — a message
            reading "nobody scored" would claim a fact about the game where this
            is a fact about the button above it. */
-        <p className="ovw-none">No scoring plays — press All for the whole game.</p>
+        <p className="ovw-none ovw-column">No scoring plays — press All for the whole game.</p>
       ) : (
         shown.map((h) => (
-          <section className="ovw-block game-half" key={h.key}>
+          <section className="ovw-block game-half ovw-column" key={h.key}>
             <div className="ovw-head-row">
               <h2 className="ovw-head">
                 {isBottom(h.half) ? 'Bottom' : 'Top'} {ordinalInning(h.inning)}
