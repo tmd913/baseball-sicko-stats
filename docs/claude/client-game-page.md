@@ -81,8 +81,77 @@ It **shrinks to the innings rather than to the page**, which every other table
 in this app does the opposite of. At 1200px `width: 100%` spread twelve numbers
 100px apart — a picture read across, drawn so wide the eye cannot. `width:
 max-content; max-width: 100%` gives it both readings: compact where there is
-room, scrolling in its own box on a phone. Measured at 390: the box scrolls and
-the `R` column is the last one visible, which is the right one to be.
+room, scrolling in its own box on a phone.
+
+**But a phone is where it has to be read whole, and it was not.** Measured at
+390 the table came to **426px in a 356px box** — 70 over — and what fell off the
+right was the **H and the E**, `R` being the last column visible. That is the
+wrong two of the three to lose: R is the score, which the head one line up has
+already said, and H and E are the two facts the line score adds to it.
+
+The 70px was **reservation rather than content**. `min-width` is a floor on a
+border-box here, so nothing ever clipped against those numbers — a wider column
+simply pushed past them — which made the 30px an inning and the 34px a total
+slack, held for digits that were not coming. Reset from the ink at 13px Inter
+with `tabular-nums` — **25px an inning** (two digits is 16.23, or the 800-weight
+header in extras), **26px a total** (two digits at 800 is 17.67, and three is a
+score nobody has posted), **8px either side of the club** rather than 12
+(`width: 1%`, so its width is its own abbreviation, widest `WSH` at 32.3) — the
+worst case is **351.3 in the 356 box** and the whole line score is on screen at
+390. The stylesheet carries the arithmetic and the two games it was measured on.
+
+**A narrow-screen block was the first shape and was rejected**: two sets of
+numbers for one table is two definitions that agree today, and there was no
+measurement behind the 30 and the 34 for a wide screen to keep.
+
+#### It takes the gutters on a phone and the column on a desktop
+
+**The `width: max-content` above never did what it says.** `.game-ls-team`
+carries `width: 1%`, and a percentage width on a cell defeats the intrinsic
+sizing of the box around it — so `max-content` resolved to the container every
+time, and at 1200 the table measured **1166px, the full page**, which is exactly
+the width the comment was written to prevent. The sentence stands because the
+*argument* is right; what was wrong was believing the declaration carried it.
+
+What carries it is the block. **This page had no capped block on any of its
+three tabs** — measured at 1440, every one of them **x=16 and 1408 wide** under
+a head and a tab strip that are 680 and centered, while the player page's own
+cards were **800 at x=320** and the team page's `Next Games` likewise. So the
+Overview's four blocks, the Plays tab's half-innings and its filter row take
+`.ovw-column`, which is the player page's `--card-column` rule with the game
+page folded onto it rather than a second cap that agrees with it. After: **800
+at x=320**, the same axis as the other two pages. The **Box Score is
+deliberately not in it** — four stat tables and a roster are the *other* kind of
+block, the kind that takes the window and bleeds, and its counterparts (the
+player page's Season and Last 5, the team page's Season) are uncapped too.
+
+The Plays tab is the sharpest case: it draws **the feed's own items**, and
+`.live-feed` measures 800 at x=320 at 1440 — so the same plate-appearance card
+was 800 wide on the Feed view and 1408 wide here.
+
+**And on a phone the line score was the last table on this page stopping
+short.** The Box Score is in the `--table-bleed` list and the line score was
+not, so at 390 the two tables on one page sat at **x=0 w=390** and **x=16
+w=358** — one page saying twice, differently, where its left edge is. The box
+now takes the gutters back by however much of them is left to take:
+`--card-column` less the container, floored at 0 and capped at `--table-bleed`,
+which is 16 where the block is against the pane's padding and **0 where the
+block is already capped**, so it reaches the glass at 390 and sits flush with
+its siblings at 1440. `margin-inline: auto` cannot express that — a box wider
+than its containing block gets auto margins of *zero*, which `.details-tabstrip`
+had already measured — so it is written as the width expression divided out of
+the container, the way that rule writes it. The innings get the 32px back with
+it: the ten-inning game that scrolled 15px over now fits.
+
+**The sides of the box are a breakpoint and the rest is not**, because
+`border-width` rejects percentages: `max(0px, 1px - var(--ls-bleed))` is thrown
+out and the border falls back to `medium`, measured at 3px on every side. The
+number is derived — the bleed is spent in full up to a viewport of
+`--card-column` + `--table-bleed`, **816** — and then swept: the box sits at x=0
+through 816, at x=1, 8 and 15 across 817–831 as the bleed runs out, and at x=16
+from 832 up. Drawn both ways at both ends, the stripped box is plainly right at
+390 and the kept one plainly right at 1440, where without it the rows run off
+into nothing on either side.
 
 **`x` is a half nobody played, and it is drawn only on a game that is over.**
 The wire sends the same absent number for two different facts and nothing in the
@@ -712,6 +781,25 @@ overflow 0 on every tab at both widths**.
 Final · Aug 13 · Nationals Park`; the line score `CHC 0 0 0 0 0 0 0 0 0 | 0 1 0`
 and `WSH 0 0 0 1 5 0 0 1 x | 7 10 0`, the `x` in the ninth; `W Cade Cavalli · L
 Kevin Gausman`; five scoring plays; thirteen Game Info rows.
+
+**The line score's width**, measured on three games at 390: gamePk 823099
+`CHC 19 · SEA 2`, the widest totals a line score gets, **426 → 356 and overflow
+0** where it was 70 in a 356 box; gamePk 823827 `WSH · MIA`, the widest
+abbreviation of the thirty, **overflow 0**; gamePk 824798 `TB · BAL`, ten
+innings, **370.58 in 356** and still scrolling. No cell in any of the three
+reports `scrollWidth > clientWidth`, at 390 or at 1200. With the bleed the box
+is **x=0 w=390** on all three and the ten-inning one fits too — overflow 0.
+
+**The three tabs' axis**, at 1440, before → after: Overview's blocks **x=16
+w=1408 → x=320 w=800**, Plays' filter row and half-innings the same, Box Score
+**x=16 w=1408 unchanged**. The player page (`ovw-day`, `ovw-starts`, `ovw-news`
+at 800/x=320; Season and Last 5 at 1408/x=16) and the team page (`Next Games` at
+800/x=320, Season at 1408/x=16) measure **identically before and after**. The
+line score's box: **x=0 w=390** at 390 and 816, **x=1 w=815** at 817, **x=16
+w=800** at 832, **x=320 w=800** at 1440, with `border-left` 0 at and below 816
+and 1px above it. `.details-view` and `document.body` report **overflow 0** at
+every width, and the half-inning door — now **28.4×34** — still opens `Top 8th ·
+CHC batting` and still closes on one press of Escape.
 
 **Box Score**: `CHC | WSH` above the tables, `CHC` lit; two tables at a time,
 the batting one eleven rows with the substitutes indented under their slots
