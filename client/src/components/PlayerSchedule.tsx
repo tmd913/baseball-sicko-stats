@@ -472,7 +472,6 @@ export function SchedulePreview({
                 ? 'The park as it plays to both hands — he faces whoever they write down.'
                 : undefined
             }
-            onNavigate={onClose}
           />
           {/* **What the box is looking at may itself be a guess**, and it says
               so where the reader is: on a batter's dialog the half of his

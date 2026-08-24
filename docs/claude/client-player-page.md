@@ -2289,13 +2289,48 @@ door naming a tab gets a page that opens on it.
 nobody is at home in, so there is no club page to lead to and the name stays
 plain text — the same null the venue join exists to produce.
 
-**The dialog closes as the club's page opens.** `openTeam` puts away a *player*
-page on its own, so the two doors inside one are covered for free; the **feed's**
-is not, the feed being a view rather than an overlay, and without
-`GamePark`'s `onNavigate` the club's page opened underneath a box the reader had
-to dismiss by hand. Verified in the running app: pressing `Fenway Park` in a feed
-preview leaves `?team=111` with the Park tab active, the feed's dialog gone and
-no stray modal in the tree.
+**The dialog stays open under the club's page, and this reverses the paragraph
+that stood here.** It read: *the dialog closes as the club's page opens —
+`openTeam` puts away a player page on its own, so the two doors inside one are
+covered for free; the feed's is not, the feed being a view rather than an
+overlay, and without `GamePark`'s `onNavigate` the club's page opened underneath
+a box the reader had to dismiss by hand.* The first half is right and is why the
+callback was never needed inside the player page; the second half is the claim
+that is not true, and the numbers say so. A dialog raised from a **view** is
+`.app-dialog`'s own **`z-index: 46`** and the club's page is `.details-view`'s
+**50**, so the page opens *over* the box, not under it. Measured with both up on
+the Roster and on the Feed: `elementFromPoint` at the middle of the window
+returns the **details view**, and `useInertBackground` marks the dialog `[inert]`
+along with the chrome, the table and the float button. 51 is the layer that
+would have sat over the page, and that is a dialog raised from *inside* the
+player page — which unmounts with it.
+
+**What the callback cost was the app's own rule that one press undoes exactly
+one thing.** Shutting the box on the way *in* meant `Back` from the club's page
+landed the reader two steps from where they pressed — reported as *going back
+from the team page after clicking a link in the opponent preview exits both
+views*. It is gone, and with it `GamePark`'s `onNavigate` prop, nobody passing it
+any more.
+
+**Driven at 1200 on all four hosts**, `?preset=Tomorrow` for a fixture with a
+park to press:
+
+| | preview | club's page | `Back` |
+| --- | --- | --- | --- |
+| Roster opponent cell | `app-dialog@46` | `details-view@50` over `app-dialog@46[inert]` | the dialog, live again |
+| Feed Upcoming row | `app-dialog@46` | same | same |
+| Player page → Schedule | `details-view@50` + `app-dialog@51` | the club alone, **no stray overlay** | back to *him* |
+| Player page → a projected start | `details-view@50` + `app-dialog@51` | the club alone | back to *him* |
+
+The two player-page rows are the case the old paragraph was really describing,
+and they are unchanged: the dialog is inside that page's tree, so `openTeam`
+putting the page away takes the box with it whatever this strip does.
+
+**And the Escape ladder is one rung a press**, which is what the layering buys.
+Stacked on the Roster: **5** `[inert]` marks, focus on the details view; one
+press leaves `app-dialog@46` with **2** marks and focus back on
+`.app-dialog-box`; a second leaves **0** marks and focus on the body; a third
+does nothing.
 
 **`TeamDoorContext` rather than a prop.** `App::openTeam` is what the app calls
 *the one door in* — it puts away the player page, remembers him for the way back

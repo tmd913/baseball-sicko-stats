@@ -335,25 +335,41 @@ function ParkRow({ stat, indexes }: { stat: ParkStat; indexes: ParkIndexes }) {
  * plate all night, and on the 2026 board that is worth 34 points of home-run
  * index at Yankee Stadium.
  */
+/*
+ * **`onNavigate` is gone, and the dialog it used to shut stays open.** It was a
+ * callback the host passed to close its own box just before the club's page
+ * opened, on the stated reasoning that *the feed's dialog would stay up over the
+ * page it just navigated to, the feed being a view rather than an overlay that
+ * `openTeam` puts away on its own.* That is the one claim in it that is not
+ * true: a dialog raised from a **view** is `.app-dialog`'s own `z-index: 46`
+ * and the club's page is `.details-view`'s **50**, so the page opens *over* it
+ * — measured, `elementFromPoint` at the middle of the window returns the
+ * details view with both up, and `useInertBackground` marks the dialog inert
+ * along with the rest of the background.
+ *
+ * What the callback cost was the rule this app keeps everywhere else: **one
+ * press undoes exactly one thing.** Closing the box on the way in meant `Back`
+ * from the club's page landed the reader on the roster, two steps from where
+ * they pressed — reported as *going back from the team page exits both views*.
+ * With it gone the page covers the box and `Back` reveals it again.
+ *
+ * **The two hosts inside the player page needed it least of all.** A dialog
+ * raised from `PlayerSchedule` or `PlayerOverview` is at 51 and would indeed sit
+ * over the page — but `openTeam` puts the player page away, and the dialog is
+ * inside its tree, so it unmounts with it whatever this strip does. Measured on
+ * Judge's Schedule tab: dialog at 51 with the page at 50, then the club's page
+ * alone with **no** stray overlay, and `Back` returning to him.
+ */
 export function GamePark({
   venueId,
   hand = 'all',
   handNote,
-  onNavigate,
 }: {
   venueId: number | null;
   /** Which cut to draw — `hitterHand` for a batter, `all` for a pitcher. */
   hand?: ParkHand;
   /** Why this cut and not another, for the strip's own tooltip. */
   handNote?: string;
-  /**
-   * **Close the dialog this strip is in**, called just before the club's page
-   * opens. The host owns its own `open` flag and this strip cannot reach it —
-   * and without it the feed's dialog would stay up *over* the page it just
-   * navigated to, the feed being a view rather than an overlay that
-   * `openTeam` puts away on its own.
-   */
-  onNavigate?: () => void;
 }) {
   const { park, loading, error } = useParkFactor(venueId);
   const openTeam = useTeamDoor();
@@ -378,7 +394,6 @@ export function GamePark({
   // there is no club page for it to lead to and the name stays plain text.
   const club = park.teamId;
   const toClub = club != null && openTeam ? () => {
-    onNavigate?.();
     // Straight onto the Park tab, which is the reading the reader pressed the
     // venue's name to get. Landing them on the club's Overview would make the
     // door a navigation rather than an answer.
