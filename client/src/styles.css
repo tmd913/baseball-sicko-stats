@@ -4563,6 +4563,46 @@ body {
   color: var(--faint);
   border-bottom: 1px solid var(--border);
 }
+/* **The three column widths are one budget, and the budget is a phone.** At
+   30px an inning, 34px a total and 12px of gutter either side of the club, a
+   nine-inning line score measured **426px in the 356px box at 390** — 70 over.
+   The one picture of a game that exists to be taken in at a glance was the one
+   thing on the page a reader had to scroll to finish, and what it cut was the
+   **H and the E**: R was the last column visible, which is the wrong two of the
+   three to lose. (Measured on gamePk 823099, `CHC 19 · SEA 2` — a two-digit R
+   *and* a two-digit H, so the widest totals a line score gets.)
+
+   None of those three numbers was a measurement. `min-width` is a floor on a
+   border-box here, so content never clips against it — it only pushes the
+   column past it — which makes each one pure reservation, and 70px of it was
+   reserved for digits that were not coming. Set from the ink instead, at 13px
+   Inter with `tabular-nums`:
+
+   - **an inning is 25px.** One run is 8.13px of ink; the widest thing the
+     column ever holds is two digits — a ten-run inning at 16.23, or the
+     *header* in extras, which is 800 weight at 11px — and 25 less the 4px
+     gutters is 17px of room for it. Confirmed by drawing the tenth: gamePk
+     824798 went ten innings and no cell in the table reports
+     `scrollWidth > clientWidth`.
+   - **a total is 26px.** Two digits at 13px/800 is 17.67, and three is a score
+     no club has posted in a hundred and fifty years.
+   - **the club keeps 8px either side rather than 12.** Its width is its own
+     abbreviation (`width: 1%`), and the widest of the thirty is **WSH at
+     32.3** — so the worst case the column has is 48.3.
+
+   Worst case measured end to end: 225 + 78 + 48.3 = **351.3 in the 356 box**,
+   so `WSH · MIA` fits at 390 with room, and the table then spreads the 4.7 it
+   did not need. Below 390 it scrolls again — `CHC · SEA` is 348.63 in the 326
+   box a 360-wide phone gives — which is the bargain `max-content` above was
+   struck for, and extras still scroll at any width because a tenth inning is a
+   tenth column: `TB · BAL` went ten and measures 370.58 at 390.
+
+   **Not a narrow-screen block**, which was the first shape it took: two sets of
+   numbers for one table is two definitions that agree today, and there was
+   nothing behind the 30 and the 34 for the wide one to keep. Nothing changes
+   above the fit either way — a percentage width on the club cell defeats the
+   `max-content` above it, so at 1200 the table measures 1166 both before and
+   after and only redistributes the slack. */
 /* The club, pinned to the left as the innings scroll under it — the same rule
    `.glog-date` states one table over, and for the same reason: a row a few
    innings in belongs to no club in particular. */
@@ -4571,8 +4611,8 @@ body {
   left: 0;
   z-index: 1;
   width: 1%;
-  padding-left: 12px !important;
-  padding-right: 12px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
   text-align: left !important;
   font-size: 13px;
   font-weight: 800;
@@ -4584,14 +4624,14 @@ body {
   z-index: 2;
 }
 .game-ls-cell {
-  min-width: 30px;
+  min-width: 25px;
   padding-left: 4px !important;
   padding-right: 4px !important;
   color: var(--muted);
 }
 /* **The cell is the door onto that half-inning's plays**, and the button fills
    it rather than wrapping the digits: one or two characters is not a target,
-   and the cell around them is 30px by the row's height, which is.
+   and the cell around them is 25px by the row's height, which is.
 
    No underline and no color of its own — a line score is a picture, and a grid
    of eighteen dotted numbers would be a picture of the links rather than of the
@@ -4600,8 +4640,18 @@ body {
    struck where the type cannot change. */
 .game-ls-door {
   display: block;
-  width: 100%;
-  padding: 0;
+  /* **It takes the cell's padding back**, which is what makes the sentence
+     above literally true: `width: 100%` and `padding: 0` left the button the
+     cell's *content* box, so the press was 22×16 in a 30px cell and became
+     17.6×16 when the cell went to 25. Bleeding out over the 9px and 4px the
+     cell pads by — `calc(100% + 8px)` against a negative margin, since a
+     `<button>` shrink-wraps under `width: auto` even as a block — makes it
+     **25.6×34**, the whole cell and a bigger target than it had before the
+     column was narrowed. The hover tint fills the cell with it, which is the
+     reading a scoreboard highlight wants anyway. */
+  width: calc(100% + 8px);
+  margin: -9px -4px;
+  padding: 9px 4px;
   border: none;
   border-radius: 4px;
   background: none;
@@ -4629,7 +4679,7 @@ body {
 .game-ls-total {
   color: var(--text);
   font-weight: 800;
-  min-width: 34px;
+  min-width: 26px;
 }
 .game-ls-table tbody .game-ls-total:first-of-type,
 .game-ls-table thead .game-ls-total:first-of-type {

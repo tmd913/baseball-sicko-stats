@@ -81,8 +81,31 @@ It **shrinks to the innings rather than to the page**, which every other table
 in this app does the opposite of. At 1200px `width: 100%` spread twelve numbers
 100px apart — a picture read across, drawn so wide the eye cannot. `width:
 max-content; max-width: 100%` gives it both readings: compact where there is
-room, scrolling in its own box on a phone. Measured at 390: the box scrolls and
-the `R` column is the last one visible, which is the right one to be.
+room, scrolling in its own box on a phone.
+
+**But a phone is where it has to be read whole, and it was not.** Measured at
+390 the table came to **426px in a 356px box** — 70 over — and what fell off the
+right was the **H and the E**, `R` being the last column visible. That is the
+wrong two of the three to lose: R is the score, which the head one line up has
+already said, and H and E are the two facts the line score adds to it.
+
+The 70px was **reservation rather than content**. `min-width` is a floor on a
+border-box here, so nothing ever clipped against those numbers — a wider column
+simply pushed past them — which made the 30px an inning and the 34px a total
+slack, held for digits that were not coming. Reset from the ink at 13px Inter
+with `tabular-nums` — **25px an inning** (two digits is 16.23, or the 800-weight
+header in extras), **26px a total** (two digits at 800 is 17.67, and three is a
+score nobody has posted), **8px either side of the club** rather than 12
+(`width: 1%`, so its width is its own abbreviation, widest `WSH` at 32.3) — the
+worst case is **351.3 in the 356 box** and the whole line score is on screen at
+390. The stylesheet carries the arithmetic and the two games it was measured on.
+
+**A narrow-screen block was the first shape and was rejected**: two sets of
+numbers for one table is two definitions that agree today, and there was no
+measurement behind the 30 and the 34 for a wide screen to keep. Nothing above
+the fit moves either way — the club cell's percentage width defeats the
+`max-content` above it, so at 1200 the table measures **1166 both before and
+after** and only redistributes the slack.
 
 **`x` is a half nobody played, and it is drawn only on a game that is over.**
 The wire sends the same absent number for two different facts and nothing in the
@@ -712,6 +735,14 @@ overflow 0 on every tab at both widths**.
 Final · Aug 13 · Nationals Park`; the line score `CHC 0 0 0 0 0 0 0 0 0 | 0 1 0`
 and `WSH 0 0 0 1 5 0 0 1 x | 7 10 0`, the `x` in the ninth; `W Cade Cavalli · L
 Kevin Gausman`; five scoring plays; thirteen Game Info rows.
+
+**The line score's width**, measured on three games at 390 (box **356**):
+gamePk 823099 `CHC 19 · SEA 2`, the widest totals a line score gets, **426 → 356
+and overflow 0** where it was 70; gamePk 823827 `WSH · MIA`, the widest
+abbreviation of the thirty, **overflow 0**; gamePk 824798 `TB · BAL`, ten
+innings, **370.58 in 356** and still scrolling, which is what a tenth column
+costs and what `max-content` is for. No cell in any of the three reports
+`scrollWidth > clientWidth`, at 390 or at 1200.
 
 **Box Score**: `CHC | WSH` above the tables, `CHC` lit; two tables at a time,
 the batting one eleven rows with the substitutes indented under their slots
