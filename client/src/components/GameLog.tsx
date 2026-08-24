@@ -9,7 +9,15 @@ import type {
 } from '../types';
 import { ExpandButton } from './ExpandButton';
 import { useFullPage } from '../hooks';
-import { creditLabel, decisionColor, formatIp, formatRate, ordinal, prettyGameDate } from '../lib';
+import {
+  creditLabel,
+  decisionColor,
+  formatIp,
+  formatRate,
+  numericGameDate,
+  ordinal,
+  prettyGameDate,
+} from '../lib';
 import { OutingPageForGame } from './OutingPage';
 import { PlayerDayModal } from './PlayerDay';
 import { PageMore, usePagedRows } from './paging';
@@ -258,10 +266,14 @@ function DnpRow({ gap }: { gap: Extract<GameLogGap, { kind: 'dnp' }> }) {
  * range is the wider thing to print.
  */
 function AbsenceRow({ gap }: { gap: Extract<GameLogGap, { kind: 'absence' }> }) {
+  // **Numbers for a range, the spelled month for a single day.** Two spelled
+  // dates with a rule between them is a cell nearly twice the width of the
+  // column it sits in — see `numericGameDate`. A one-game stretch is one date
+  // and reads as every other row's does.
   const span =
     gap.from === gap.to
       ? prettyGameDate(gap.from)
-      : `${prettyGameDate(gap.from)} – ${prettyGameDate(gap.to)}`;
+      : `${numericGameDate(gap.from)} – ${numericGameDate(gap.to)}`;
   return (
     <tr className="glog-gap is-absence" title={gap.detail || undefined}>
       <th className="glog-date glog-gap-span" scope="row" colSpan={2}>

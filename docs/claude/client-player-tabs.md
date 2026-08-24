@@ -1016,9 +1016,33 @@ fills the season in.
 | **a day off** (`dnp`) | a log row with the date, the opponent and its result chip, and one cell reading `Did not play` | it *is* a game — it had a winner whether or not he was in it |
 | **a stretch** (`absence`) | one row: the date range, the state, and how many of his club's games it cost | forty near-identical rows would bury the season he did play |
 
-Judge's log at 1200×900 now opens `Jul 19 – Aug 23 · 60-day IL · 33 games`,
-`Jul 17 · vs LAD · L 1-2 · Did not play`, `Jun 2 – Jul 12 · 10-day IL ·
-37 games`, and then May 31 and the season he played. The **fifteen dashes were
+Judge's log at 1200×900 now opens `7/19 – 8/23 · 60-day IL · 33 games`,
+`Jul 17 · vs LAD · L 1-2 · Did not play`, `6/2 – 7/12 · 10-day IL ·
+37 games`, and then May 31 and the season he played.
+
+**A range is written in numbers where a single date is spelled**, and the two
+are deliberately different. `Jun 9` is a date and `6/9` is a pair of numbers the
+reader has to parse, so a row naming one day pays nothing for the spelled month
+— but two spelled dates with a rule between them is `Jul 19 – Aug 23`, measured
+at **110px** against the **72px** the numeric form takes, in a cell that has the
+date column and the opponent's to fit inside. The locale is the reader's, as
+`prettyGameDate`'s already is, since `6/9` cannot be read at all without knowing
+which half leads.
+
+**It did not narrow the date column, and it was not going to.** Measured at
+1200 and 390 before and after: the column is **109px** and **79px** on both
+sides of the change, because a range sits in a cell spanning the date column
+*and* the opponent's (252px and 191px), and the date column's own width is set
+by the **header** — the expand button, the word `Date`, and 22.8px of padding
+either side against 26px of text. What the numeric form buys is a range that no
+longer fills the cell it sits in. Narrowing the column itself is a different
+change and would have to come out of the corner cell.
+
+**The range still needs both columns**, which is the reason the span was not
+dropped to one while the text was being shortened: 72px against a date column
+whose *content* box is 63.4px at 1200 and 64.2px at 390. Fitting it into one
+column would widen the column for every row on the table — the opposite of what
+was asked for. The **fifteen dashes were
 rejected**: a row of `—` across every stat column says "did not play" fifteen
 times in a language the reader has to translate, where one cell says it once.
 The same argument the Stats tab's `.stats-none` already makes about a span he
