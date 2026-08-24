@@ -421,11 +421,19 @@ export function DateBar({
      allows in any case. */
   useDismissable(asPopover && shown, barRef, onClose ?? (() => {}));
   usePopoverFit(asPopover && shown, popRef);
-  /* Runs unconditionally and does nothing unless asked — see `measure`. */
-  usePublishedHeight(barRef, '--date-bar-h', measure && !fixed);
+  /* Runs unconditionally and does nothing unless asked — see `measure`.
+     **`!fixed` used to be in this test and is gone**, which was true rather than
+     load-bearing for as long as the only fixed bar was a team page's: `measure`
+     already says *this is the bar a header row sticks under*, and the second
+     clause was a second copy of that claim reading a prop about something else.
+     The app's own Roster bar goes fixed in the `Summary` reading now, and with
+     the clause in it stopped publishing at the moment it changed height —
+     leaving `--date-bar-h` on the collapsed bar's number and the summary table's
+     header row stuck under a bar that is no longer that tall. */
+  usePublishedHeight(barRef, '--date-bar-h', measure);
   if (fixed) {
     return (
-      <div className="date-bar date-bar-fixed" role="group" aria-label="Dates">
+      <div className="date-bar date-bar-fixed" role="group" aria-label="Dates" ref={barRef}>
         <div className="date-bar-row">
           <div className="date-face">
             <span className="date-face-lead">{lead}</span>

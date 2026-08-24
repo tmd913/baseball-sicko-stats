@@ -1605,6 +1605,42 @@ eye already is, and here there is no second column so it read as a word adrift
 which in a 12-team league's first playoff round is eight of the ten cards,
 leaving it off would put his own team out of reach entirely.
 
+### The tab is a button on the Roster, and there is one drawing again
+
+*(This supersedes the whole section below, which is left as written — it is the
+record of what a second drawing of one page costs, and the measurements in it
+were all real. Everything it says about the page **itself** is unchanged; what
+has gone is the tab, and with it `standalone`, `.app.matchup-mode` and
+`.mup-view.mup-page`.)*
+
+**The argument that made it a tab is the one that takes it away.** A tab says
+*which page of the app you are on*, and this week's opponent is a page you open
+off your own roster and come back from — which is what `player=`, `team=`,
+`game=` and a Scoreboard card already are. So the door is `MatchupButton`, first
+in the Roster's own tools row, and what it opens is the overlay every other door
+already opened: `mup=<id>`, the body pinned, the background inert, a Back row and
+Escape.
+
+**`standalone` is gone rather than left unused**, which is this repo's rule about
+a field nobody reads. Its four suppressions become unconditional
+(`useLockBodyScroll(true)`, `useOverlayFocus(viewRef, undefined, true)`, no early
+return in the Escape effect, the Back row always drawn), and the two stylesheet
+blocks that gave a page-drawn-as-a-tab what an overlay has for free go with it.
+The one measurement worth carrying out of them is the gutters', which the section
+below states twice and which cost a shipped day: **this box is the scroll
+container**, a scroll container's origin is its own padding edge, and a table
+bleeding back out through the *app's* 22px put 22px of itself left of scroll
+offset zero, clipped and unreachable. The overlay never had it, its 16px of
+padding and 16px of bleed being the same number by construction.
+
+**And `SummaryToggle` is exported now**, because the Roster grew the same
+reading: this table over the matchup's own span. One component and one bar
+reading (`{ kind: 'matchup' }`, `fixed`) on both surfaces — see **Client**,
+*`Summary` is the Roster's fifth reading*. What does **not** cross over is
+`startersOnly`: a leaguemate's page has to cut his bench out by hand to agree
+with the card, where the app's own table already draws the starters divider over
+its rows and the `Starters` filter was deliberately taken off that view.
+
 ### The same page, as a tab: `Matchup`
 
 **It is a top-level tab now as well as a page over the League view**, and they

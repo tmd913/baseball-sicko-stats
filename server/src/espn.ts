@@ -3314,9 +3314,19 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
  * acquisition count at all while the live one had them — measured before the
  * bump, `undefined` on every side of period 18 against a working 19. Bump it
  * whenever a side or a matchup gains a field.
+ *
+ * **`-v3` is nothing gaining a field and `tallyCategories` changing its mind**,
+ * which is the other half of the same rule: a version guards the *meaning* of
+ * what is stored as well as its shape. `wins/losses/ties` are computed once, on
+ * the way in, and a settled week is read back with no freshness test at all —
+ * so a week in which a side threw no innings would have gone on serving the
+ * tally that skipped ERA and WHIP long after every live week counted them as
+ * tied. The blobs are one ESPN request each to rebuild and the two answers
+ * cannot be told apart by looking, which is exactly when a stale one is worth
+ * least and costs most.
  */
 const scoreboardBlobKey = (leagueId: number, period: number) =>
-  `espn-scoreboard-${leagueId}-${period}-v2.json`;
+  `espn-scoreboard-${leagueId}-${period}-v3.json`;
 
 const scoreboardCache = new Map<string, { matchups: EspnMatchup[]; fetchedAt: number }>();
 const scoreboardInFlight = new Map<string, Promise<EspnMatchup[]>>();
@@ -3631,9 +3641,32 @@ function sideFrom(
  * two *projected* sides, and it must reach the same verdict from the same
  * numbers as the card it replaces — one function rather than two that agree
  * today. `lowerBetter` is honored here, so ERA and WHIP need no case anywhere
- * else; a category either side is missing a figure for is **skipped** rather
- * than counted, which is what keeps a side ineligible for one from being
- * recorded as losing it.
+ * else.
+ *
+ * **A category *neither* side has a figure for is a tie; one only one side has
+ * is skipped.** The two absences are different facts and the split is the whole
+ * of the rule. A side ESPN reports as *ineligible* for a category is absent
+ * from `scores` by `sideFrom`'s own rule, and counting that as a loss is the
+ * fault the skip exists to prevent — but it is a fact about **one** side, so
+ * the other still has its figure and the skip still answers it.
+ *
+ * Both sides absent is the other thing entirely, and it is the first minute of
+ * every week: a side that has thrown no innings has no denominator, so ESPN
+ * reports **no ERA and no WHIP** for either of them (see `withAddedComponents`,
+ * where the projection's own version of this was already found and answered).
+ * Measured on the live 12-team league at the top of period 20, every one of the
+ * six matchups: `scoreByStat` carries all eight counting and OPS categories as
+ * `0` from the first minute — ESPN having nothing to divide — and carries
+ * neither 47 (ERA) nor 41 (WHIP) at all. Skipped, the headline read **0-0-8**
+ * on a ten-category league, which says two of the ten are somebody's and does
+ * not say whose. Level on nothing is what they actually are, so they are level:
+ * **0-0-10**.
+ *
+ * Which also means **only a rate can reach the tie**, and that is what keeps
+ * the ineligibility rule intact rather than merely mostly intact: a counting
+ * category ESPN sends as `0` from the first minute is present, so a counting
+ * category that is genuinely absent is genuinely ineligible — and it is
+ * ineligible for one side, not for both.
  */
 export function tallyCategories(
   mine: Record<number, number>,
@@ -3646,7 +3679,13 @@ export function tallyCategories(
   for (const cat of categories) {
     const h = mine[cat.statId];
     const a = theirs[cat.statId];
-    if (typeof h !== 'number' || typeof a !== 'number') continue;
+    const hasH = typeof h === 'number';
+    const hasA = typeof a === 'number';
+    if (!hasH && !hasA) {
+      ties++;
+      continue;
+    }
+    if (!hasH || !hasA) continue;
     if (h === a) ties++;
     else if (cat.lowerBetter ? h < a : h > a) wins++;
     else losses++;

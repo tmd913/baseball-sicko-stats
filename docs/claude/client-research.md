@@ -228,6 +228,60 @@ two dialogs are `Modal`s in a portal, and `Search` and `Filters` open rows
 *inside* the bar. Checked by clicking all **26** controls in the row and looking
 for a descendant outside its rect — **none**.
 
+### The head does not scroll the board either
+
+*(This is the section above, applied to the two boxes it left standing. Every
+word of the mechanism is unchanged; what is new is the measurement that says the
+row was one of three.)*
+
+**Reported a second time, and about the other end of the pane**: *still able to
+scroll the research table horizontally with a finger in the top section with the
+filters — specifically the count of players and the middle filter row that
+doesn't scroll itself.* Both of those are **`.research-head`**, and it is the
+same box the tools row is for the same reason — a sticky child of the pane,
+pinned at `left: 0`, whose own side padding and whose non-scrolling children have
+the pane as their nearest scrollable ancestor. The third is the condensed run's
+box while the head is stuck.
+
+Measured at 390 with the same 200px horizontal wheel, `.research-scroll.
+scrollLeft` after, **before**: 200 on the head's 22px side padding, 200 on
+`.research-count`, 200 on the condensed run's own padding — against **0** inside
+the tools row, which had already been answered a section ago. **After: 0, 0,
+0**, at 390 and 1200 alike, with `scrollTop` still moving **300 either way** over
+every one of them, the block axis being left to chain exactly as the row's is.
+
+**The chips row was never the fault**, and it is the same proof the three button
+runs were: `.research-chips` is `overflow-x: auto` with
+`overscroll-behavior-x: none`, so a gesture landing in it is spent there whether
+or not it has anywhere to go. Measured at 390 with six filters built (`scrollWidth`
+575 against a 346 client): the chips row's own `scrollLeft` goes to 200 and the
+pane's stays at 0.
+
+**The head can take the rule because nothing in it leaves it**, which is the one
+thing here that had to be measured rather than assumed — the head is where
+`Search`, `Filters` and the turn-day strip *open*. Walked every descendant's rect
+against the head's own in four states: at rest (31px tall), with Search open
+(73), with Filters open (117) and with a chip built (150). **No descendant
+outside the box in any of them**, and `scrollWidth === clientWidth` and
+`scrollHeight === clientHeight` throughout. The two `<select>`s in the Filters
+panel open a list the platform draws outside the document, which no `overflow`
+reaches.
+
+**The rail is not the box that takes it — its inner is.**
+`.research-condensed-rail` is `height: 0` on purpose (see *The run rides a
+zero-height rail*), so `overflow: hidden` there would clip the whole condensed
+run out of existence rather than interposing a scroll container. The box with the
+height in it is `.research-condensed-inner`, and it is safe for the reason the
+head is: its one child is the run, **346px wide inside 390** at every offset, its
+two arrows at x=22 and x=324, with the run's own overflow already clipped by
+`.tool-scroll-box` one level in. Checked after: the condensed run still scrolls
+itself (`tool-scroll-box.scrollLeft` 200 on a wheel over it) and both arrows are
+still drawn.
+
+So the fold is three selectors and one pair of declarations —
+`.research-scroll > .view-tools`, `.research-scroll > .research-head` and
+`.research-condensed-inner` — rather than three rules that agree today.
+
 ### The bar stops at its third row
 
 *(This moves one line and nothing else: the section above describes the

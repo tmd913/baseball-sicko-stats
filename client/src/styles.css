@@ -665,9 +665,11 @@ body {
    `league-rank-mode` was added later and did not join this list, which is
    exactly the strip it produced — measured, the bar sat at y=14 there against
    y=0 on the two views beside it. */
+/* (`.app.matchup-mode` was a fourth member and is gone with the `Matchup` tab —
+   the page it named is an overlay again, and an overlay is `position: fixed`
+   over the app rather than a column inside it.) */
 .app.summary-mode .app-chrome,
 .app.research-mode .app-chrome,
-.app.matchup-mode .app-chrome,
 .app.league-rank-mode .app-chrome {
   position: static;
 }
@@ -8218,8 +8220,44 @@ button.start-line:focus-visible {
    control set leaves the row: its two dialogs are `Modal`s in a portal, and
    `Search` and `Filters` open rows *inside* the bar, which is why this one can
    take the rule and the other two cannot. Checked by clicking all 26 controls in
-   the row and looking for a descendant outside its rect — **none**. */
-.research-scroll > .view-tools {
+   the row and looking for a descendant outside its rect — **none**.
+
+   **The row was one of three boxes with this fault and the only one that got
+   the rule**, reported a second time: *still able to scroll the table sideways
+   with a finger in the top section — the count of players, and the middle
+   filter row that doesn't scroll itself*. Both of those are the **head**, which
+   is the same kind of box for the same reason — a sticky child of the pane,
+   pinned at `left: 0`, whose padding and whose non-scrolling children have the
+   pane as their nearest scrollable ancestor. Measured at 390 with the same
+   200px horizontal wheel, `.research-scroll.scrollLeft` after, before this
+   rule: **200 on the head's 22px side padding, 200 on `.research-count`, 200 on
+   the condensed run's own padding while stuck** — against 0 inside the tools
+   row, which had already been answered. After: **0, 0, 0**. The chips row was
+   never the fault and is the same proof the three runs were: it is
+   `overflow-x: auto` with `overscroll-behavior-x: none`, so a gesture landing
+   in it is spent there whether or not it has anywhere to go.
+
+   **The head can take it because nothing in it leaves it**, which is the test
+   the row above had to pass and is the one thing here that had to be measured
+   rather than assumed — the head is where `Search`, `Filters` and the turn-day
+   strip *open*. Walked every descendant's rect against the head's own in four
+   states — at rest (31px tall), with Search open (73), with Filters open (117)
+   and with a chip built (150): **no descendant outside the box in any of them,
+   and `scrollWidth === clientWidth` and `scrollHeight === clientHeight`
+   throughout**, so the block axis goes on chaining exactly as the row's does.
+   The two `<select>`s in the Filters panel open a list the platform draws
+   outside the document, which no `overflow` reaches.
+
+   **The rail is not the box that takes it — its inner is.**
+   `.research-condensed-rail` is `height: 0` on purpose (see it below), so
+   `overflow: hidden` there would clip the whole condensed run out of existence
+   rather than interposing a scroll container. The box with the height in it is
+   `.research-condensed-inner`, and it is safe for the same reason the head is:
+   its one child is the run, 346px wide inside 390 at every offset, with the
+   run's own overflow already clipped by `.tool-scroll-box` one level in. */
+.research-scroll > .view-tools,
+.research-scroll > .research-head,
+.research-condensed-inner {
   overflow: hidden;
   overscroll-behavior-x: none;
 }
@@ -8677,7 +8715,8 @@ button.start-line:focus-visible {
 .schedule-toggle svg,
 .projected-toggle svg,
 .feed-toggle svg,
-.summary-toggle svg {
+.summary-toggle svg,
+.matchup-open svg {
   flex: none;
 }
 
@@ -9024,48 +9063,19 @@ button.start-line:focus-visible {
   overflow: hidden;
 }
 
-/* ---- The matchup as a tab -------------------------------------------------
-   The same page the Scoreboard opens over itself, drawn as a page of the app —
-   see `LeagueMatchup.tsx::standalone`. As an overlay it is `position: fixed;
-   inset: 0` with its own scroller, which is where its pinned band and its
-   roster reading's fixed-height column both come from. A tab has to be given
-   the same box by hand, and this is the third view to take the column the other
-   two already take: the app is the viewport, the chrome is static at the top of
-   it, and the page below scrolls inside itself.
-
-   Everything in `.mup-view` is then untouched — its band still pins to the box
-   that scrolls, `--details-chrome-h` still measures it, and the team page's
-   roster reading still turns that box into a column of its own. */
-.app.matchup-mode {
-  height: 100dvh;
-  /* **No side gutters at all here, and they were 22px.** The page below is a
-     *scroll container* (`.mup-view` scrolls itself), and a scroll container's
-     origin is its own padding edge — so a table that bleeds back out through
-     the app's gutters with `margin-inline: -22px` puts 22px of itself to the
-     **left of scroll offset zero**, where it is clipped and unreachable. Shipped
-     that way for a day: the matchup page lost 22px off each side of every wide
-     table on it, which is a headshot column on the left and a stat column on
-     the right. The overlay never had it, its 16px of padding and its 16px of
-     bleed being the same number by construction.
-     So the gutters go to the page inside, where the bleed has something to
-     come out of — see `.mup-view.mup-page` — and `.app` gives the box the
-     window. */
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* With no gutters on `.app`, the chrome has nothing to bleed through: its
-   negative side margins are exactly that padding, and here they would take it
-   22px off each edge of the window. It keeps its own side padding, which is
-   what puts the header and the tabs where they are on every other view. */
-.app.matchup-mode .app-chrome {
-  margin-top: 0;
-  margin-bottom: 0;
-  margin-left: 0;
-  margin-right: 0;
-  padding-top: 14px;
-}
+/* ---- The matchup as a tab stood here ---------------------------------------
+   Two blocks — `.app.matchup-mode` and its `.app-chrome` override — that gave
+   the matchup page the viewport-tall column the summary and research views
+   take, so that a page drawn as a *tab* could pin its own band and give its
+   roster reading a scrollport. Both are gone with the tab. As an overlay the
+   page is `position: fixed; inset: 0` with its own scroller and has all of it
+   for free, which is what it had before the tab and has again — see
+   `App.tsx::matchupButton` for the door that replaced it. The one thing worth
+   keeping out of them is the fault the gutters recorded: `.app` had 22px of
+   side padding, the page below was a scroll container, and a table bleeding
+   back out through those gutters put 22px of itself left of scroll offset
+   zero, where it is clipped and unreachable. The overlay never had it, its
+   16px of padding and 16px of bleed being the same number by construction. */
 /* The *document* mustn't bounce on these two views either — the pane inside
    consumes its own gesture, but iOS hands the drag to the page whenever the
    pane can't scroll in the axis it was dragged in (a summary table of six rows
@@ -10535,7 +10545,15 @@ button.start-line:focus-visible {
    of one page and read identically by construction. It takes `.on` and never
    `.active`, being a plain switch with no panel. */
 .feed-toggle,
-.summary-toggle {
+.summary-toggle,
+/* **The door onto the matchup page, first in that same run** — the one control
+   there that is not a reading of the table under it. It is folded onto the
+   shape, the flex rule, the hover and the focus ring below, and deliberately
+   **not onto `.on`**: a door has no state to be in, so a lit one would be a
+   button claiming a reading it does not have. That is the whole of the
+   difference between it and the four beside it, and it is one selector list
+   rather than a second set of rules that agree today. */
+.matchup-open {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -10553,7 +10571,8 @@ button.start-line:focus-visible {
 .research-toggle:hover,
 .schedule-toggle:hover,
 .projected-toggle:hover,
-.feed-toggle:hover {
+.feed-toggle:hover,
+.matchup-open:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -10574,7 +10593,8 @@ button.start-line:focus-visible {
 .schedule-toggle,
 .projected-toggle,
 .feed-toggle,
-.summary-toggle {
+.summary-toggle,
+.matchup-open {
   flex: none;
   white-space: nowrap;
 }
@@ -10591,7 +10611,8 @@ button.start-line:focus-visible {
 .schedule-toggle:focus-visible,
 .projected-toggle:focus-visible,
 .feed-toggle:focus-visible,
-.summary-toggle:focus-visible {
+.summary-toggle:focus-visible,
+.matchup-open:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -17127,52 +17148,15 @@ span.mup-move-name:hover {
   min-height: 0;
 }
 
-/* ---- The matchup as a tab ----
-   See `.app.matchup-mode` above for the column this sits in. Written two
-   classes deep and placed *here*: `.mup-view`'s own layer rule is further down
-   this file than the `.app.matchup-mode` block, so a single-class selector up
-   there would lose to it on source order. */
-/* The band bleeds through the box's own side padding, and as a tab that box is
-   `.app` rather than the window — 22px against the overlay's 16. Left at 16 it
-   stopped **6px short of each edge** on a page whose table below it reaches 0
-   (measured: the band at x=6, w=1188 against a table at x=0, w=1200), which is
-   a hairline that does not meet the edge it is drawn to. This is `--bar-bleed`
-   and `--table-bleed`'s own rule stated a third time: the number belongs to the
-   container, and the container has changed. */
-.mup-view.mup-page > .mup-chrome {
-  margin-left: calc(-1 * var(--app-gutter));
-  margin-right: calc(-1 * var(--app-gutter));
-  padding-left: var(--app-gutter);
-  padding-right: var(--app-gutter);
-}
-/* And the same swap one box out, for the tools row and the dates: both are
-   centered card columns inside the page's own padding, so they need no bleed —
-   what they need is for the page to *have* the gutter their neighbours are
-   measured against, which is what the padding below restores. */
-.mup-view.mup-page {
-  /* Out of the overlay layer entirely: it is a page in the flow now, and a
-     fixed box over the app would cover the very tabs that lead to it. */
-  position: static;
-  inset: auto;
-  z-index: auto;
-  flex: 1;
-  min-height: 0;
-  /* **The gutters are this box's, and they have to be**, which is the whole of
-     the clipping bug above: this box is the scroll container, `--table-bleed`
-     makes the wide tables inside it eat exactly this padding, and a scroll
-     container's origin is its own padding edge. Padding here and bleed of the
-     same size is the overlay's own arrangement (16 and 16) with the app's
-     number instead — the table reaches the window on both edges and none of it
-     is left outside the scrollport. */
-  padding-left: var(--app-gutter);
-  padding-right: var(--app-gutter);
-  --table-bleed: var(--app-gutter);
-  /* It has no page behind it to be a ground for. */
-  background: none;
-  /* And no scrollbar gutter to reserve: that exists because the overlay pins
-     the body and takes the page's own scrollbar away, which a tab does not. */
-  scrollbar-gutter: auto;
-}
+/* ---- The matchup as a tab stood here too ----
+   Two rules (`.mup-view.mup-page` and its chrome's bleed) that took this page
+   out of the overlay layer and gave it the app's own gutters, so that a page
+   drawn as a *tab* could not cover the tabs that led to it. Gone with the tab —
+   see the note where `.app.matchup-mode` stood. The measurement worth keeping
+   is the one about the bleed: the band's `--bar-bleed` is the box's own side
+   padding, 16px in the overlay against the app's 22, and left at 16 as a tab it
+   stopped 6px short of each edge over a table that reached 0 (the band at x=6,
+   w=1188 against a table at x=0, w=1200). The number belongs to the container. */
 
 
 /* The head: the way back, and which week the numbers are. Pinned, on
@@ -17345,13 +17329,10 @@ span.mup-move-name:hover {
   /* Over the page and under `.mup-chrome`'s 5. */
   z-index: 4;
   /* How far it bleeds is the box's own side padding, `--bar-bleed`'s standing
-     rule: 16px in the overlay, the app's gutter as a tab (below). Scoped with
-     `>` for the reason `.app > .date-bar` is — the same bar is *also* drawn
-     inside a pane that has already bled through this padding itself. */
+     rule, and there is one box again — 16px, the overlay's. Scoped with `>` for
+     the reason `.app > .date-bar` is: the same bar is *also* drawn inside a pane
+     that has already bled through this padding itself. */
   --bar-bleed: 16px;
-}
-.mup-view.mup-page > .date-bar {
-  --bar-bleed: var(--app-gutter);
 }
 
 /* *(The union-and-ghosts note that stood here is gone with the ghosts. It

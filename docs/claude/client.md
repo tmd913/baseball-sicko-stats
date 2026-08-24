@@ -135,6 +135,114 @@ door. `mt=`, `mr=`, `proj=1` and the projection read all hang off it; two copies
 of that test are two copies that will one day disagree about whether the lens is
 drawn.
 
+### And the fourth tab became a button, so the row is three
+
+*(This supersedes the two paragraphs above about `Matchup` being a tab. What
+they say about the page — one component, `myMatchupId`, a bye being an ordinary
+matchup — is unchanged and is why the change is as small as it is; what has gone
+is the second **drawing** of it.)*
+
+**Roster · Research · League**, and `Matchup` is the first control in the
+Roster's own tools row. The argument that made it a tab is the one that takes it
+away again: a tab says *which page of the app you are on*, and this week's
+opponent is a page you **open off your roster and come back from** — which is
+exactly what `player=`, `team=`, `game=` and a Scoreboard card already are. The
+strip is which subject; a door is not a subject.
+
+**So `standalone` is gone with it, and with it `.app.matchup-mode` and
+`.mup-view.mup-page`.** Those existed to give a page drawn as a *tab* what an
+overlay has for free — a viewport-tall column so its band could pin and its
+roster reading could have a scrollport, the app's gutters instead of the
+overlay's 16px, and a `position: static` that kept it from covering the very tabs
+that led to it. One drawing again, so one set of rules again. The one
+measurement worth keeping out of them is the gutters': `.app` had 22px of side
+padding, the page below was a scroll container, and a table bleeding back out
+through those gutters put 22px of itself **left of scroll offset zero**, where it
+is clipped and unreachable — shipped that way for a day, and the overlay never
+had it, its 16px of padding and 16px of bleed being the same number by
+construction.
+
+**`matchupPageOpen` is `matchupId != null` now, and it is one test where it was
+two** — which is the whole of what retiring the tab bought downstream. There is
+no longer a state in which a matchup is open and no id says so, so `mup=` is
+written whatever view is behind it rather than only on the League view's.
+
+**`view=matchup` is the one link that has to be answered rather than mapped.**
+It named the reader's *own* week without naming a matchup — the one door in the
+app that meant *mine* rather than *this one* — so it cannot be turned into a
+`mup=` at read time: the id it wants is a fact about a board that has not
+arrived. It is held as a **want** (`wantMyMatchup`, seeded from the URL and
+settable from nowhere else), and one effect resolves it the moment the board
+lands. That effect tests `scoreboard` rather than `myMatchupId` and clears the
+flag either way, which is the whole of its correctness: a manager with no row
+this period has a null id that is an **answer**, and a flag left standing on one
+would re-open the page every time the minute poll returned.
+
+**The board is read on the roster views now, and that is the price.** The button
+is drawn only once `myMatchupId` is non-null, which is what the three empty
+states the tab used to carry have become — *no league*, *no board yet*, *no row
+for your team* are all a null id and all answered by the button not being there,
+rather than by a control that promises something and then explains itself. That
+costs one `/api/espn/scoreboard` on this view: 10KB over the wire, a minute's
+cache per league on the server, ~2ms warm, one per session for a connected reader
+who never leaves the Roster — against the report, the ownership map, the lineups
+and the matchup window this same view already asks for. A reader with no league
+pays nothing, `needsScoreboard` being gated on one.
+
+**Measured through the doors.** `?view=matchup` lands on `?preset=Today&mup=119`
+with the page over the Roster, the Roster pill lit, `.app-chrome`,
+`.summary-view` and the back-to-top button all `inert`, and one press of Escape
+back to `?preset=Today` with the Roster still the active tab. `?mup=119` on the
+Roster does the same without the rewrite. `?view=league&mup=119` is untouched —
+the same overlay, the League pill lit, Escape back to `view=league`.
+
+### `Summary` is the Roster's fifth reading, and the one whose days are not yours
+
+**The matchup page's own `Summary` toggle, on your own table**: this roster over
+the days the fantasy week has actually had — the period's start to today, clamped
+(`matchupDays`) — which is the span the category card two presses away is summed
+over. One component (`SummaryToggle`, exported from `LeagueMatchup.tsx`) and one
+bar reading (`{ kind: 'matchup' }`, `fixed`) on both surfaces, rather than a
+second control for one idea. It is **last** in the run for the reason the door is
+first: `Feed`, `Schedule` and `Projected` are departures from the plain table
+that a reader works on arrival, and this is the one that hands the days over to
+the league.
+
+**A lens rather than a range, which is why it is not a fifth `DateScope`.** The
+other readings each keep days of their own because the reader *picks* them; these
+are derived, so there is nothing to keep and nothing to put back — turning the
+lens off leaves the stats table's entry exactly where it was. That is what the
+projected lens had to grow a fourth `DateScope` entry to achieve and what
+`beforeProjection` was deleted for failing to; here it falls out. The override is
+**one line in one place** — `start`/`end` shadow the held pair right after
+`ranges[dateScopeRef.current]` — so the report read, the feed, the table and the
+bar all take the lens's days and nothing below can disagree about them.
+
+**It owns the bar, which is what makes it a reading rather than a preset.**
+`preset=Matchup` exists, means these same days, and has been in the URL since
+before this control — but a preset is a range the reader picked, steppable by the
+arrows and replaceable by the calendar, and this is not the reader's to move. So
+the bar goes `fixed`: no arrows, the face a `<div>` rather than a button, and
+`Matchup to date` over the days. `rsum=1` carries it, and the URL keeps writing
+the **held** `start`/`end`, not the derived ones — writing those would freeze a
+rule into a pair of dates, which is the bug the preset rule exists to prevent.
+
+**`!fixed` came out of `usePublishedHeight`'s test with it.** That clause was
+true rather than load-bearing while the only fixed bar was a team page's:
+`measure` already says *this is the bar a header row sticks under*, and the
+second clause was a second copy of that claim reading a prop about something
+else. With it in, the app's own bar stopped publishing `--date-bar-h` at the
+moment it changed shape. Measured after: **54px in both readings**, so the
+summary table's header row does not move on the press.
+
+**It is exclusive with the other three and goes away with the page.** Pressing it
+clears `scheduleSpan` and `rosterProjected`; pressing either of those clears it;
+and it is folded onto the effect that puts the projected lens away on a crossing
+of the view tabs — the same rule, written about *a lens* rather than about the
+projection, and this one moves the days as hard as that one does. Not drawn at
+all where `matchupDays` is null, which is one test for three cases: no league, no
+window yet, and a period whose first day is still ahead.
+
 ### The tabs are the width of the window, and the chrome is two rows shorter
 
 **The strip is `.main-tabs`/`.main-tab`, full width with the active tab
