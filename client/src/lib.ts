@@ -938,6 +938,27 @@ export function prettyGameDate(date: string): string {
   });
 }
 
+/**
+ * **The same date with the month as a number** — `6/9` where `prettyGameDate`
+ * gives `Jun 9`.
+ *
+ * For a **range**, and only for a range. One date reads better spelled (`Jun 9`
+ * is a date; `6/9` is a pair of numbers you have to parse), but two of them with
+ * a rule between is a cell nearly twice as wide as the column it sits in, and
+ * the game log's date column is the narrowest thing on a table read across on a
+ * phone. So a span pays the legibility and a single date does not.
+ *
+ * The locale is the reader's, as `prettyGameDate`'s is — `6/9` where a month
+ * leads and `9/6` where a day does, which is the only way a bare pair of numbers
+ * can be read at all.
+ */
+export function numericGameDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+  });
+}
+
 export function describePitch(description: string): string {
   return description.replace(/_/g, ' ');
 }
