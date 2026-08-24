@@ -889,7 +889,7 @@ A drag's order is held locally while it is live and **committed on release**, un
 
     **A badge on a player outside the population wears a dashed ring**, and the whole of the argument is that this is *not* a second meaning for a broken border. The app's ladder is solid = measured, broken = ours, and the percentile card one tab over already draws a dashed ring on **exactly these men**: Savant publishes no `percent_rank_` for a player under its bar, so `percentiles.ts` ranks him against the qualified distribution itself and marks the bar `estimated`, which the card draws as `.pct-bubble--est`. Driven and counted on the live app: an unqualified batter's card (Aaron Judge, 261 PA) draws **32 of its 39 bubbles ringed**, where a qualified one's (Yordan Alvarez) draws 4 of 41 — the four being rows Savant ranks for nobody. Same set of players, same sentence — *the league publishes no standing for this man, so this placement is ours* — so the board says it the same way, and the two screens now agree mark for mark about the same player.
 
-    **What a badge that was both projected and unqualified would draw** was settled before the ring went on rather than after. Neither surface that draws a `.col-rank` percentile has a projected reading: the board and the Stats tab hold measured stats only, and the League Rankings table's `.col-rank` is a rank of *teams*, which the modifier is scoped away from. If one ever arrives, the two claims are the same claim in different words, and a second broken outline over the first would be two ways of saying one thing — the argument that took the third mark off a projected start row. The chrome would say `Projected` once for the whole table, as `.mup-card.mup-proj` does, and the ring would keep its single meaning.
+    **What a badge that was both projected and unqualified would draw** was settled before the ring went on rather than after. Neither surface that draws a `.col-rank` percentile has a projected reading: the board and the Stats tab hold measured stats only, and the League Rankings table's `.col-rank` is a rank of *teams*, which the modifier is scoped away from. If one ever arrives, the two claims are the same claim in different words, and a second broken outline over the first would be two ways of saying one thing — the argument that took the third mark off a projected start row. The chrome would say `Projected` once for the whole table, as `.mup-card.mup-proj` does, and the ring would keep its single meaning. *(One has arrived — see* The projected reading *below — and it settled the question by not drawing a badge at all: `Ranks` comes off the bar under the lens, along with `Columns` and the window tabs, because nobody* qualifies *for a week nobody has played and there is no population to rank an estimate within. The paragraph above is left as written, this file's rule for its own superseded reasoning; what it got right is that the two marks are one claim, and what the answer turned out to be is that the projected surface simply has no percentile.)*
 
     **`--faint`, not `--text`.** The percentile card's ring is `--text` because it sits on a colored bubble; here the badge *is* `--faint`, the tone this table gives the quieter of two lines in a cell, and a ring louder than the number it encloses would invert the one hierarchy the cell has. **An `outline`, not a `border`**, for the reason `.pct-bubble--est` gives and `.sched-vs-estimated` gives: a border is part of the box, so a ring that comes and goes down a column would change a row's height and a table's width by which players happen to qualify. Every `.col-rank` on these two tables also takes `width: fit-content` and an auto start margin, so the box hugs its digits whether or not a ring is drawn on it — declared for all of them rather than for the ringed ones, which is *reserve the box, don't move the page*. **Measured on the same rows with the ring toggled in the DOM at 390 / 1200 / 1920**: table width `1583.25 / 1998.70 / 1998.70` with it and without it, every row 58.00px either way, each badge's box 7.31px wide and its right edge on the same hundredth, and page overflow 0. The `fit-content` itself moved nothing: a searched row is 1910.73 / 1904.44 / 1856.30 / 1921.63px for Winn / Ruiz / Judge / Alvarez before and after.
 
@@ -1174,3 +1174,441 @@ A key here is still kept in the reader's saved column list, so crossing back put
 **The empty state governs before the six below it**, which is the rule that family already follows — the causes are tested in the order they govern. None of the six can be reached here: the buttons that define every one of them are off the bar and `boardRows` is the whole population. So an empty board on this reading has exactly one cause and it is not a control the reader touched — the thirty rows did not arrive — and the message names that rather than blaming a filter, with `Players` as the way back. The *filter* empty state above it is untouched and says `No clubs match these filters`; checked with `HR ≥ 900`.
 
 **Checked in a browser at 320 / 375 / 390 / 480 / 640 / 900 / 1200 / 1920**, both readings, dark and Powder Blue: rows **58.00px** everywhere, no horizontal overflow of the page body anywhere, the head measured at 41 / 72 / 103 exactly as before (**62 / 93 now** — the head is two lines since; the sweep is in the sort bullet above), the pinned name column and the sorted column's double edge unchanged, and the full-page box's `--table-bleed` still the 12px that box declares. Thirty rows is under `PAGE_SIZE`, so the board is one page and the paging strip is never reserved.
+
+### The projected reading — the whole league over days nobody has played
+
+**Both wide readings of this board are cut by what has already happened**, and
+the question a manager is on it to answer is not: *who should I pick up for the
+rest of this week*. The window tabs answer half of it — a man's last thirty days
+are a better guide than his season — and stop where it gets interesting, because
+they still describe games that are over. So the board takes a third reading:
+**`Projected`**, which replaces every figure with what that player is expected to
+do over a span of days still to be played.
+
+**It is the same engine the Roster's own lens and the League page's matchup card
+run** (`server/src/projection.ts`), asked a third question. That one wants a
+side's total, the second wants a line per man on sixteen rows; this wants a line
+per man on **six hundred**. One context, one per-player core, three callers —
+two projections of one Saturday that disagreed would be worse than either.
+
+#### It is a mode of this board, not a fourth page
+
+The Schedule view's argument one section up, and it lands the same way: the same
+rows, the same population, the same five controls above them, with the numbers in
+the cells swapped. **Mutually exclusive with the Schedule view**, and in *both*
+directions — that mode replaces the stat columns with days and this replaces the
+figures in them, so they are two readings of one set of cells and cannot both be
+in force.
+
+The one-way version of that exclusivity shipped and was caught in a browser.
+`toggleBoardProjected` cleared the span, and nothing cleared the lens: pressing
+`Schedule` on `?view=research&bproj=1` left **both buttons lit**, the columns
+became the fourteen days (the `schedule` branch of `columns` is tested first, so
+that mode does win the table), and the projected span line stayed on screen above
+a table with no projected figure anywhere in it. `setBoardScheduleSpan` is the
+other half; the span is App's and shared with the Roster's copy of the toggle, so
+this is the board's press saying what it means and nothing else changes hands.
+
+**Not offered on the team reading**, and not disabled there: a projection is a
+line per *man* — his lineup slot, his rotation turn, his platoon — and there is
+no such thing for the Brewers. That is the rule the include buttons and the
+position pills already follow on that reading, and crossing to it puts the lens
+away.
+
+#### The vocabulary changes with the figures, because two thirds of it cannot be projected
+
+A projection can answer for a **count** and for a **rate built out of counts**,
+and for nothing else. xwOBA, exit velocity, barrels, the GB/LD/FB split, chase
+rate, bat speed and sprint speed are readings of *contact that has not happened*;
+roster % and the five trend columns are facts about a fantasy league rather than
+about a week of baseball. Left in the vocabulary they would be two thirds of the
+columns on the app's widest table drawing em dashes, which reads as a broken
+board rather than as an honest one.
+
+So the lens swaps the **columns** as well as the numbers, which is exactly what
+the Schedule view already does with a different answer:
+
+| | drawn under the lens |
+| --- | --- |
+| batting | `Opp`* · `G` · `PA` · `AB` · `H/AB` · `R` · `HR` · `RBI` · `SB` · `CS` · `BB` · `K` · `AVG` · `OBP` · `SLG` · `OPS` · `ISO` · `BB%` · `K%` |
+| pitching | `Opp`* · `G` · `GS` · `IP` · `BF` · `W` · `L` · `SV` · `HLD` · `SVHD` · `H` · `R` · `ER` · `HR` · `BB` · `HBP` · `K` · `ERA` · `WHIP` · `BAA` · `K/9` · `BB/9` · `HR/9` · `K%` · `BB%` · `K-BB%` · `K/BB` |
+
+*\* on a single day only — see below.*
+
+- **Every definition is the board's own, pulled by key** (`projectedColumns`).
+  Nothing restates a formatter, a `value`, an `ascFirst` or a title, so a column
+  whose arithmetic is fixed on the measured board is fixed here in the same
+  breath. Two are genuinely different questions and are the only two written out.
+- **`FIP` and `xFIP` are deliberately out**, although the projection produces
+  every component either needs. They are estimators, and an estimator of an
+  estimate is a number nobody can act on — the reader already has the projected
+  ERA those components were built from, and a second ERA-scale figure beside it
+  differing only by the modeling invites a comparison neither can survive.
+  `BABIP` is out on the same ground: it is a *luck* metric, and there is no luck
+  in an expected value.
+- **`IP` is a decimal and the column says so.** `inningsPitched` is *thirds*
+  everywhere else in this app — `6.2` is six and two thirds — and it takes a
+  whole out count, which a projection has not got: 18.7 projected outs is 6.23
+  innings, and printed in the ordinary form it reads as 6⅔, a third of an inning
+  out with nothing on screen to say so. The server leaves `inningsPitched`
+  **null** on a projected row and the lens's own column divides `outs` itself, so
+  the ambiguous string is never written at all and the two forms cannot meet.
+  It keeps `ip`'s key so a reader's sort survives the press, and `outs` as its
+  `value` so the order is the same order; its `toValue` takes innings where the
+  measured column takes thirds, which is the plainest statement that these are
+  two columns rather than one.
+- **`G` dashes at nothing where the measured board prints the number.** `0` is
+  never an honest answer on a leaderboard — a row is there because he played —
+  and it is the commonest answer here: a club with no game left in the span, a
+  starter whose turn falls outside it, a man on the IL or in the minors. The rest
+  of his row is already dashes, and a lone `0` among them would be the one cell
+  claiming a measurement (*he appears in no games*) where the truth is *there is
+  nothing here to project*.
+- **`Columns` and `Ranks` come off the bar**, the rule that takes them off in
+  schedule mode: the vocabulary is not the reader's to pick here, and a
+  percentile is a standing among the *qualified* players on a measured board —
+  nobody qualifies for a week nobody has played, and ranking an estimate against
+  a field of estimates would put a solid badge under a number this app's own rule
+  says must never wear a measurement's clothes. (`columnRanks.tsx`'s note that
+  "neither surface that draws a `.col-rank` percentile has a projected reading"
+  is what this answers: one of them does now, and it answers by not drawing
+  them.)
+- **And the window tabs come off with them**, which is the same rule one control
+  further. A projection is not drawn from a window — it is his season blended
+  with his last thirty days, always, whichever pill is lit — so under the lens
+  those five decide **nothing**, and a reader who pressed `7d` and watched the
+  table not move would be owed an explanation this bar has no room for. It is the
+  tabs *and* the phone's dropdown, or a phone would keep the control the desktop
+  has taken away. The setting survives and the board comes back to it.
+
+#### `Opp` on a single day, and nothing over a range
+
+**The one column on the row that a future span makes useless is the one naming a
+game**, and the lens answers it two ways.
+
+**On a single day it is that day's fixture** — `@ SEA`, the first pitch, and the
+man the other club is throwing in the app's own three tiers (upright announced,
+italic where it is his own rotation slot, italic under a dashed line where it is
+his club's). That is what the reader asked for by narrowing to a day, and it is a
+*different fact* from the measured board's `Opp`, which draws today's status map:
+a projection of Thursday under a cell naming this afternoon's game would be the
+one thing on the row describing another span.
+
+**Over a range there is no column at all**, and `G` beside it is what a row is
+read against instead. A week is a week of fixtures and naming one of them would be
+a summary of nothing — the Roster's projected reading reached the same answer and
+states it in the same words (**Client — the Roster view**, *The Opponent column
+becomes `G`*).
+
+- **It rides on the row** (`ResearchRow.projGame`, filled by
+  `getBoardProjection`) rather than being joined client-side off a schedule
+  index. The board holds an index only in schedule mode, and `buildScheduleIndex`
+  takes a `ScheduleSpan` — one of four named runs — where this needs *one named
+  date* that may be any of the next 28. The server already holds the fixture, the
+  probable and the rotation map for exactly that day.
+- **The name rides with it where `ScheduleGame` deliberately carries only ids**,
+  and the population is why: that window is every club's fortnight read by a grid
+  whose cells are two characters wide, where this is one fixture per row of a
+  board read to pick a stranger up. One name per row against 750 names for every
+  row of a window nobody has narrowed.
+- **The tier is re-derived server-side rather than read off `ctx.starters`**,
+  which flattens the three into one set: an announced start is a probable id on
+  the game itself, everything else is the rotation map's, `estimated` where that
+  projection came off the club's pooled cadence rather than the man's own. Same
+  two facts, same ladder, so the board and the Schedule view's grid cannot
+  disagree about how firm a Thursday start is.
+- **Zero new CSS.** The cell is `.research-opp-main` / `.research-opp-time` /
+  `.research-opp-sp`, the measured column's own three, and the two unannounced
+  tiers wear `.sched-vs-projected` / `.sched-vs-estimated` — the modifiers the
+  stylesheet already lends to the player page's Schedule tab.
+- **And never on a span with nothing in it**, which `from === end` gets wrong on
+  its own. A range wholly in the past clamps to its own last day, so
+  `?bproj=1&start=2026-08-10&end=2026-08-12` answered `oneDay: true` and the
+  board drew an `Opp` header over **471 em dashes**, beside a line already saying
+  *nothing to project*. A column that can only be empty is a column not to draw.
+
+#### The control: a disclosure, not the Roster's plain switch
+
+The Roster's toggle has one thing to say — *the days in view, estimated* —
+because that page already carries a date control and the lens borrows it. **This
+board has no dates at all**, so the lens has to bring a span with it, and a span
+is exactly what a lit button cannot say: `Week 20`, `Wed, Aug 26` and `Aug 26 –
+Aug 30` are three readings behind one word.
+
+So the button opens a panel and takes the class pair the board's other three
+disclosures take — **`.active` for open, `.on` for holding something** — where the
+Roster's takes `.on` alone. `ProjectedToggle` grew an optional `active`, so the
+caller with a panel says so and the caller without it reads exactly as it always
+has; `.projected-toggle.active` is folded onto `.research-toggle.active`'s
+selector list, this being the same state on the same shape.
+
+**Pressing it does not turn the lens on**, which is `Starting`'s half borrowed
+whole: that button opens the day strip and narrows nothing until a day is
+pressed. Here the panel opens and the board goes on drawing its measured figures
+until a span is picked.
+
+**Three doors, and only two of them are spans:**
+
+| | |
+| --- | --- |
+| `Week 20` | the rest of this matchup period |
+| `Week 21` | the next one, its own days |
+| `Custom` | the app's calendar — one press picks a day, two pick a range |
+
+- **A period is the one span a calendar cannot express**: its dates are the
+  league's own arithmetic and they move as the week is played. `Next 7` / `Next
+  14` where no league names them, which is `scheduleSpans`' own fallback one
+  control over and the same words, so the two runs cannot come to call one span
+  two things.
+- **`Week 20`, not `This matchup`** — the wording `spanLabel` argues at length
+  for: it says *which* fantasy week rather than that it is the current one, it is
+  the vocabulary the League page already speaks, and `This week` would collide
+  with the calendar week the date presets mean.
+- **The current period starts today and the next one starts on its own first
+  day**, and this got that wrong for one commit. Every span started today, so
+  `Week 21` came out as *Aug 24 – Sep 20* — the rest of week 20 **and** all of
+  week 21, which is not what anybody pressing it is asking for.
+  `max(start, today)` is the one rule right for both, and it is a no-op on a
+  period that has not begun. The current one still starts this morning because
+  days already played are nobody's to project and `getBoardProjection` clamps
+  forward regardless — a pill whose dates the answer contradicted would be the
+  control lying about what it did.
+- **`Today` was a third pill and has gone.** It is a single day, which is what
+  the calendar beside it is *for*, and a named pill for one of the 130 days that
+  calendar reaches was a pill arguing that today is a kind of span rather than a
+  date.
+- **A named span closes the panel and `Custom` does not**, which is not an
+  asymmetry: pressing a period *is* the answer, where pressing `Custom` is asking
+  the question — a panel that shut on it would take the calendar away in the same
+  frame it drew it. Picking on the calendar closes it, that press being the
+  answer.
+- **The calendar is drawn only behind `Custom`.** Measured: **346px** of head
+  with it always drawn against **36** without it, which is the panel most readers
+  see for the two presses they make.
+- **It opens on today where no custom range is in force.** A reader pressing
+  `Custom` off `Week 20` is saying the period's fortnight is *not* what they
+  want, so a grid marking those fourteen days would make picking a single day two
+  presses of un-marking first.
+- **It takes the panel's width, capped at 640.** Every other calendar in this app
+  is the 260px its popover can afford; this one is in the flow of a head that is
+  the full content width, where 260px marooned at the left edge read as a control
+  that had failed to lay out. The grid is seven equal tracks, so width goes
+  straight into the cells — uncapped at 1400 they come out ~195px each and the
+  month reads as a wall of buttons. 640 puts a cell at about 90px, and below 640
+  the picker really is the panel's full width, which is where it matters.
+
+**`Clear` is always drawn while the lens is on.** It was drawn only where no pill
+was lit, on the reasoning that a lit pill is its own way off — press `Week 20`
+again and the lens goes, the rule the turn filter's day strip keeps for its own
+last day. That rule is true and it is not *findable*: nothing on a lit pill says
+it is also a switch, and a reader looking for the way back to the measured board
+has no reason to press the thing that is already selected. Reported as exactly
+that. One button that says what it does beats a gesture that has to be explained.
+
+#### The panel is in the head and the button is in the run, because the run clips
+
+Every disclosure on this board has that shape and this one has to. `.research-scroll
+> .view-tools` carries `overflow: hidden` — it is a sticky box in a pane that
+scrolls sideways, and the run must not slide with it — so an absolutely
+positioned panel opened from a button inside it is **clipped to the run's own
+36px**. Measured at 1400 with the key drawn beside the toggle: the panel's box
+was 320px wide at x=1058 and nothing of it painted below the row. `.research-head`
+under it carries the same rule, which is why the panels there are all **in flow**
+— an accordion, growing the head under the *rows* rather than under the finger
+that pressed it, that finger being on the condensed rail, which has no height to
+move.
+
+**The date bar was tried first and is the record of why.** The lens drew App's own
+`DateBar` as a second row of the tools band, on the argument that one bar states
+the days on every surface that has them. Three things came out of driving it:
+
+1. the calendar it opened was clipped by the same `overflow: hidden`, and had to
+   be moved out of `.view-tools` to a block child of the pane;
+2. `position: sticky` opens a stacking context whatever the `z-index`, so the
+   popover's own 30 resolved against its siblings inside the bar — the board's
+   head is a sticky sibling at the same 5 and later in the tree, and painted over
+   a calendar hanging down into it;
+3. and the head's caption then said twice what the bar said once — `PROJECTED /
+   Wed, Aug 26` in the bar, `PROJECTED · Wed, Aug 26 · 1 day still to play`
+   sixty pixels under it, which is the redundancy the Roster's own caption was
+   retired for.
+
+All three go with the bar. What is left is a button, a panel and a line.
+
+#### The line in the head, which is where the span is stated
+
+`PROJECTED · Wed, Aug 26 · 1 day still to play`, the last thing in the head before
+the count. It is the Roster's retired caption, kept here because neither half of
+the argument that retired it reaches: that bar was **pinned** and said the same
+two lines eight pixels away, and this board has no bar at all — the days live
+behind the button, in a panel the reader closes as soon as they have picked — so
+the head is the only place the span is stated, and it is the one box on this page
+that sticks and that the expanded mode keeps.
+
+**The days left matter as much as the dates.** A span whose clubs are mostly idle
+projects a board of dashes, and the count line directly under this one would then
+be the only number on screen — a table that looks broken with nothing to explain
+it. `5 days still to play` against a five-day span says the lens is drawing all of
+it; `1 day` against the same span says most of it has been played.
+
+**At none the span is not printed at all** and the line becomes the whole
+sentence — `Nothing to project — every game in these days has been played`.
+Naming a projected span there would be the lens taking credit for figures it did
+not touch. Reached only by an inbound link over a past range; every span the panel
+offers starts today, so a press cannot land here.
+
+`.research-proj-line` is folded onto `.research-count`'s rule — the same object in
+the same box, the head's quiet caption line, differing only in which sentence it
+carries. The lead word takes the app's accent, this being a *state* the table is
+in rather than emphasis.
+
+#### `How the projection works`, and why it is a glyph
+
+**The button is in the run beside the toggle it explains and its panel is in the
+head** — the split the section above forces. It is drawn **only while the lens is
+on**, so the run does not carry a footnote to a control that is doing nothing.
+
+**A glyph and no word**, which is where it parts from the four buttons beside it:
+those are *nouns* — Search, Filters, Schedule, Projected — and each names a thing
+the board can be, where this is a footnote to the one beside it and a fifth word
+would read as a fifth setting. `.research-proj-help` is the app's own 30px icon
+square, everything else about it `.research-toggle`'s. The label is `.sr-only`
+rather than absent, this run's standing rule: a button whose only content is an
+`aria-hidden` mark has no accessible name at all.
+
+**The sentences are `ProjectionNote`'s**, split out of `ProjectionKey` so that a
+fourth caller which cannot use a popover at all still says what the other three
+say. One engine, one set of words. Its **board branch is a branch rather than a
+wording tweak**: the Roster's rows and the matchup's card are both *what has
+already happened + what is left*, and this board has no played half whatever —
+its span is clamped forward to today and every figure on it is an estimate end to
+end. A key telling a reader of *this* table that part of his row was a real line
+would be the one sentence on the page that is untrue.
+
+The note is capped at a **62-character measure**. Uncapped it took the head's full
+width — measured at 1400, paragraphs **1,356px** long, three times the line
+anybody reads — where `.info-key-panel` holds the same sentences at 320 on every
+other surface.
+
+#### What the server answers with, and what it costs
+
+**`/api/research/projected?type=&start=&end=`**, a route of its own for the two
+reasons `/api/projection/roster` is one beside `/api/report`: `/api/research` is a
+**cached blob** keyed by kind and window, served warm to every reader alike, where
+this is a computation over a span the reader picked; and it joins four league-wide
+boards and the league's schedule, which nobody who never presses the toggle should
+pay for. `start`/`end` take that route's own resolution and its own 62-day
+ceiling.
+
+**It adds no upstream at all.** `getBoardProjection` runs on the context
+`getRosterProjection` already builds, which holds both season boards and both
+30-day boards for the entire league — they are what every per-player projection is
+drawn from — so the population is `pools.batSeason` / `pools.pitSeason`'s own key
+set and there is nothing to fetch. The clamp forward to today, the `daysLeft` gate
+and the memoized context are all shared with the roster's reading.
+
+**The rows come back as `ResearchRow`s**, which is the whole economy of it: the
+sort, the filters, the position pills, the include buttons, the marks, the
+identity block and the paging are all phrased in that vocabulary and none of them
+had to be told anything. Every stat field the projection cannot fill is **null**,
+written out in `BLANK_STATS` rather than derived by walking the season row's keys
+— a field added to `ResearchRow` later would be silently *carried over* by a map
+over keys and silently blank here, and blank is the safe direction.
+
+**A man with nothing to project keeps his row, dashed.** Dropping him would change
+the board's *population* — the include counts, the position pills, `of 622` — to
+say something about the span rather than about the league, and the sort already
+puts a row of nulls at the bottom in both directions. `qualified` rides along
+untouched: it is a fact about how much he has played this season, nothing reads it
+under the lens, and blanking it would invent an answer where the honest one is
+already on the row.
+
+**The blank test is the *printed* count, not the raw one.** A reliever whose share
+of a single day comes to four hundredths of an appearance projects two hundredths
+of an inning: every count on his row rounds to nought, and the *rates* divided out
+of those hundredths are his season's rates wearing a projection's clothes.
+Measured on the 7-day pitching board before the test: Orlando Arcia — a shortstop
+who threw one mop-up inning in April — read **`G 0 · IP 0.0 · ERA 4.26`**, a rate
+with nothing on screen to be a rate *of*. The row is blank the moment its printed
+innings are, and the batting side the moment its printed plate appearances are.
+
+**Measured on the live board, 2026-08-24.**
+
+| | rows | projecting | raw | gzipped |
+| --- | --- | --- | --- | --- |
+| batters, one day | 710 | 460 | 769KB | **44.7KB** |
+| pitchers, one day | 821 | 173 | 894KB | **41.0KB** |
+| pitchers, seven days | 821 | 519 | 838KB | **51.2KB** |
+
+The raw figure is mostly the null run — forty-odd `"xwoba":null` per row, identical
+on every one of them, which is what gzip is for. Warm, the route answers in under
+a second; the context is memoized on the span and everything under it is cached
+for hours already.
+
+#### A pre-existing engine bug this board made impossible to miss
+
+**Adrian Houser led the entire projected pitching board in strikeouts**, on 43
+projected innings over two starts. He is not that pitcher.
+
+`projectPitcher` blends a man's season outs-per-outing with his last thirty days'
+and, on the **starter** view, divides each window's outs by that window's *starts*.
+`projectOnePitcher` guards the season side of that with `startsAreHisRecord` — the
+majority test that asks whether `outs / gs` is a number about starts at all, and
+the thing that stops a swingman being projected for a starter's workload. **The
+recent window had no such guard.** Houser's season is 25 games, 15 starts, 324
+outs — a starter, 21.6 outs a turn, right. His last thirty days are **6
+appearances and one start** for 75 outs, which is a month of long relief with a
+spot start in it and says nothing whatever about how long his starts go; read as
+`75 / 1` it claimed **twenty-five innings per turn**, blended to 39.4 at that
+window's weight, and projected **78.8 outs over two starts**.
+
+The recent term is now taken only where a majority of the recent appearances were
+starts — the same majority test in the same words — and is otherwise null, so
+`blend` falls back to his own season rate. **After: 43.2 outs over the same two
+turns, 21.6 a turn, his season figure to the tenth**, and he is off the first page
+of the board. The relief view needs no such guard: games are games whatever role
+they were.
+
+**It was live in all three callers**, the Roster's lens and the matchup card
+included; this board is simply the one that sorts six hundred men by the figure
+and puts the worst case at the top.
+
+#### Measured
+
+**Driven in a browser at 320 / 390 / 640 / 900 / 1200 / 1920**, batting and
+pitching, lens on:
+
+- page-body horizontal overflow **0** at every width;
+- the control set stays **three rows** (36px each) — the panel is in the head,
+  not the bar, so the bar is the bar it was;
+- table rows **58.00px**, the header row **51.00**, unchanged from the measured
+  board;
+- the span line **15px**, drawn only under the lens;
+- the panel **46px** with the three pills, **346** with `Custom` open, and the
+  calendar 640px at 1400 against 346 at 390 (the panel's own width there);
+- `.research-head` clips nothing at any width (`scrollHeight − clientHeight` = 0
+  with the note and the calendar both open).
+
+**Scrolled 900 into the pane at 1400**: the condensed rail holds the lit
+`Projected` glyph with its label visually hidden, the head sits at 162 under a
+rail at 102 with no overlap, and the span line is still on screen — which is what
+the line is for.
+
+**The whole flow, driven end to end**: press `Projected` → panel, 46px, `Week 20 ·
+Week 21 · Custom`, nothing on the board changed; press `Week 21` → panel closes,
+`PROJECTED · Sep 7 – Sep 20 · 14 days still to play`, the columns swap, `Columns`
+and `Ranks` and the window tabs gone; press `Projected` again → `Custom` unlit,
+`Week 21` lit, `Clear` drawn; press `Custom` → calendar at today; two presses on
+the 28th → `PROJECTED · Fri, Aug 28 · 1 day still to play` with the `Opp` column
+back; press `Clear` → the measured board, every control returned.
+
+**Validated against the engine's own answer**, one row read out: Freddy Peralta on
+2026-08-26, `@ DET 1:10 PM · RHP Melton`, `G 1 · GS 1 · IP 5.1 · BF 24.8 · W 0.2 ·
+H 5.9 · ER 3.4 · BB 2.1 · K 4.1 · ERA 5.92 · WHIP 1.56 · K/9 7.2` — 24.8 batters
+faced over 15.4 outs, and the four rates recompute off the counts printed beside
+them.
+
+**Bundle: 678.09 → 686.02 KB of JS** (200.37 → 202.66 gzipped) and **176.48 →
+177.37 KB of CSS** (31.61 → 31.78) — 7.9KB and 0.9KB raw, 2.3KB and 0.17KB over
+the wire, for a second reading of the app's widest table, a server route, a
+column vocabulary and a picker.

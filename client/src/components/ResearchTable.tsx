@@ -10,6 +10,8 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
+import { ProjectedToggle, ProjectionNote } from './Projection';
+import { DateCalendar } from './DateRangePicker';
 import { TurnButton, TurnDayStrip } from './TurnPicker';
 import {
   defaultScheduleSpan,
@@ -37,6 +39,7 @@ import {
 } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
 import type {
+  BoardProjection,
   MatchupWindow,
   PlayerKind,
   ResearchIncludeKey,
@@ -51,6 +54,7 @@ import {
   positionCell,
   searchFold,
   statusCorner,
+  wideRange,
 } from '../lib';
 import { PlayerIdentity, TeamIdentity, TeamPhoto } from './PlayerIdentity';
 import {
@@ -63,6 +67,7 @@ import {
   OPPONENT_KEY,
   opponentColumn,
   PITCHER_COLUMNS,
+  projectedColumns,
   TEAM_HIDDEN,
   TEAM_ONLY,
   TREND_BY_KEY,
@@ -652,6 +657,49 @@ interface Props {
    *  per-user league fact, and this table is otherwise the league's. */
   matchupWindow: MatchupWindow | null;
   /**
+   * **The projected reading** — what the whole league is expected to do over a
+   * span of days nobody has played yet, in place of the season or window the
+   * board otherwise draws.
+   *
+   * Three props, for the reason the Schedule view takes two and the turn filter
+   * three: they answer different questions and arrive at different times.
+   * `projected` is the control's own state (in the URL as `bproj=1`, held in
+   * App so a lens survives a crossing to a player's page and back);
+   * `projection` is the answer once it has landed, **null until it does**, so
+   * the board goes on drawing the measured figures until there is something to
+   * replace them with — rule 1 of the app's loading system, and the same
+   * arrangement `schedule` has one field up; and `projSpan` is the days
+   * themselves, which App owns because it owns every range in the app.
+   *
+   * The board is in the lens with the answer still null for exactly as long as
+   * the read is out, which is the state the ball inside the toggle is drawn
+   * for.
+   */
+  projected: boolean;
+  projection: BoardProjection | null;
+  /** The days the lens is over — held in App, which owns every range in the
+   *  app, and **re-derived on every fresh press** rather than remembered. */
+  projSpan: { start: string; end: string };
+  /** A new span, which turns the lens **on**; `null` turns it off. One callback
+   *  for both because the panel's pills are toggles — pressing the lit one is
+   *  how the lens goes off, which is the rule the turn filter's day strip
+   *  already follows for its own last day. */
+  onProjSpanChange: (span: { start: string; end: string } | null) => void;
+  /**
+   * **The named spans the panel offers**, and the calendar under them is
+   * everything else. Built in App, which owns this app's clock and its league's
+   * two matchup periods — a board that derived its own today would be a second
+   * answer to *which day is it*, which is the thing `today` was lifted out of
+   * five memos to prevent. See `boardProjSpans`.
+   */
+  projSpans: { label: string; start: string; end: string; title: string }[];
+  /** The app's own baseball today — what the `Custom` calendar opens on where
+   *  no range is in force, and this app's one clock. */
+  today: string;
+  /** The latest day the calendar may reach — the app's own ceiling, so the
+   *  board and the Roster cannot disagree about where the season ends. */
+  maxDate: string;
+  /**
    * **The turn filter** — the days a pitcher must be due to start on to be on
    * the board at all. Null is off, which is every board but a pitching one and
    * most pitching ones.
@@ -866,7 +914,30 @@ export interface ResearchUi {
    *  panel is part of where you were:
    *  coming back to find the Filters panel shut is the same surprise as coming
    *  back to find it empty. */
-  panels: { search: boolean; filters: boolean; turns: boolean; columns: boolean };
+  panels: {
+    search: boolean;
+    filters: boolean;
+    turns: boolean;
+    columns: boolean;
+    /** The projected lens's span picker — the days it is drawn over. Open is a
+     *  fact about where you were, like the other three. */
+    projected: boolean;
+    /** …and whether that panel's `Custom` door is the one in force — the
+     *  calendar is drawn only behind it. Held with the rest of *where you were*
+     *  so a reader who picked a range, crossed to the Roster and came back
+     *  finds the calendar showing their range rather than a run of pills that
+     *  says nothing is selected. */
+    projCustom: boolean;
+    /** …and *How the projection works*, whose **button is in the tools run
+     *  beside `Projected`** and whose panel is in the head, which is the
+     *  arrangement every other disclosure on this board has. It has to be: the
+     *  run is `overflow: hidden` — a sticky box in a pane that scrolls sideways
+     *  must not slide with it — so a popover opened from a button inside it is
+     *  clipped to the run's own 36px. Measured before it moved: a 320px
+     *  `InfoKey` painting as a 46px sliver. In the head it is an accordion,
+     *  which is what the two panels beside it already are. */
+    projHelp: boolean;
+  };
   /** The condition being typed, deliberately *not* per board — it is a
    *  keystroke rather than a setting. The column it names does belong to one
    *  board, so `draftColumn` falls back when you cross to a board without it. */
@@ -899,7 +970,15 @@ export const freshResearchUi = (): ResearchUi => ({
     'team-batter': freshBoard(),
     'team-pitcher': freshBoard(),
   },
-  panels: { search: false, filters: false, turns: false, columns: false },
+  panels: {
+    search: false,
+    filters: false,
+    turns: false,
+    columns: false,
+    projected: false,
+    projCustom: false,
+    projHelp: false,
+  },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
 });
@@ -999,7 +1078,7 @@ function WatchStar({
 }
 
 export function ResearchTable({
-  rows,
+  rows: measuredRows,
   kind,
   teams,
   onTeamsChange,
@@ -1013,6 +1092,13 @@ export function ResearchTable({
   onWindowChange,
   scheduleSpan,
   onScheduleSpanChange,
+  projected,
+  projection,
+  projSpan,
+  onProjSpanChange,
+  projSpans,
+  today,
+  maxDate,
   turnDays,
   onTurnDaysChange,
   turnIndex,
@@ -1040,6 +1126,31 @@ export function ResearchTable({
   ui,
   onUiChange,
 }: Props) {
+  /**
+   * **The lens is in force**, which is the flag every branch below reads —
+   * pressed *and* answered.
+   *
+   * The two halves are deliberately one test: the board goes on drawing the
+   * measured board for as long as the read is out (rule 1 of the loading
+   * system — never over data), so a press swaps nothing until there is
+   * something to swap in, and the only mark it leaves is the ball inside the
+   * toggle that started it. Every control the lens takes off the bar comes off
+   * on the same beat the columns change, which is what stops the bar saying one
+   * thing while the table says another for the length of a fetch.
+   */
+  const projectedOn = projected && projection !== null;
+  /**
+   * **The rows the whole of this component is about.**
+   *
+   * One swap at the top rather than a branch at every reader, and it is the
+   * economy the projected board was designed around: `BoardProjection.rows` are
+   * `ResearchRow`s, so the population, the include buttons, the position pills,
+   * the search, the sort, the filters, the marks and the paging below are all
+   * untouched and none of them had to be told the lens exists. What the lens
+   * changes past this line is the *columns* (`columns`) and the two controls
+   * whose subject it swaps out.
+   */
+  const rows = projectedOn ? projection.rows : measuredRows;
   // Every column this board *has* — what the picker lists, what a filter can be
   // built on, and the canonical order. `columns` below is the visible subset.
   // Roster % drops out of the vocabulary entirely without a league, rather than
@@ -1292,13 +1403,33 @@ export function ResearchTable({
 
   const columns = useMemo(() => {
     if (schedule) return scheduleColumns(schedule, kind, teams, teams ? undefined : openFixture);
+    /**
+     * **The lens swaps the vocabulary as well as the figures**, which is the
+     * Schedule view's own move one line up applied to a different question.
+     *
+     * A projection can answer for a count and for a rate built out of counts,
+     * and for nothing else: xwOBA, exit velocity, barrels, the batted-ball
+     * split, chase rate, bat speed and roster % are readings of contact and of
+     * a fantasy league, not of a week that has not happened. Left in, two
+     * thirds of the columns on the app's widest table would draw em dashes,
+     * which reads as a broken board rather than an honest one. So the lens
+     * draws its own list — see `projectedColumns`, which pulls every definition
+     * out of this board's own arrays by key so no formatter is restated.
+     *
+     * **The turn filter's `Start` column still leads them**, below: it is why
+     * those rows are on screen, and *who starts Friday, and what is he worth*
+     * is precisely the pair the two controls answer together — the same reason
+     * `Starting` stays on the bar in schedule mode where Columns and Ranks go.
+     */
     const byKey = new Map(allColumns.map((c) => [c.key, c]));
     // `filter(Boolean)` rather than a fallback: a key with no column on this
     // board is one the board doesn't have — Ros% without a league, a trend
     // window with no baseline — and dropping it is what those two rules
     // already do. A saved list keeps the key, so connecting a league puts the
     // column back where the reader had it.
-    const stats = orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
+    const stats = projectedOn
+      ? projectedColumns(kind, projection.oneDay)
+      : orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
     /**
      * **The `Start` column leads them while the turn filter is on**, and it is
      * the filter's own rather than a member of the vocabulary: it is not in
@@ -1327,6 +1458,8 @@ export function ResearchTable({
     openFixture,
     activeTurn,
     turnDoors,
+    projectedOn,
+    projection,
   ]);
   /**
    * Which keys the sort's fallback will accept. Out of schedule mode that is
@@ -1347,7 +1480,14 @@ export function ResearchTable({
   const visibleKeys = useMemo(
     () =>
       new Set(
-        schedule
+        // **The lens takes the same union schedule mode does, and for the same
+        // reason.** Swapping the columns is not the reader unticking one — it
+        // is a second reading of the same rows in the same order — so a board
+        // sorted by `HR` becomes a *projected* home-run leaderboard rather than
+        // falling back to the default, and the way back to the measured column
+        // is one press of the lit toggle. The comparator already resolves a key
+        // that is not drawn (`columnsByKey`), so nothing else had to be told.
+        schedule || projectedOn
           ? [...columns.map((c) => c.key), ...orderedKeys]
           : // **And `Start` is sortable while it is drawn**, which it has to be
             // said explicitly for: this set is the reader's *saved list*, and the
@@ -1360,7 +1500,7 @@ export function ResearchTable({
             ? [TURN_KEY, ...orderedKeys]
             : orderedKeys,
       ),
-    [schedule, columns, orderedKeys, activeTurn],
+    [schedule, projectedOn, columns, orderedKeys, activeTurn],
   );
   /** The columns actually on screen, by key. The sort resolves through this
    *  first and `columnsByKey` second: in schedule mode the sorted column is a
@@ -1382,7 +1522,31 @@ export function ResearchTable({
     filters: filtersOpen,
     turns: turnsOpen,
     columns: columnsOpen,
+    projected: projectedOpen,
+    projCustom: projCustomOpen,
+    projHelp: projHelpOpen,
   } = ui.panels;
+  /**
+   * **What the `Custom` calendar opens on** — the reader's own range where they
+   * have picked one, and **today** where they have not.
+   *
+   * The distinction is the whole of the seed: a reader pressing `Custom` off
+   * `Week 20` is saying the period's fortnight is *not* what they want, so a
+   * grid opening on those fourteen days would mark a range they have just
+   * rejected and make picking a single day two presses of un-marking. Today is
+   * the day every projection starts from and the one a streaming decision is
+   * made on.
+   *
+   * `today` is App's, threaded down with the spans rather than derived here:
+   * this app has one clock (see App's own `today`, lifted out of five memos for
+   * exactly this reason) and a board that asked the browser again would be a
+   * second answer to *which day is it* across a 3am rollover.
+   */
+  const projCustomRange = useMemo(() => {
+    const named = projSpans.some((sp) => sp.start === projSpan.start && sp.end === projSpan.end);
+    return projected && !named ? projSpan : { start: today, end: today };
+  }, [projected, projSpan, projSpans, today]);
+
   /** Whether the day strip is on screen — the panel's flag *and* a board a turn
    *  is a fact about. It is one flag for the whole board (`ResearchUi.panels`),
    *  so left open and carried to the batters it would go on counting a strip
@@ -1545,9 +1709,18 @@ export function ResearchTable({
   // there either: a percentile under `@ LAD` is nothing, and a games-in-the-span
   // count ranked against the league would be a percentile of a *fixture list*
   // — the same reason the Fantasy group is on `NO_GOOD_END`, a step further.
+  // **And null under the projected lens, whose toggle is off the bar there
+  // too.** A percentile is a standing among the *qualified* players on a
+  // measured board — Savant's own bar, read off `ResearchRow.qualified` — and a
+  // projection has no such population: nobody qualifies for a week nobody has
+  // played, and ranking an estimate against a field of estimates would put a
+  // solid badge under a number this app's own rule says must never wear a
+  // measurement's clothes. (The `columnRanks.tsx` note that "neither surface
+  // that draws a `.col-rank` percentile has a projected reading" is what this
+  // answers: one of them does now, and it answers by not drawing them.)
   const ranks = useMemo(
-    () => (showRanks && !schedule ? rankScales(columns, population) : null),
-    [showRanks, columns, population, schedule],
+    () => (showRanks && !schedule && !projectedOn ? rankScales(columns, population) : null),
+    [showRanks, columns, population, schedule, projectedOn],
   );
   /** What a badge says it is ranked against — the board and the span, in
    *  words, since a 7-day percentile and a season one are different claims. */
@@ -2576,7 +2749,23 @@ export function ResearchTable({
           {/* Out in the bar rather than inside the Filters panel: it decides which
               games every number on the board is drawn from, which is too large a
               thing to keep behind a disclosure — and being always visible, it needs
-              no chip to say what it is set to. */}
+              no chip to say what it is set to.
+
+              **Not drawn at all under the projected lens**, which is the rule
+              that takes Columns and Ranks off the bar in schedule mode and the
+              include buttons off the team reading: a control whose whole
+              subject has been swapped out is a setting lying about its own
+              reach. A projection is not drawn from a window — it is his season
+              blended with his last thirty days, always, whichever pill is lit —
+              so under the lens these five decide **nothing**, and a reader who
+              pressed `7d` and watched the table not move would be owed an
+              explanation this bar has no room for. The setting survives the
+              lens and the board comes back to it, exactly as the turn filter's
+              days survive a crossing to the batters.
+
+              It is the tabs *and* the dropdown beside them, or a phone would
+              keep the control the desktop has taken away. */}
+          {!projectedOn && (
           <div className="research-window-row" role="tablist" aria-label="Time span">
             {RESEARCH_WINDOWS.map((w) => (
               <button
@@ -2596,6 +2785,7 @@ export function ResearchTable({
               </button>
             ))}
           </div>
+          )}
           {/* **Eleven pills on the player reading, two on the team one**, and
               the run is the same run: a club has no position to be eligible at,
               so what is left of the row is the half of it that was never about
@@ -2637,7 +2827,8 @@ export function ResearchTable({
               to find `SS`. A closed select shows the one that is set and opens
               the rest in a list the platform draws. Both rendered, one media
               query, neither chosen in JS. */}
-<select
+{!projectedOn && (
+          <select
             className="research-window-select"
             value={String(statWindow)}
             onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
@@ -2649,6 +2840,7 @@ export function ResearchTable({
               </option>
             ))}
           </select>
+          )}
 <select
             className="research-pos-select"
             value={teams ? (researchKindFor(pos) === 'pitcher' ? 'pitchers' : 'batters') : pos}
@@ -2848,7 +3040,138 @@ export function ResearchTable({
                 )
               }
             />
-            {!schedule && (
+            {/* **How far ahead, immediately after the button that turns the
+                mode on** — and it was at the far end of the run.
+
+                It stood outside `.research-tools` as a group of its own, which
+                was right while Schedule was the last control in the run: the
+                strip landed beside the group or under it as the width allowed,
+                and either way it read as Schedule's. Adding `Projected` after
+                Schedule put a second toggle *between* the mode and its own
+                span, so the row read `Schedule · Projected · Week 20 · Week 21`
+                — a span strip whose subject was two controls back, and which
+                looked at a glance like the projected lens's. Reported as
+                exactly that.
+
+                Inside the group it is unambiguous by position, which is the
+                only thing that can settle it: the strip is drawn only while the
+                mode is on, so the run it joins is one button longer only in the
+                state where the strip is what the reader is looking at.
+
+                `Next 7` / `Next 14` spelled out rather than `7d` / `14d`,
+                because the window tabs an inch away read `7d` and mean the
+                opposite direction in time — see `ScheduleSpanTabs`. */}
+            {scheduleSpan !== null && (
+              <ScheduleSpanTabs
+                span={scheduleSpan}
+                matchup={matchupWindow}
+                onChange={onScheduleSpanChange}
+              />
+            )}
+            {/**
+             * **Projected reads directly after Schedule**, and the two are the
+             * same kind of control read one step apart: that one swaps the stat
+             * columns for the days ahead, and this one swaps the *figures* in
+             * them for what those days are worth. They are two readings of one
+             * set of cells and cannot both be in force — each turns the other
+             * off, which is the exclusivity the summary table's own pair
+             * already keeps.
+             *
+             * **Not drawn on the team reading**, and not disabled there: a
+             * projection is a line per *man* — his lineup slot, his rotation
+             * turn, his platoon — and there is no such thing for the Brewers.
+             * That is the rule the include buttons and the position pills
+             * already follow on that reading.
+             *
+             * The wait is inside the button, exactly as `Schedule`'s is: the
+             * board goes on drawing the measured figures until the answer
+             * lands, so this is the only mark the press leaves.
+             */}
+            {/**
+             * **A disclosure, and it is `Starting`'s shape rather than the
+             * Roster's plain switch.**
+             *
+             * That toggle has one thing to say — *the days in view, estimated*
+             * — because the Roster already carries a date control and the lens
+             * simply borrows it. This board has no dates at all, so the lens
+             * has to bring its own span with it, and a span is exactly what a
+             * lit button cannot say: `Week 20`, `Wed, Aug 26` and `Aug 26 –
+             * Aug 30` are three different readings behind one word. So the
+             * button opens a panel and takes the class pair the board's three
+             * other disclosures take — **`.active` for open, `.on` for holding
+             * something** — where the Roster's takes `.on` alone.
+             *
+             * **Pressing it does not turn the lens on**, which is the half
+             * borrowed whole from `Starting`: that button opens the day strip
+             * and narrows nothing until a day is pressed. Here the panel opens
+             * and the board goes on drawing its measured figures until a span
+             * is picked — and picking one closes the panel again, which is the
+             * thing a reader asked for in as many words.
+             *
+             * **And pressing the lit span off is how the lens goes off**, which
+             * is the turn filter's rule for its own last day. The panel's
+             * `Clear` covers the case no pill can — a range picked on the
+             * calendar, where nothing is lit to press.
+             */}
+            {!teams && (
+              <>
+                <ProjectedToggle
+                  on={projected}
+                  active={projectedOpen}
+                  loading={projected && !projection}
+                  onToggle={() => setPanel('projected', !projectedOpen)}
+                  title={
+                    projected
+                      ? `Projected over ${wideRange(projSpan.start, projSpan.end)} — pick other days, or clear it`
+                      : 'Read the board as what every player is expected to do over days still to be played'
+                  }
+                />
+                {/**
+                 * **The key, beside the control it explains and drawn only
+                 * while that control is doing something.**
+                 *
+                 * Where the Roster row and the League page keep theirs, and it
+                 * is the same component's words (`ProjectionNote`) — one engine
+                 * explained in one set of sentences, which is why that block
+                 * was split out of `ProjectionKey` rather than restated.
+                 *
+                 * **The button is here and the panel is in the head**, which is
+                 * the arrangement the board's other three disclosures already
+                 * have and which this one has to have: `.research-scroll >
+                 * .view-tools` is `overflow: hidden` — a sticky box in a pane
+                 * that scrolls sideways must not slide with it — so an
+                 * `InfoKey`'s popover opened from a button in this run is
+                 * clipped to the run. Measured before the split: a 320px panel
+                 * painting as a 46px sliver at 1400.
+                 *
+                 * **A glyph and no word**, which is where it parts from the
+                 * four buttons beside it. Those are *nouns* — Search, Filters,
+                 * Schedule, Projected — and each names a thing the board can
+                 * be; this is a footnote to the one beside it, and a fifth word
+                 * in the run would read as a fifth setting. The label is
+                 * visually hidden rather than absent, which is this run's own
+                 * standing rule: a button whose only content is an
+                 * `aria-hidden` mark has no accessible name at all.
+                 */}
+                {projected && (
+                  <button
+                    type="button"
+                    className={`research-toggle research-proj-help${projHelpOpen ? ' active' : ''}`}
+                    aria-expanded={projHelpOpen}
+                    onClick={() => setPanel('projHelp', !projHelpOpen)}
+                    title="How the projection works"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 11v5" strokeLinecap="round" />
+                      <circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+                    </svg>
+                    <span className="sr-only">How the projection works</span>
+                  </button>
+                )}
+              </>
+            )}
+            {!schedule && !projectedOn && (
               <>
                 {/* Columns reads last: the three before it decide *who* is in the
                     table, where this changes what is shown about them. Shared with
@@ -2897,19 +3220,6 @@ export function ResearchTable({
               </>
             )}
             </div>
-            {/* How far ahead, offered only while the mode is on — its own group,
-                so it wraps whole and lands beside the tools run or under it as
-                the width allows, exactly as every other group in this bar does.
-                `Next 7` / `Next 14` spelled out rather than `7d` / `14d`,
-                because the window tabs an inch away read `7d` and mean the
-                opposite direction in time — see `ScheduleSpanTabs`. */}
-            {scheduleSpan !== null && (
-              <ScheduleSpanTabs
-                span={scheduleSpan}
-                matchup={matchupWindow}
-                onChange={onScheduleSpanChange}
-              />
-            )}
     </>
   );
 
@@ -2995,6 +3305,131 @@ export function ResearchTable({
           counts={dayCounts}
           onChange={onTurnDaysChange}
         />
+      )}
+
+      {/**
+       * **The days the lens is over, behind the button that draws it.**
+       *
+       * It is `TurnDayStrip`'s place in the head and its arrangement: a panel
+       * the board's own disclosure opens, drawn in `.research-head` rather than
+       * in the control set, for the reason every panel on this board is —
+       * pressed from the condensed run, a panel in the control set opens
+       * hundreds of pixels above the top of the pane, so the button is
+       * reachable at every offset and the thing it opens is not.
+       *
+       * **Three doors, and only two of them are spans.**
+       *
+       * - **This matchup period and the next**, which is what a fantasy manager
+       *   plans in and the one thing a calendar cannot express: a period's
+       *   dates are the league's own arithmetic and they move as the week is
+       *   played. `Next 7` / `Next 14` where no league names them.
+       * - **`Custom`**, which is not a span at all but the door to the app's
+       *   own calendar — one press on a date picks a day, two pick a range.
+       *   The grid is drawn **only behind it**, which is what keeps the panel
+       *   at one row for the two presses most readers make: measured, 346px of
+       *   head with the calendar always drawn against **36** without it.
+       *
+       * **A named span closes the panel and `Custom` does not**, which is the
+       * one asymmetry here and it is not one: pressing a period *is* the
+       * answer, where pressing `Custom` is asking the question — a panel that
+       * shut on it would take the calendar away in the same frame it drew it.
+       * Picking on the calendar closes it, that press being the answer.
+       *
+       * **`Clear` is always drawn while the lens is on.** It was drawn only
+       * where no pill was lit, on the reasoning that a lit pill is its own way
+       * off — press `Week 20` again and the lens goes, the rule the turn
+       * filter's day strip keeps for its own last day. That rule is true and it
+       * is not *findable*: nothing on a lit pill says it is also a switch, and
+       * a reader looking for the way back to the measured board has no reason
+       * to press the thing that is already selected. Reported as exactly that.
+       * One button that says what it does beats a gesture that has to be
+       * explained.
+       */}
+      {projectedOpen && (
+        <div className="research-panel research-proj-panel">
+          <div className="research-proj-spans">
+            <div className="proj-span view-switch" role="group" aria-label="Days to project">
+              {projSpans.map((sp) => {
+                const on =
+                  projected && !projCustomOpen && projSpan.start === sp.start && projSpan.end === sp.end;
+                return (
+                  <button
+                    key={sp.label}
+                    type="button"
+                    className={`view-tab${on ? ' active' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => {
+                      onUiChange((u) => ({ ...u, panels: { ...u.panels, projected: false, projCustom: false } }));
+                      onProjSpanChange({ start: sp.start, end: sp.end });
+                    }}
+                    title={sp.title}
+                  >
+                    {sp.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className={`view-tab${projCustomOpen ? ' active' : ''}`}
+                aria-pressed={projCustomOpen}
+                onClick={() => setPanel('projCustom', !projCustomOpen)}
+                title="Pick a day, or a run of days, on the calendar"
+              >
+                Custom
+              </button>
+            </div>
+            {projected && (
+              <button
+                type="button"
+                className="research-clear"
+                onClick={() => {
+                  onUiChange((u) => ({ ...u, panels: { ...u.panels, projected: false, projCustom: false } }));
+                  onProjSpanChange(null);
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {/* **The calendar, at the panel's own width.** It is 260px inside the
+              app's popover, where the box is what the popover can afford; here
+              the box is the head, which is the full content width at every
+              size, and a 320px grid marooned at its left edge read as a control
+              that had failed to lay out. Capped at the readable end rather than
+              left to run: seven tracks across 1,900px is a month of
+              200px-square days. */}
+          {projCustomOpen && (
+            <div className="research-proj-cal">
+              <DateCalendar
+                /* **Today where there is no custom range in force**, which is
+                   what a reader pressing `Custom` off `Week 20` means: the
+                   period's own fortnight is not a *starting point* for picking
+                   a day, and a grid opening on it would mark two weeks the
+                   reader has just said they did not want. */
+                start={projCustomRange.start}
+                end={projCustomRange.end}
+                max={maxDate}
+                onChange={(start, end) => {
+                  setPanel('projected', false);
+                  onProjSpanChange({ start, end });
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* **How the projection works** — the button is up in the tools run
+          beside the toggle it explains, and this is what it opens. The two are
+          apart for the reason the board's other three disclosures are: the run
+          is `overflow: hidden`, so a popover opened from a button inside it is
+          clipped to the run. In the head it is an accordion, and it grows the
+          head under the rows rather than under the finger that pressed it —
+          that finger is on the condensed rail, which has no height to move. */}
+      {projected && projHelpOpen && (
+        <div className="research-panel research-proj-note">
+          <ProjectionNote board days={projection?.daysLeft ?? 0} />
+        </div>
       )}
 
       {filtersOpen && (
@@ -3133,7 +3568,51 @@ export function ResearchTable({
     </>
   );
 
+  /**
+   * **What the lens is reading, in the head.**
+   *
+   * The board's own version of the caption the Roster's projected reading once
+   * had and retired. That one went because the date bar eight pixels above it
+   * was printing the same two lines, and being **pinned** was printing them
+   * better; neither half reaches here. This board has no date bar at all — the
+   * days live behind the `Projected` button, in a panel the reader closes as
+   * soon as they have picked — so the head is the only place the span is
+   * stated, and the head is the one box on this page that sticks and that the
+   * expanded mode keeps.
+   *
+   * **The days left matter as much as the dates.** A span whose clubs are
+   * mostly idle projects a board of dashes, and the count line directly under
+   * this one would then be the only number on screen — a table that looks
+   * broken with nothing to explain it. `5 days still to play` against a
+   * five-day span says the lens is drawing all of it; `1 day` against the same
+   * span says most of it has been played.
+   *
+   * **At none the span is not printed at all**, and the line becomes the whole
+   * sentence: naming a projected span there would be the lens taking credit for
+   * figures it did not touch. Reached by an inbound `?bproj=1` over a past
+   * range — every span the panel offers starts today, so a press cannot land
+   * here.
+   *
+   * Drawn only once the answer has landed. A line that named a span before the
+   * server had clamped it (`start` is clamped forward to today) would be
+   * describing days the table is not about.
+   */
+  const projSpanLine = projectedOn ? (
+    <div className="research-proj-line">
+      {projection.daysLeft === 0 ? (
+        'Nothing to project — every game in these days has been played'
+      ) : (
+        <>
+          <span className="research-proj-lead">Projected</span> ·{' '}
+          {wideRange(projection.start, projection.end)} · {projection.daysLeft}{' '}
+          {projection.daysLeft === 1 ? 'day' : 'days'} still to play
+        </>
+      )}
+    </div>
+  ) : null;
+
   const controls = (
+    <>
     <div className="view-tools">
       <div className="research-chrome">
           <div className="research-bar">
@@ -3180,6 +3659,7 @@ export function ResearchTable({
 
       </div>
     </div>
+    </>
   );
 
   return (
@@ -3338,6 +3818,7 @@ export function ResearchTable({
               now.** Both printed the same sentence off the same `filters`
               array; only one of them could be pressed. See `panels` above. */}
           {panels}
+          {projSpanLine}
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
               {loading ? (

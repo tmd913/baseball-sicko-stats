@@ -1269,6 +1269,28 @@ player**. Which is why they share a context and a per-player core rather than
 each having their own — two projections of one roster that disagreed about a
 Saturday would be worse than either.
 
+**And the research board takes a third reading of the same engine now**, which
+is worth naming here because two of the paragraphs below are what it was measured
+against and one of them it reverses. That board has no date control of its own,
+so its lens brings a span with it and its `Projected` is a *disclosure* rather
+than the plain switch this one is; its rows are projection end to end where these
+are `already happened + what is left`; and the caption this table retired — see
+*The caption was saying twice what the bar above it says once* — is drawn there,
+because the argument that retired it was about a **pinned** bar eight pixels above
+it and that board has no bar at all. `ProjectionKey`'s sentences were split into
+`ProjectionNote` for it, a fourth caller which cannot use a popover at all. The
+whole of it is in **The research board**, *The projected reading*.
+
+**One thing that changed under this table with it, and it is a correction rather
+than an addition.** `projectPitcher` blended a starter's season outs-per-turn with
+his last thirty days' and applied `startsAreHisRecord`'s majority test to the
+season side only, so a starter whose recent month was mostly relief was read at
+his *relief* workload per start — Adrian Houser, 6 recent appearances and one
+start for 75 outs, projected at 25 innings a turn. The recent term now takes the
+same guard. Every caller moves: this table's rows, the matchup card and the board
+alike. See **The research board**, *A pre-existing engine bug this board made
+impossible to miss*.
+
 #### It is a mode of this table, not a fourth page
 
 The same argument the Schedule view records one section up, and it lands the same

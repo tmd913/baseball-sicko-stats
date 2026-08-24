@@ -8008,7 +8008,17 @@ button.start-line:focus-visible {
    chrome — except that the bar is one box further down the tree, `.league-view`
    being what holds the tab. That depth is the whole reason it was left out; it
    is not a reason for the band to look different. */
-.league-view > .date-bar {
+.league-view > .date-bar,
+/* **And the research board's, for the length of its projected lens** — the one
+   page in the app with no dates of its own, which grows some while that lens is
+   on. It is the same band in the same arrangement as the Rankings tab's above
+   it: a viewport-tall column with one scroller in it, the tools row and the bar
+   as two rows of one band. What it deliberately does **not** take is the
+   `::after` shadow the four above it carry — that shadow says *content passes
+   under this bar*, and this one is not pinned vertically at all. The board's
+   head is what holds the top of that pane; the bar scrolls away with the rest
+   of the control set, so there is nothing to pass under it. */
+.research-scroll > .date-bar {
   /* The same ground as the row above it, and for its reason — see
      `.view-tools`. The two are one band and neither may be a rectangle. */
   background: var(--bg);
@@ -8130,13 +8140,17 @@ button.start-line:focus-visible {
    that view is the second viewport-tall column with one scroller in it, so its
    control set, its head, its error banner and its empty states are all block
    children of a pane that scrolls sideways and all want the same `left: 0`. The
-   board has no date bar — nothing on it is drawn from a range — so what sticks
-   *vertically* there is the head instead, which is the rule below it. */
+   board's own bar is drawn only while its projected lens is on — that sentence
+   read *the board has no date bar, nothing on it is drawn from a range* until
+   the lens gave it one — and it is the one bar of the four that does not stick
+   *vertically*: what holds the top of that pane is the head, which is the rule
+   below. It is in this list for the inline axis and the layer alone. */
 .summary-scroll > .view-tools,
 .summary-scroll > .date-bar,
 .league-scroll > .view-tools,
 .league-scroll > .date-bar,
 .research-scroll > .view-tools,
+.research-scroll > .date-bar,
 .research-scroll > .research-head,
 .research-scroll > .research-condensed-rail,
 .research-scroll > .error-banner,
@@ -8167,6 +8181,36 @@ button.start-line:focus-visible {
      it is a full-width band by design and carries its own 10px of padding, so
      it wants the edge it now has. */
   z-index: 5;
+}
+/* **And one step above that ladder while its calendar is open**, which is the
+   board's bar alone and only for as long as the popover is.
+
+   `position: sticky` opens a stacking context whatever the `z-index`, so the
+   popover's own `z-index: 30` resolves against its siblings *inside* the bar
+   and against nothing outside it — the note on the rule above records the same
+   trap on the Roster. Here the box it has to clear is the board's head, which
+   is a sticky sibling at the same 5 and comes **later** in the tree, so at 5 the
+   head painted over a calendar hanging down into it.
+
+   **Scoped to `.open` rather than declared flat**, and that is the whole of why
+   it costs the pinned ladder nothing: the bar is not pinned vertically, so as
+   the reader scrolls in it travels up *past* the condensed rail (also 5) — and
+   a bar permanently at 6 would paint over that rail on the way. Open, the
+   reader has just pressed the face and is at the top of the pane, where there
+   is no rail yet.
+
+   **Two conditions, because the bar opens two panels.** `.open` is the face's
+   calendar; the second is the ⓘ in the end slot, which is an `InfoKey` and
+   carries no class on the bar at all — so the condition *is* "this bar has a
+   key panel in it", which is what `:has()` says (the same reading
+   `.app-chrome:has(+ .view-tools)` already takes one file section over).
+   Without it the key opened at 5 against a head also at 5 and later in the
+   tree: measured at 1400, the panel's box was 320 × 569 at y=319 and the head's
+   two lines painted over its **top 46px**, so it read as a paragraph starting
+   in the middle of its own first sentence. */
+.research-scroll > .date-bar.open,
+.research-scroll > .date-bar:has(.info-key-panel) {
+  z-index: 6;
 }
 .summary-scroll > .view-tools,
 .league-scroll > .view-tools,
@@ -10648,7 +10692,14 @@ button.start-line:focus-visible {
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
    which has to read whether it's open or not — a collapsed control must never
    be the only place a filter lives. */
-.research-toggle.active {
+.research-toggle.active,
+/* **And the board's projected toggle, which is a disclosure there and a plain
+   switch on the Roster.** One button, two callers: it passes `active` only
+   where it has a panel to open, so the Roster's copy never matches this rule
+   and reads exactly as it always has. Folded onto the selector list rather than
+   restyled, this being the same state on the same shape — the board's run must
+   not hold one control whose *open* looks different from the four beside it. */
+.projected-toggle.active {
   color: var(--text);
   border-color: var(--accent);
 }
@@ -11676,9 +11727,122 @@ button.start-line:focus-visible {
    a hint line under the strip once, which is what the column direction was for;
    both are gone (see `TurnPicker.tsx`) and the direction stays only to keep the
    one child stretching rather than centering. */
-.research-turn-panel {
+.research-turn-panel,
+/* **And the projected lens's span picker, which is the same shape one control
+   along**: a row of named spans over a calendar, both of them full-width blocks
+   rather than controls sharing a line. It is folded onto the turn panel's rule
+   rather than given one that agrees today — two panels the same head opens, in
+   the same direction, for the same reason. */
+.research-proj-panel {
   flex-direction: column;
   align-items: stretch;
+}
+/* The three doors and the `Clear` beside them. A row of its own above the
+   calendar, and it wraps: at a phone's width three pills and a button do not
+   always share a line, and a run that scrolled would be a second scroller
+   inside a panel that is already inside a scroller. */
+.research-proj-spans {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* **Every item in the run keeps its natural width**, which the strip had to be
+   told: `.proj-span` was written for a 260px popover, where a run of two
+   dividing the box evenly is the only thing that looks laid out, and the panel
+   it lives in now is the full content width. Stretched, `Today · Week 20 · Week
+   21` came out **1,730px** at 1400 with `How it works` marooned at the far
+   right — three words spread across a screen, which reads as a broken layout
+   rather than as a control. Natural, the run is the app's own segmented switch
+   at the size every other one on this bar is.
+
+   `.view-switch` is what the strip *is* rather than what it resembles, so the
+   pills, their gaps, the lit state and the focus ring all come from that rule
+   and nothing here restates them. */
+.research-proj-spans > * {
+  flex: none;
+}
+/* **The key is a square, not a pill**, which is what a run of nouns needs of a
+   footnote: `Search · Filters · Schedule · Projected` are things the board can
+   *be*, and a fifth labeled button would read as a fifth setting. The label is
+   `.sr-only` rather than absent — this run's standing rule, a button whose only
+   content is an `aria-hidden` mark having no accessible name at all — so the
+   padding that makes room for a word has to come off, leaving the app's own
+   30px icon square. Everything else about it is `.research-toggle`'s: the
+   ground, the border, the hover, the `.active` accent and the focus ring, so
+   it cannot come to look like a different kind of control from the button it
+   is a footnote to. */
+.research-proj-help {
+  width: var(--control-h);
+  padding: 0;
+  justify-content: center;
+}
+/* **The key, in flow rather than in a popover.** `.research-head` is
+   `overflow: hidden` — a sticky box in a pane that scrolls sideways must not
+   slide with it — so an `InfoKey`'s absolutely-positioned panel opened from
+   inside it is clipped to the head: measured before this moved, a 320px panel
+   painting as a 46px sliver. An accordion is what every other panel this head
+   holds already is, and it grows the head under the *rows* rather than under
+   the finger that pressed it (the run that finger is on rides a zero-height
+   rail — see `.research-condensed-rail`).
+
+   It reads at the panel's own width and in the app's quieter ink, which is what
+   `.info-key-panel` gives the same sentences on every other surface; the type
+   scale is that panel's own so the four callers say one thing at one size. */
+/* **The key's own panel**, in the head with the board's other two. It is a
+   `.research-panel` as well, which gives it the head's own rhythm; what this
+   adds is a reading measure and the type the same sentences take inside
+   `.info-key-panel` on every other surface. */
+.research-proj-note {
+  display: block;
+  /* **A reading measure, not the panel's width.** This is the one block of
+     *prose* on the board, and the head it opens in is the full content width —
+     measured at 1400 the paragraphs came out **1,356px** long, which is three
+     times the line anybody reads. `.info-key-panel` holds the same sentences at
+     320 on every other surface; 62 characters is that line expressed in the
+     panel's own type, so the four callers read alike whatever box they are in. */
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.research-proj-note p {
+  margin: 0 0 8px;
+}
+.research-proj-note p:last-child {
+  margin-bottom: 0;
+}
+.research-proj-note b {
+  color: var(--text);
+  font-weight: 700;
+}
+/* The calendar takes the panel's width rather than the 260px it is inside a
+   popover: this is a box in the flow of a head that is the full content width,
+   so a 260px grid marooned at its left edge would read as a control that failed
+   to lay out. Capped so it does not become a wall on a desktop — the same
+   `320px` the app's own popover caps it at, which is the width every reader of
+   this app already picks dates in. */
+/* **The calendar takes the panel's width**, where every other calendar in the
+   app takes the 260px its popover can afford. The box is different: this one is
+   in the flow of a head that is the full content width at every size, and a
+   260px grid marooned at its left edge read as a control that had failed to lay
+   out rather than as the picker it is.
+
+   **Capped at 640, which is where a day stops being a day.** The grid is seven
+   equal tracks, so width goes straight into the cells: at 1400 uncapped they
+   come out ~195px each and the month reads as a wall of buttons rather than as
+   a calendar. 640 puts a cell at about 90px — comfortably bigger than the
+   popover's 37 and still square enough to scan a month in — and below 640 the
+   picker really is the full width of the panel, which is the width that
+   matters, a phone being where 260px of grid in a 346px box looked worst.
+
+   A wrapper of its own because `DateCalendar` renders a **fragment**: its head,
+   its grid and its foot are three siblings with no box round them, which is
+   what lets the popover give them its own padding. */
+.research-proj-cal {
+  width: 100%;
+  max-width: 640px;
 }
 /* `ScrollRow` bleeds out through its container's gutter and back in by the
    bar's, which is right in `.view-tools` — the row it was written for — and
@@ -12129,6 +12293,11 @@ button.start-line:focus-visible {
    than the board's. It was the one word left standing in a run of marks. */
 .research-condensed .research-toggle-label,
 .research-condensed .schedule-toggle-label,
+/* …and `.projected-toggle-label` for the same reason, one control along: the
+   lens's button is `Projection.tsx`'s, shared with the Roster view, so it
+   carries that view's label class rather than the board's. Two words left
+   standing in a run of marks is what this list exists to prevent. */
+.research-condensed .projected-toggle-label,
 .research-condensed .research-inc-full {
   position: absolute;
   width: 1px;
@@ -12182,10 +12351,38 @@ button.start-line:focus-visible {
    caption in position as well as in wording: the number describes the rows
    directly under it, where the badges above describe the board they were drawn
    from. */
-.research-count {
+/* **What the projected lens is reading, one line above the count.**
+
+   Folded onto `.research-count`'s selector list rather than given rules that
+   agree today: the two are the same object in the same box — the head's own
+   quiet caption line — and the only thing that separates them is which of the
+   two sentences they carry. That is this stylesheet's standing rule, and the
+   same one that folded `.kind-switch` onto `.view-switch`.
+
+   The lead word is the one thing it adds, and it is the app's own accent: this
+   is a *state* the table is in rather than emphasis, which is the only thing
+   color is spent on here. It is the same accent the date bar above prints
+   `PROJECTED` in, so the two say one thing in one color; and it costs the head
+   no reserved box, the line being drawn only while the lens is on and the head
+   publishing its own measured height (`--research-head-h`) for the column
+   headings to stick under. */
+.research-count,
+.research-proj-line {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+}
+.research-proj-line {
+  /* The gap to the count under it. `margin` rather than a gap on the head,
+     which would space every line in it — the panels above included, whose own
+     rhythm is their business. */
+  margin-bottom: 3px;
+}
+.research-proj-lead {
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 /* The foot of a paged table while there are rows still to come — the strip that

@@ -91,8 +91,11 @@ import {
 } from './espn.js';
 import type {
   BattingLine,
+  BoardProjection,
   PitchingLine,
   PlayerKind,
+  ProjectedFixture,
+  ProjectedStarter,
   ResearchRow,
   RotationProjection,
   ScheduleGame,
@@ -723,7 +726,43 @@ function projectPitcher(
       REGRESS_OUTS,
     );
 
-  const recentDenom = starterView ? num(recent?.gamesStarted) : num(recent?.games);
+  /**
+   * **How many outings the *recent* window's outs came out of** — and on the
+   * starter view it is only ever read where those outings were starts.
+   *
+   * This is `projectOnePitcher`'s `startsAreHisRecord` guard arriving on the
+   * other window, and it was missing. That test asks whether `outs / gs` is a
+   * number about starts *at all*, applies it to the season row and stops a
+   * swingman being projected for a starter's workload — and then the blend two
+   * lines down took the recent window's `outs / gamesStarted` with no such
+   * test, where a mixed-role month is exactly the shape it is wrong about.
+   *
+   * **Measured on the live board, Adrian Houser on 2026-08-24.** His season is
+   * 25 games, 15 starts, 324 outs — a starter, so `outs / gs` is 21.6 outs a
+   * turn, seven innings, right. His last thirty days are **6 appearances and
+   * one start** for 75 outs, which is a month of long relief with a spot start
+   * in it and says nothing whatever about how long his starts go; read as
+   * `75 / 1` it claimed **twenty-five innings per turn**, blended to 39.4 at
+   * that window's weight, and projected him for **78.8 outs — 26.3 innings —
+   * over two starts**. He led the entire projected pitching board in strikeouts
+   * on the strength of it.
+   *
+   * So the recent term is taken **only where a majority of the recent
+   * appearances were starts**, which is the same majority test in the same
+   * words; otherwise it is null and `blend` falls back to the season figure
+   * alone, which is the honest answer — his own record of how long a start of
+   * his lasts. After: **43.4 outs over the same two turns** (21.7 a turn, his
+   * season rate to the tenth), and he is no longer on the first page of it.
+   *
+   * The relief view is untouched: `games` is games whatever role they were, so
+   * `outs / games` on that side needs no such guard.
+   */
+  const recentStartsAreHisRecord = num(recent?.gamesStarted) * 2 > num(recent?.games);
+  const recentDenom = starterView
+    ? recentStartsAreHisRecord
+      ? num(recent?.gamesStarted)
+      : 0
+    : num(recent?.games);
   // **`outsPer` is left alone**, deliberately, and it is the one figure here
   // that is. It is how long he goes, which is a fact about his job rather than
   // about how well he has thrown — a rookie starter's five innings is not a
@@ -2629,5 +2668,373 @@ export async function getRosterProjection(
     daysLeft: ctx.daysLeft,
     players: out,
     fetchedAt: Date.now(),
+  };
+}
+
+// ---- The research board, projected ------------------------------------------
+
+/**
+ * **Every stat field on a `ResearchRow` blanked**, which is the half of a
+ * projected row that matters most.
+ *
+ * A projected board is built by taking the season row's *identity* — his name,
+ * his club, his position, his hand — and putting projected numbers beside it.
+ * Everything the projection cannot answer for has to be **null**, not left over
+ * from the season, because a row carrying a projected home-run count and a
+ * measured barrel rate is two arithmetics on one line: the reader has no way to
+ * tell which half of it is an estimate, and the app's standing rule is that an
+ * estimate never wears a measurement's clothes.
+ *
+ * It is written out rather than derived by walking the season row's keys, and
+ * that is deliberate: a field added to `ResearchRow` later would be silently
+ * *carried over* by a `map` over keys, and silently **blank** here — and blank
+ * is the safe direction. The narrowed vocabulary the lens draws
+ * (`researchColumns.tsx::projectedKeys`) is the list of things that are
+ * actually filled below; anything not in it is a column the lens does not draw.
+ */
+const BLANK_STATS = {
+  pa: null,
+  ab: null,
+  doubles: null,
+  triples: null,
+  rbi: null,
+  sb: null,
+  cs: null,
+  avg: null,
+  obp: null,
+  slg: null,
+  ops: null,
+  babip: null,
+  gamesStarted: null,
+  wins: null,
+  losses: null,
+  saves: null,
+  holds: null,
+  inningsPitched: null,
+  outs: undefined,
+  era: null,
+  whip: null,
+  strikeoutsPer9: null,
+  walksPer9: null,
+  homeRunsPer9: null,
+  battersFaced: null,
+  avgAgainst: null,
+  earnedRuns: undefined,
+  hitBatsmen: null,
+  strikes: null,
+  pitches: null,
+  fip: null,
+  xfip: null,
+  hits: null,
+  hr: null,
+  runs: null,
+  walks: null,
+  strikeouts: null,
+  xba: null,
+  xslg: null,
+  xwoba: null,
+  xera: null,
+  exitVelocity: null,
+  launchAngle: null,
+  barrelRate: null,
+  hardHitRate: null,
+  sweetSpotRate: null,
+  gbRate: null,
+  ldRate: null,
+  fbRate: null,
+  pullAirRate: null,
+  whiffRate: null,
+  chaseRate: null,
+  firstPitchStrikeRate: null,
+  batSpeed: null,
+  sprintSpeed: null,
+} satisfies Partial<ResearchRow>;
+
+/** A rate over a guarded denominator — null rather than a `0` or an `Infinity`,
+ *  which is the rule every derived rate in this codebase is held to and the one
+ *  that keeps a man with nothing projected out of the top of a rate sort. */
+const over = (a: number, b: number): number | null => (b > 0 ? a / b : null);
+/** A rate rounded the way the board prints it. The board's own formatters take
+ *  a number and print it to three places or two; rounding here rather than on
+ *  screen is the same bargain the counts take (`round1`) — what a reader
+ *  recomputes off the columns beside it is what was printed. */
+const round3 = (n: number | null): number | null => (n === null ? null : Math.round(n * 1e3) / 1e3);
+const round2 = (n: number | null): number | null => (n === null ? null : Math.round(n * 100) / 100);
+
+/**
+ * **His club's game on the one day a projection was narrowed to**, and the man
+ * the other club is throwing.
+ *
+ * Only ever called on a one-day span — see `BoardProjection.oneDay`, and the
+ * reason a range gets no fixture at all.
+ *
+ * **The tier is re-derived here rather than read off `ctx.starters`**, which
+ * flattens the three into one set: an announced start is a probable id on the
+ * game itself, and everything else is the rotation map's, `estimated` where
+ * that projection came off the club's pooled cadence rather than the man's own.
+ * That is the same ladder the Schedule view's cell draws, and deriving it from
+ * the same two facts is what stops the board and the grid disagreeing about how
+ * firm a Thursday start is.
+ */
+function fixtureOn(
+  ctx: ProjectionContext,
+  rotations: Record<string, RotationProjection>,
+  teamId: number,
+  day: string,
+): ProjectedFixture | null {
+  const g = (ctx.remaining.get(teamId) ?? []).find((x) => x.date === day);
+  if (!g) return null;
+  const home = g.homeId === teamId;
+  const oppId = home ? g.awayId : g.homeId;
+  const oppProbable = home ? g.awayProbableId : g.homeProbableId;
+  let starter: ProjectedStarter | null = null;
+  const named = (id: number, tier: ProjectedStarter['tier']): ProjectedStarter | null => {
+    const row = ctx.pools.pitSeason.get(id);
+    // A man with no row on the season board has no name to print, and inventing
+    // one from an id is not a thing this file does. The fixture still stands —
+    // the opponent is the half of the cell a reader is owed either way.
+    return row ? { id, name: row.name, hand: ctx.pools.throws.get(id) ?? null, tier } : null;
+  };
+  if (oppProbable) starter = named(oppProbable, 'announced');
+  else {
+    for (const [idStr, r] of Object.entries(rotations)) {
+      if (!r.starts.includes(g.gamePk)) continue;
+      const id = Number(idStr);
+      const row = ctx.pools.pitSeason.get(id);
+      // A projected turn is hung off a player id and carries no club, so the
+      // side has to be checked: the *other* club's arm is the one this cell is
+      // about, and both of them have a slot in this game.
+      if (!row || row.teamId !== oppId) continue;
+      starter = named(id, r.estimated ? 'estimated' : 'projected');
+      break;
+    }
+  }
+  return {
+    gamePk: g.gamePk,
+    opponent: home ? g.away : g.home,
+    isHome: home,
+    startTime: g.startTime,
+    starter,
+  };
+}
+
+/**
+ * **The whole league, projected over a span** — the research board's own
+ * `Projected` lens, one `ResearchRow` per player.
+ *
+ * **It is `getRosterProjection` asked about six hundred men instead of sixteen,
+ * and it adds no upstream whatever.** The context this runs on already holds
+ * both season boards and both 30-day boards for the entire league — they are
+ * what every per-player projection is drawn from — so the population is
+ * `pools.batSeason` / `pools.pitSeason`'s own key set and there is nothing to
+ * fetch. The `daysLeft` gate, the clamp forward to today and the memoized
+ * context are all shared with the roster's reading, which is what stops the two
+ * disagreeing about whether Saturday is still to be played.
+ *
+ * **A man with nothing to project keeps his row, dashed.** A club with no game
+ * left in the span, a starter whose turn falls outside it, a man off the active
+ * roster: `games` is 0 and every figure is null, exactly as the roster's lens
+ * draws him. Dropping him would change the board's *population* — the include
+ * buttons' counts, the position pills, `of 622` — to say something about the
+ * span rather than about the league, and the sort already puts a row of nulls
+ * at the bottom in both directions.
+ *
+ * **No lineup half.** `ProjectedPlayerLine.lineup` answers *what would your
+ * fantasy team actually start him for*, which is a question about a roster; a
+ * board of free agents has no seat to give anybody.
+ */
+export async function getBoardProjection(
+  kind: PlayerKind,
+  start: string,
+  end: string,
+): Promise<BoardProjection> {
+  const today = baseballToday();
+  // The roster lens's own clamp, word for word: a day that has been played is
+  // not a day anybody projects, and a range wholly in the past answers with its
+  // own last day and `daysLeft: 0` rather than a span running backwards.
+  const from = start < today ? (today > end ? end : today) : start;
+  const empty: BoardProjection = {
+    kind,
+    start: from,
+    end,
+    daysLeft: 0,
+    // **Never on a span with nothing in it**, which is the one case `from ===
+    // end` gets wrong on its own. A range wholly in the past clamps to its own
+    // last day (`from = end`, above) and would answer `oneDay: true` — so the
+    // board drew the `Opp` column for a day nobody is going to play, and every
+    // cell in it was a dash, because there is no fixture on the row either.
+    // Measured on `?bproj=1&start=2026-08-10&end=2026-08-12`: an `Opp` header
+    // over 471 em dashes, beside a line already saying *nothing to project*.
+    // A column that can only be empty is a column not to draw.
+    oneDay: false,
+    rows: [],
+    fetchedAt: Date.now(),
+  };
+  if (end < from) return empty;
+
+  const [ctx, window] = await Promise.all([contextFor(from, end), getScheduleWindow()]);
+  const pool = kind === 'pitcher' ? ctx.pools.pitSeason : ctx.pools.batSeason;
+  if (ctx.daysLeft === 0) {
+    return { ...empty, rows: [...pool.values()].map((r) => identityOf(r)), fetchedAt: Date.now() };
+  }
+  const oneDay = from === end;
+  const rotations = window.rotations ?? {};
+
+  const rows: ResearchRow[] = [];
+  for (const season of pool.values()) {
+    const bucket: Bucket = {};
+    const game =
+      oneDay && season.teamId !== null ? fixtureOn(ctx, rotations, season.teamId, from) : null;
+    if (kind === 'pitcher') {
+      const made = projectOnePitcher(ctx, season.id, bucket);
+      const chances = made.starts + made.reliefGames;
+      const row = chances > 0 ? pitchingRow(season, bucket, chances, made.starts) : null;
+      rows.push({ ...(row ?? identityOf(season)), projGame: game });
+    } else {
+      const made = projectOneBatter(ctx, season.id, bucket);
+      const row = made.games > 0 ? battingRow(season, bucket, made.games) : null;
+      rows.push({ ...(row ?? identityOf(season)), projGame: game });
+    }
+  }
+
+  return { kind, start: from, end, daysLeft: ctx.daysLeft, oneDay, rows, fetchedAt: Date.now() };
+}
+
+/**
+ * **His identity and nothing else** — the base every projected row is built on,
+ * and the whole of the row of a man this span has no game for.
+ *
+ * The identity half is copied from the season board, which is where the board's
+ * own rows come from in the first place, so the name, the club, the position
+ * list, the hand and `starter` are the ones the measured board draws and the
+ * two readings cannot disagree about who a row is.
+ *
+ * `games: 0` rather than null because the field is not nullable; every *figure*
+ * beside it is null, which is what draws the row as dashes rather than as a
+ * line of noughts claiming he plays and does nothing.
+ *
+ * **`qualified` rides along untouched, and that is deliberate.** It is a fact
+ * about how much he has played *this season* — Savant's bar, which is what the
+ * percentile scale is built from — and it is not a claim about the projection.
+ * Nothing reads it under the lens (the `Ranks` toggle is off the bar there, a
+ * projection having no percentile population to be ranked within), and blanking
+ * it would be inventing an answer where the honest one is the one already on
+ * the row.
+ */
+function identityOf(season: ResearchRow): ResearchRow {
+  return { ...season, ...BLANK_STATS, games: 0, record: null };
+}
+
+/**
+ * **The blank test is the *printed* count, not the raw one**, and it is where
+ * both of these return null.
+ *
+ * It is the test the roster's lens already applies one level down — `line.pa
+ * === 0` is the man with nothing to project, drawn as dashes rather than as a
+ * line of noughts. A reliever whose share of a single day comes to four
+ * hundredths of an appearance projects two hundredths of an inning: every count
+ * on his row rounds to nought, and the *rates* divided out of those hundredths
+ * are his season's rates wearing a projection's clothes. Measured before this
+ * test, on the 7-day pitching board: Orlando Arcia — a shortstop who threw one
+ * mop-up inning in April — read `G 0 · IP 0.0 · ERA 4.26`, which is a rate with
+ * nothing on screen to be a rate *of*.
+ *
+ * So the row is blank the moment its own printed innings are, and the batting
+ * side the moment its printed plate appearances are.
+ */
+function battingRow(season: ResearchRow, b: Bucket, games: number): ResearchRow | null {
+  const pa = b[BAT.pa] ?? 0;
+  if (round1(pa) === 0) return null;
+  const hits = b[BAT.h] ?? 0;
+  const doubles = b[BAT.d2] ?? 0;
+  const triples = b[BAT.d3] ?? 0;
+  const hr = b[BAT.hr] ?? 0;
+  const walks = b[BAT.bb] ?? 0;
+  const hbp = b[BAT.hbp] ?? 0;
+  const ab = b[BAT.ab] ?? 0;
+  // **The unprinted components stay exact and only the columns are rounded**,
+  // which is `battingOf`'s own split one file-section up and is load-bearing
+  // for the same reason: `TB` multiplies a rounded home run by four, and over a
+  // one-day span that was enough to put a range's OPS below every day in it.
+  const totalBases = hits + doubles + 2 * triples + 3 * hr;
+  const obp = over(hits + walks + hbp, pa);
+  const slg = over(totalBases, ab);
+  return {
+    ...identityOf(season),
+    games: round1(games),
+    pa: round1(pa),
+    ab: round1(ab),
+    hits: round1(hits),
+    doubles: round1(doubles),
+    triples: round1(triples),
+    hr: round1(hr),
+    runs: round1(b[BAT.r] ?? 0),
+    rbi: round1(b[BAT.rbi] ?? 0),
+    walks: round1(walks),
+    strikeouts: round1(b[BAT.k] ?? 0),
+    sb: round1(b[BAT.sb] ?? 0),
+    cs: round1(b[BAT.cs] ?? 0),
+    avg: round3(over(hits, ab)),
+    obp: round3(obp),
+    slg: round3(slg),
+    // **Off the unrounded pair, not the two printed thousandths.** The board
+    // prints OBP and SLG to three places each and OPS to three, so adding the
+    // printed figures would be right to within a thousandth and wrong at the
+    // digit anybody would check it on.
+    ops: round3(obp === null || slg === null ? null : obp + slg),
+  };
+}
+
+function pitchingRow(
+  season: ResearchRow,
+  b: Bucket,
+  chances: number,
+  starts: number,
+): ResearchRow | null {
+  const outs = b[PIT.outs] ?? 0;
+  const innings = outs / 3;
+  // The printed figure, which is what the lens's own `IP` column draws — see
+  // `battingRow` above for why the test is on that rather than on the raw outs.
+  if (Math.round(innings * 10) === 0) return null;
+  const hits = b[PIT.h] ?? 0;
+  const walks = b[PIT.bb] ?? 0;
+  const hbp = b[PIT.hbp] ?? 0;
+  const er = b[PIT.er] ?? 0;
+  const k = b[PIT.k] ?? 0;
+  const hr = b[PIT.hr] ?? 0;
+  const tbf = b[PIT.tbf] ?? 0;
+  const atBats = Math.max(0, tbf - walks - hbp);
+  return {
+    ...identityOf(season),
+    games: round1(chances),
+    gamesStarted: round1(starts),
+    // **`inningsPitched` stays null on a projected row, and the column is drawn
+    // from `outs` instead.** That field is *thirds* everywhere else in this app
+    // — `6.2` is six and two thirds — and a projection has no whole out count
+    // to write in that form: 18.7 outs is 6.23 innings, and `"6.2"` written
+    // here would be read by everything downstream as 6⅔, off by a third of an
+    // inning and unfalsifiable. So the projected board's `IP` column is its own
+    // (`researchColumns.tsx::projectedColumns`), formats `outs / 3` to a
+    // decimal and says so on its title, and the ambiguous string is never
+    // written at all. The two forms cannot meet, there being only one of them.
+    outs: round1(outs),
+    battersFaced: round1(tbf),
+    hits: round1(hits),
+    runs: round1(b[PIT.r] ?? 0),
+    earnedRuns: round1(er),
+    walks: round1(walks),
+    strikeouts: round1(k),
+    hr: round1(hr),
+    hitBatsmen: round1(hbp),
+    wins: round1(b[PIT.w] ?? 0),
+    losses: round1(b[PIT.l] ?? 0),
+    saves: round1(b[PIT.sv] ?? 0),
+    holds: round1(b[PIT.hd] ?? 0),
+    era: round2(over(er * 9, innings)),
+    whip: round2(over(walks + hits, innings)),
+    strikeoutsPer9: round2(over(k * 9, innings)),
+    walksPer9: round2(over(walks * 9, innings)),
+    homeRunsPer9: round2(over(hr * 9, innings)),
+    avgAgainst: round3(over(hits, atBats)),
   };
 }

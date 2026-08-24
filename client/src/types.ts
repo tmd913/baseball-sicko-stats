@@ -1534,6 +1534,56 @@ export interface ResearchRow {
   batSpeed: number | null; // mph
   // Batter only — Savant publishes no sprint speed on the pitching board.
   sprintSpeed: number | null; // feet per second
+
+  /**
+   * **The fixture a one-day projection is drawn over** — only ever set on a row
+   * of the *projected* board, and only where that board's span is a single day.
+   *
+   * It is the projected reading's answer to the same question `Opp` answers on
+   * the measured board: *who is he facing*. That column reads today's status
+   * map, which is a fact about **this afternoon** and says nothing whatever
+   * about the Thursday a reader has just narrowed a projection to — so under
+   * the lens the cell is drawn from this instead, and the two never meet.
+   *
+   * **Absent over a range**, which is not an omission: a week is a week of
+   * fixtures and naming one of them would be the one cell on the row describing
+   * a different span from the figures beside it. The board draws `Games` there
+   * instead, the rule the roster's own projected reading already follows.
+   */
+  projGame?: ProjectedFixture | null;
+}
+
+/**
+ * **One club's game on the day a projection was narrowed to**, from the side of
+ * the man whose row it is. Mirrors `server/src/types.ts` by hand.
+ *
+ * Deliberately the *fixture* and not a game state: the day this describes has
+ * not been played, so there is no score, no inning and no `Final` to draw —
+ * which is why it is not `PlayerStatus`'s opponent read a second way.
+ */
+export interface ProjectedFixture {
+  gamePk: number;
+  /** The other club's abbreviation — "SEA". */
+  opponent: string;
+  /** His club is at home, which is what decides `vs` against `@`. */
+  isHome: boolean;
+  /** ISO first pitch, or null where the schedule gives none. */
+  startTime: string | null;
+  /** The man the other club is throwing, or null where nobody is named and no
+   *  rotation slot puts anybody there. */
+  starter: ProjectedStarter | null;
+}
+
+export interface ProjectedStarter {
+  id: number;
+  name: string;
+  /** `R` / `L`, or null where MLB lists none. */
+  hand: string | null;
+  /** Which of the app's three tiers the start is — `announced` where his club
+   *  has named him, `projected` where his own rotation slot puts him there,
+   *  `estimated` where his club's pooled rotation does. The same ladder
+   *  `StartTier` draws in the Schedule view's own cell. */
+  tier: 'announced' | 'projected' | 'estimated';
 }
 
 /** Everything a user has customised, saved server-side against their id.
@@ -1961,6 +2011,45 @@ export interface RosterProjection {
    *  nothing to project, which the view says in words. */
   daysLeft: number;
   players: ProjectedPlayerLine[];
+  fetchedAt: number;
+}
+
+/**
+ * **The research board, projected** — every row of the league over a span of
+ * days nobody has played yet, in place of the season or window the board
+ * ordinarily draws.
+ *
+ * **The rows are `ResearchRow`s and that is the whole economy of it.** A
+ * projected board is this board over different numbers, exactly as a projected
+ * roster row is the summary table's row over different numbers: the sort, the
+ * filters, the position pills, the include buttons, the marks and the identity
+ * block are all phrased in that vocabulary and none of them had to be told
+ * anything. What the lens changes is which *columns* are drawn — the ones the
+ * projection can actually fill — and the numbers in them.
+ *
+ * **Every stat field the projection cannot fill is `null`, not carried over
+ * from the season row.** A projected line and a measured Statcast reading on
+ * one row would be two arithmetics on one line, which is the thing this
+ * codebase spends its length preventing; the narrowed vocabulary means nobody
+ * ever draws them, and a filter left over from the measured board finds a null
+ * rather than last month's barrel rate.
+ */
+export interface BoardProjection {
+  kind: PlayerKind;
+  /** The span actually projected — `start` clamped forward to today, a day that
+   *  has been played being nobody's to project. */
+  start: string;
+  end: string;
+  /** Days of it that still have a game to be played. Zero means there was
+   *  nothing to project, which the board says in words rather than drawing six
+   *  hundred rows of dashes with nothing to explain them. */
+  daysLeft: number;
+  /** **True where the span is one day**, which is the condition `projGame` is
+   *  filled under — carried rather than re-derived from `start === end` because
+   *  the two dates are the *clamped* span and the client's own are what the
+   *  reader picked. */
+  oneDay: boolean;
+  rows: ResearchRow[];
   fetchedAt: number;
 }
 

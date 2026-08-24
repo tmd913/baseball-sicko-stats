@@ -96,7 +96,7 @@ import {
   rostersToWatchlist,
 } from './espn.js';
 import type { EspnRosterPlayer } from './espn.js';
-import { getProjection, getRosterProjection } from './projection.js';
+import { getBoardProjection, getProjection, getRosterProjection } from './projection.js';
 import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1664,6 +1664,42 @@ app.get(
       : 'season';
     const { season, rows } = await getTeamResearch(kind, window);
     res.json({ season, kind, window, rows });
+  }),
+);
+
+/**
+ * **The same board, projected** — every player in the league over a span of days
+ * nobody has played yet, which is what the research board's own `Projected`
+ * toggle swaps its figures for.
+ *
+ * A route of its own rather than a parameter on `/api/research`, and for the
+ * two reasons `/api/projection/roster` is one beside `/api/report`: that board
+ * is a **cached blob** keyed by kind and window, served warm to every reader
+ * alike, where this is a computation over a span the reader picked; and it joins
+ * four league-wide boards and the league's schedule, which nobody who never
+ * presses the toggle should pay for.
+ *
+ * **No ESPN league is needed**, exactly as the roster's lens needs none: every
+ * input is a board this app already holds. What a connected league adds is the
+ * span the toggle opens on — the rest of this matchup period — and that is the
+ * client's arithmetic, not this route's.
+ *
+ * **`start`/`end` take `/api/report`'s own resolution and its own ceiling**, so
+ * a link that opens the board on a span is read the way a link that opens the
+ * roster on one is, and a range nobody could draw is a 400 rather than a
+ * minute of projection.
+ */
+app.get(
+  '/api/research/projected',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    const { start, end } = resolveDateRange(req.query.start, req.query.end);
+    if (dayCount(start, end) > MAX_RANGE_DAYS) {
+      res.status(400).json({ error: `date range too large (max ${MAX_RANGE_DAYS} days)` });
+      return;
+    }
+    res.json(await getBoardProjection(kind, start, end));
   }),
 );
 
