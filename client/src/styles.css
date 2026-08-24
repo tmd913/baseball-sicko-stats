@@ -5990,7 +5990,13 @@ button.start-line:focus-visible {
      padded to clear the sticky date column's edge rather than sitting against
      it. */
   text-align: left;
-  padding: 0 10px;
+  /* **The padding is on the span, not on the cell**, because the span is what
+     pins. A sticky box is placed at its `left` offset exactly, so padding left
+     on the *cell* is padding the sentence loses the moment it sticks — measured
+     at 390 scrolled across, `7/19–8/23` and `60-day IL` ended up touching. On
+     the span it travels with it, and the pinned position is then identical to
+     the resting one. */
+  padding: 0;
   white-space: nowrap;
   background: var(--bg);
 }
@@ -6006,17 +6012,22 @@ button.start-line:focus-visible {
    `td` left it at `left: -209` — exactly where it would have been unstuck. The
    span inside it has the whole cell to slide along, so it pins.
 
-   The offset is the date and opponent columns' own width, read at runtime by
-   `GameLogTable`: the date column is `width: 1%` and sizes to its content, so
-   109px at 1200 and 79px at 390, and there is no one number to declare. One
-   offset covers both shapes — a `dnp` row's sentence begins after two cells and
-   an `absence` row's after the one cell that spans both, which is the same
-   edge. */
+   The offset is read at runtime by `GameLogTable`: the date column is
+   `width: 1%` and sizes to its content, so 109px at 1200 and 79px at 390, and
+   there is no one number to declare. */
 .glog-note-in {
   position: sticky;
   /* `sticky` does not apply to an inline box. */
   display: inline-block;
-  left: var(--glog-pin, 0);
+  padding: 0 10px;
+  /* A `dnp` row is a game and keeps the opponent's cell, so its sentence begins
+     after two columns. */
+  left: var(--glog-pin-2, 0);
+}
+/* A stretch has no one opponent and gives that cell to its sentence, which
+   therefore begins after the date alone. */
+.glog-gap.is-absence .glog-note-in {
+  left: var(--glog-pin-1, 0);
 }
 /* The zebra stripe needs no rule of its own here: `.glog-note` is a `td`, so
    `.glog-table tbody tr:nth-child(even) td` above already paints it

@@ -266,20 +266,37 @@ function DnpRow({ gap }: { gap: Extract<GameLogGap, { kind: 'dnp' }> }) {
  * range is the wider thing to print.
  */
 function AbsenceRow({ gap }: { gap: Extract<GameLogGap, { kind: 'absence' }> }) {
-  // **Numbers for a range, the spelled month for a single day.** Two spelled
-  // dates with a rule between them is a cell nearly twice the width of the
-  // column it sits in — see `numericGameDate`. A one-game stretch is one date
-  // and reads as every other row's does.
+  // **Numbers for a range, the spelled month for a single day** — see
+  // `numericGameDate`. A one-game stretch is one date and reads as every other
+  // row's does.
+  //
+  // **The en dash is unspaced**, which is worth a line because it is load-bearing
+  // rather than typographic. The range now lives in the date column alone, so it
+  // is what that column sizes to: measured at 1200, `7/19 – 8/23` is 72.0px
+  // against the 63.4px the header leaves, and the column grew from 109px to 118
+  // to take it — widening the very column this was shortened to keep narrow.
+  // Unspaced it is 65.4px and the column is 111. (An unspaced en dash is also
+  // the correct form for a range, so nothing was traded for it.)
   const span =
     gap.from === gap.to
       ? prettyGameDate(gap.from)
-      : `${numericGameDate(gap.from)} – ${numericGameDate(gap.to)}`;
+      : `${numericGameDate(gap.from)}\u2013${numericGameDate(gap.to)}`;
   return (
     <tr className="glog-gap is-absence" title={gap.detail || undefined}>
-      <th className="glog-date glog-gap-span" scope="row" colSpan={2}>
+      {/* **One column, like every other row's date.** It spanned the opponent's
+          too while the range was spelled out and needed the room, and the cost
+          was that the *pinned* region of the table changed shape from row to
+          row: the date cell is sticky, so a range row held two columns against
+          the scroll where a game row held one, and scrolling across dragged a
+          two-column block over the table. A pinned column that is a different
+          width depending on what kind of row you are looking at is not a pinned
+          column. */}
+      <th className="glog-date glog-gap-span" scope="row">
         {span}
       </th>
-      <td className="glog-note" colSpan={BATTER_COLUMNS.length}>
+      {/* Everything except the date — the opponent's cell included, a stretch
+          having no one opponent to name. */}
+      <td className="glog-note" colSpan={BATTER_COLUMNS.length + 1}>
         <span className="glog-note-in">
           <span className="glog-gap-status">{gap.status}</span>
           {' · '}
@@ -676,12 +693,12 @@ function GameLogTable({
    * standing test for measuring at runtime (`--research-pin-left` is the same
    * rule on the board next door).
    *
-   * **One offset serves both row shapes**, which is worth stating because it
-   * looks as though it should be two. A `dnp` row's sentence begins after the
-   * date cell *and* the opponent cell; an `absence` row's begins after the one
-   * cell that spans both of them for its date range. Those are the same edge,
-   * so the two rows pin to the same number rather than to two that would have
-   * to be kept equal.
+   * **Two offsets, because the two row shapes pin different amounts.** A `dnp`
+   * row is a game: it keeps the opponent's cell, so its sentence begins after
+   * two columns. An `absence` row has no one opponent and gives that cell to
+   * its sentence, which therefore begins after the date alone. (They were one
+   * number for a while, when a range spanned both columns — and that spanning
+   * is exactly what made the pinned region change width from row to row.)
    *
    * **The fault it fixes was found by driving the table, not by reading it.**
    * At 390px with the pane scrolled 400px right, the three gap rows on Aaron
@@ -699,7 +716,8 @@ function GameLogTable({
     const measure = (): void => {
       const date = head.children[0]?.getBoundingClientRect().width ?? 0;
       const opp = head.children[1]?.getBoundingClientRect().width ?? 0;
-      t.style.setProperty('--glog-pin', `${Math.round(date + opp)}px`);
+      t.style.setProperty('--glog-pin-1', `${Math.round(date)}px`);
+      t.style.setProperty('--glog-pin-2', `${Math.round(date + opp)}px`);
     };
     measure();
     // The columns resize with the pane — the overlay's own width, the expand
