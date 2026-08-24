@@ -73,6 +73,10 @@ import type { DateBarReading, DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
 import {
   buildScheduleIndex,
+  buildWindowIndex,
+  clampTurnRange,
+  toTurnRange,
+  turnRangeParam,
   defaultScheduleSpan,
   effectiveSpan,
   spanDates,
@@ -80,7 +84,7 @@ import {
   stepSpan,
   toScheduleSpan,
 } from './components/schedule';
-import type { ScheduleSpan } from './components/schedule';
+import type { ScheduleSpan, TurnRange } from './components/schedule';
 import {
   EligibilityContext,
   FantasyRosterContext,
@@ -1923,6 +1927,93 @@ export default function App() {
    */
   const [researchUi, setResearchUi] = useState<ResearchUi>(freshResearchUi);
 
+  /**
+   * **Which days the research board's `Starting` filter is set to** — the one
+   * control on that board that selects on the schedule ahead rather than on the
+   * season behind, and the way a manager streams a start: pick Friday, and the
+   * board is the pitchers due to start on Friday with every stat column beside
+   * them.
+   *
+   * **In the URL as `turn=`**, by the rule `win=`, `pos=` and `inc=` follow: it
+   * decides which players are in the table, so a link that leaves it out
+   * describes a different board. The param is `turn=` rather than `starts=`
+   * because the date bar's own params are `start=` and `end=` — see
+   * `toTurnRange`, which carries that argument and the format.
+   *
+   * **The dates are absolute, and that is honest here where a date preset's
+   * would not be.** A preset is a *rule* about the recipient's own today, which
+   * is why the bar carries its label; `Starting Fri 8/28` is a fact about the
+   * schedule, exactly as the League page's `lwk=` is a fact about the league's
+   * calendar. What a link cannot promise is that those days are still ahead
+   * when it is opened, and that is what `clampTurnRange` is for.
+   *
+   * Up here with the rest of the board's cross-cutting controls because
+   * `ResearchTable` is unmounted the moment the view changes, and because the
+   * URL has to be written from one place.
+   */
+  const [turnRange, setTurnRange] = useState<TurnRange | null>(() =>
+    toTurnRange(initialParams.get('turn')),
+  );
+  /**
+   * **When the window is wanted for the turn filter** — a range in force, *or*
+   * the day strip open with nothing picked yet.
+   *
+   * The second half is not a nicety: the strip **is** the window's days, so
+   * gated on the range alone the control could never be used at all — a reader
+   * with nothing picked would open an empty panel and have nothing to press to
+   * pick anything. It is the same shape the Schedule toggle has, where pressing
+   * the mode on is what asks for the read.
+   *
+   * Scoped to the board that draws it: the panel's open flag is one of
+   * `ResearchUi`'s and survives a crossing to the Roster tab, where a window
+   * read for a control that is not on screen is a request nobody asked for.
+   */
+  const turnWanted = view === 'research' && (turnRange !== null || researchUi.panels.turns);
+  /**
+   * **The same window over every day it has**, which is what the research
+   * board's turn filter reads — see `buildWindowIndex`.
+   *
+   * A second index rather than the one above because the two answer different
+   * questions: that one is cut to the span the grid is drawing, and this filter
+   * must be able to name a day beyond it (a link to next Tuesday opened by a
+   * reader on `Next 7`, or with the Schedule view off altogether). Built only
+   * while the filter is on, so a reader who never presses `Starting` pays
+   * nothing for it.
+   *
+   * **No pitcher lookup, deliberately.** That argument is what `buildStarters`
+   * costs — the club derivation and the 750 game-sides behind it — and it buys
+   * the name of *the other club's* starter, which this filter never draws: a
+   * row here is the man pitching, and what its cell says beside the day is who
+   * he faces. So it needs no season roster and no wait on one, which is why
+   * this index has no `playersLoading` in its gate where the grid's has.
+   */
+  const turnIndex = useMemo(
+    () => (turnWanted && scheduleWindow ? buildWindowIndex(scheduleWindow) : null),
+    [turnWanted, scheduleWindow],
+  );
+  /** The turn filter asks for the window the way the matchup page's team pages
+   *  do — through the flag, rather than by owning the span the Schedule view is
+   *  on. See `scheduleWanted`. */
+  useEffect(() => {
+    if (turnWanted) needSchedule();
+  }, [turnWanted, needSchedule]);
+  /**
+   * **The days cut to the window, once the window is there to cut them to.**
+   *
+   * A link naming Friday is opened the following Tuesday, and the schedule this
+   * app reads starts at today and never looks back — so the days it names may
+   * be behind the window's first. Clamped where they overlap it and dropped
+   * where they do not, which is the falls-back-rather-than-empties rule: a
+   * filter selecting on days the board can say nothing about is one that empties
+   * it in silence. `clampTurnRange` returns the range it was handed when there
+   * is nothing to change, so this settles in one pass.
+   */
+  useEffect(() => {
+    if (!turnRange || !turnIndex) return;
+    const cut = clampTurnRange(turnRange, turnIndex);
+    if (cut !== turnRange) setTurnRange(cut);
+  }, [turnRange, turnIndex]);
+
   // The how-to page (settings menu → How to use, and the empty state's button).
   // In the URL like every other view, so it survives a reload and can be linked
   // to — which is the only way to hand someone the guide directly.
@@ -2156,7 +2247,7 @@ export default function App() {
    * segmented control — and the app's own trap, two things in one param, read
    * the other way round. None of the others can collide: `preset`, `start`,
    * `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`, `sched`,
-   * `plays`, `newplays`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`,
+   * `turn`, `plays`, `newplays`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`,
    * `win`, `help`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `proj`, `rproj`,
    * `rankproj`, `league`.
    *
@@ -3730,6 +3821,20 @@ export default function App() {
       if (plays) p.set('plays', plays);
       if (feedNewOnly) p.set('newplays', '1');
     }
+    // The days the board's `Starting` filter is set to, and **only where it is
+    // in force**: a turn is a fact about a pitcher, so the control is not drawn
+    // on the batting board or on the thirty clubs, and a param naming a filter
+    // the recipient's page does not offer is a parameter that lies about it —
+    // the rule `cut=`, `tside=` and `mr=` follow. The state survives the
+    // crossing, so coming back to the pitchers finds the days still picked.
+    if (
+      view === 'research' &&
+      researchKind === 'pitcher' &&
+      !researchTeams &&
+      turnRange
+    ) {
+      p.set('turn', turnRangeParam(turnRange));
+    }
     // The mode and its span as one param, so it can never say a span with no
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
     // absence can mean.
@@ -3768,6 +3873,7 @@ export default function App() {
     simulate,
     hideInjured,
     scheduleSpan,
+    turnRange,
     rosterProjected,
     rosterSource,
     helpOpen,
@@ -7153,6 +7259,11 @@ export default function App() {
           onScheduleSpanChange={setScheduleSpan}
           matchupWindow={matchupWindow}
           schedule={scheduleIndex}
+          /* And the turn filter, which reads the same window over all of its
+             days rather than over the span — see `turnIndex`. */
+          turnRange={turnRange}
+          onTurnRangeChange={setTurnRange}
+          turnIndex={turnIndex}
           include={researchInclude}
           onIncludeChange={setResearchInclude}
           includeWatchlist={researchWatchlist}

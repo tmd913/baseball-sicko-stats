@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { PlayerKind, ResearchRow } from '../types';
 import type { Column } from './researchColumns';
 import { OPPONENT_KEY, ROSTER_PCT_COLUMN, TREND_BY_KEY } from './researchColumns';
+import { TURN_KEY } from './schedule';
 
 /**
  * **A percentile rank for every stat, on both tables built from the shared
@@ -141,6 +142,13 @@ export const NO_GOOD_END: ReadonlySet<string> = new Set<string>([
   // The market, not the player.
   ROSTER_PCT_COLUMN.key,
   ...TREND_BY_KEY.keys(),
+  // **The day he starts is not a grade.** The turn filter's `Start` column
+  // orders on where his turn sits in the window, which is what lets the reader
+  // put Friday's men above Sunday's; a percentile of it would say Friday is
+  // better than Sunday, which is a claim about the schedule and not about him.
+  // Its `value` is an ordinal rather than a measurement, which is the same
+  // thing `Opp` says by holding words.
+  TURN_KEY,
   // A profile rather than a grade — the same four that decline an `ascFirst` on
   // both boards.
   'launchAngle',

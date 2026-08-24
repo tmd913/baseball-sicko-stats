@@ -10,12 +10,18 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
+import { TurnButton, TurnDays } from './TurnPicker';
 import {
   defaultScheduleSpan,
   scheduleColumns,
   startTierOn,
+  TURN_KEY,
+  turnColumn,
+  turnCounts,
+  turnRangeLabel,
+  turnsInRange,
 } from './schedule';
-import type { ScheduleIndex, ScheduleSpan } from './schedule';
+import type { ScheduleIndex, ScheduleSpan, TurnRange } from './schedule';
 import { SchedulePreview } from './PlayerSchedule';
 import type { SplitsRead } from './PlayerSchedule';
 import { useOpponentBoards } from './OpponentTable';
@@ -643,6 +649,24 @@ interface Props {
    *  Threaded rather than read here for the reason `trendWindows` is: it is a
    *  per-user league fact, and this table is otherwise the league's. */
   matchupWindow: MatchupWindow | null;
+  /**
+   * **The turn filter** — the days a pitcher must be due to start on to be on
+   * the board at all. Null is off, which is every board but a pitching one and
+   * most pitching ones.
+   *
+   * Three props for the same reason the Schedule view takes two: they answer
+   * different questions and arrive at different times. `turnRange` is the
+   * control's own state (in the URL as `turn=`, held in App so leaving the view
+   * does not throw it away), and `turnIndex` is the **whole window** indexed —
+   * every day the server answered for, not the span the grid happens to be
+   * drawing — so the filter can name a day the Schedule view is not showing and
+   * both can be on at once. So a board can be *in* the filter with the index
+   * still null, which is exactly the state the button's own wait is drawn for:
+   * nothing narrows while the read is in flight.
+   */
+  turnRange: TurnRange | null;
+  onTurnRangeChange: (r: TurnRange | null) => void;
+  turnIndex: ScheduleIndex | null;
   /** Which of the three sets of players the board includes. Lifted to App with
    *  the other cross-board controls, and in the URL for the same reason the
    *  window is: it changes the population the table describes, not the
@@ -772,6 +796,11 @@ const windowLabel = (w: ResearchWindow) => (w === 'season' ? 'Season' : `${w}d`)
  */
 const PAGE_SIZE = 50;
 
+/** One empty map rather than a fresh one per render — the day strip's counts
+ *  are a memo dependency of nothing, but a new `Map` every render would make
+ *  every child holding it re-render for no change. */
+const NO_COUNTS: Map<string, number> = new Map();
+
 
 /** What each board remembers while you are looking at the other one. */
 export type BoardState = {
@@ -835,7 +864,7 @@ export interface ResearchUi {
    *  panel is part of where you were:
    *  coming back to find the Filters panel shut is the same surprise as coming
    *  back to find it empty. */
-  panels: { search: boolean; filters: boolean; columns: boolean };
+  panels: { search: boolean; filters: boolean; turns: boolean; columns: boolean };
   /** The condition being typed, deliberately *not* per board — it is a
    *  keystroke rather than a setting. The column it names does belong to one
    *  board, so `draftColumn` falls back when you cross to a board without it. */
@@ -868,7 +897,7 @@ export const freshResearchUi = (): ResearchUi => ({
     'team-batter': freshBoard(),
     'team-pitcher': freshBoard(),
   },
-  panels: { search: false, filters: false, columns: false },
+  panels: { search: false, filters: false, turns: false, columns: false },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
 });
@@ -982,6 +1011,9 @@ export function ResearchTable({
   onWindowChange,
   scheduleSpan,
   onScheduleSpanChange,
+  turnRange,
+  onTurnRangeChange,
+  turnIndex,
   matchupWindow,
   schedule,
   include,
@@ -1175,6 +1207,26 @@ export function ResearchTable({
    * narrowing the rows while their PA is off screen, precisely as it does when
    * the column is merely unticked.
    */
+  /**
+   * **The turn filter, where it is in force — and null everywhere else.**
+   *
+   * One derivation read by all six of its consequences (the column, the row
+   * test, the chip, `Clear all`, the empty state and the board signature),
+   * because the gate is four conditions deep and a copy of it that fell out of
+   * step would be a board narrowed by a control it is not drawing. It was:
+   * crossing to the batters left the range in force with the button gone, and
+   * the board read `0 of 166 batters` under an empty state blaming a threshold
+   * nobody had set.
+   *
+   * A turn is a fact about a pitcher, so the batting board and the thirty clubs
+   * are not narrowed by one; the range itself is kept, so coming back to the
+   * pitchers finds the days still picked.
+   */
+  const activeTurn =
+    turnRange && turnIndex && kind === 'pitcher' && !teams
+      ? { range: turnRange, index: turnIndex }
+      : null;
+
   const columns = useMemo(() => {
     if (schedule) return scheduleColumns(schedule, kind, teams, teams ? undefined : openFixture);
     const byKey = new Map(allColumns.map((c) => [c.key, c]));
@@ -1183,8 +1235,34 @@ export function ResearchTable({
     // window with no baseline — and dropping it is what those two rules
     // already do. A saved list keeps the key, so connecting a league puts the
     // column back where the reader had it.
-    return orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
-  }, [allColumns, orderedKeys, schedule, kind, teams, openFixture]);
+    const stats = orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
+    /**
+     * **The `Start` column leads them while the turn filter is on**, and it is
+     * the filter's own rather than a member of the vocabulary: it is not in
+     * `allColumns`, the picker never lists it and no threshold can be typed
+     * against it.
+     *
+     * A filtered row has to say *why it is on screen* — the argument the
+     * position cell already makes on this board — and `Starting Fri – Sun`
+     * narrows six hundred pitchers to forty while saying nothing about which of
+     * the three days any of them goes on, which is the half of the answer the
+     * reader is choosing between. It leads because it is the reason the row is
+     * there.
+     *
+     * Not in schedule mode, where the day columns already *are* this fact,
+     * drawn fourteen wide.
+     */
+    return activeTurn ? [turnColumn(activeTurn.index, activeTurn.range), ...stats] : stats;
+  }, [
+    allColumns,
+    orderedKeys,
+    schedule,
+    kind,
+    teams,
+    openFixture,
+    activeTurn?.range,
+    activeTurn?.index,
+  ]);
   /**
    * Which keys the sort's fallback will accept. Out of schedule mode that is
    * the columns on screen: hiding the one you were sorting on has to fall the
@@ -1203,8 +1281,21 @@ export function ResearchTable({
    */
   const visibleKeys = useMemo(
     () =>
-      new Set(schedule ? [...columns.map((c) => c.key), ...orderedKeys] : orderedKeys),
-    [schedule, columns, orderedKeys],
+      new Set(
+        schedule
+          ? [...columns.map((c) => c.key), ...orderedKeys]
+          : // **And `Start` is sortable while it is drawn**, which it has to be
+            // said explicitly for: this set is the reader's *saved list*, and the
+            // turn filter's column is in no list and no vocabulary. Left out, a
+            // press on its header set a `sortKey` this test rejected and the
+            // order fell straight back to the board's default — a header that
+            // lit nothing, which is the one thing a sort control must not be.
+            // Ordering by it is what the column is for: soonest turn first.
+            activeTurn
+            ? [TURN_KEY, ...orderedKeys]
+            : orderedKeys,
+      ),
+    [schedule, columns, orderedKeys, activeTurn],
   );
   /** The columns actually on screen, by key. The sort resolves through this
    *  first and `columnsByKey` second: in schedule mode the sorted column is a
@@ -1221,7 +1312,17 @@ export function ResearchTable({
   // Which of them is open lives in App's `ResearchUi` with everything else the
   // board is set to: a panel you left open is part of where you were, and this
   // component is unmounted the moment you look at anything else.
-  const { search: searchOpen, filters: filtersOpen, columns: columnsOpen } = ui.panels;
+  const {
+    search: searchOpen,
+    filters: filtersOpen,
+    turns: turnsOpen,
+    columns: columnsOpen,
+  } = ui.panels;
+  /** Whether the day strip is on screen — the panel's flag *and* a board a turn
+   *  is a fact about. It is one flag for the whole board (`ResearchUi.panels`),
+   *  so left open and carried to the batters it would go on counting a strip
+   *  nobody is drawing: 166 rows walked for a `Map` nothing reads. */
+  const turnStripOpen = turnsOpen && kind === 'pitcher' && !teams;
   const setPanel = (which: keyof ResearchUi['panels'], on: boolean) =>
     onUiChange((u) => ({ ...u, panels: { ...u.panels, [which]: on } }));
 
@@ -1723,6 +1824,11 @@ export function ResearchTable({
     // a new table and must not scroll one back to the top.
     searchFold(search),
     filters.map((f) => `${f.column}${f.op}${f.value}`).join(','),
+    // The days picked, which cut the population harder than anything else on
+    // this list — six hundred pitchers to forty. A reader who was two hundred
+    // rows into Wednesday's starters and presses Friday is looking at a
+    // different table, which is the whole of what this signature is for.
+    activeTurn ? `${activeTurn.range.start}..${activeTurn.range.end}` : '',
     activeSortKey,
     activeSortAsc,
   ].join('|');
@@ -1787,11 +1893,20 @@ export function ResearchTable({
     cancelBeat();
   }, [boardSignature]);
 
-  const visible = useMemo(() => {
+  /**
+   * The board as every control **but the turn filter** leaves it — the position
+   * pill, the search and the stat thresholds.
+   *
+   * It is a step of its own rather than one `filter` because the day strip's
+   * counts are measured against it: `12` under Friday has to be *the rows that
+   * press would leave*, which is this set and not the one the filter has
+   * already cut. See `turnCounts`.
+   */
+  const narrowed = useMemo(() => {
     // Folded exactly as the rows are, so `garcia` finds García and `García`
     // finds him too, and so `crow-armstrong` and `crow armstrong` are one query.
     const q = searchFold(search);
-    const out = boardRows.filter((r) => {
+    return boardRows.filter((r) => {
       if (posMatch && !posMatch(r)) return false;
       if (q && !(searchText.get(r) ?? '').includes(q)) return false;
       for (const f of filters) {
@@ -1809,6 +1924,38 @@ export function ResearchTable({
       }
       return true;
     });
+  }, [boardRows, search, searchText, posMatch, filters, columnsByKey]);
+
+  /**
+   * Who is due a turn in the days picked — **ids rather than a test run inside
+   * the sort's own filter**, because the test is a walk of the man's club's
+   * fixtures and the board is re-filtered on every letter typed into the search.
+   * Worked once per (board, range) and read as a `Set` afterwards.
+   *
+   * Null is the filter off, which is what leaves every row standing — and it is
+   * null while the window is still being read as well, which is rule 1 of the
+   * loading system: nothing narrows until there is something to narrow it by,
+   * and the only mark the wait leaves is the ball inside the control.
+   */
+  const turnIds = useMemo(() => {
+    if (!activeTurn) return null;
+    const ids = new Set<number>();
+    for (const r of narrowed) {
+      if (turnsInRange(activeTurn.index, r.teamId, r.id, activeTurn.range).length > 0) ids.add(r.id);
+    }
+    return ids;
+  }, [narrowed, activeTurn?.range, activeTurn?.index]);
+
+  /** How many of the board start on each day of the window — the number under
+   *  every chip in the strip, and worked only while that strip is open: it is a
+   *  walk of the whole board and nothing else reads it. */
+  const dayCounts = useMemo(
+    () => (turnStripOpen && turnIndex ? turnCounts(turnIndex, narrowed) : NO_COUNTS),
+    [turnStripOpen, turnIndex, narrowed],
+  );
+
+  const visible = useMemo(() => {
+    const out = turnIds ? narrowed.filter((r) => turnIds.has(r.id)) : narrowed;
 
     // The name column is resolved ahead of both maps because it is in neither:
     // it is not a stat, so the picker never offers it and the filter builder
@@ -1845,17 +1992,7 @@ export function ResearchTable({
       if (av === bv) return a.name.localeCompare(b.name);
       return (av - bv) * dir;
     });
-  }, [
-    boardRows,
-    search,
-    searchText,
-    posMatch,
-    filters,
-    activeSortKey,
-    activeSortAsc,
-    columnsByKey,
-    drawnByKey,
-  ]);
+  }, [narrowed, turnIds, activeSortKey, activeSortAsc, columnsByKey, drawnByKey]);
 
   /**
    * The rows actually mounted — a page of them, growing as the reader reaches
@@ -2516,6 +2653,42 @@ export function ResearchTable({
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
             </button>
             {/**
+             * **Starting — the third disclosure, and the pitching board's
+             * own.**
+             *
+             * It reads with Search and Filters because it does what they do:
+             * it takes *rows* out. What it selects on is the one thing this
+             * board is the right population for — a whole league of arms, and
+             * the question *who is starting on Friday* — which is why it is
+             * here and not on the roster table, where the twelve men you hold
+             * are already a list you can read down.
+             *
+             * **Not drawn on the batting board or on the clubs**, and not
+             * disabled there either: a turn is a fact about a pitcher, and a
+             * control whose whole subject has been swapped out is a setting
+             * lying about its own reach — the rule that takes Columns and Ranks
+             * off the bar in schedule mode, and the include buttons off the
+             * team reading. The range it holds survives the crossing, so coming
+             * back finds the days you had picked.
+             *
+             * **It stays on the bar in schedule mode**, where Columns and Ranks
+             * go, and that is the same rule read the other way: this narrows
+             * rows, and *a schedule of the men starting this weekend* is
+             * precisely the question the two controls answer together.
+             */}
+            {kind === 'pitcher' && !teams && (
+              <TurnButton
+                range={turnRange}
+                today={turnIndex?.today ?? null}
+                open={turnsOpen}
+                /* On with no index is the window still being read — App holds
+                   it and hands it down only once it has landed, exactly as the
+                   Schedule toggle knows its own wait. */
+                loading={turnRange !== null && !turnIndex}
+                onToggle={() => setPanel('turns', !turnsOpen)}
+              />
+            )}
+            {/**
              * **Watchlist sits after Filters, and it is the one control here
              * that adds players rather than taking them away.** It stays in this
              * group rather than joining the three include buttons it now
@@ -2587,7 +2760,11 @@ export function ResearchTable({
                     come to look like different controls. */}
                 <ColumnsButton
                   open={columnsOpen}
-                  count={columns.length}
+                  /* What the picker lists, which is not what is drawn while the
+                     turn filter is on: `Start` is that filter's own column and
+                     is in no vocabulary, so counting it here would put a `30` on
+                     a button whose panel has 29 things in it. */
+                  count={columns.length - (activeTurn ? 1 : 0)}
                   customised={!!columnKeys}
                   onToggle={() => setPanel('columns', !columnsOpen)}
                 />
@@ -2669,6 +2846,14 @@ export function ResearchTable({
       "control that changes size under the finger that pressed it" — the finger
       is on the condensed run, which rides a zero-height rail and does not
       move. */
+  /**
+   * What the turn filter's chip says, or null where there is nothing to say —
+   * the filter off, the window not yet read, or a board a turn is not a fact
+   * about. One test, read by the chip, by `Clear all` and by the empty state,
+   * so the three cannot come to disagree about whether the days are in force.
+   */
+  const turnChip = activeTurn ? turnRangeLabel(activeTurn.range, activeTurn.index.today) : null;
+
   const panels = (
     <>
       {searchOpen && (
@@ -2688,6 +2873,20 @@ export function ResearchTable({
             </button>
           )}
         </div>
+      )}
+
+      {/* The days, under the same head the other two panels open into — see the
+          note above `panels` for why every one of them is drawn there rather
+          than in the control set that opens it. Nothing is drawn while the
+          window is still out: the strip *is* the window's days, so there is no
+          shape to reserve, and the wait is marked inside the button. */}
+      {turnStripOpen && turnIndex && (
+        <TurnDays
+          index={turnIndex}
+          range={turnRange}
+          counts={dayCounts}
+          onChange={onTurnRangeChange}
+        />
       )}
 
       {filtersOpen && (
@@ -2756,8 +2955,31 @@ export function ResearchTable({
           include buttons keep no chips either, for the same reason this one
           no longer needs one — it is always on screen in the bar above,
           lit, with its count beside it. */}
-      {filters.length > 0 && (
+      {(filters.length > 0 || turnChip) && (
         <div className="research-chips">
+          {/* **The turn filter's chip leads the row**, and it is the one thing
+              on this board that says which days are in force once the strip
+              has scrolled away — `Starting` on the button says *that* the board
+              is narrowed, and `Fri 8/28 – Sun 8/30` is what it is narrowed to.
+              It is a chip rather than a count beside the button for the reason
+              the stat thresholds are: a sentence a number cannot say.
+
+              It reads before the thresholds because it is the coarser cut —
+              forty pitchers out of six hundred, where `K/9 ≥ 9` then works on
+              those forty. */}
+          {turnChip && (
+            <button
+              type="button"
+              className="research-chip"
+              onClick={() => onTurnRangeChange(null)}
+              title="Show every pitcher again, whatever day he starts"
+            >
+              Starting {turnChip}
+              <span className="research-chip-x" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          )}
           {filters.map((f) => (
             <button
               key={f.id}
@@ -2772,14 +2994,26 @@ export function ResearchTable({
               </span>
             </button>
           ))}
-          {/* Clears exactly what the row shows — the stat thresholds — and
-              nothing else. It used to clear the watchlist too, which was
-              right while that narrowed the table and is wrong now that it
-              widens it: a button for undoing filters must not be able to
-              take players *off* the board, still less empty it outright
-              with the three ownership buttons off. It also cleared the
-              Qualified toggle, which no longer exists. */}
-          <button type="button" className="research-clear" onClick={() => setFilters([])}>
+          {/* Clears exactly what the row shows — the stat thresholds, and the
+              days if they are among them — and nothing else. It used to clear
+              the watchlist too, which was right while that narrowed the table
+              and is wrong now that it widens it: a button for undoing filters
+              must not be able to take players *off* the board, still less empty
+              it outright with the three ownership buttons off. It also cleared
+              the Qualified toggle, which no longer exists.
+
+              The turn filter is in it because it is *in the row*: this button's
+              rule is that it undoes what the chips beside it say, and a chip
+              this button left standing would be a row that says two things and
+              clears one. It takes rows away like every other member. */}
+          <button
+            type="button"
+            className="research-clear"
+            onClick={() => {
+              setFilters([]);
+              if (turnChip) onTurnRangeChange(null);
+            }}
+          >
             Clear all
           </button>
         </div>
@@ -3007,8 +3241,26 @@ export function ResearchTable({
 
         {!loading && !error && visible.length === 0 && boardRows.length > 0 && (
           <div className="empty-state">
-            <p className="empty-title">No {teams ? 'clubs' : 'players'} match these filters</p>
-            <p>Loosen a threshold or clear a filter above.</p>
+            {/* **The days are named where they are what emptied it**, which is
+                this board's own rule about an empty state: it names its own
+                cause and the control that caused it. `narrowed` is everything
+                the reader set *except* the days, so a board that had rows
+                before the filter and none after it was emptied by the filter
+                and by nothing else — and on a run of free agents that is the
+                ordinary case rather than a corner, most days having nobody on
+                a board of forty men. The general message would send the reader
+                to loosen a threshold that is not what took the rows. */}
+            {turnChip && narrowed.length > 0 ? (
+              <>
+                <p className="empty-title">Nobody here starts {turnChip}</p>
+                <p>Pick other days under Starting, or clear it.</p>
+              </>
+            ) : (
+              <>
+                <p className="empty-title">No {teams ? 'clubs' : 'players'} match these filters</p>
+                <p>Loosen a threshold or clear a filter above.</p>
+              </>
+            )}
           </div>
         )}
 

@@ -714,6 +714,8 @@ at.
 
 Everything about what a day *says* is `components/schedule.tsx` and is shared: the index, the cell, the two counts, the header. The two tables draw the same `ScheduleCell`, so a day read on the roster and the same day read on the board cannot come to say two things — the rule `PlayerIdentity` and `PhotoStatus` already set for the blocks those tables share.
 
+**A third reader has since joined them, and it is not a view at all.** The research board's `Starting` filter — *show me the pitchers due to start on these days* — reads this module too: `buildWindowIndex` is the same index over every day the server answered for rather than over a span, and `turnsInRange` asks `startTierOn` per game, which is the test the `GS` column sums and the day cell draws its box with. So the filter and the grid cannot disagree about whether a man is up on Friday, which is the whole reason it reads the index instead of a start-day map of its own. `ScheduleIndex.span` carries a fourth value, `'window'`, for it — deliberately not a member of `ScheduleSpan`, nothing offering it and `sched=` never able to say it. The whole of that control is in **Client — the research board**, *The turn filter*; what is here is that the fact it selects on is this file's.
+
 #### It is a mode of the two tables, not a fourth page
 
 **This is the decision the feature turns on and it was a close one**, so both sides are worth writing down. A page was arguable: it asks a different question of a different span from a different upstream, which is exactly the test that keeps Roster, Feed and Research three pages rather than one. What settles it is the **research board**.

@@ -11348,6 +11348,152 @@ button.start-line:focus-visible {
 .research-clear:hover {
   color: var(--text);
 }
+
+/* ---- The turn filter ------------------------------------------------------
+   `Starting` — the pitching board's day picker, and the `Start` column it
+   splices in. The whole of the design is in `TurnPicker.tsx` and in
+   `schedule.tsx`'s *The turn filter*; what is here is the two shapes.
+
+   **The panel stacks where the other two lie down**, and it is the one panel on
+   this board that has to: `.research-panel` is a wrapping row because a search
+   field and a threshold builder are each one run of controls, where this is a
+   run of 28 chips with a line under it saying what the next press does. Wrapped
+   as flex items the strip and the foot would sit side by side at 1,920 and the
+   foot would be a caption 1,200px from the thing it captions. */
+.research-turn-panel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+/* `ScrollRow` bleeds out through its container's gutter and back in by the
+   bar's, which is right in `.view-tools` — the row it was written for — and
+   wrong in here: this one is inside the head's own padding, and the bleed put
+   the first and last chip 12px outside the box the panel is. Taken back at the
+   one call site that is not that row. */
+.research-turn-panel .tool-scroll {
+  margin-inline: 0;
+  /* **And it is held to the panel's width**, which `flex: 1 1 100%` does not do
+     here: that basis is the *main* axis, and this panel's main axis is the
+     column — so the strip took its width from its content and ran 1,453px wide
+     inside a 346px box at 390, clipped by the head with no scroller and no
+     arrows, which is 21 of the 28 days unreachable. Measured before → after at
+     390: the strip 1453.5 → 346.0 with the box scrolling and both arrows drawn. */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.turn-day-run {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+/* A day, in the two words `dayWords` writes it in and the count the board would
+   be left with. A small aimed target, so it keeps its hover at every width —
+   the app's rule scopes hover on pressable *surfaces*, not on pills. */
+.turn-day {
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 46px;
+  padding: 4px 7px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  line-height: 1.15;
+  cursor: pointer;
+}
+.turn-day:hover {
+  color: var(--text);
+}
+.turn-day:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.turn-day-wk {
+  font-size: 11px;
+  font-weight: 700;
+}
+.turn-day-date {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+/* The count reads as the chip's own value — the number of rows that press
+   leaves — so it takes the weight the two lines above it give up. */
+.turn-day-n {
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+/* Nought is drawn and drawn quietly. A day nobody on *this* board starts is a
+   fact about the board the reader has built, and blanking it would leave the
+   chip looking unmeasured rather than empty. */
+.turn-day-n.none {
+  color: var(--faint);
+  font-weight: 700;
+}
+/* In the range. It takes the lit-control clothing the whole bar already wears
+   (`.research-toggle.on`), rather than a selection color of its own. */
+.turn-day.on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.turn-day.on .turn-day-date,
+.turn-day.on .turn-day-n.none {
+  color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* The two ends of the run, drawn a shade harder — with a fortnight lit there is
+   nothing else to say where it starts and stops once the strip is scrolled. */
+.turn-day.edge {
+  border-color: var(--accent);
+}
+.turn-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* What the next press does, or what the last one did — the calendar's own foot,
+   which is where this line's wording comes from (`Pick the range end`). */
+.turn-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* The `Start` column's cell. Deliberately **not** folded onto `.sched-cell`:
+   that one is a single day of the grid and this is a list of days, and two
+   things that merely resemble each other are two things that will one day
+   differ — a change to the grid's cell must not reach a column that is not in
+   it. What they do share is the tier modifiers (`.sched-vs-projected` and
+   `.sched-vs-estimated`), which travel, exactly as they travel to the player
+   page's own next-start line. */
+.research-turn-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+/* **The day and the club on one line**, which is the board's own trade: width
+   is free here and height is not. A range of five days can hold two turns, and
+   at two lines apiece that is four in a 58px row; on one line each it is two,
+   and what it costs is ~40px of a table that already scrolls sideways at every
+   width. The same argument the opposing-starter line settles in the grid. */
+.research-turn {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.research-turn-opp {
+  color: var(--muted);
+  font-weight: 600;
+}
 /* ---- The head of the board ------------------------------------------------
    **What the table is, held above the table.** The control set scrolls away
    with the rows now (it is the pane's first child — see `ResearchTable.tsx`),
