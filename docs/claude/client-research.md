@@ -187,6 +187,47 @@ the reader asked for and nothing else. Crossing back down: 162 → 154 becomes
 162 → 112, and the row moves 226 → 234. Page-body overflow **0** throughout, the
 three rows 36px each, the chrome 146px at 390 and 142 at 1200.
 
+### The control set does not scroll the board
+
+**A sideways gesture that landed on this row moved the table under it**,
+reported exactly so. The row is a sticky child of `.research-scroll`, the pane
+the table scrolls in — pinned at `left: 0`, so it never moves — but it is *in*
+that pane, and the pane is the nearest scrollable ancestor of every pixel of it
+that is not inside one of the three runs. So a two-finger swipe or a thumb
+landing on the row's own 22px side padding, or in the 10px between two runs,
+scrolled the columns: the control set stood still and the board slid, which
+reads as dragging something that isn't there.
+
+**The runs were never the fault and are the proof of what the fix has to be.**
+`.tool-scroll-box` is `overflow-x: auto` with `overscroll-behavior-x: none`, so
+it is a scroll container and a gesture landing in one is spent there *whether or
+not it has anywhere to go* — which is why the middle run, which does not overflow
+at 390, swallowed the swipe as completely as the two that do. Measured at 1200
+with a 200px horizontal wheel, `.research-scroll.scrollLeft` after: **200 on the
+row's left padding, 200 on the strip above the runs, 0 inside a run**. The row
+takes the same pair and becomes the scroll container it was already behaving like
+the inside of. After: **0, 0, 0**, at 1200 and 390 alike.
+
+**`overscroll-behavior-x` alone would do nothing**, which is the trap: the row
+is not a scroll container, so there is no chaining to prevent — the pane is
+simply the box that scrolls. `overflow: hidden` is what interposes one.
+
+**The block axis is left to chain**, deliberately: the row has no scrollable
+overflow of its own, so a vertical wheel over it passes to the pane exactly as
+before. Measured: `scrollTop` **300 either way**, with the condensed run
+appearing at the stick and absent at the top — the sentinel sits in the gap above
+`.research-stick-line`, *inside* the row's padding box, so it is not clipped and
+goes on reporting. That was the one thing that had to be checked rather than
+assumed, `IntersectionObserver` reading through clipping ancestors.
+
+**And it is this pane's row alone, not the fold the neighboring selectors
+make.** The Roster's tools row and the League Rankings' each open a *projection
+key* out of their own box — four paragraphs hanging below the row — and a row
+that clips would clip it. Nothing in the board's control set leaves the row: its
+two dialogs are `Modal`s in a portal, and `Search` and `Filters` open rows
+*inside* the bar. Checked by clicking all **26** controls in the row and looking
+for a descendant outside its rect — **none**.
+
 ### The bar stops at its third row
 
 *(This moves one line and nothing else: the section above describes the

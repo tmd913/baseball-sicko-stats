@@ -848,6 +848,26 @@ a chart.
 
   **The one caller that opens this page before it has a game is the Game Log row**, whose read is still out, and the same latch covers it without painting anything wrong: the `pending` branch draws **no tab strip at all**, so there is nothing on screen to swap. Measured with that read held 1.5s, at t+400ms and t+900ms: **0 tab strips, 0 tabs, the block wait**, then at t+1300ms the game lands and the page is on **Innings** with its four inning bars. Setting the state during that render rather than in an effect is what keeps it to one paint — React re-renders on a set during render before it commits.
 
+  **The head closes itself while the outing is being read**, which is the same
+  fault the New plays page recorded and fixed — and it is on this page's own
+  loading state, which is exactly when a reader is looking at it. `.details-chrome`
+  carries **no bottom padding**, and is right not to: on the player page its last
+  child is the tab strip, and the active tab's 2px underline *is* the bar's bottom
+  edge. With no strip yet the last child is the head, whose `margin-bottom: 20px`
+  then **collapses straight through the box** and becomes the gap below it.
+  Measured at 1200 on a Game Log row's press with the day read held at 5s of
+  latency: the chrome is **66px** — 20 of top padding plus a 46px head plus
+  nothing — with the pitcher's name and the game line sitting flush on the
+  hairline. After: **82**, the head's own bottom at 66 and 16px of band under it,
+  and the loaded page **unchanged at 120** (a 34px strip whose own bottom *is* the
+  chrome's). One rule for both pages rather than a copy each —
+  `.details-chrome:not(:has(.details-tabstrip))`, they being the same object, a
+  details chrome whose last child is a head — and `.newplays-chrome` /
+  `.newplays-head` give up their two declarations to it. **16px rather than the
+  head's own 20**: the top padding is clearing a window edge and a rounded corner
+  where this is clearing text from a rule. See **Client — the Feed view**, *The
+  new-plays navbar has a bottom edge again*, for the first measurement.
+
   **Measured on the live 2026 season, all four routes**: a live outing (Blake Snell, `LAD 5–1 COL · Bottom 4`) opens on **Innings** with 4 inning bars from the Overview tab's game card, from a Game Log row and from the feed's own outing bar alike; a finished one (`STL 2–1 CIN · Final`) opens on **Line** from all three. Pressing `Line` on the live page sticks.
 
   **The sections are the card's own components** (`GameLine`, `OpponentSection`, `ArsenalSection`, `InningsList`), not a second rendering of the same numbers: a page that drifted from the card it replaces would be worse than the gap it fills, which is also why `PitcherCard` stays rather than being deleted for parts. What each gained is a **`bare`** mode. Inside a page opened *for* a section, under a tab strip that has just named it, a `.game-sub-bar` reading `Line` over the line is the same word twice — and a *collapsible* one offers to hide the only thing on screen. So `CardSection` has three modes: a toggle (the card), a static label (`defaultOpen`, which the old breakdown used), and no heading at all (`bare`). Measured on the page: **0 `.section-title`** elements.

@@ -42,6 +42,70 @@ given to a screen reader as words, since a colored circle names nothing.
 what was asked for: the tabs are drawn only on the League view, so the dot is a
 statement about a page you are already on.
 
+### And the same dot in the header, which reverses the sentence above it
+
+**The paragraph before this one is left as written and is the argument this
+one overturns.** It is right about the *pill* — a mark saying *there are moves
+you have not seen* is worth nothing beside a control that leads to a page where
+you can already see them — and that is exactly why the mark is worth having on a
+button whose whole errand is asking the question from somewhere else.
+
+`.tx-btn` sits in the header's brand cluster **beside the fantasy button**, and
+it goes straight to this tab. The fantasy button opens a menu of *controls over
+the app*; the League pill opens the league's page on whichever tab it was last
+on. Neither answers the errand a manager has several times a day — *has anybody
+done anything* — which from the Roster view was three presses: the pill, then
+this tab, and this tab is the third of three on a strip that scrolls at 320.
+
+**It is the same mark from the same comparison** (`unseenTransactions`), folded
+onto `.lg-tab-dot`'s own rule rather than given one that agrees today, so the two
+can never come to be two different reds. What differs is the corner: a 36px
+square has no label to keep clear of, so the dot sits 5px in from its own top
+right where the tab's sits 4px down and 5 in. Measured at 1200 with the marker
+rewound, the button is **36px wide with the dot and without it**, the dot lands
+inside its own rect, and its computed ground is `rgb(251, 139, 126)` —
+`--strikeout`, byte-identical to the tab's.
+
+**No `on` state**, where the fantasy button beside it has one. That button
+reports a *mode* — which list the roster views are reading — where this is a way
+to a page, and the app already says which page you are on twice over: the League
+tab is underlined and the Transactions tab is filled. A third mark for one fact
+is a mark that says nothing. The press does clear the matchup page first
+(`mup=`/`mt=`), a matchup being a page drawn *over* this view whatever tab is
+behind it — landing on the feed underneath one is landing behind it.
+
+**What it costs the header is a wrapped line below 390px, and that is paid
+rather than accepted** — see **Client**, *the header's control line*, where the
+twelve pixels and the three numbers that find them are measured.
+
+**Driven at 1200 with `seenTransactions` rewound to `ts: 1`:** on the **Roster**
+view the button reads `League transactions — new moves since you last looked`
+and wears the dot; on the League view the button's dot and the tab's are both
+drawn and are the same color; one press takes the URL to
+`?view=league&lt=transactions`, draws **43** rows, and clears **both**.
+
+### The feed is read for the whole app now, not for the League view
+
+**The read has moved out one level twice and both times for the same reason.**
+It was gated on this tab, on the reasoning that nobody who only looks at the
+scoreboard should pay for a 250-row activity feed; the dot overruled it, the tab
+row having to make its claim before the tab is opened. It is gated on nothing but
+`espnConnected` now, because the dot is in the **header** and the header is on
+every view — a mark that only tells the truth on the page it points at is a mark
+that says nothing.
+
+**Its half of the minute-long poll moved with it.** The poll's own timer is
+gated on the league rather than on the view; the three *other* reads in a tick —
+the scoreboard, the rankings and the projection — took a `view === 'league'`
+test each, so what a reader on the Roster view pays is one request a minute and
+nothing else. Measured on the live league with the browser sitting on the Roster
+view for 150s, counting requests by route: **transactions 1 at load, 2 at +60s,
+3 at +120s**, and `scoreboard`, `rankings` and `projection` **0 at every check**.
+
+Upstream it costs **nothing per reader**: the server's cache is keyed by league,
+so twelve leaguemates sitting on the app cost the one read a minute that one of
+them does.
+
 **Measured end to end against the live 12-team league**, at 1200×900: a marker
 from another league draws the dot on arrival; opening the tab clears it and
 writes `{leagueId: 60120, ts: 1786824052358}` — the feed's own newest date — and

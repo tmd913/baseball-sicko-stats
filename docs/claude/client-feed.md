@@ -1124,6 +1124,18 @@ form fits, so the head is 46 again and the bar is 82 like every other width. The
 `row-gap: 12px` that wrap needs stays declared: a two-day range will still wrap
 it, and the height is measured for exactly that reason.
 
+**Neither declaration is written on this page's own selectors any more, and
+nothing about this page changed.** The **outing page** turned out to be the same
+box in its *loading* state — a head with no tab strip under it, flush on the
+hairline, 66px — so the two numbers are one rule keyed on there being no strip
+(`.details-chrome:not(:has(.details-tabstrip))`, beside `.details-chrome`
+itself), which is this repo's fold-don't-restyle rule: they are the same object,
+a details chrome whose last child is a head. This page never has a strip, so the
+rule matches it at every width and the chrome still measures **82**. The two
+paragraphs above are left where they are, carrying the reasoning and the
+measurement that established it. See **Pitchers**, *The outing page's head closes
+itself while the outing is being read*, for the second measurement.
+
 **Bundle: 602.26 → 602.83 KB of JS** (179.31 → 179.45 gzipped) and **159.54 →
 160.17 KB of CSS** (28.57 → 28.67) — 0.57KB of JS for a second piece of state, a
 second parameter and two spans, and 0.63KB of CSS for the reservation grid, the

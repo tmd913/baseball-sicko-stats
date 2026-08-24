@@ -111,7 +111,12 @@ import { BackToTop } from './components/FloatControls';
 import { EspnSettings } from './components/EspnSettings';
 import { LeagueOnboarding } from './components/LeagueOnboarding';
 import { ThemeSwatches } from './components/ThemePicker';
-import LeagueView, { LEAGUE_TABS, ProjectedTools } from './components/LeagueView';
+import LeagueView, {
+  LEAGUE_TABS,
+  ProjectedTools,
+  boardProjectable,
+  showingProjected,
+} from './components/LeagueView';
 import LeagueMatchupView from './components/LeagueMatchup';
 import type { MatchupReading } from './components/LeagueMatchup';
 import type { LeagueTab } from './components/LeagueView';
@@ -1960,6 +1965,25 @@ export default function App() {
    * day disagree about whether the lens is drawn.
    */
   const matchupPageOpen = view === 'matchup' || (view === 'league' && matchupId != null);
+  /**
+   * **A surface that draws the projected lens is on screen**, which is now two
+   * of them: the matchup page above, and the League's **Scoreboard** tab, whose
+   * `Projected` button is back after having been taken away.
+   *
+   * The reversal is argued where the board draws it (`LeagueView`'s
+   * `Scoreboard`); what matters here is that `proj=1` has two surfaces to be
+   * about, so the three places that test it — the URL, the read, and the rule
+   * that puts a lens away when its page leaves — test the pair rather than one
+   * of them. Written once for the reason `matchupPageOpen` is written once.
+   *
+   * **Navigation state alone, never fetched data.** Whether the board can *act*
+   * on the lens is a fact about the week (`boardProjectable`) and decides only
+   * whether the button is drawn; putting it in here would mean a `?proj=1` link
+   * had its param stripped and its lens switched off in the frame before the
+   * board landed.
+   */
+  const projLensPage =
+    matchupPageOpen || (view === 'league' && leagueTab === 'scoreboard');
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
     // **`matchup` is the default**, which is the week a manager opens this tab
@@ -2365,9 +2389,11 @@ export default function App() {
   );
 
   useEffect(() => {
-    // **The matchup page is the only reader**, the Scoreboard's toggle having
-    // moved there — so a reader who never opens a card never pays for it.
-    if (!projected || !matchupPageOpen || !espnConnected) {
+    // **Two surfaces read it** — the matchup page and the board it is opened
+    // from — and nobody else does, so a reader who never presses `Projected` on
+    // either never pays for four league-wide boards joined against every roster
+    // in the league. See `projLensPage`.
+    if (!projected || !projLensPage || !espnConnected) {
       // **Cleared on the way out, not only on the way in.** Turning the lens off
       // while a read is in flight discards its answer — and a flag left true is
       // a ball spinning for ever on a button that is no longer doing anything.
@@ -2378,7 +2404,7 @@ export default function App() {
       return;
     }
     loadLeagueProjection();
-  }, [projected, matchupPageOpen, espnConnected, loadLeagueProjection]);
+  }, [projected, projLensPage, espnConnected, loadLeagueProjection]);
 
   /** A projection belongs to one matchup period, so stepping the arrows drops
    *  it rather than letting last week's figures be drawn over this one. */
@@ -2421,23 +2447,31 @@ export default function App() {
   }, [view, leagueTab, espnConnected, rankSpan, rankWeek, rankProjected, espnLeagueId]);
 
   /**
-   * The Transactions feed, read on the **first entry to the League view** —
-   * any tab of it — and then kept.
+   * The Transactions feed, read **once a league is connected**, whatever view
+   * the reader is on — and then kept.
    *
-   * It was gated on the Transactions tab, on the reasoning that nobody who
-   * only ever looks at the scoreboard should pay for a 250-row activity feed.
-   * What overrules that is the **dot on the tab itself**: "there are moves you
-   * haven't seen" is a claim this page has to be able to make *before* the tab
-   * is opened, and there is nothing else on the wire that carries it. So the
-   * read moves one level out and the cost is paid — one request per entry,
-   * answered from the server's own minute-long cache and gzipped down the wire.
+   * It has moved out one level twice, and both times for the same reason. It
+   * was gated on the Transactions *tab*, on the reasoning that nobody who only
+   * ever looks at the scoreboard should pay for a 250-row activity feed; the
+   * dot on that tab overruled it, "there are moves you haven't seen" being a
+   * claim the tab row has to make *before* the tab is opened. It is gated on
+   * nothing but the league now, because **the dot is in the header** — the
+   * button beside the fantasy one, which goes straight to the feed — and that
+   * button is on screen on every view. A mark that only tells the truth on the
+   * page it points at is a mark that says nothing.
+   *
+   * What it costs is one request per app boot for a reader with a league,
+   * answered from the server's own minute-long cache and about a tenth of its
+   * 86KB once `compression()` has had it. Upstream it costs **nothing per
+   * reader**: that cache is keyed by league, so twelve leaguemates cost the one
+   * read a minute that one of them does.
    *
    * Kept rather than re-read on every entry: the poll below is what keeps it
    * current, and `Refresh from ESPN` is what goes and asks when a reader knows
    * something has happened that a cache cannot.
    */
   useEffect(() => {
-    if (view !== 'league' || !espnConnected) return;
+    if (!espnConnected) return;
     if (transactionsRef.current) return;
     let canceled = false;
     setTransactionsLoading(true);
@@ -2458,9 +2492,9 @@ export default function App() {
     };
     // `transactionsRef` rather than `transactions`, deliberately: depending on
     // the state itself would re-run the effect on its own result and spin,
-    // which is the dependency rule the ownership read already states. And no
-    // `leagueTab`, which is the whole of the change above.
-  }, [view, espnConnected, espnLeagueId]);
+    // which is the dependency rule the ownership read already states. And
+    // neither `leagueTab` nor `view`, which is the whole of the change above.
+  }, [espnConnected, espnLeagueId]);
 
   /**
    * **Which matchup each team is in this period**, team id → matchup id — what
@@ -2527,10 +2561,12 @@ export default function App() {
    * been readable for ten minutes must not become a message because one poll
    * lost its connection. The next tick will say so if it is real.
    *
-   * The transactions feed is polled whatever tab is open, the other two only
-   * when they are, which is the same laziness the reads themselves take: what
-   * is not on screen is not worth a request — except the one thing the tab row
-   * itself draws.
+   * The transactions feed is polled whatever tab is open **and whatever view
+   * the reader is on**, the other three only where they are drawn, which is the
+   * same laziness the reads themselves take: what is not on screen is not worth
+   * a request — except the one thing a *mark* is drawn from. That mark used to
+   * be the tab's dot alone and is now the header button's as well, which is on
+   * screen on every view, so the exception travels with it.
    */
   const pollLeague = useCallback(() => {
     const quiet = (what: string) => (e: Error) =>
@@ -2541,7 +2577,7 @@ export default function App() {
     // this it would sit still for as long as it was open. The two rules the
     // poll already has are untouched — the week has to be live, and the read
     // goes through the server's own minute.
-    if ((leagueTab === 'scoreboard' || matchupId != null) && scoreboardLive) {
+    if (view === 'league' && (leagueTab === 'scoreboard' || matchupId != null) && scoreboardLive) {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
     }
     // **A projected card is half live figures**, so the half that is read
@@ -2552,13 +2588,13 @@ export default function App() {
     // it only shrinks as games are played, so the two drifted apart in a
     // direction nobody could see. Quiet, on success alone, and only where the
     // week can still move.
-    if (projected && matchupId != null && scoreboardLive) {
+    if (view === 'league' && projected && projLensPage && scoreboardLive) {
       // The loader carries its own failure handling — see `loadLeagueProjection`,
       // which logs and leaves the last answer standing, which is what `quiet`
       // does for the reads beside it.
       void loadLeagueProjection(true);
     }
-    if (leagueTab === 'rankings' && rankSpanLive) {
+    if (view === 'league' && leagueTab === 'rankings' && rankSpanLive) {
       // The lens rides along, or a tick would quietly swap a projected table
       // back to the live one a minute after the reader asked for it.
       api
@@ -2568,6 +2604,11 @@ export default function App() {
     }
     api.espnTransactions().then(setTransactions).catch(quiet('transactions'));
   }, [
+    // `view` is in the list because the three reads above are now gated on it:
+    // the tick runs off the League page for the feed's sake alone, and a
+    // scoreboard read fired from the Roster view would be a request for a board
+    // nobody is looking at.
+    view,
     leagueTab,
     matchupId,
     scoreboardLive,
@@ -2577,6 +2618,7 @@ export default function App() {
     rankWeek,
     rankProjected,
     projected,
+    projLensPage,
     loadLeagueProjection,
   ]);
 
@@ -2590,7 +2632,7 @@ export default function App() {
   });
 
   /**
-   * The poll itself, for as long as the League page is on screen.
+   * The poll itself, for as long as a league is connected.
    *
    * A hidden tab is skipped rather than polled — see `LEAGUE_POLL_MS` — and
    * becoming visible fires one immediately, so a reader who comes back to a tab
@@ -2598,7 +2640,7 @@ export default function App() {
    * hour's, and the Transactions dot is answering for now.
    */
   useEffect(() => {
-    if (view !== 'league' || !espnConnected) return;
+    if (!espnConnected) return;
     const tick = () => {
       if (!document.hidden) pollLeagueRef.current();
     };
@@ -2608,7 +2650,13 @@ export default function App() {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, [view, espnConnected, espnLeagueId]);
+    // **Not `view`**, which is the change the header button forces: the dot on
+    // it is drawn from the feed and is on screen wherever the reader is, so a
+    // timer that stopped the moment they left the League page would leave a mark
+    // answering for whenever they last looked. What the tick *does* off that
+    // page is one request — see `pollLeague`, where the other three reads are
+    // gated on the view rather than on the timer.
+  }, [espnConnected, espnLeagueId]);
 
   /**
    * The newest move in the feed, which is what "have I seen it" is asked
@@ -3472,7 +3520,7 @@ export default function App() {
     // Transactions has no figures to project — so anywhere else this would be a
     // param naming a lens that is not in force — and a parameter that cannot
     // describe the page it opens is a parameter that lies about it.
-    if (matchupPageOpen && projected) p.set('proj', '1');
+    if (projLensPage && projected) p.set('proj', '1');
     // Which matchup is open **over** the view, which is a page rather than a
     // tab — so it is written whatever tab is behind it, and a link carrying it
     // opens that page the way `player=` opens a player's.
@@ -4143,12 +4191,15 @@ export default function App() {
    * these end is a lens outliving the page it was pressed on.
    */
   useEffect(() => {
-    // The matchup page is where `proj=1` is drawn, written and read (see the
-    // URL sync and the projection's own effect, both gated on this same pair),
-    // so this is that page leaving the screen rather than being covered.
-    if (!projected || matchupPageOpen) return;
+    // The matchup page and the board it opens from are where `proj=1` is drawn,
+    // written and read (see the URL sync and the projection's own effect, both
+    // gated on this same test), so this is the reader leaving *both* of them
+    // rather than one being covered by the other — crossing to Rankings,
+    // Transactions or another view puts the lens away, and opening a card over
+    // the board does not.
+    if (!projected || projLensPage) return;
     setProjected(false);
-  }, [matchupPageOpen, projected]);
+  }, [projLensPage, projected]);
 
   useEffect(() => {
     // The tab, not the span: see above. The rankings read (up beside the
@@ -5201,6 +5252,32 @@ export default function App() {
      truncating rather than wrapping as they already did — and the ⓘ is in the
      same place at every width. The whole of what that costs is the range
      line's trailing `· so far` at 320; from 390 up nothing clips at all. */
+  /* **And the Scoreboard's own, in the same row.**
+     
+     It was the board's control, then the matchup page's alone, and it is both
+     again — the argument is in `LeagueView`'s `Scoreboard`. What decides its
+     *place* is the sentence directly below this one, written for the Rankings
+     tab and true word for word here: what this button changes is which numbers
+     the page draws, so it belongs with the other filters rather than on the
+     page, and the app already draws two `Projected` toggles in this row.
+     
+     Drawn only where the projection can act (`boardProjectable` — a categories
+     league on a week still being played), absent rather than disabled, and
+     lit off `showingProjected`, which is the same test the board swaps its cards
+     on. */
+  const leagueBoardProjected =
+    view === 'league' && leagueTab === 'scoreboard' && boardProjectable(scoreboard) ? (
+      <ProjectedTools
+        projection={projection}
+        categories={scoreboard?.categories.length ?? 0}
+        showing={showingProjected(projection, projected)}
+        projected={projected}
+        /* The undelayed flag, for the mark inside the control that started the
+           read — a press is owed no `WAIT_DELAY`. */
+        loading={projLoading}
+        onProjected={setProjected}
+      />
+    ) : null;
   const leagueRankProjected =
     view === 'league' && leagueTab === 'rankings' && rankings?.projectable ? (
       <ProjectedTools
@@ -5545,7 +5622,10 @@ export default function App() {
             page of the league, and a line that scrolls away is the wrong shape
             for the control a reader looks for first. */}
         <ScrollRow label="the view controls" className="view-tools-scroll">
-          {/* And whether it is drawn to the end of the week. */}
+          {/* And whether it is drawn to the end of the week — the board's lens
+              and the Rankings table's, never both at once, the two being one
+              tab apart. */}
+          {leagueBoardProjected}
           {leagueRankProjected}
           {rosterTools && (
             <>
@@ -6310,6 +6390,89 @@ export default function App() {
               </div>
             )}
           </div>
+          {/* **The way to the league's moves, from wherever you are.**
+
+              The fantasy button beside it opens a menu of *controls over the
+              app*; the League pill in the tab row opens the league's own page
+              on the tab it was last on. Neither is the errand this answers,
+              which is the one a manager has several times a day: *has anybody
+              done anything*. From the Roster view that was three presses — the
+              pill, then the Transactions tab, and the tab is the third of three
+              on a strip that scrolls at 320.
+
+              **The dot is the whole reason it is a button rather than an entry
+              in the menu beside it.** `client-league-transactions.md` records
+              the dot being kept off the League pill deliberately — *the tabs are
+              drawn only on the League view, so the dot is a statement about a
+              page you are already on* — and that is exactly the sentence this
+              reverses: a mark saying *there are moves you have not seen* is
+              worth nothing on the one page where you can already see them. It
+              is the same mark, drawn from the same comparison
+              (`unseenTransactions`), and pressing the button opens the tab that
+              clears it.
+
+              Gated on `espnConnected` like the League pill, and for its reason:
+              a button leading to a page that could only ever say *connect a
+              league* is chrome for a feature the reader hasn't got. */}
+          {espnConnected && (
+            <button
+              type="button"
+              /* **No `on` state**, where the fantasy button beside it has one.
+                 That one reports a *mode* — which list the roster views are
+                 reading — where this is a way to a page, and the app already
+                 says which page you are on twice over: the League tab is
+                 underlined and the Transactions tab is filled. A third mark for
+                 the same fact is a mark that says nothing. */
+              className="tx-btn"
+              /* The fact goes to a screen reader as words, since a colored
+                 circle names nothing — and it goes in the *label* rather than in
+                 a hidden child, an element with an `aria-label` taking no name
+                 from its contents at all. */
+              aria-label={
+                unseenTransactions
+                  ? 'League transactions — new moves since you last looked'
+                  : 'League transactions'
+              }
+              title={
+                unseenTransactions
+                  ? 'League transactions — new since you last looked'
+                  : 'League transactions'
+              }
+              onClick={() => {
+                setSettingsOpen(false);
+                setFantasyOpen(false);
+                // A matchup is a page drawn *over* this view whatever tab is
+                // behind it, so landing on the Transactions tab with one open
+                // would be landing behind it. The press names a page; it lets go
+                // of the one that was covering it.
+                setMatchupId(null);
+                setMatchupTeam(null);
+                setView('league');
+                setLeagueTab('transactions');
+              }}
+            >
+              {/* Two arrows passing, which is what a transaction is — the same
+                  thing `.lg-tx-swap`'s `⇄` says on a trade row, drawn at the
+                  weight the header's other icons are drawn at. */}
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 8h14" />
+                <path d="M14.5 4.5 18 8l-3.5 3.5" />
+                <path d="M20 16H6" />
+                <path d="M9.5 12.5 6 16l3.5 3.5" />
+              </svg>
+              {unseenTransactions && <span className="tx-dot" aria-hidden="true" />}
+            </button>
+          )}
         </div>
         {/* The icon cluster, in the header rather than over the list: these
             belong to the watchlist itself, not to whichever view is reading it,
@@ -6745,6 +6908,11 @@ export default function App() {
         <LeagueView
           tab={leagueTab}
           board={scoreboard}
+          /* The Scoreboard's own lens. The projection is read once and drawn
+             twice — this board and the matchup page opened from it — so the two
+             can never come to show different figures for one week. */
+          projection={projection}
+          projected={projected}
           onOpenMatchup={(id) => {
             // A card names the matchup and nothing more, so it opens on the
             // Summary in the middle — clearing any side a `mt=` link or an
