@@ -328,6 +328,82 @@ The badge lands at the same x as the matchup row's own (35 at 390, 213 at
 a line that was already 19px of text and padding — and the block itself is
 **84 → 69px**, taking a matchup card from **281.97 → 251.97**.
 
+### The Projected toggle is the board's again, and the matchup page's
+
+**The section below this one is left exactly as written, and this is the third
+turn of the same question.** The toggle was built on this board, given to the
+matchup page as well, then made that page's **alone** — and it is both again,
+which is what was asked for.
+
+**What made keeping both untenable was one press, and the button being here is
+what pays it.** The objection, in that section's own words: with the button gone
+from this head, a lens turned on over on the matchup page and carried back would
+leave ten dashed cards under a tag reading `Projected` with *nothing on screen to
+turn it off*. That is a fault of a lens with **one** control and **two**
+surfaces, not of a projected board; restore the control to both and the way out
+is wherever the way in is. `proj=1` is now honored by whichever of the two the
+reader is looking at, and neither can be reached in a state it cannot leave.
+
+**The other half of that section is a real distinction and is answered rather
+than overruled** — *a board is ten summaries scanned at a glance where a
+projection is a thing to study*. A manager scanning ten cards for *is anybody
+winning* is asking about now; one who presses `Projected` is asking the board's
+own version of the same question, and the page under a card is where it is broken
+down. Two depths of one question, not two pages' worth of it — and the dashed
+border is what keeps a reader from mistaking one for the other.
+
+**`projLensPage` is the one test the three places share** (`App.tsx`): the URL
+sync that writes `proj=1`, the read behind it, and the rule that puts a lens away
+when its page leaves the screen. It is `matchupPageOpen ||
+(view === 'league' && leagueTab === 'scoreboard')` — **navigation state alone,
+never fetched data**, which is the same trap the Rankings lens records: whether
+the board can *act* on the lens is a fact about the week and decides only whether
+the button is drawn, and putting it in this test would strip the param off a
+`?proj=1` link in the frame before the board landed.
+
+**The control is in the app's tools row, not on the page**, which is the
+Rankings tab's own arrangement one tab over and its argument word for word: what
+this button changes is *which numbers the page draws*, so it belongs with the
+other filters — and the app already draws a `Projected` toggle in that row, twice
+(the Roster's and the Rankings'). Drawn only where the projection can act
+(`boardProjectable` — a categories league on a week still being played), absent
+rather than disabled, and lit off `showingProjected`, which is the same function
+the board swaps its cards on so a lit control can never sit over unprojected
+numbers.
+
+**What came back.** `MatchupCard`'s `projected` prop and with it
+`.lg-matchup.lg-proj`'s dashed border and the `— projected for the whole week`
+ending on a cell's tooltip; `stateWord('projected')` on the bar's lead line; the
+head's dates running to `projection.end` rather than to today. What did **not**
+come back is `.lg-board-proj`, a class that never had a rule in the stylesheet —
+a mark nobody reads is a mark nobody misses.
+
+**Driven on the live 12-team league at 320, 390 and 1200**, week 19 live:
+
+| | face | cards | dashed | key | URL |
+| --- | --- | --- | --- | --- | --- |
+| at rest | `WEEK 19 · LIVE` · Aug 10 – Aug 23 | 10 | 0 | no | `?view=league` |
+| pressed | `WEEK 19 · PROJECTED` · Aug 10 – Aug 23 | 10 | **10** | yes | `&proj=1` |
+| pressed again | `WEEK 19 · LIVE` | 10 | 0 | no | `proj` dropped |
+
+Byte-identical at all three widths, with **0 page-body overflow** at each, and
+the key's own panel at 320 running **34 → 310** inside a 320px window. The
+figures do move under the lens — the first two cards' category rows read
+`74 28 86 13 .811 114 8 2.92 1.06 13` live and `75 28 87 13 .812 116 8 2.91 1.06
+14` projected. Crossing to **Rankings** puts the lens away and drops the param
+(`lt=rankings`, no `proj`), which is *a lens is put away when its page leaves*;
+opening a **card** with it on does not — `?view=league&proj=1&mup=110` opens the
+matchup page already projected, `.mup-proj` on its card and `Projected` in its
+tag, with **both** toggles lit. `?view=league&proj=1` as an inbound link opens
+lit and dashed.
+
+**What it costs the tools row is one line, which is the line the Rankings tab
+already pays**: `.view-tools` goes **60 → 96px** with the toggle drawn, at 320 /
+375 / 390 / 640 / 900 / 1200 / 1920 alike, the League tabs taking a centered line
+of their own so anything beside them breaks beneath. That row is in the page and
+scrolls away; the pinned chrome is **unchanged** at every one of those widths
+(148 at 320, 100 to 640, 102 above).
+
 ### The Projected toggle is the matchup page's, not this board's
 
 **This replaces seven sections, and the reversal is worth reading rather than
@@ -534,6 +610,58 @@ Driven against the built client and the live 2026 league at **390×844 and
 111.03 KB of CSS** (19.09 → 19.77 gzipped) — 9.1KB and 4.2KB raw, 2.6KB and
 0.7KB over the wire, for a view, a route, a component and the paragraphs above
 restated where the rules are.
+
+### The week bar is pinned, like every other statement of which days these are
+
+**It scrolled away, and it was the one such statement in the app that did.** The
+bar says which week the whole page is of; the cards under it are 252px each, so
+on a 390px phone the week is off the top of the screen by the third card and a
+manager reading down ten matchups has to go back up to find out which one they
+are of. That is the complaint that put the app's own dates against the chrome in
+the first place, made again one view over.
+
+**`.league-view > .date-bar`, not `.app >`**, and the child combinator is the
+whole of why it was left out: the bar is one box further down the tree, the tab
+being a component of its own (see *The period arrows live inside the Scoreboard
+tab*). That box is static and in normal flow, so it changes nothing about what
+the bar sticks *to* — a sticky box sticks to the nearest scrollport, which here
+is the window either way. It is folded onto `.app > .date-bar`'s own placement
+rule rather than given a second one that agrees today, and onto the ground, seam
+and shadow the three other placements share.
+
+**Two things had to follow it.** The unpinning rule — a window with no room for
+the chrome unpins it, and this goes with it — is the same sibling test one level
+longer (`.app-chrome[data-unpinned] ~ .league-view > .date-bar`), because
+`--chrome-h` is already 0 there and the bar would otherwise pin itself to the top
+of a 280px-tall window. And the **band**: `.view-tools:not(:has(+ .date-bar))`
+puts a 14px gap under the tools row where no bar follows, and an adjacent-sibling
+test cannot see past the wrapper — so the band was cut in two by a strip of page
+above a bar that then pinned itself against the chrome anyway. One more relative
+selector (`:not(:has(+ .league-view > .date-bar))`) rather than a class, which is
+the rule the two `:has()` tests beside it already follow. The other two tabs keep
+the gap: Rankings puts its row inside its own pane, and Transactions has no bar.
+
+**Measured at 1200×900, 390×844, 320×844 and 844×390**, at rest and scrolled
+900px:
+
+| | chrome | tools row | bar at rest | bar scrolled |
+| --- | --- | --- | --- | --- |
+| 1200 | 102 | y=102, 96 tall | y=198 | **y=102** |
+| 390 | 100 | y=100, 96 tall | y=196 | **y=100** |
+| 320 | 148 | y=148, 96 tall | y=244 | **y=148** |
+
+The bar is **54px** at every one, `position: sticky` with `top` resolving to the
+chrome's own measured height, `z-index: 39` (under the chrome's 41), the tools
+row's bottom margin **0**, and **0 page-body overflow** at each. At **844×280**,
+where the chrome cannot afford to pin, the chrome carries `data-unpinned` and the
+bar's computed `position` is **`static`** — which is the fallback doing its job
+rather than being inherited.
+
+**Bundle, for all five changes that landed together** — the board's lens, the
+header's transactions button and its dot, this bar, the outing page's head and
+the research row's scroll containment: **640.75 → 642.25 KB of JS** (190.59 →
+190.90 gzipped) and **168.93 → 169.51 KB of CSS** (30.34 → 30.45) — 1.5KB and
+0.58KB raw, 0.31KB and 0.11KB over the wire.
 
 ### Three tabs, because they are three questions
 

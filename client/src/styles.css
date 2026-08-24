@@ -19378,3 +19378,50 @@ html[data-theme='light'] .league-table thead th {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ---- The header keeps one line on a phone ---------------------------------
+   **A fourth square went into the brand cluster** — the way to the league's
+   moves, beside the fantasy button — and on a narrow phone it was the square
+   that broke the row. Measured with it and without, `.app-header` height at
+   320 / 360 / 375 / 390 / 640 / 1200: **84 → 90, 36 → 84, 36 → 84**, 36, 36, 36.
+   So from 390 up it costs nothing and below it costs a whole wrapped line of
+   *pinned* chrome, which is the most expensive kind: the search icon dropped to
+   a second row and every page under it started 48px lower.
+
+   The arithmetic, at 375: the row has **331px** inside the app's gutters and
+   wants **343** — a 295px brand, a 12px gap and the 36px search icon. Twelve
+   pixels, which is why this is three small numbers rather than a control moved
+   somewhere else.
+
+   **Measured after**, `.app-header` at the same six widths with the button in
+   place: **84**, 36, 36, 36, 36, 36 — one line from 360 up, and 320 back to the
+   height it was before the button existed rather than the 90 it had reached.
+   Page-body overflow is 0 at every one.
+
+   **The wordmark pays**, because it is the one thing in this row that is not a
+   control: `Statcast Sicko` gives up three points of type (18 → 15px, measured
+   121 → 101px wide) and the two gaps tighten by 2px each. That is 36px back,
+   against the 27 the narrowest common phone (360) needs. The mark, the gear,
+   the two league buttons and the search are all untouched at every width — a
+   target you aim at with a thumb is not where to find pixels.
+
+   **At the end of the file**, which is this stylesheet's oldest trap stated for
+   the fifth time: a media query adds no specificity, so a narrow block has to
+   sit after everything it overrides — `.app-header h1` and `.brand` are both
+   declared a thousand lines up, and the 640px block above this one restates
+   `.app-header`'s own gap. */
+@media (max-width: 430px) {
+  .app-header {
+    /* **`column-gap`, not `gap`** — the 640px block above sets this row's gap to
+       `--stack-gap`, which is the phone's own rhythm and is what separates the
+       two *lines* on the one width where this row still wraps (320). Writing the
+       shorthand here would take that with it. */
+    column-gap: 10px;
+  }
+  .app-header h1 {
+    font-size: 15px;
+  }
+  .brand {
+    gap: 6px;
+  }
+}
