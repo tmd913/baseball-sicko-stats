@@ -20,7 +20,43 @@ import {
   VS_TITLE,
 } from './schedule';
 import type { PitcherLookup, ScheduleIndex } from './schedule';
-import type { PlayerReport, ScheduleGame, ScheduleWindow, StartTier } from '../types';
+import type { PlayerReport, ScheduleGame, ScheduleWindow, SeasonStats, StartTier } from '../types';
+
+/**
+ * **What `SchedulePreview` actually needs to know about the man**, which is
+ * three fields rather than a whole `PlayerReport`: his id (the handedness map
+ * is keyed on it), the arm he throws with, and his platoon split.
+ *
+ * It is narrowed to those three because a **fourth** surface now opens this
+ * dialog and cannot produce the rest — the research board, whose rows are a
+ * league-wide leaderboard (`ResearchRow`) and not reports of anybody. Every
+ * roster-side caller passes its `PlayerReport` unchanged: the interface is
+ * structural, so a report already is one of these.
+ */
+export interface PreviewSubject {
+  id: number;
+  /** Pitchers only, and what the opposing lineup's accented row is read off. */
+  throws: string | null;
+  splitVsLeft: SeasonStats | null;
+  splitVsRight: SeasonStats | null;
+}
+
+/**
+ * A caller's platoon split when it has to be **read** rather than held — the
+ * `OppRead` twin for the other half of this dialog, and the same four states:
+ * nothing asked yet, a read in flight, a read that threw, or an answer (which
+ * may itself be two nulls, a man with no plate appearances against either
+ * hand).
+ *
+ * The roster's tables never need it: a `PlayerReport` arrives with the split on
+ * it. The research board always does — 450 rows, and the split of the one man
+ * somebody presses is not a thing to fetch 450 of.
+ */
+export type SplitsRead = {
+  splits?: { vsLeft: SeasonStats | null; vsRight: SeasonStats | null };
+  loading?: boolean;
+  error?: boolean;
+};
 
 /**
  * ---------------------------------------------------------------------------
@@ -400,11 +436,22 @@ export function SchedulePreview({
   isPitcher,
   tier,
   opp,
+  splits,
+  onRetrySplits,
   onLoad,
   onOpenDetails,
   onClose,
 }: {
-  report: PlayerReport;
+  report: PreviewSubject;
+  /** Where the caller has to **read** the split rather than already holding it
+   *  — the research board. Absent means `report` carries it, which is every
+   *  roster-side caller and the reason this is optional rather than the only
+   *  path. See `SplitsRead`. */
+  splits?: SplitsRead;
+  /** Ask for that read again. `onLoad` above is the *club's* board and takes a
+   *  club id; this one is about the man, and the two are deliberately not one
+   *  function taking a number that means whichever the branch is. */
+  onRetrySplits?: () => void;
   game: ScheduleGame;
   index: ScheduleIndex;
   teamId: number;
@@ -514,9 +561,11 @@ export function SchedulePreview({
                   rather than that half alone — the feed's Upcoming dialog
                   draws exactly this, for the reason `BatterSplitsTab` records:
                   a split is a comparison, and one side of it is a number. */}
-              <BatterSplitsTab
+              <SplitsBody
+                read={splits}
                 vsLeft={report.splitVsLeft}
                 vsRight={report.splitVsRight}
+                onRetry={onRetrySplits}
                 /* Null where neither club has named nor projected anybody —
                    the whole comparison unmarked, the player page's own Splits
                    tab. See the feed's `UpcomingRow`. */
@@ -537,6 +586,58 @@ export function SchedulePreview({
 }
 
 /**
+ * The platoon card, or the read it is still waiting on.
+ *
+ * **Three states rather than two, and the third is the one this exists for.**
+ * A caller that already holds the split (`read` absent) draws the card and
+ * nothing else has changed for it — that is every roster-side caller, and the
+ * branch is a pass-through. A caller that had to ask for it gets the app's own
+ * loading discipline inside the dialog, exactly as `OpponentRead` gives the
+ * pitcher's half: nothing under `WAIT_DELAY`, then the block wait, then a line
+ * with the retry the press has to offer, the row behind this dialog being
+ * `inert` while it is open.
+ *
+ * **The wait is drawn where the card will be, not over the dialog**, which is
+ * the rule *never over data*: the starter, the park and the projection note
+ * above it are already answered and stay answered while this lands.
+ */
+function SplitsBody({
+  read,
+  vsLeft,
+  vsRight,
+  highlight,
+  highlightTitle,
+  onRetry,
+}: {
+  read: SplitsRead | undefined;
+  vsLeft: SeasonStats | null;
+  vsRight: SeasonStats | null;
+  highlight: 'left' | 'right' | null;
+  highlightTitle?: string;
+  onRetry?: () => void;
+}) {
+  const waiting = useDelayedFlag(!!read && !read.splits && !read.error);
+  const card = (l: SeasonStats | null, r: SeasonStats | null) => (
+    <BatterSplitsTab vsLeft={l} vsRight={r} highlight={highlight} highlightTitle={highlightTitle} />
+  );
+  if (!read) return card(vsLeft, vsRight);
+  if (read.splits) return card(read.splits.vsLeft, read.splits.vsRight);
+  if (read.error) {
+    return (
+      <div className="details-error opp-status">
+        Couldn&rsquo;t read his splits.{' '}
+        {onRetry && (
+          <button type="button" className="ovw-link" onClick={onRetry}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+  return waiting ? <LoadingBlock>Reading his platoon splits</LoadingBlock> : null;
+}
+
+/**
  * **Whether a fixture has a preview worth opening**, the `ScheduleGame` twin of
  * `canPreview`. Asked by the Schedule row and by the summary table's Schedule
  * cell, so a cell that presses and a dialog with something in it cannot come
@@ -548,7 +649,7 @@ export function SchedulePreview({
  * being a different fact from an absence.
  */
 export function canPreviewFixture(
-  report: PlayerReport,
+  report: PreviewSubject,
   game: ScheduleGame,
   isPitcher: boolean,
   opp: OppRead | undefined,

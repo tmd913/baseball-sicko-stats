@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ScrollRow } from './TabStrip';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
@@ -13,11 +13,17 @@ import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import {
   defaultScheduleSpan,
   scheduleColumns,
+  startTierOn,
 } from './schedule';
 import type { ScheduleIndex, ScheduleSpan } from './schedule';
+import { SchedulePreview } from './PlayerSchedule';
+import type { SplitsRead } from './PlayerSchedule';
+import { useOpponentBoards } from './OpponentTable';
+import { api } from '../api';
 import {
   PlayerStatusContext,
   useFullPage,
+  useHandedness,
   usePlayerStatus,
   usePublishedHeight,
 } from '../hooks';
@@ -28,6 +34,7 @@ import type {
   ResearchIncludeKey,
   ResearchRow,
   ResearchWindow,
+  ScheduleGame,
   TrendWindow,
 } from '../types';
 import {
@@ -1051,6 +1058,93 @@ export function ResearchTable({
     () => new Map(allColumns.map((c) => [c.key, c])),
     [allColumns],
   );
+
+  /**
+   * ---------------------------------------------------------------------
+   * The game preview an opponent cell opens, in the Schedule view.
+   * ---------------------------------------------------------------------
+   *
+   * **The same dialog the roster table's Schedule cell opens**, because it is
+   * the same cell — `ScheduleCell` was built with an `onPreview` from the
+   * start and this board simply never handed it one, so `vs MIL` read as a
+   * press on twelve of your own men and as plain text on the other four
+   * hundred and fifty. One cell drawing two behaviors is the thing this file
+   * and `client-summary.md` spend their length preventing.
+   *
+   * It matters more here than it does there, and for the reason the board
+   * exists: the roster is men you already own, where the fixture answers *do I
+   * start him Thursday*; this is the whole league, where it answers *is this
+   * the week to pick him up* — a two-start turn against the club with the
+   * worst line against right-handers is exactly the case, and until now the
+   * board could show the `2` and not what the two were against.
+   *
+   * **What the board cannot hand the dialog is the man himself.** A row here
+   * is a `ResearchRow` — a leaderboard line, not a `PlayerReport` — so it has
+   * neither his throwing hand nor his platoon split. The hand comes off
+   * `HandednessContext`, which the board's own rows already read for the `L/R`
+   * under a name; the split is **read on the press** and held, exactly as the
+   * opposing club's board beside it is (`useOpponentBoards`), and the dialog
+   * draws the wait. Fetching 450 splits to make 450 cells pressable is the
+   * alternative, and it is not one.
+   */
+  const [fixture, setFixture] = useState<{ row: ResearchRow; game: ScheduleGame } | null>(null);
+  /* Keyed on whose preview is open, so a club line read for one man is dropped
+     when the next opens — `useOpponentBoards`'s own contract, and the summary
+     table holds it exactly this way. */
+  const { opps, load: loadOpponent } = useOpponentBoards(fixture?.row.id ?? 0);
+  /**
+   * His platoon split, by MLB id, read lazily and **kept for the board's
+   * lifetime** — which is the one place this departs from the club cache above.
+   * A club's line is scoped to the man whose dialog asked for it; a man's split
+   * is a fact about him, so scanning down a column and opening five batters and
+   * then the first one again should cost five reads rather than six.
+   *
+   * The mark comes off on failure so `Try again` is a retry rather than a
+   * no-op, the departure from *never mark a request answered before it is
+   * answered* that `useOpponentBoards` records: this is a press handler, not an
+   * effect with a cleanup that could discard the answer.
+   */
+  const [splits, setSplits] = useState<Record<number, SplitsRead>>({});
+  const splitsAsked = useRef<Set<number>>(new Set());
+  const loadSplits = useCallback((id: number) => {
+    if (splitsAsked.current.has(id)) return;
+    splitsAsked.current.add(id);
+    setSplits((p) => ({ ...p, [id]: { loading: true } }));
+    api
+      .splits(id)
+      .then((d) => setSplits((p) => ({ ...p, [id]: { splits: { vsLeft: d.vsLeft, vsRight: d.vsRight } } })))
+      .catch(() => {
+        splitsAsked.current.delete(id);
+        setSplits((p) => ({ ...p, [id]: { error: true } }));
+      });
+  }, []);
+  /**
+   * **The press.** The read the dialog will want is started here rather than
+   * inside it, which is what the Schedule row and the summary table both do:
+   * the dialog draws the three loading states, and starting the read on the
+   * press is what makes them short.
+   *
+   * A row with no club is not a fixture at all — the leaderboard files a
+   * handful of men under no team — and it opens nothing rather than opening a
+   * box that would have to say so.
+   */
+  const openFixture = useCallback(
+    (row: ResearchRow, game: ScheduleGame) => {
+      if (row.teamId === null) return;
+      if (row.kind === 'pitcher') {
+        const oppId = game.homeId === row.teamId ? game.awayId : game.homeId;
+        if (oppId) loadOpponent(oppId);
+      } else {
+        loadSplits(row.id);
+      }
+      setFixture({ row, game });
+    },
+    [loadOpponent, loadSplits],
+  );
+  /* His hand, for the accented row of the lineup a pitcher's dialog draws. The
+     board's rows already read this map for the `L/R` under a name, so the
+     dialog is asking the app what it has rather than fetching anything. */
+  const openHand = useHandedness(fixture?.row.id ?? 0);
   // **The list is the order**, which it was not until the columns became
   // reorderable: the keys used to be read into a `Set` and the table rendered
   // `allColumns.filter(...)`, so the arrangement was always the board's own
@@ -1082,7 +1176,7 @@ export function ResearchTable({
    * the column is merely unticked.
    */
   const columns = useMemo(() => {
-    if (schedule) return scheduleColumns(schedule, kind, teams);
+    if (schedule) return scheduleColumns(schedule, kind, teams, teams ? undefined : openFixture);
     const byKey = new Map(allColumns.map((c) => [c.key, c]));
     // `filter(Boolean)` rather than a fallback: a key with no column on this
     // board is one the board doesn't have — Ros% without a league, a trend
@@ -1090,7 +1184,7 @@ export function ResearchTable({
     // already do. A saved list keeps the key, so connecting a league puts the
     // column back where the reader had it.
     return orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
-  }, [allColumns, orderedKeys, schedule, kind, teams]);
+  }, [allColumns, orderedKeys, schedule, kind, teams, openFixture]);
   /**
    * Which keys the sort's fallback will accept. Out of schedule mode that is
    * the columns on screen: hiding the one you were sorting on has to fall the
@@ -2744,6 +2838,47 @@ export function ResearchTable({
 
   return (
     <div ref={fullRef} className={`research-view${isFull ? ' is-expanded' : ''}`}>
+      {/* **The fixture preview, drawn once for the whole board.** `Modal`
+          portals it, so where it sits in this tree decides nothing about where
+          it paints — only which state it can see, which is why it is here and
+          not in the cell that opened it. The same reasoning, and the same
+          placement, as the summary table's own.
+
+          `schedule` is tested as well as `fixture` because the mode can be
+          pressed off with the dialog open: the cell that raised this box would
+          be gone, and a preview of a fixture the board is no longer showing is
+          a box about nothing. */}
+      {fixture && schedule && fixture.row.teamId !== null && (
+        <SchedulePreview
+          report={{
+            id: fixture.row.id,
+            throws: openHand?.throws ?? null,
+            /* Never carried on a board row — `splits` below is where his
+               platoon line actually comes from, and this pair is what the
+               roster's callers fill instead. */
+            splitVsLeft: null,
+            splitVsRight: null,
+          }}
+          splits={fixture.row.kind === 'pitcher' ? undefined : (splits[fixture.row.id] ?? {})}
+          onRetrySplits={() => loadSplits(fixture.row.id)}
+          game={fixture.game}
+          index={schedule}
+          teamId={fixture.row.teamId}
+          name={fixture.row.name}
+          isPitcher={fixture.row.kind === 'pitcher'}
+          tier={startTierOn(schedule, fixture.game, fixture.row.teamId, fixture.row.id)}
+          opp={
+            opps[
+              fixture.game.homeId === fixture.row.teamId
+                ? fixture.game.awayId
+                : fixture.game.homeId
+            ]
+          }
+          onLoad={loadOpponent}
+          onOpenDetails={onOpenDetails}
+          onClose={() => setFixture(null)}
+        />
+      )}
       {/* **The whole page is in the pane**, and the pane is the one box on this
           view that scrolls (`.app.research-mode` is a viewport-tall flex column
           — see the stylesheet). Everything above the rows therefore scrolls

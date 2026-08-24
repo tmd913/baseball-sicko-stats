@@ -649,6 +649,21 @@ Schedule view has a `ScheduleGame`, which carries neither: the starter is
 the board is read on press. Folding them would be one component taking both
 shapes and using half of each.
 
+**A fifth caller narrowed what it asks about the man.** The research board's
+Schedule cell now opens this dialog too — the argument is in **Client — the
+research board**, under *The Schedule view on the board* — and a row there is a
+`ResearchRow`, a leaderboard line rather than a report of anybody. So
+`SchedulePreview` takes a `PreviewSubject`: the three fields it actually reads,
+which are his id (the handedness map is keyed on it), the arm he throws with,
+and his platoon split. The interface is structural, so a `PlayerReport` already
+is one and **no existing caller was edited** — the four surfaces above pass what
+they always passed. The board fills the hand from `HandednessContext` and reads
+the split on the press, which is what the optional `SplitsRead` prop is: the
+`OppRead` twin for the other half of this dialog, drawn by `SplitsBody` with the
+same three states `OpponentRead` gives a pitcher's half. Absent means the
+`report` carries the split, which is every roster-side caller and the reason it
+is optional rather than the only path.
+
 **The dialog is the table's, not the cell's.** One is open at a time, and the
 state that goes with it — the opposing club's board — is a read this table
 should make once per club rather than once per cell. So `SummaryTable` holds it
