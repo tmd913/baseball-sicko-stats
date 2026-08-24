@@ -877,10 +877,19 @@ export interface GameStatusView {
   score: string | null;
   /**
    * The same score before it was joined into a string, or null where there is
-   * none. It exists for **one** caller — the summary table's opponent cell,
-   * which has to wrap one of the two clubs in a link to its page and cannot do
-   * that to the middle of a finished string. Everything else reads `score`, and
-   * `score` is built from this, so the two can never disagree.
+   * none.
+   *
+   * It was cut out for **one** caller — the summary table's opponent cell, when
+   * that cell was to wrap one of the two clubs in a link to its page, which
+   * cannot be done to the middle of a finished string. **That door is now the
+   * whole line and opens the game's own page instead** (see
+   * `SummaryTable.tsx::OpponentCell`, which records why), so what the cell
+   * reads off this is the *test*: a null here is a game with no score yet, and
+   * that is which of the two shapes it is drawing.
+   *
+   * Kept in that shape rather than reduced to a boolean, because `score` is
+   * built from it and the two therefore cannot come to disagree — which is the
+   * property this was extracted for and is worth more than the field costs.
    */
   sides: ScoreSides | null;
   /** Right-hand label: start time, current inning, or "Final". */

@@ -31,7 +31,7 @@ async function fetchText(url: string): Promise<string> {
 
 // ---- Schedule ---------------------------------------------------------
 
-interface GameStatusFields {
+export interface GameStatusFields {
   abstractGameState?: string;
   codedGameState?: string;
   detailedState?: string;
@@ -90,7 +90,7 @@ export interface ScheduledGame {
  * imports this module — folding them would close an import cycle. They must
  * move together; each names the other.
  */
-function isPostponedStatus(s: GameStatusFields | undefined): boolean {
+export function isPostponedStatus(s: GameStatusFields | undefined): boolean {
   return (
     s?.codedGameState === 'D' ||
     s?.codedGameState === 'C' ||
@@ -1106,17 +1106,28 @@ interface BoxPitching {
 }
 
 /**
- * A game is "final" once it's over (Final/Game Over/Completed Early). Only final
- * games are safe to cache permanently — an in-progress game keeps accruing
- * plays, so its feed must be re-fetched rather than frozen at first read.
+ * A game is "final" once it's over (Final/Game Over/Completed Early).
+ *
+ * **Exported beside `isPostponedStatus`, and for the reason that one is
+ * restated rather than folded into `stateOf`:** these two comparisons are the
+ * app's reading of MLB's status keys, and a fourth copy of them is where the
+ * three that exist start to disagree. `game.ts` classifies its own feed's
+ * status and reaches them through here rather than writing the strings out
+ * again — the same economy `schedule.ts::stateOf` makes for `gameLog.ts`.
  */
-function isFinalFeed(feed: LiveFeed): boolean {
-  const status = feed.gameData?.status;
+export function isFinalStatus(status: GameStatusFields | undefined): boolean {
   return (
     status?.abstractGameState === 'Final' ||
     status?.codedGameState === 'F' ||
     status?.codedGameState === 'O'
   );
+}
+
+/** …and the same question of a feed. Only final games are safe to cache
+ *  permanently — an in-progress game keeps accruing plays, so its feed must be
+ *  re-fetched rather than frozen at first read. */
+function isFinalFeed(feed: LiveFeed): boolean {
+  return isFinalStatus(feed.gameData?.status);
 }
 
 /**

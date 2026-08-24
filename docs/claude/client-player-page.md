@@ -2066,9 +2066,12 @@ what is left of the sideways jump is the width of two glyphs. A **free agent**,
 whom MLB files under no club, keeps the reserved space and gets no link — the
 join-to-null rule, unchanged.
 
-**And the club's `Back` now comes back here**, which is `App`'s `teamReturnKey`:
-see `client-team-page.md`, *One page at a time*, where the one step of memory is
-argued against the stack it is not.
+**And the club's `Back` now comes back here**, which was `App`'s
+`teamReturnKey` and is `pageStackRef` now: see `client-team-page.md`, *One page
+at a time*, where the one step of memory that this was and the route it became
+are both argued. The behavior from this page is unchanged — press the chip, then
+`Back`, and you are back on his page — and what changed is that the step no
+longer runs out one door further on.
 
 **Bundle**, for the move, the return and the trend cut together: JS **623,989 →
 624,552** raw (183,900 → **184,007** gzipped), CSS **165,315 → 165,439** (29,654

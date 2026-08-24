@@ -4405,6 +4405,482 @@ body {
   white-space: nowrap;
 }
 
+/* **A played game's result**, on the club page's Results tab. The chip is
+   `.glog-res` — the game log's own, folded onto rather than restyled: it is the
+   same object (a result beside an opponent) and that rule already carries the
+   four tones and the argument for each of the colors. What is here is only the
+   slot it sits in, which is this row's rather than a table cell's: pushed to
+   the far end by the same auto margin the roster row's hand takes, so a column
+   of a hundred and thirty results is scannable down its right edge. */
+.team-result-mark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+/* The half-inning beside a live chip — `Top 6`. Outside the chip rather than
+   in it, because the chip is the *result* and this is where the game has got
+   to, and a chip reading `Live 3-1 Top 6` is three facts in one pill. */
+.team-result-half {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hit);
+}
+
+/* ---- The game's page ----------------------------------------------------
+   Everything below is `GamePage`, and there is deliberately little of it for
+   the reason the club's page has little: it is the same shell
+   (`.details-view`, `.details-chrome`, `.details-head`, `.details-tab`) with a
+   game in it, its lists are the Projected Starts block's own rows
+   (`.start-row` / `.start-line`), its box score is folded onto the three wide
+   tables' rules above, and its status chip is `.game-status`, which the summary
+   table and the schedule grid already draw.
+
+   What is here is the four things a *game* has that neither of the other two
+   subjects has: two clubs in the head instead of one portrait, a line score, a
+   play stream, and a footnote list.
+
+   **The head is two subjects with the score between them.** A row rather than
+   `.details-id`'s photo-beside-text column, because there is no one subject to
+   name: the crests are `TeamPhoto` at a size this box sets through
+   `--row-photo` rather than by cutting a second circle, and each is a door to
+   that club's page. */
+.game-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.game-head-line {
+  /* 34 rather than the row's 42: two of them plus two scores and a separator
+     have to fit a phone beside the back button, and the head is pinned chrome —
+     every pixel it takes is a pixel off every tab under it. */
+  --row-photo: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.game-head-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+/* **The home club is written inwards** — crest, abbreviation, runs on the away
+   side and the mirror of it on the home one — so the two scores meet in the
+   middle either side of the separator and a reader's eye lands on the pair
+   rather than hunting the ends of a line. */
+.game-head-side-home {
+  flex-direction: row-reverse;
+}
+.game-head-abbr {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.game-head-runs {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text);
+}
+/* `@` before first pitch and `–` once there are two numbers. Faint, because it
+   is punctuation between the two things being read rather than one of them. */
+.game-head-vs {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--faint);
+}
+/* The line under it: the state, the day and the ballpark. Folded onto nothing —
+   `.details-sub` is a column of chips under a name and this is a row of prose
+   under a score — but it takes that block's own gaps so the two heads have one
+   rhythm. */
+.game-head-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+  min-width: 0;
+}
+.game-head-when {
+  color: var(--muted);
+}
+.game-head-venue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* **The line score.** Its own table rather than a fold onto the three wide
+   ones, and that is the one place this page cuts its own: those are read *down*
+   a column of a hundred rows and this is two rows read *across* twelve narrow
+   ones, so every declaration they carry for the first — the 13px cell padding,
+   the zebra stripe, the sticky first column, the minimum column width — is
+   wrong here or does nothing. Two objects that would agree about a font. */
+.game-ls-scroll {
+  overflow-x: auto;
+  /* The x axis alone, for the reason `.game-box-scroll` records at length: this
+     box scrolls sideways in an ordinary scrolling page, and `overscroll-behavior:
+     none` on a pane whose vertical scrollHeight equals its clientHeight declines
+     to pass a wheel on to the page behind it. */
+  overscroll-behavior-x: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  /* **Shrink to the innings rather than to the page.** Every other table in
+     this app is `width: 100%` because every other one is a row of stat columns
+     that wants the slack; a line score is twelve narrow numbers, and at 1200px
+     `100%` spread them 100px apart — a picture read across, drawn so wide the
+     eye cannot. `max-content` capped at the box is what gives it both readings:
+     compact where there is room, and scrolling in its own box on a phone, which
+     is the rule every wide thing here follows. */
+  width: max-content;
+  max-width: 100%;
+}
+.game-ls-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.game-ls-table th,
+.game-ls-table td {
+  padding: 9px 0;
+  text-align: center;
+  white-space: nowrap;
+}
+.game-ls-table thead th {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--faint);
+  border-bottom: 1px solid var(--border);
+}
+/* The club, pinned to the left as the innings scroll under it — the same rule
+   `.glog-date` states one table over, and for the same reason: a row a few
+   innings in belongs to no club in particular. */
+.game-ls-team {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 1%;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  text-align: left !important;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: var(--pin-edge);
+}
+.game-ls-table thead .game-ls-team {
+  z-index: 2;
+}
+.game-ls-cell {
+  min-width: 30px;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  color: var(--muted);
+}
+/* **The cell is the door onto that half-inning's plays**, and the button fills
+   it rather than wrapping the digits: one or two characters is not a target,
+   and the cell around them is 30px by the row's height, which is.
+
+   No underline and no color of its own — a line score is a picture, and a grid
+   of eighteen dotted numbers would be a picture of the links rather than of the
+   game. What says it presses is the pointer and, where there is one, the hover
+   tint; the tooltip names what opens. That is `.sum-name-link`'s own bargain,
+   struck where the type cannot change. */
+.game-ls-door {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+@media (hover: hover) {
+  .game-ls-door:hover {
+    background: var(--panel-2);
+    color: var(--text);
+  }
+}
+.game-ls-door:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* R, H and E, which are the reading — the innings are how it got there. Set
+   off by a rule down the left rather than by a color, `color` being spent on
+   state in this app and a total not being one. */
+.game-ls-total {
+  color: var(--text);
+  font-weight: 800;
+  min-width: 34px;
+}
+.game-ls-table tbody .game-ls-total:first-of-type,
+.game-ls-table thead .game-ls-total:first-of-type {
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+}
+.game-ls-table tbody tr:first-child th,
+.game-ls-table tbody tr:first-child td {
+  border-bottom: 1px solid var(--border);
+}
+
+/* **The decisions** — W, L and S beside the three men. A row of pairs rather
+   than a table: there are at most three of them and each is one label and one
+   name. */
+.game-decisions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.game-decision {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+/* The letter, in the fully-round label pill this app gives every one-word
+   state. The three take one ground rather than three: a win and a loss are the
+   same *kind* of fact here (who is credited with the game) where on a season
+   row they are opposite outcomes — this is the box score's own W/L/S, not a
+   result. */
+.game-decision-role {
+  min-width: 20px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-2);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* **The footnotes**, as MLB writes them. A definition list because that is what
+   they are — a label and a sentence — and the label is held to a column so a
+   reader can run their eye down the terms. */
+.game-info {
+  display: grid;
+  grid-template-columns: minmax(90px, max-content) 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 12.5px;
+}
+.game-info-row {
+  display: contents;
+}
+.game-info-label {
+  font-weight: 700;
+  color: var(--muted);
+}
+.game-info-value {
+  margin: 0;
+  color: var(--prose);
+  /* These are MLB's own sentences and some of them are long (the umpires, the
+     pitch counts of six relievers), so they wrap rather than pushing the page
+     sideways — the rule every wide thing in this app follows in the other
+     direction, a table scrolling in its own box. */
+  overflow-wrap: anywhere;
+}
+
+/* **The box score.** The table itself is folded onto the three wide ones above;
+   what is here is the name column, which is this table's own — a slot number, a
+   name, and the position or the decision after it. */
+.game-box-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 1%;
+  text-align: left;
+  font-weight: 700;
+  background: var(--bg);
+  box-shadow: var(--pin-edge);
+}
+.game-box-table thead .game-box-name {
+  z-index: 3;
+  background: var(--panel-2);
+}
+.game-box-table tfoot th,
+.game-box-table tfoot td {
+  font-weight: 800;
+  background: var(--panel-2);
+  border-bottom: none;
+}
+.game-box-table tbody td,
+.game-box-table tfoot td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: clamp(28px, 4.4vw, 46px);
+}
+/* **The slot number is a reserved box rather than a printed one.** It is drawn
+   only on the man who *started* the slot — repeating it down a substitution
+   would file a pinch hitter as a tenth hitter — and the width is held on every
+   row all the same, which is what keeps the names in one column instead of
+   stepping left wherever the number is absent. The same rule the app applies to
+   every control that changes size under the reader: reserve the box, don't move
+   the page. */
+.game-box-slot {
+  display: inline-block;
+  width: 14px;
+  margin-right: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+  text-align: right;
+}
+.game-box-pos {
+  margin-left: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+/* `(W, 10-5)` — MLB's own string, and the only color in this table. That is
+   the point rather than an accident: `color` is spent on state, and who is
+   credited with the game is one.
+
+   **Three tones, on the game log's own two tokens.** It took `--hit` for all of
+   them for a commit, which put a *loss* in the app's live green — the one line
+   of the table where the reader is being told the pitcher lost. A save and a
+   hold take neither color, being credits rather than results; a third would say
+   they were a third outcome. See `GamePage.tsx::decisionTone`. */
+.game-box-decision {
+  margin-left: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.game-box-decision-w {
+  color: var(--hit);
+}
+.game-box-decision-l {
+  color: var(--strikeout);
+}
+/* A substitute, indented under the man he came in for. The indent is the slot
+   box's width plus its gap, so his name starts where the man above him did and
+   the two read as one slot rather than two rows. */
+.game-box-sub .game-box-slot {
+  width: 24px;
+}
+
+/* Who did not play, under each club's two tables. `.game-roster` groups a
+   heading with its list; the rows are the roster tab's own. */
+.game-roster + .game-roster {
+  margin-top: 14px;
+}
+.game-roster-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* **A name, wherever this page writes one.** Folded onto nothing and declaring
+   the same four things `.team-roster-name` and `.team-game-arm` declare, for
+   the reason those two are separate from each other: each inherits the type of
+   the line it sits in, and these lines are a table cell, a sentence and a list
+   row. What they share is the bargain — the type is the line's, and only the
+   hover and the pointer say it presses. */
+.game-name {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+@media (hover: hover) {
+  .game-name:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+}
+.game-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* **Which club's box score, and which plays.** Both are two tabs in
+   `.view-switch`'s own shape — the control the team page pins over its own two
+   halves — so the row is only the box it sits in.
+
+   **The gap under it is the tab's own block rhythm**, not a number of its own:
+   `.ovw-block` puts 24px under every block it draws, so a control row sitting
+   at 4px read as part of the heading below it rather than as the row above it —
+   on the Plays tab the switch sat on top of `TOP 1ST`, which is a control and a
+   heading reading as one line when they are two different kinds of thing.
+   Measured on the rendered page: two half-inning blocks are **24px** apart, and
+   this row is now the same distance from the first of them. */
+.game-box-tools,
+.game-plays-tools {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 24px;
+}
+/* **The play stream is the feed's own items**, so there is nothing here to
+   style: `.feed-item` and its rails, `.feed-item-head`, the plate-appearance
+   card and the clip are all the stream's, drawn by `FeedItem`. What is this
+   tab's own is the half-inning heading above each run of them, the gap between
+   the items inside one, and the `Show more` at the foot.
+
+   **There were ten `.game-play*` rules here** — a sentence, a running score and
+   a pitcher line, which is how this tab drew a play before it drew feed items,
+   and which the Overview's *Scoring Plays* block went on using afterwards. That
+   block is gone (the Plays tab's `Scoring` cut is the same reading, in the same
+   items, one tab along), so the rules went with their last reader.
+
+   **The half-inning block is not a scroll target.** It was, while a line-score
+   cell jumped into this tab and scrolled to it — that door opens a dialog now
+   (`GamePage.tsx::HalfInningDialog`), so the `scroll-margin-top` went with the
+   jump it was clearing the pinned chrome for. */
+/* The club that was batting, beside the half-inning. Inside the heading rather
+   than beside it, because "Top 5th" and "ATL batting" are one statement — and
+   at the heading's weight it would compete with the innings a reader is
+   scanning for. */
+.game-half-club {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+}
+/* The feed's own list inside a half-inning block. It takes `.feed-list`'s
+   rhythm and gives back the app gutters the block already holds, so the cards
+   line up with the heading above them rather than with the page. */
+.game-play-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
 /* **The portrait and the club under it**, one column at the head of a player's
    page. The column is what lifts the picture: 64 + 12 + 25 = 101 is taller than
    the three lines of name, position and rostered share beside it (91), so
@@ -5086,6 +5562,7 @@ button.start-line:focus-visible {
 .glog-scroll,
 .stats-scroll,
 .opp-scroll,
+.game-box-scroll,
 .league-scroll {
   overflow-x: auto;
   /* Both axes: this pane scrolls sideways always and vertically in
@@ -5099,9 +5576,29 @@ button.start-line:focus-visible {
   border-radius: var(--radius);
   background: var(--bg);
 }
+/* **…in the sideways axis alone, on the one pane that scrolls in one axis.**
+   `overscroll-behavior: none` above is `none` in *both*, which is right for the
+   four panes that are themselves the vertical scroller — the Game Log tab
+   reshapes the overlay so that `.glog-scroll` is one — and wrong for a box
+   score, which sits in an ordinary scrolling page and scrolls sideways only.
+
+   The trap is that a box with `overflow-x: auto` computes `overflow-y: auto`
+   too, so it *is* a vertical scroll container with `scrollHeight ===
+   clientHeight`: it is at its boundary the instant a wheel arrives, and `none`
+   then declines to pass the scroll on. Reported as **"box score page isn't
+   scrollable"** and reproduced on the rendered page — `.details-view` at
+   2862/900 with a wheel over the table doing nothing, `.glog-scroll` reading
+   `auto/auto osb=none sh=571 ch=571`. The x axis is still `none`, which is what
+   the rule was for: a flick that runs off the end of a wide table must not
+   spring the page behind it. */
+.game-box-scroll {
+  overscroll-behavior: auto;
+  overscroll-behavior-x: none;
+}
 .glog-table,
 .stats-table,
 .opp-table,
+.game-box-table,
 .league-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -5121,7 +5618,8 @@ button.start-line:focus-visible {
    every phone width there is. */
 .glog-table,
 .stats-table,
-.opp-table {
+.opp-table,
+.game-box-table {
   /* Named rather than repeated, because two rules read it now: the cells
      below, and the Stats tab's sort buttons, which zero the `th`'s padding and
      have to re-apply exactly this gutter or a header would line up differently
@@ -5153,7 +5651,9 @@ button.start-line:focus-visible {
 .stats-table th,
 .stats-table td,
 .opp-table th,
-.opp-table td {
+.opp-table td,
+.game-box-table th,
+.game-box-table td {
   padding: 13px var(--row-gutter);
   line-height: 1.35;
   white-space: nowrap;
@@ -5165,7 +5665,9 @@ button.start-line:focus-visible {
 .stats-table tbody tr:nth-child(even) td,
 .stats-table tbody tr:nth-child(even) .glog-date,
 .opp-table tbody tr:nth-child(even) td,
-.opp-table tbody tr:nth-child(even) .glog-date {
+.opp-table tbody tr:nth-child(even) .glog-date,
+.game-box-table tbody tr:nth-child(even) td,
+.game-box-table tbody tr:nth-child(even) th {
   background: var(--row-alt);
 }
 /* **A row is a press now, so it looks like one.** It carried no hover tint for
@@ -5207,7 +5709,8 @@ button.start-line:focus-visible {
 }
 .glog-table thead th,
 .stats-table thead th,
-.opp-table thead th {
+.opp-table thead th,
+.game-box-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
   position: sticky;
@@ -9669,6 +10172,7 @@ button.start-line:focus-visible {
 .research-scroll,
 .glog-scroll,
 .stats-scroll,
+.game-box-scroll,
 .league-scroll {
   margin-left: calc(-1 * var(--table-bleed, 0px));
   margin-right: calc(-1 * var(--table-bleed, 0px));
@@ -12147,6 +12651,29 @@ button.start-line:focus-visible {
 .lg-tx-more:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* **The game page's own `Show more`**, at the foot of the innings drawn so far.
+   Folded onto `.feed-more` above rather than restyled, being the same button
+   the roster's stream ends with — what it needs of its own is only its
+   **place**.
+
+   That rule centers itself with `align-self`, which works because the feed's
+   stream is a flex column; `.details-overview` is not one, so the button sat at
+   the left margin under a column of cards. `margin-inline: auto` on a
+   `width: fit-content` block is the same result without asking the parent to be
+   anything.
+
+   **It has to sit after `.feed-more`**, which is the ordering rule this
+   stylesheet states for media queries biting without one: the two selectors are
+   of equal specificity and `.feed-more`'s `display: inline-flex` and
+   `margin-top` would otherwise win by coming later. Written up in the game
+   page's own section first, it drew flush left — measured at 1200, 16px from
+   the left edge and 1031 from the right. */
+.game-plays-more {
+  display: flex;
+  width: fit-content;
+  margin: 24px auto 0;
 }
 .feed-more-count,
 .lg-tx-more-count {

@@ -27,10 +27,14 @@ half under a chevron, a ladder of overlays unwinding whole on one keypress.
 A second page wants all thirty of those lines and none of the 1,969 around them.
 So they moved into **`DetailsShell`**, which takes:
 
+(**There is a third page on it now** — a game's, `client-game-page.md` — which
+is the extraction paying for itself a second time: it wanted every one of these
+lines and wrote none of them.)
+
 | prop | what it is |
 | --- | --- |
 | `tab` | which tab is showing — the scroll reset and the strip's scroll-into-view |
-| `resetKey` | what makes this a *different page* — a player key on one caller, a club id on the other |
+| `resetKey` | what makes this a *different page* — a player key on one caller, a club id on another, a `gamePk` on the third |
 | `head` | whatever names the subject, drawn beside the back button |
 | `chromeExtra` | anything pinned between the head and the strip — one caller has one |
 | `tabs` | the `role="tab"` buttons themselves |
@@ -62,7 +66,7 @@ behavior it had, from a different file.
 
 ## What the page is, and what it is not
 
-Six tabs: **Overview · Schedule · Roster · Splits · Park · Stats**.
+Seven tabs: **Overview · Schedule · Results · Roster · Splits · Park · Stats**.
 
 Every per-player mark is gone, each for the reason the research board's team
 rows already give: the roster baseball and the padlock say who owns him, which
@@ -72,9 +76,9 @@ the status code an injury designation. Each would be a mark on every club or on
 none, which is the rule `RULES.md` states — *a mark that would be on every row
 marks nothing*.
 
-**Four of the player page's nine tabs are absent and none of them is an
-omission.** Each was refused for a reason about the club rather than about the
-work:
+**Three of the player page's nine tabs are absent and none of them is an
+omission** — it was four, and the fourth is the last entry below, which came
+back. Each was refused for a reason about the club rather than about the work:
 
 - **Percentile Rankings** and **Charts** are Savant scrapes, and Savant publishes
   percentile bars and a rolling xwOBA series **per player**. There is no club
@@ -91,6 +95,15 @@ work:
   are not on the wire: `ScheduleGame` is deliberately thin (see `types.ts`, which
   argues the omission), so the tab would be a route and a payload before it was a
   table.
+
+  **That refusal has been overturned, and this paragraph is left standing
+  because the reasoning in it is what changed rather than what was wrong.** The
+  tab is **Results** and it is a route and a payload — `/api/teams/:id/games`
+  and `TeamGameResult`, the backward mirror of the forward window. What made it
+  worth the trip is not that the scores got cheaper: it is that **a game has a
+  page now**, so a list of games is a list of *doors* rather than a table of
+  numbers that would have had to grow to justify itself. See the Results tab
+  below, and `client-game-page.md` for the page it opens.
 
 ---
 
@@ -195,6 +208,14 @@ since a reader on a club's page most often wants to know who *they* are facing.
 Hung off the pair instead (`mine || theirs`), it left a line ending in a dangling
 "vs" whenever the far club had named nobody; seen on the live window and fixed.
 
+**The matchup is a door onto the game's own page** — `OpponentPress`'s own box,
+which is where every other opponent in this app is a press. It opens the
+**page** rather than the game preview, and that is forced rather than chosen:
+the preview is built around a `PreviewSubject` (a player, his hand, his split)
+and a club is not standing in the game. A **postponement** is not a door, there
+being no game to read, and the row already says `PPD` — the same cut the summary
+table's cell makes.
+
 **A name nobody has announced draws nothing, not `TBD`.** Clubs name a starter
 about three days out — measured, 28/28 today, 27/30 tomorrow, 30/30 at two days,
 3/22 at three, 1/30 at four and nothing beyond — so past the front of the window
@@ -210,6 +231,46 @@ picked for and is what a postponement already wears in the summary table's
 opponent cell, on the board's, in the schedule cell's `PPD` and on
 `.game-status.postponed`). A row that drew it silently would be a fixture that
 never happens sitting among ones that will.
+
+### Results
+
+**The club's season, backwards** — every game it has played or is playing,
+newest first, and every row a door onto that game's own page.
+
+**It is `Schedule` read the other way**, which is why it sits directly behind it
+in the strip: one reading split at the present moment, drawn from two different
+reads because a manager plans forwards and judges backwards. **Newest first** is
+the whole of the ordering argument — a club's page is opened to ask how they
+have been going, and the answer to that is at the *end* of a season read the
+usual way up.
+
+**Fixtures are not in it.** A row with two dashes where the score goes would be
+the Schedule tab's answer at lower resolution, in a list whose one column is the
+score. Both lists are doors, so nothing is lost by the split.
+
+A row is the day, the matchup, and a chip carrying the result — `W 5–3`, `L
+2–7`, or `Live 3-1` with the half-inning beside it. The chip is **`.glog-res`**,
+the game log's own, folded onto rather than restyled: it is the same object (a
+result beside an opponent) and that rule already carries the four tones and the
+argument for each color. There is deliberately **no stat line**: runs and hits
+per game are on the Stats tab's spans and in the box score one press away, and a
+row carrying them would be a table where this is an index — the same call the
+Roster tab makes about ranking.
+
+**The score is the club's own first**, which is the one place this app turns a
+line score round: everywhere else `TOR 3–2 NYY` is away-first because the reader
+is looking at a *game*, and here they are looking at one club's season down a
+column, where the number that has to be in the same place on every row is
+theirs. The chip's tooltip names both sides.
+
+The read is **lazy, on first open, keyed on the club** — and deliberately not on
+the side switch, which is a fact about games rather than an omission: a club's
+result is its result, and there is no batting reading of a 5–3 win. It is the
+second tab the switch does nothing to, after Park, and for the same kind of
+reason.
+
+**The route and its measurements are in `client-game-page.md`**, with the page
+the rows open.
 
 ### Roster
 
@@ -525,31 +586,41 @@ Hicklen; `MIL` → the Brewers then eight players with `mil` in their names; `tu
 
 ## One page at a time
 
-`team=` and `player=` are **mutually exclusive by construction**, enforced in the
-one place that can enforce it: `App`'s `openTeam` and `openPlayer`, which each
-clear the other. Every caller goes through them — the board row, the Overview
-chip, the search, the roster row, a fixture's starter — so the exclusion cannot
-be got round by a caller. On the way *in*, a link carrying both takes the
-**player**, the older parameter and the one an existing link can have; a hand-made
-URL is the only way to produce the pair, and falling back beats emptying the view.
+`team=`, `player=` and `game=` are **mutually exclusive by construction**,
+enforced in the one place that can enforce it: `App::showPage`, the single
+function that sets all three and which every door goes through. Every caller goes
+through it — the board row, the Overview chip, the search, the roster row, a
+fixture's starter, a result row — so the exclusion cannot be got round by a
+caller. On the way *in*, a link carrying more than one takes the **oldest**
+parameter it can (player, then team); a hand-made URL is the only way to produce
+the set, and falling back beats emptying the view.
 
-They are **not a stack**. A player opened from a club's roster *replaces* the
-club, exactly as a player opened from another player's Overview already replaces
-him — one page at one layer, and one press of Escape to leave it. Stacking would
-need a second `.details-view` above 50 and would then have to answer what happens
-when a reader walks a chain of six.
+They are **not stacked on screen**. A player opened from a club's roster
+*replaces* the club, exactly as a player opened from another player's Overview
+already replaces him — one page at one layer, and one press of Escape to leave
+it. Stacking them visually would need a second `.details-view` above 50, and the
+comment here used to ask what would then happen when a reader walked a chain of
+six. That question was about *rendering* six pages; **remembering** the six is a
+different thing and costs a small array, which is what the section below is.
 
-**But the club page remembers the one player it was opened from**, which is
-`App`'s `teamReturnKey`, and that is a step of memory rather than the stack it is
-not: a reader on Judge's page who presses `NYY` has asked about the Yankees
-*from Judge*, and a `Back` that drops him on the roster board has undone two
-things with one press — the rule every dialog in this app already keeps. Open a
-club any other way and there is nobody behind it, so `Back` closes to the view as
-it always did. `openTeam` records who was on screen and `openPlayer` clears the
-record, so a player opened *from* the club page — a roster row, a fixture's
-starter — replaces the club rather than returning to it. `Back` and Escape are
-one door (`DetailsShell` gives both to `onClose`), so a returning press is a
-returning key.
+**`Back` steps back one page, and this page's step carries its tab.** That is
+`App`'s `pageStackRef` — the route the reader took in — and the tab rides with
+it because returning a reader who pressed a row on `Results` to the club's
+`Overview` is the same fault one step smaller. The tab it carries is **not**
+`teamPageTab`: that one is the tab a *door* named and this page's key is built
+from it, so following the strip with it would remount the page on every press of
+a tab. `TeamDetails` reports its own through `onTabChange` and it lands in a ref.
+
+**This was one step of memory per page — `teamReturnKey` — and it is a route
+now.** The old rule was that a club opened from a player remembered *him*, and a
+player opened from that club remembered nobody, so a `Back` from the second
+undid two things with one press. That was tolerable while there were two pages
+and one door between them; with a game's page in the middle it stopped being so,
+and was reported: a crest inside a game's page opened a club, and one press of
+`Back` left the reader on the roster board with the game he came from nowhere.
+The whole of the reasoning, and the five-page walk that checks it, are in
+`client-game-page.md`. `Back` and Escape are one door (`DetailsShell` gives both
+to `onClose`), so a returning press is a returning key.
 
 **It is not in the URL**, unlike everything about *which* page is open: it is the
 route taken rather than the page arrived at, and a link carrying it would promise
@@ -557,11 +628,13 @@ a reader a page he was never on. A reload of `?team=147` closes to the view —
 which is what the same link handed to somebody else does, and the two agreeing is
 the point.
 
-Driven end to end: `?player=batter-592450` → press the chip → `?team=147` → `Back`
-→ `?player=batter-592450`, every other param untouched, and Escape does the same;
-`?team=147` opened cold → Escape → the view, no `player=`; and inside the club
-page a Roster row opens `player=` with `team=` gone, whose own `Back` closes to
-the view rather than bouncing back to the club.
+Driven end to end: `?player=batter-592450` → press the chip → `?team=147` →
+`Back` → `?player=batter-592450`, every other param untouched, and Escape does
+the same; `?team=147` opened cold → Escape → the view, no `player=`; and inside
+the club page a Roster row opens `player=` with `team=` gone, whose own `Back`
+now returns **to the club** rather than closing to the view — which is the one
+behavior this section describes that changed, and the sentence it replaces was
+the fault.
 
 The page draws only for a club `teams` can name; an id nobody has heard of opens
 nothing, which is `detailsPlayer`'s standing rule for an unresolvable `player=`

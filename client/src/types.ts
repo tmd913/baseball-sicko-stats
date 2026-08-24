@@ -2256,3 +2256,214 @@ export interface EspnTransactions {
   leagueName: string;
   fetchedAt: number;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * A game's own page
+ *
+ * Everything below is `/api/games/:gamePk` — the box score, both clubs'
+ * rosters and the whole play stream, for one game, drawn on the page a live
+ * or finished opponent cell and a club's Results tab open.
+ *
+ * **It is a shape of ours rather than MLB's**, built in `game.ts` off the
+ * `feed/live` payload the day pipeline already reads. The alternative — widen
+ * `StatsApiGame` and bump `FEED_CACHE_VERSION` — was rejected: that type is
+ * cut *per player* (a batter's plate appearances, a pitcher's line) because
+ * every one of its readers is a player, and the six hundred blobs already on
+ * disk would each have been re-fetched to carry a linescore no day view draws.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** One club's half of a game — its line score, its box score and its roster. */
+export interface GameTeamLine {
+  teamId: number;
+  /** In full, for the page's head. */
+  name: string;
+  /** `MIL`, which is what every table in the app calls this club. */
+  abbr: string;
+  runs: number | null;
+  hits: number | null;
+  errors: number | null;
+  /** Men left on base — the box score's own last column. */
+  lob: number | null;
+  /** Whom this side announced, which is all there is before first pitch. */
+  probablePitcherId: number | null;
+  probablePitcherName: string | null;
+  /** In batting order: the nine who started, each followed by whoever hit in
+   *  his slot after him. Empty until MLB posts the lineup. */
+  batters: GameBatterLine[];
+  /** In the order they took the mound — `[0]` is the starter. */
+  pitchers: GamePitcherLine[];
+  /** The men on the active roster who did not appear, as MLB files them. */
+  bench: GameRosterMan[];
+  bullpen: GameRosterMan[];
+  /** The club's own totals, for the foot of each box score table. */
+  batting: GameBattingTotals | null;
+  pitching: GamePitchingTotals | null;
+}
+
+/** A man on the roster who has not appeared — the bench and the bullpen. */
+export interface GameRosterMan {
+  id: number;
+  name: string;
+  /** His listed position, or null where the boxscore names none. */
+  pos: string | null;
+  /** `L` / `R` / `S` — which side he hits from, or which arm he throws with. */
+  hand: string | null;
+}
+
+/** One man's batting line for the game. */
+export interface GameBatterLine {
+  id: number;
+  name: string;
+  /** The position he took the field at. */
+  pos: string | null;
+  /**
+   * His slot, 1–9.
+   *
+   * **Never null on a row that reaches a client**, though the type allows it:
+   * a man MLB gives no `battingOrder` was never in the order at all — the
+   * relievers MLB appends to its own `batters` list — and `game.ts` drops him
+   * rather than filing him at the foot of the table with a `.000` line. The
+   * null survives on the type because it is what the wire says, and a reader of
+   * this file should know that the absence means *not in the order* rather than
+   * *slot unknown*.
+   */
+  order: number | null;
+  /**
+   * **How far down the slot he is** — 0 for the man who started it, 1 for the
+   * first off the bench, and so on. It is MLB's own `battingOrder` read as the
+   * two numbers it is (`"801"` is the second man in the eighth slot), which is
+   * what lets the table indent a substitute under the man he came in for
+   * rather than filing him as a tenth hitter.
+   */
+  sub: number;
+  ab: number;
+  r: number;
+  h: number;
+  rbi: number;
+  bb: number;
+  k: number;
+  hr: number;
+  lob: number;
+  /** MLB's own one-line summary — `1-4 | K, R`. */
+  summary: string | null;
+  /** His season line as MLB prints it, for the two columns beside the game's. */
+  avg: string | null;
+  ops: string | null;
+}
+
+/** One man's pitching line for the game. */
+export interface GamePitcherLine {
+  id: number;
+  name: string;
+  /** `5.2` — five innings and two outs, MLB's own spelling. */
+  ip: string;
+  h: number;
+  r: number;
+  er: number;
+  bb: number;
+  k: number;
+  hr: number;
+  pitches: number;
+  strikes: number;
+  battersFaced: number;
+  /** `(W, 10-5)` as MLB writes it beside his name, or null. */
+  decision: string | null;
+  /** His season ERA, as MLB prints it. */
+  era: string | null;
+  /** Whether this was a start, which is what separates the first line from the
+   *  relief that follows it. */
+  started: boolean;
+}
+
+export interface GameBattingTotals {
+  ab: number;
+  r: number;
+  h: number;
+  rbi: number;
+  bb: number;
+  k: number;
+  lob: number;
+  avg: string | null;
+  ops: string | null;
+}
+
+export interface GamePitchingTotals {
+  ip: string;
+  h: number;
+  r: number;
+  er: number;
+  bb: number;
+  k: number;
+  hr: number;
+  pitches: number;
+  strikes: number;
+}
+
+/** One inning of the line score. */
+export interface GameInning {
+  num: number;
+  /** **Null runs is a half nobody played** — the bottom of the ninth with the
+   *  home club ahead — which is the `x` a line score prints there, and is a
+   *  different fact from the 0 of a half that was played and scored nothing. */
+  away: number | null;
+  home: number | null;
+}
+
+/** The winning, losing and saving pitchers, once MLB has closed the box. */
+export interface GameDecision {
+  role: 'W' | 'L' | 'S';
+  id: number;
+  name: string;
+}
+
+/** **One game, whole** — what `/api/games/:gamePk` answers with. */
+export interface GameReport {
+  gamePk: number;
+  status: GameStatus;
+  /** MLB's official ET date for the game, `YYYY-MM-DD`. */
+  date: string;
+  venueId: number | null;
+  venueName: string | null;
+  attendance: number | null;
+  /** Once MLB has closed the box, in minutes. */
+  durationMinutes: number | null;
+  /** `89 degrees, Partly Cloudy · 8 mph, In From LF`, or null. */
+  weather: string | null;
+  away: GameTeamLine;
+  home: GameTeamLine;
+  innings: GameInning[];
+  /** How many innings the game was scheduled for — 9 ordinarily, and the
+   *  number a line score's empty columns are drawn out to. */
+  scheduledInnings: number;
+  decisions: GameDecision[];
+  /** The box score's own footnotes — pitches-strikes, umpires, first pitch.
+   *  MLB's labels and values, unedited. */
+  notes: { label: string; value: string }[];
+}
+
+/**
+ * One row of a club's **Results** tab — a game it has played or is playing.
+ *
+ * Deliberately not `ScheduleGame`: that type is the *forward* window and is
+ * thin on purpose (no score, because there is none yet). This is the backward
+ * one, and the score is the whole of what it is for.
+ */
+export interface TeamGameResult {
+  gamePk: number;
+  /** MLB's official ET date, `YYYY-MM-DD`. */
+  date: string;
+  startTime: string | null;
+  /** Whether the club whose page this is was at home. */
+  home: boolean;
+  opponentId: number;
+  opponent: string;
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
+  detailedState: string;
+  teamScore: number | null;
+  opponentScore: number | null;
+  /** Null on a game with no winner — one still being played, and a tie. */
+  won: boolean | null;
+  /** Where a live game has got to, so a row can say `Top 6`. */
+  inning: number | null;
+  inningState: string | null;
+}
