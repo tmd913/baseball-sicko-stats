@@ -3537,17 +3537,55 @@ export function withAddedComponents(
   scores: Record<number, number>,
   today: Record<number, number> | undefined,
   categories: EspnCategory[],
+  /**
+   * **Whether a *rate* absent from `scores` may be created from what is being
+   * added**, and it is false for the caller this function was written for and
+   * true for the projection.
+   *
+   * The rule above — a category ESPN left out is one the side is ineligible for,
+   * and adding a day's production must not put it back — is right about *today*
+   * and wrong about *the end of the week*. At the start of a matchup period a
+   * side has thrown no innings, so ESPN reports **no ERA and no WHIP**: there is
+   * no denominator to divide by yet. Under the old rule the projection could
+   * then never produce them either, and the card drew two of the ten categories
+   * as blank for the whole first day of every week — reported as *"projections
+   * are not including ERA/WHIP at the beginning of the matchup"*, which is
+   * exactly what it was doing. A side that has not pitched yet is not
+   * ineligible; it is early.
+   *
+   * **Only a `DERIVED` rate may be created, never a counting category**, which
+   * keeps the identity this file is measured on ("0 categories invented where
+   * the side has none") true where it was actually about something. ESPN sends
+   * a counting stat as `0` from the first minute of a week — there is nothing to
+   * divide — so a counting category that is genuinely absent is genuinely
+   * ineligible, and creating one would be the fault the old rule names.
+   *
+   * **And the zero denominator is its own guard.** A rate is created only where
+   * `DERIVED.of` returns a finite number, and every one of the nine returns
+   * `null` on an empty denominator — so a side with no pitching to project
+   * produces no ERA rather than a 0.00 that would read as the best score in the
+   * league. The dangerous case cannot be reached from here.
+   */
+  createRates = false,
 ): Record<number, number> {
   if (!today) return scores;
   const merged = { ...scores };
   for (const [id, v] of Object.entries(today)) {
     const n = Number(id);
-    if (merged[n] === undefined || DERIVED[n]) continue;
+    if (DERIVED[n]) continue;
+    if (merged[n] === undefined) {
+      // A component the side has no figure for is still a component of a rate
+      // that may be created. It is not a category — `categoryScores` ships only
+      // what the league scores — so this adds nothing to the wire.
+      if (!createRates) continue;
+      merged[n] = 0;
+    }
     merged[n] += v;
   }
   for (const cat of categories) {
     const rule = DERIVED[cat.statId];
-    if (!rule || merged[cat.statId] === undefined) continue;
+    if (!rule) continue;
+    if (merged[cat.statId] === undefined && !createRates) continue;
     if (!rule.needs.every((n) => typeof merged[n] === 'number')) continue;
     const v = rule.of(merged);
     if (typeof v === 'number' && Number.isFinite(v)) merged[cat.statId] = v;
