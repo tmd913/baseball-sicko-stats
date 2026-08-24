@@ -73,10 +73,10 @@ import type { DateBarReading, DatePreset } from './components/DateControls';
 import { ScheduleSpanTabs, ScheduleToggle } from './components/ScheduleControl';
 import {
   buildScheduleIndex,
-  buildWindowIndex,
-  clampTurnRange,
-  toTurnRange,
-  turnRangeParam,
+  buildTurnIndex,
+  clampTurnDays,
+  toTurnDays,
+  turnDaysParam,
   defaultScheduleSpan,
   effectiveSpan,
   spanDates,
@@ -84,7 +84,7 @@ import {
   stepSpan,
   toScheduleSpan,
 } from './components/schedule';
-import type { ScheduleSpan, TurnRange } from './components/schedule';
+import type { ScheduleSpan, TurnDays } from './components/schedule';
 import {
   EligibilityContext,
   FantasyRosterContext,
@@ -1951,8 +1951,8 @@ export default function App() {
    * `ResearchTable` is unmounted the moment the view changes, and because the
    * URL has to be written from one place.
    */
-  const [turnRange, setTurnRange] = useState<TurnRange | null>(() =>
-    toTurnRange(initialParams.get('turn')),
+  const [turnDays, setTurnDays] = useState<TurnDays | null>(() =>
+    toTurnDays(initialParams.get('turn')),
   );
   /**
    * **When the window is wanted for the turn filter** — a range in force, *or*
@@ -1968,7 +1968,7 @@ export default function App() {
    * `ResearchUi`'s and survives a crossing to the Roster tab, where a window
    * read for a control that is not on screen is a request nobody asked for.
    */
-  const turnWanted = view === 'research' && (turnRange !== null || researchUi.panels.turns);
+  const turnWanted = view === 'research' && (turnDays !== null || researchUi.panels.turns);
   /**
    * **The same window over every day it has**, which is what the research
    * board's turn filter reads — see `buildWindowIndex`.
@@ -1996,7 +1996,7 @@ export default function App() {
   const turnIndex = useMemo(
     () =>
       turnWanted && scheduleWindow && !playersLoading
-        ? buildWindowIndex(scheduleWindow, pitcherLookup)
+        ? buildTurnIndex(scheduleWindow, pitcherLookup)
         : null,
     [turnWanted, scheduleWindow, pitcherLookup, playersLoading],
   );
@@ -2018,10 +2018,10 @@ export default function App() {
    * is nothing to change, so this settles in one pass.
    */
   useEffect(() => {
-    if (!turnRange || !turnIndex) return;
-    const cut = clampTurnRange(turnRange, turnIndex);
-    if (cut !== turnRange) setTurnRange(cut);
-  }, [turnRange, turnIndex]);
+    if (!turnDays || !turnIndex) return;
+    const cut = clampTurnDays(turnDays, turnIndex);
+    if (cut !== turnDays) setTurnDays(cut);
+  }, [turnDays, turnIndex]);
 
   // The how-to page (settings menu → How to use, and the empty state's button).
   // In the URL like every other view, so it survives a reload and can be linked
@@ -3840,9 +3840,9 @@ export default function App() {
       view === 'research' &&
       researchKind === 'pitcher' &&
       !researchTeams &&
-      turnRange
+      turnDays
     ) {
-      p.set('turn', turnRangeParam(turnRange));
+      p.set('turn', turnDaysParam(turnDays));
     }
     // The mode and its span as one param, so it can never say a span with no
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
@@ -3882,7 +3882,7 @@ export default function App() {
     simulate,
     hideInjured,
     scheduleSpan,
-    turnRange,
+    turnDays,
     rosterProjected,
     rosterSource,
     helpOpen,
@@ -7270,8 +7270,8 @@ export default function App() {
           schedule={scheduleIndex}
           /* And the turn filter, which reads the same window over all of its
              days rather than over the span — see `turnIndex`. */
-          turnRange={turnRange}
-          onTurnRangeChange={setTurnRange}
+          turnDays={turnDays}
+          onTurnDaysChange={setTurnDays}
           turnIndex={turnIndex}
           include={researchInclude}
           onIncludeChange={setResearchInclude}

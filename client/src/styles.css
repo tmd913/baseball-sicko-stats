@@ -11354,16 +11354,17 @@ button.start-line:focus-visible {
    splices in. The whole of the design is in `TurnPicker.tsx` and in
    `schedule.tsx`'s *The turn filter*; what is here is the two shapes.
 
-   **The panel stacks where the other two lie down**, and it is the one panel on
-   this board that has to: `.research-panel` is a wrapping row because a search
-   field and a threshold builder are each one run of controls, where this is a
-   run of 28 chips with a line under it saying what the next press does. Wrapped
-   as flex items the strip and the foot would sit side by side at 1,920 and the
-   foot would be a caption 1,200px from the thing it captions. */
+   **The panel is one item and stretches to the row**, where `.research-panel`
+   centers what it holds: that base rule is a wrapping row of *controls* — a
+   search field beside its Clear, a stat select beside an operator and a
+   threshold — and this panel is a single scroller that has to be as wide as the
+   box or its arrows sit somewhere other than its ends. It carried a `Clear` and
+   a hint line under the strip once, which is what the column direction was for;
+   both are gone (see `TurnPicker.tsx`) and the direction stays only to keep the
+   one child stretching rather than centering. */
 .research-turn-panel {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
 }
 /* `ScrollRow` bleeds out through its container's gutter and back in by the
    bar's, which is right in `.view-tools` — the row it was written for — and
@@ -11375,9 +11376,10 @@ button.start-line:focus-visible {
   /* **And it is held to the panel's width**, which `flex: 1 1 100%` does not do
      here: that basis is the *main* axis, and this panel's main axis is the
      column — so the strip took its width from its content and ran 1,453px wide
-     inside a 346px box at 390, clipped by the head with no scroller and no
-     arrows, which is 21 of the 28 days unreachable. Measured before → after at
-     390: the strip 1453.5 → 346.0 with the box scrolling and both arrows drawn. */
+     inside a 346px box at 390 (measured while it still drew 28 days), clipped by
+     the head with no scroller and no arrows, three quarters of them unreachable.
+     Measured before → after at 390: the strip 1453.5 → 346.0, with the box
+     scrolling and both arrows drawn. */
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -11437,8 +11439,10 @@ button.start-line:focus-visible {
   color: var(--faint);
   font-weight: 700;
 }
-/* In the range. It takes the lit-control clothing the whole bar already wears
-   (`.research-toggle.on`), rather than a selection color of its own. */
+/* Picked. It takes the lit-control clothing the whole bar already wears
+   (`.research-toggle.on`), rather than a selection color of its own — which is
+   what makes a day read as a control that is *on* rather than as a cell that is
+   selected, and every one of them can be pressed off again. */
 .turn-day.on {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
@@ -11448,26 +11452,6 @@ button.start-line:focus-visible {
 .turn-day.on .turn-day-n.none {
   color: color-mix(in srgb, var(--accent) 70%, transparent);
 }
-/* The two ends of the run, drawn a shade harder — with a fortnight lit there is
-   nothing else to say where it starts and stops once the strip is scrolled. */
-.turn-day.edge {
-  border-color: var(--accent);
-}
-.turn-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* What the next press does, or what the last one did — the calendar's own foot,
-   which is where this line's wording comes from (`Pick the range end`). */
-.turn-hint {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 /* The `Start` column's cell. Deliberately **not** folded onto `.sched-cell`:
    that one is a single day of the grid and this is a list of days, and two
    things that merely resemble each other are two things that will one day

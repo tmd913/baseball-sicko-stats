@@ -10,7 +10,7 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
-import { TurnButton, TurnDays } from './TurnPicker';
+import { TurnButton, TurnDayStrip } from './TurnPicker';
 import {
   defaultScheduleSpan,
   scheduleColumns,
@@ -18,10 +18,11 @@ import {
   TURN_KEY,
   turnColumn,
   turnCounts,
-  turnRangeLabel,
-  turnsInRange,
+  turnDaysLabel,
+  turnDaysTitle,
+  turnsOnDays,
 } from './schedule';
-import type { ScheduleIndex, ScheduleSpan, TurnRange } from './schedule';
+import type { ScheduleIndex, ScheduleSpan, TurnDays } from './schedule';
 import { SchedulePreview } from './PlayerSchedule';
 import type { SplitsRead } from './PlayerSchedule';
 import { useOpponentBoards } from './OpponentTable';
@@ -665,8 +666,8 @@ interface Props {
    * still null, which is exactly the state the button's own wait is drawn for:
    * nothing narrows while the read is in flight.
    */
-  turnRange: TurnRange | null;
-  onTurnRangeChange: (r: TurnRange | null) => void;
+  turnDays: TurnDays | null;
+  onTurnDaysChange: (d: string[] | null) => void;
   turnIndex: ScheduleIndex | null;
   /** Which of the three sets of players the board includes. Lifted to App with
    *  the other cross-board controls, and in the URL for the same reason the
@@ -1012,8 +1013,8 @@ export function ResearchTable({
   onWindowChange,
   scheduleSpan,
   onScheduleSpanChange,
-  turnRange,
-  onTurnRangeChange,
+  turnDays,
+  onTurnDaysChange,
   turnIndex,
   matchupWindow,
   schedule,
@@ -1251,10 +1252,13 @@ export function ResearchTable({
    * are not narrowed by one; the range itself is kept, so coming back to the
    * pitchers finds the days still picked.
    */
-  const activeTurn =
-    turnRange && turnIndex && kind === 'pitcher' && !teams
-      ? { range: turnRange, index: turnIndex }
-      : null;
+  const activeTurn = useMemo(
+    () =>
+      turnDays && turnIndex && kind === 'pitcher' && !teams
+        ? { days: turnDays, set: new Set(turnDays), index: turnIndex }
+        : null,
+    [turnDays, turnIndex, kind, teams],
+  );
 
   /**
    * **What a start in the `Start` column opens** — the same pair of doors the
@@ -1283,7 +1287,7 @@ export function ResearchTable({
             game: openGame ?? undefined,
           }
         : undefined,
-    [activeTurn?.index, openFixtureIn, openGame],
+    [activeTurn, openFixtureIn, openGame],
   );
 
   const columns = useMemo(() => {
@@ -1312,7 +1316,7 @@ export function ResearchTable({
      * drawn fourteen wide.
      */
     return activeTurn
-      ? [turnColumn(activeTurn.index, activeTurn.range, turnDoors), ...stats]
+      ? [turnColumn(activeTurn.index, activeTurn.set, turnDoors), ...stats]
       : stats;
   }, [
     allColumns,
@@ -1321,8 +1325,7 @@ export function ResearchTable({
     kind,
     teams,
     openFixture,
-    activeTurn?.range,
-    activeTurn?.index,
+    activeTurn,
     turnDoors,
   ]);
   /**
@@ -1890,7 +1893,7 @@ export function ResearchTable({
     // this list — six hundred pitchers to forty. A reader who was two hundred
     // rows into Wednesday's starters and presses Friday is looking at a
     // different table, which is the whole of what this signature is for.
-    activeTurn ? `${activeTurn.range.start}..${activeTurn.range.end}` : '',
+    activeTurn ? activeTurn.days.join(',') : '',
     activeSortKey,
     activeSortAsc,
   ].join('|');
@@ -1907,6 +1910,30 @@ export function ResearchTable({
   // return to the board in development. Comparing signatures makes the effect
   // idempotent for a given table, so a re-run of any kind is a no-op and only
   // a genuine change of population or order moves anything.
+  /**
+   * **Where the reader was, as of the last scroll they made** — which is not
+   * always what `scrollTop` reads by the time the reset below runs.
+   *
+   * That reset is `Math.min(where you are, the top of the table)`, and the
+   * `min` is what keeps a press still: a reader who can see the control they
+   * pressed is above the target already, and scrolling *to* it would take that
+   * control off the screen from under them. It reads the live `scrollTop` for
+   * "where you are", and the browser can have moved that before the effect runs
+   * — a commit that both narrows the rows **and** changes the columns replaces
+   * the whole of the table's DOM, and Chrome clamps the offset against whatever
+   * the content momentarily is while it does. Measured on the turn filter's
+   * first press from **1400**: the effect computes the right target (156) and
+   * finds `scrollTop` already **0**, so the `min` answers 0 and the reader
+   * lands on a screenful of the control bar — the exact thing the target exists
+   * to prevent. A press that only narrows rows (a search over the same board)
+   * never sees it, which is why it took a control that does both to surface.
+   *
+   * So "where you are" is recorded on the reader's own scrolls and read from
+   * here. Nothing else about the rule changes: still never downwards, still no
+   * further up than the top of the table.
+   */
+  const wasAt = useRef(0);
+
   const placedSignature = useRef(boardSignature);
   useLayoutEffect(() => {
     if (placedSignature.current === boardSignature) return;
@@ -1942,7 +1969,8 @@ export function ResearchTable({
             box.getBoundingClientRect().top -
             head.offsetHeight
           : 0;
-      box.scrollTop = Math.min(box.scrollTop, Math.max(0, top));
+      box.scrollTop = Math.min(wasAt.current, Math.max(0, top));
+      wasAt.current = box.scrollTop;
     }
     // The reading position goes back to the top with the scroll, and for the
     // same reason: a page into a table is a fact about *that* table, and this
@@ -2003,10 +2031,10 @@ export function ResearchTable({
     if (!activeTurn) return null;
     const ids = new Set<number>();
     for (const r of narrowed) {
-      if (turnsInRange(activeTurn.index, r.teamId, r.id, activeTurn.range).length > 0) ids.add(r.id);
+      if (turnsOnDays(activeTurn.index, r.teamId, r.id, activeTurn.set).length > 0) ids.add(r.id);
     }
     return ids;
-  }, [narrowed, activeTurn?.range, activeTurn?.index]);
+  }, [narrowed, activeTurn]);
 
   /** How many of the board start on each day of the window — the number under
    *  every chip in the strip, and worked only while that strip is open: it is a
@@ -2075,6 +2103,12 @@ export function ResearchTable({
    * when nothing is being fetched, why one beat at a time) is in `paging.tsx`;
    * what is the board's own is the page size above and where the count lives.
    */
+  /** The pane's own scroll handler — paging's, plus the note of where the
+   *  reader has got to that the reset above reads (`wasAt`). */
+  const onPaneScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    wasAt.current = e.currentTarget.scrollTop;
+    onScroll();
+  };
   const { onScroll, loadingMore, cancelBeat } = usePagedRows({
     scrollRef,
     total: visible.length,
@@ -2740,13 +2774,13 @@ export function ResearchTable({
              */}
             {kind === 'pitcher' && !teams && (
               <TurnButton
-                range={turnRange}
+                days={turnDays}
                 today={turnIndex?.today ?? null}
                 open={turnsOpen}
                 /* On with no index is the window still being read — App holds
                    it and hands it down only once it has landed, exactly as the
                    Schedule toggle knows its own wait. */
-                loading={turnRange !== null && !turnIndex}
+                loading={turnDays !== null && !turnIndex}
                 onToggle={() => setPanel('turns', !turnsOpen)}
               />
             )}
@@ -2914,7 +2948,7 @@ export function ResearchTable({
    * about. One test, read by the chip, by `Clear all` and by the empty state,
    * so the three cannot come to disagree about whether the days are in force.
    */
-  const turnChip = activeTurn ? turnRangeLabel(activeTurn.range, activeTurn.index.today) : null;
+  const turnChip = activeTurn ? turnDaysLabel(activeTurn.days, activeTurn.index.today) : null;
 
   /**
    * Whether the surface that raised the open preview is **still on screen** —
@@ -2955,11 +2989,11 @@ export function ResearchTable({
           window is still out: the strip *is* the window's days, so there is no
           shape to reserve, and the wait is marked inside the button. */}
       {turnStripOpen && turnIndex && (
-        <TurnDays
+        <TurnDayStrip
           index={turnIndex}
-          range={turnRange}
+          days={turnDays}
           counts={dayCounts}
-          onChange={onTurnRangeChange}
+          onChange={onTurnDaysChange}
         />
       )}
 
@@ -3045,8 +3079,12 @@ export function ResearchTable({
             <button
               type="button"
               className="research-chip"
-              onClick={() => onTurnRangeChange(null)}
-              title="Show every pitcher again, whatever day he starts"
+              onClick={() => onTurnDaysChange(null)}
+              title={
+                activeTurn
+                  ? `Starting ${turnDaysTitle(activeTurn.days, activeTurn.index.today)} — press to show every pitcher again, whatever day he starts`
+                  : undefined
+              }
             >
               Starting {turnChip}
               <span className="research-chip-x" aria-hidden="true">
@@ -3085,7 +3123,7 @@ export function ResearchTable({
             className="research-clear"
             onClick={() => {
               setFilters([]);
-              if (turnChip) onTurnRangeChange(null);
+              if (turnChip) onTurnDaysChange(null);
             }}
           >
             Clear all
@@ -3204,7 +3242,7 @@ export function ResearchTable({
           which is a search field losing the caret mid-word. And an empty state
           reads under the count it explains, not on the far side of a hairline
           from it. */}
-      <div className="research-scroll" ref={scrollRef} onScroll={onScroll}>
+      <div className="research-scroll" ref={scrollRef} onScroll={onPaneScroll}>
         {/* **The whole control set again, condensed — on a rail that takes no
             room.**
 
