@@ -4812,6 +4812,33 @@ export async function getRankings(
     meta.regularPeriods == null
       ? []
       : meta.periods.filter((p) => p.period > meta.regularPeriods!).map((p) => p.period);
+  /**
+   * **The regular season, as a list of matchup periods** — the same cut
+   * `halvesOf` makes, undivided.
+   *
+   * This is what the `season` span is drawn from now, where it used to be
+   * ESPN's own published season line read straight off `meta.teams[].values`.
+   * That line was free and was answering a different question: **it includes
+   * the playoffs**, so on the checked league a `Season` column in late August
+   * carried periods 19 and 20 — a bracket two teams in twelve are playing in —
+   * mixed into the eighteen weeks every team played. Reported as exactly that.
+   *
+   * **And it fixes a quirk that was documented rather than fixed.** ESPN counts
+   * a playoff week only for the teams still in the winners' bracket, so the
+   * eight sides on a bye were short by their week's own total against the four
+   * who were not: a column nobody could rank fairly. Summing the periods gives
+   * every team the weeks it actually played and nothing else.
+   *
+   * `p.first`/`p.last` are tested for `halvesOf`'s own reason — a matchup period
+   * ESPN has filed no scoring periods under is a week with no days in it — and
+   * an empty list is what makes the fallback below possible.
+   */
+  const regular =
+    meta.regularPeriods == null
+      ? []
+      : meta.periods
+          .filter((p) => p.period <= meta.regularPeriods! && p.first && p.last)
+          .map((p) => p.period);
   const halves = halvesOf(meta.periods, meta.regularPeriods);
 
   const dated = async (first: number, last: number) => {
@@ -4847,7 +4874,58 @@ export async function getRankings(
       live: true,
     });
   }
-  spans.push({ span: 'season', label: 'Season', periods: null, start: null, end: null, live: false });
+  /**
+   * **`Regular Season`, and it says so because it is one.** The label was
+   * `Season` while the figures were ESPN's own line, which runs to whatever has
+   * been played including the bracket; this is the eighteen weeks every team
+   * played, so the word that was a summary is a claim now and the label has to
+   * carry it.
+   *
+   * **It is dated and it carries its periods**, where it carried neither: the
+   * span *is* a run of weeks now, so the bar states them like every other cut
+   * (`Regular Season · Weeks 1–18`) rather than falling back to the "ESPN's own
+   * season line" note the client keeps for the case below.
+   *
+   * **And `live` is answered rather than declared `false`.** The old flag was
+   * false because ESPN's line and the week being played were different
+   * questions; this span *contains* the current period while the regular season
+   * is on, so it is live in the one sense that flag has ever meant — these
+   * figures include a week still being played — and it stops being live the day
+   * the bracket starts, which is exactly when the numbers stop moving.
+   *
+   * **The fallback is ESPN's line under its old name**, for a league that
+   * publishes no matchup count: there is no boundary to cut the playoffs out at,
+   * so there is nothing to promise, and `Regular Season` over a figure that may
+   * include a bracket would be the claim this change exists to stop making. It
+   * is the same league that is offered no halves and no playoffs span, for the
+   * same missing number.
+   */
+  if (regular.length > 0) {
+    const { start, end } = await dated(regular[0], regular[regular.length - 1]);
+    spans.push({
+      span: 'season',
+      label: 'Regular Season',
+      periods: [regular[0], regular[regular.length - 1]],
+      start,
+      end,
+      live: current != null && regular.includes(current),
+    });
+  } else {
+    spans.push({
+      span: 'season',
+      label: 'Season',
+      periods: null,
+      start: null,
+      end: null,
+      // **A running total is live while the season is on**, which is the same
+      // question the four spans above answer: do these figures include a week
+      // still being played. It read `false` here for years and the client
+      // carried a named exception to make the poll work anyway (`rankings.span
+      // === 'season'`); answered honestly, the flag is the only thing either
+      // side has to look at.
+      live: current != null,
+    });
+  }
   for (const [key, label, list] of [
     ['first', 'First half', halves?.first ?? []],
     ['second', 'Second half', halves?.second ?? []],
@@ -4956,15 +5034,21 @@ export async function getRankings(
       ? { period: current, scoringPeriodId: latest }
       : null;
 
-  if (asked === 'season') {
-    // **ESPN's own published season line, left exactly as it comes** — which
-    // means it, too, stops at yesterday, and deliberately so: this column is
-    // the number the manager sees on ESPN's own site, and a figure of ours that
-    // silently disagreed with it would be worse than one that lags with it.
-    // (ESPN's season line has a second quirk of its own that has nothing to do
-    // with today: it counts a playoff week only for the teams still in the
-    // winners' bracket — measured, the eight teams on a bye are short by
-    // exactly their week's own total.)
+  if (asked === 'season' && regular.length === 0) {
+    // **ESPN's own published season line, left exactly as it comes** — the
+    // fallback for a league that publishes no matchup count, and so no boundary
+    // to cut a bracket out at. It stops at yesterday, deliberately: this column
+    // is then the number the manager sees on ESPN's own site, and a figure of
+    // ours that silently disagreed with it would be worse than one that lags
+    // with it.
+    //
+    // **This used to be the `season` branch outright**, and the two things
+    // wrong with it are why it is a fallback now. It includes the playoffs, so
+    // a `Season` column in late August carried a bracket two teams in twelve
+    // were playing. And it counts a playoff week only for the teams still in
+    // the winners' bracket — measured, the eight sides on a bye short by
+    // exactly their week's own total. Both were documented rather than fixed;
+    // summing the regular-season periods answers both.
     for (const t of meta.teams) values[t.id] = onlyCategories(t.values);
   } else if (asked === 'week' && weekPeriod != null) {
     // **One settled week, exactly as `matchup` reads the live one** — the same
@@ -4986,12 +5070,19 @@ export async function getRankings(
       values[Number(id)] = liveDay ? withRates(v) : onlyCategories(v);
     }
   } else {
+    // **Four spans through one branch now**, the regular season having become a
+    // run of matchup periods like the three beside it: one `mScoreboard` read
+    // filtered to the list, counting stats added and rates rebuilt from the
+    // components they add up from. `season` is the widest of the four and costs
+    // no more than any of them — the filter takes the whole list in one request.
     const list =
-      asked === 'first'
-        ? (halves?.first ?? [])
-        : asked === 'second'
-          ? (halves?.second ?? [])
-          : playoffs;
+      asked === 'season'
+        ? regular
+        : asked === 'first'
+          ? (halves?.first ?? [])
+          : asked === 'second'
+            ? (halves?.second ?? [])
+            : playoffs;
     if (list.length > 0) {
       const frozen = current == null || !list.includes(current);
       const raw = await getSpanTotals(creds, list, frozen, liveDay, force);

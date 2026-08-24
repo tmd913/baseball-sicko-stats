@@ -589,15 +589,21 @@ export function SummaryToggle({
  * the table entirely. A control that leaves reads before the four that stay, the
  * same way the app's tab strip reads above the row this sits in.
  *
- * **The glyph is two sides facing each other**, which is what a matchup is and
- * — more to the point — a silhouette nothing else in the run has. The first
- * drawing was a bar chart either side of a center spine, and it was wrong twice
- * over: at 19px the spine dominates and the mark reads as a plus sign, and
- * `FeedGlyph` two buttons along is *already* two columns of horizontal strokes.
- * Two arrowheads pointing at each other collide with none of the four —
- * `ScheduleGlyph` a landscape calendar, `ProjectedGlyph` a rising line, the
- * summary card portrait — and are legible at a size where a chart is not. 19px
- * to match the two beside it rather than the 17 a glyph defaults to.
+ * **The glyph is crossed swords**, which is the one mark for this that a reader
+ * already knows — a head-to-head, in the vocabulary every scoreboard and every
+ * game in the genre uses. Two drawings were tried and thrown away first, and
+ * both failed the same test: *is this legible as a thing rather than as a
+ * shape?* A bar chart either side of a center spine reads as a **plus sign** at
+ * 19px, and `FeedGlyph` two buttons along is already two columns of horizontal
+ * strokes; two arrowheads facing each other read as `> <` and mean nothing in
+ * particular. Swords are unmistakable at a glance and collide with none of the
+ * four beside them — `ScheduleGlyph` a landscape calendar, `ProjectedGlyph` a
+ * rising line, `FeedGlyph` a list, the summary card portrait.
+ *
+ * **`strokeWidth` 2, not the summary card's 2.2**, and that is the one thing the
+ * denser mark costs: this is eight strokes reaching all four corners of the box
+ * where its neighbours are three or four in the middle of one, so the heavier
+ * stroke closed the gap the two blades cross in. 19px like the rest of the run.
  */
 export function MatchupButton({ onOpen, title }: { onOpen: () => void; title: string }) {
   return (
@@ -614,13 +620,20 @@ export function MatchupButton({ onOpen, title }: { onOpen: () => void; title: st
         height={19}
         fill="none"
         stroke="currentColor"
-        strokeWidth={2.2}
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d="M5.5 6.5L9.5 12l-4 5.5" />
-        <path d="M18.5 6.5L14.5 12l4 5.5" />
+        {/* The blade running up-left, and its hilt in the opposite corner: a
+            guard across the grip, the grip itself, and a pommel. The notch at
+            the tip (`V3h3`) is what makes it a point rather than a line — at
+            19px it is the difference between a sword and a slash. */}
+        <path d="M14.5 17.5 3 6V3h3l11.5 11.5" />
+        <path d="m13 19 6-6M16 16l4 4M19 21l2-2" />
+        {/* …and its mirror, tip up-right, hilt bottom-left. */}
+        <path d="M14.5 6.5 18 3h3v3l-3.5 3.5" />
+        <path d="m5 14 4 4M7 17l-3 3M3 19l2 2" />
       </svg>
       {/* Its own class rather than `.summary-toggle-label` beside it: that name
           belongs to the control it was written for, and an unstyled hook shared

@@ -107,6 +107,15 @@ that has nothing to do with today, already recorded below: it counts a playoff
 week only for the teams still in the winners' bracket — measured, the eight
 teams on a bye are short by exactly their week's total.)
 
+*(**Superseded**: `season` is `Regular Season` now — periods `1 … regularPeriods`
+through the same `getSpanTotals` path as the halves, so it takes the live day
+like they do and it is no longer ESPN's line. The quirk in the parenthesis is
+what settled it: a column three teams in twelve carry an extra fortnight in is a
+column nobody can rank. See **Client — the League rankings**, *`Season` is
+`Regular Season`*. ESPN's line survives as the fallback for a league that
+publishes no matchup count, where there is no boundary to cut a bracket out at,
+and there the paragraph above still holds word for word.)*
+
 **Measured through the route**: a live scoreboard is **698ms** cold against the
 536ms it was, and **2.1ms** warm; a settled week is **1.8ms**; the live rankings
 span **743ms** cold and **1.5ms** warm. The response itself is unchanged in size
@@ -749,6 +758,13 @@ the **winners' bracket** in the live period 19, whose stats ESPN counts toward
 the season line while the consolation ladder's are not yet counted. Every team
 is reproduced by *some* prefix, to machine precision, which is what makes the
 summation trustworthy.
+
+*(That verification is also what made moving `season` off ESPN's line safe rather
+than hopeful: the summation **is** ESPN's line, to machine precision, for
+whichever prefix ESPN happens to have counted. Taking the prefix `1..18` for
+every team is therefore not a different arithmetic — it is the same one with the
+bracket left out on purpose, which is what the reader asked for and what the
+"eight teams and four teams" split above shows they need.)*
 
 **So all five spans are served and none is faked.** `matchup` and `season` are
 **ESPN's own numbers** — the current period's `scoreByStat` and `valuesByStat`

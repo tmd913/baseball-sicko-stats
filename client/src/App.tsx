@@ -2866,12 +2866,20 @@ export default function App() {
    * looking at something that cannot move, and asking again every minute would
    * be a request a minute to be told so.
    *
-   * The Rankings tab's answer is the span's own `live` flag with one addition:
-   * `season` is ESPN's running total, which accrues all year, and its flag is
-   * `false` because that flag answers a different question — *do these numbers
-   * include a week still being played*, which is what puts `so far` on the
-   * caption. What the poll needs to know is whether they can change at all, and
-   * the season's can.
+   * The Rankings tab's answer is **the span's own `live` flag, and nothing
+   * else**. It carried a named exception for `season` — that span was ESPN's
+   * running total, whose flag was declared `false` on the grounds that the flag
+   * answered a different question (*do these numbers include a week still being
+   * played*) from the one a poll asks (*can they change at all*). The two
+   * questions have the same answer and always did; what was wrong was the
+   * declaration. `season` is the **regular season** now, a run of matchup
+   * periods like the three beside it, and its flag says truthfully whether the
+   * week being played is one of them — so the exception is not merely redundant
+   * but backwards: during the playoffs those eighteen weeks are settled and
+   * cannot move, and the exception polled them every minute to be told so.
+   * (A league publishing no matchup count still gets ESPN's running line under
+   * that span, and the server marks *that* live while a period is current —
+   * same question, answered rather than assumed.)
    */
   const scoreboardLive = scoreboard?.live === true;
   const rankSpanLive =
@@ -2882,8 +2890,7 @@ export default function App() {
     // server's own answer rather than the request, so this cannot outlive a
     // week it declined.
     rankings.week == null &&
-    (rankings.span === 'season' ||
-      rankings.spans.find((s) => s.span === rankings.span)?.live === true);
+    rankings.spans.find((s) => s.span === rankings.span)?.live === true;
 
   /**
    * One tick of that poll: re-read what is on screen, quietly.
