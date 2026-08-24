@@ -1016,33 +1016,57 @@ fills the season in.
 | **a day off** (`dnp`) | a log row with the date, the opponent and its result chip, and one cell reading `Did not play` | it *is* a game — it had a winner whether or not he was in it |
 | **a stretch** (`absence`) | one row: the date range, the state, and how many of his club's games it cost | forty near-identical rows would bury the season he did play |
 
-Judge's log at 1200×900 now opens `7/19 – 8/23 · 60-day IL · 33 games`,
-`Jul 17 · vs LAD · L 1-2 · Did not play`, `6/2 – 7/12 · 10-day IL ·
+Judge's log at 1200×900 now opens `7/19–8/23 · 60-day IL · 33 games`,
+`Jul 17 · vs LAD · L 1-2 · Did not play`, `6/2–7/12 · 10-day IL ·
 37 games`, and then May 31 and the season he played.
 
-**A range is written in numbers where a single date is spelled**, and the two
-are deliberately different. `Jun 9` is a date and `6/9` is a pair of numbers the
-reader has to parse, so a row naming one day pays nothing for the spelled month
-— but two spelled dates with a rule between them is `Jul 19 – Aug 23`, measured
-at **110px** against the **72px** the numeric form takes, in a cell that has the
-date column and the opponent's to fit inside. The locale is the reader's, as
-`prettyGameDate`'s already is, since `6/9` cannot be read at all without knowing
-which half leads.
+#### The date column is one column on every row, and that is what set the format
 
-**It did not narrow the date column, and it was not going to.** Measured at
-1200 and 390 before and after: the column is **109px** and **79px** on both
-sides of the change, because a range sits in a cell spanning the date column
-*and* the opponent's (252px and 191px), and the date column's own width is set
-by the **header** — the expand button, the word `Date`, and 22.8px of padding
-either side against 26px of text. What the numeric form buys is a range that no
-longer fills the cell it sits in. Narrowing the column itself is a different
-change and would have to come out of the corner cell.
+**A range spanned the date column *and* the opponent's for a while, and the
+fault it caused was not width.** The date cell is **sticky**, so a two-column
+span meant the *pinned* region of the table changed shape from row to row: a
+range row held two columns against the scroll where a game row held one, and
+scrolling across dragged a two-column block over the table. Reported as
+*"multiple columns are stuck (date and opponent) for rows covering a time
+range"*, which is exactly what it looks like. **A pinned column that is a
+different width depending on which kind of row you are looking at is not a
+pinned column.** So a range now sits in the date column alone and its sentence
+takes everything else, the opponent's cell included — a stretch having no one
+opponent to name.
 
-**The range still needs both columns**, which is the reason the span was not
-dropped to one while the text was being shortened: 72px against a date column
-whose *content* box is 63.4px at 1200 and 64.2px at 390. Fitting it into one
-column would widen the column for every row on the table — the opposite of what
-was asked for. The **fifteen dashes were
+That decides the format, because the range is then what the column sizes to.
+Measured at 1200, where the header (the expand button, the word `Date`, and
+22.8px of padding either side against 26px of text) leaves **63.4px** for
+content:
+
+| | width | date column |
+| --- | --- | --- |
+| `Jul 19 – Aug 23` | 110px | — |
+| `7/19 – 8/23` (spaced en dash) | 72.0px | 109 → **118px** |
+| `7/19–8/23` (unspaced) | **65.4px** | 109 → **111px** |
+
+So the numbers are what make the one-column span possible at all, and **the
+unspaced en dash is load-bearing rather than typographic** — spaced, the column
+grew 9px, widening the very column the numbers were meant to keep narrow.
+Unspaced it is 111px at 1200 and 80px at 390 against a 109/79 floor, which is
+two pixels and one. (An unspaced en dash is also the correct form for a range,
+so nothing was traded.)
+
+**A single date keeps its spelled month.** `Jun 9` is a date and `6/9` is a pair
+of numbers the reader has to parse, so a row naming one day pays nothing for the
+month and only a range does. The locale is the reader's, as `prettyGameDate`'s
+already is, since a bare pair of numbers cannot be read without knowing which
+half leads.
+
+**The column is not reserved at its worst case**, which is the one place this
+parts from *reserve the box, don't move the page*. A double-digit range
+(`12/29–12/31`, 78.6px) would take the column to 124px — but reserving that
+would widen it for every player, including the great majority whose logs carry
+no range at all, which is the cost the reader was objecting to. A column that
+sizes to its own content is the right answer where the content is a property of
+*which player is open* rather than of a control moving under the finger.
+
+The **fifteen dashes were
 rejected**: a row of `—` across every stat column says "did not play" fifteen
 times in a language the reader has to translate, where one cell says it once.
 The same argument the Stats tab's `.stats-none` already makes about a span he
@@ -1124,15 +1148,24 @@ left: 191px` on the `td` left it at `left: -209`, exactly where it would have
 been unstuck. The span inside it has the whole cell to slide along, so it pins.
 
 The offset is **measured, not declared** — the date column is `width: 1%` and
-sizes to its own content, 109px at 1200 and 79px at 390, which is this repo's
+sizes to its own content, 111px at 1200 and 80px at 390, which is this repo's
 standing test for reading a value at runtime (`--research-pin-left` is the same
-rule one board over). **One offset serves both shapes**, which looks as though it
-should be two: a `dnp` row's sentence begins after the date cell *and* the
-opponent cell, an `absence` row's after the one cell spanning both for its date
-range, and those are the same edge.
+rule one board over). **Two offsets, because the two shapes pin different
+amounts**: a `dnp` row is a game and keeps the opponent's cell, so its sentence
+begins after two columns, where an `absence` row gives that cell to its sentence
+and begins after the date alone.
 
-Measured after: at 390 scrolled 400, the three sentences sit at **191, 79→191 and
-191** and all three are on screen; row height is **44.55px** at both widths,
+**The padding rides on the span, not on the cell**, and that is a second thing a
+sticky box does not do for free: it is placed at its `left` offset exactly, so
+padding on the *cell* is padding the sentence loses the moment it sticks —
+measured at 390 scrolled across, `7/19–8/23` and `60-day IL` ended up touching.
+On the span it travels with it, and the pinned position is then identical to the
+resting one.
+
+Measured after: at 390 scrolled 400px, every row's date cell is pinned at
+**0–80** — game rows, `dnp` rows and `absence` rows alike, which is the
+complaint answered — and the sentences sit at **80** (absence) and **192**
+(`dnp`), all of them on screen. Row height is **44.55px** at both widths,
 unchanged, and the page overflows by **0**.
 
 #### Measured across the population
