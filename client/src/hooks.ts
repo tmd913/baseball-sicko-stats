@@ -998,6 +998,19 @@ export function useOverlayFocus(
 }
 
 /**
+ * How far a finger may travel between `pointerdown` and `pointerup` and still
+ * count as a tap rather than the start of a scroll. Chromium's own touch-slop
+ * figure.
+ *
+ * **One home, two surfaces.** The percentile card's `PairRow` reveals its
+ * dumbbell on a tap and the arsenal charts' pin clears on one
+ * (`usePitchSelection`), and both are answering the same question about the same
+ * gesture — two numbers for one question is two numbers to keep true. It lives
+ * here rather than beside either because neither may import the other.
+ */
+export const TAP_SLOP = 8;
+
+/**
  * How long a dismissal keeps waiting for the click it expects, when nothing
  * else has happened to say the gesture is over. A backstop rather than a
  * timing rule: a press that produces a click produces it in the same gesture,

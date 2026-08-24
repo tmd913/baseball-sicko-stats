@@ -9,14 +9,28 @@ The roster holds both batters and pitchers, discriminated by `WatchPlayer.kind` 
 - **Opposing lineup**: `PlayerGame.opponentId` rides on every game, and `getReport` attaches `opponentHitting` to a *pitcher's* games (`teamHitting.ts::getTeamHitting`) — the **season, all games** cut, which is the opponent table's opening state and is why that table draws with no request of its own. What that module answers with is **nine cuts** rather than three: a window, a venue and a hand, whole league, each ranked within its own population. It is computed from the per-date Savant exports rather than read from MLB, and the whole of that — why MLB cannot be asked for a windowed or home-only platoon split, how a day reduces to four leaves plus a game count, why runs are read off the score progression, and the validation against MLB's own numbers — is in **Data sources**, *Team hitting: nine cuts a window*. Two rules of the old module survive unchanged: **ranks are computed here, not read off the API**, which ranks by its own default sort and doesn't rank splits at all (ties share a rank, and **1st is always the best offense** — so the fewest strikeouts ranks 1st, not 30th); and **a failed lookup resolves to null**, the opponent's line being context on a card that must never 502 a report which already has the outing. Note a **team's** hand split is by the hand of the pitcher they faced, so a lefty's card marks `vsLeft`.
 ### The Arsenal tab's two charts
 
-**The tab is third on a pitcher, directly after the percentile card**, where it
-used to trail the Game Log. Same argument that put Splits there: the card and
-these two charts are both a picture of *what kind of pitcher this is* — what he
-throws and where it moves — where Stats and the Game Log are the numbers he has
-put up, and a reader deciding about a stranger takes the pictures first. It also
+**The tab is second on a pitcher, directly after the Overview.** It has moved
+twice and each move is the same argument one step further. It first came out
+from behind the Game Log to sit third, behind the percentile card, on the
+argument that put Splits there: the card and these two charts are both a picture
+of *what kind of pitcher this is* — what he throws and where it moves — where
+Stats and the Game Log are the numbers he has put up, and a reader deciding about
+a stranger takes the pictures first. What the second move adds is that of the two
+pictures, **the arsenal is the one that is only his**: a percentile card is his
+season placed against everybody's, which is a reading a pitcher shares with every
+batter on the strip, where nobody else's arsenal is on this page at all. It also
 stops the one pitcher-only tab being the one furthest along a strip that scrolls
-on a phone: measured at 390px, Arsenal is now fully in view at `scrollLeft 0`
-where it was the seventh of eight.
+on a phone: measured at 390px, Arsenal is fully in view at `scrollLeft 0` where
+it was the seventh of eight.
+
+**The strip runs `Overview · Arsenal · Percentile Rankings · Splits · News ·
+Stats · Game Log · Schedule · Charts`**, and the order is the order the buttons
+are written in — nothing stores a position (see `DetailsTab`), so moving a tab is
+moving one JSX block.
+
+**The same two charts draw an outing**, on the outing page's own Arsenal tab,
+with his season in the place the league occupies here — see *An outing's arsenal
+is the same two pictures, one baseline nearer* below.
 
 **`components/ArsenalCharts.tsx` recreates the two pictures a Baseball Savant
 pitcher page leads with** — **Pitch Usage** and **Movement Profile (Induced
@@ -715,6 +729,120 @@ stated reasons, anchored to the title row rather than to its own 30px button
 (the `.roll-key` trick: a shrink-to-fit against the button resolves to 180px,
 and a 320px panel fits from neither of the button's edges on a phone).
 
+### An outing's arsenal is the same two pictures, one baseline nearer
+
+**The outing page's Arsenal tab draws Pitch Usage and Movement Profile for one
+night's work, with his own season in the place the league occupies on his player
+page** (`GameArsenalCharts` in `ArsenalCharts.tsx`). The rows the tab already had
+stay, under them.
+
+**Only the baseline moves, and that is the whole design.** A season chart answers
+*what kind of pitcher is this*, and the population worth answering it against is
+the rest of the league. An outing asks a different question with the same shapes
+— *was tonight his usual stuff* — and the only baseline that can answer it is the
+pitcher himself: against the league, a night on which a good pitcher's slider
+lost three inches still reads as an above-average slider, which is the fact and
+not the question. So the two components take a `ChartBaseline` and the game hands
+them his season; everything else — the butterfly's one scale, the cloud's
+outlines, the shared selection, what is lit and what a press means — is the same
+code and cannot drift from the page next door.
+
+**The charts stopped reading `SeasonArsenalPitch` to make that possible.** They
+read a `ChartPitch` now: a pitch, its own numbers, and `baseVelo`/`baseHBreak`/
+`baseVBreak`/`baseHRange`/`baseVRange` — the comparison named for its *role*
+rather than for one caller's population. `leagueHBreak` holding a season figure
+is a name that lies to the next reader, and there was one within the week. Each
+caller adapts in (`seasonChartPitches`, `gameChartPitches`), and the fields
+neither picture draws — the season's BA/SLG/wOBA against, a game's whiff rate —
+are not on `ChartPitch` at all, so nothing can start drawing one off whichever
+caller happens to carry it.
+
+**The blob is his own scatter, and it is a different quantity from the league's
+on purpose.** `pitchLeague.ts`'s `LEAGUE_SPREAD` is the spread of *per-pitcher
+means* — how much pitchers differ from one another. `PitchSpread` in
+`pitcherArsenal.ts` is the spread *within one pitcher* — the standard deviation
+of his own season's per-pitch break, computed off the same CSV rows the season
+averages come from. Each is the right cloud for the chart that draws it: the
+season plot's dots are pitches measured against the league, and the game plot's
+dots are one night's pitches measured against his season, which is a question
+only his own scatter can answer. Measured on Logan Gilbert's 2026: his four-seam
+is **2.5" / 1.5"** against the league's **3.7" / 3.5"**, and his splitter
+**4.4" / 4.0"** — a tight fastball and a loose splitter, which is the reading.
+Fewer than two of a type carried a break gives **null** rather than zero: a
+standard deviation of one reading is zero, and a zero-width blob is a claim that
+every one of his sliders breaks identically, made off one slider.
+
+**The cloud is every pitch, not a sample.** The season plot draws one dot per
+percent because a starter throws 2,000+ a season; a game is already bounded by a
+pitch count — 100 on the outing measured, a dozen for a reliever — so there is
+nothing to sample and the densities are the usage for free. That is also why the
+pitches had to arrive **per pitch rather than per type**: `PitchMix` has carried a
+game's mean break since it was written, and a mean cannot say how *tight*
+tonight's sliders were, which on a one-game chart is most of the reading. `Pitch`
+carries `hBreak`/`vBreak` now and `gameMovementSamples` reads them off the
+batters he faced — the same pitches `PitchMix` is aggregated from, rather than a
+second array beside them. Measured on that outing: **100 pitches, 100 with a
+break**, 6 pitch types, 6 blobs.
+
+**No arm, and no year on the titles.** The arm slot is a *season* figure off
+Savant's own arm-angle leaderboard — there is no such thing as tonight's slot — so
+drawing it here would be a season fact in the corner of a chart whose whole claim
+is that it is about one game, and it would cost the outing page a Savant read for
+a corner. The corner is the hatch key's alone, which is what a chart with no arm
+angle already did; the info key's arm paragraph is gated on the mark being drawn,
+a key explaining a corner the reader cannot see being worse than one paragraph
+shorter. The titles drop their year for the same reason — `2026 Pitch Usage` over
+one afternoon names the wrong span.
+
+**Three strings named the league in markup and now read the baseline.** The
+callout tag (`vs RHP AVG` → `vs SEASON AVG`), the legend's third row (`RHP avg` →
+`Season`), and — the one that had to be found in a screenshot rather than in the
+code — **the hatch key in the plot's own corner**, which said `MLB AVG` over blobs
+drawn from the pitcher's own season. `ChartBaseline` carries all four spellings
+(`label`, `short`, `key`, `against`), and `key` is deliberately not `label`: the
+callout compares against the line *for his hand* and says so, where the key
+stands over all five blobs at once and a season chart's has always read `MLB
+AVG`. **`SEASON AVG` is three characters longer and still clears the disc** —
+measured over the whole text box against the field circle, **19.1 viewBox units**
+where `MLB AVG` clears by 31.2. Both are clear, and the arm line on the season
+chart clears by 8.8, so 19.1 is comfortably inside what this plot already
+accepts. The geometry is fixed: everything is inside a 400-unit `viewBox` that
+scales as one, so the figure holds at every width.
+
+**The rows below the charts stayed, and the split control with them.** The player
+page dropped its own rows when the charts arrived, on the grounds that the
+velo/spin/break table was saying again what the pictures say better. Three things
+on a game's row are **not** in either picture — the pitch count and strike rate,
+the whiff rate, and the season Results strip — and they have no other home on
+this page. The `SplitTabs` above them also survives the argument that removed the
+player page's: there it switched the *whole tab* between two of the three columns
+the butterfly already draws, and cut the movement cloud to a third of itself; here
+it cuts the rows only, the charts above it drawing the whole game either way, so
+a per-hand whiff rate stays reachable and nothing on screen is contradicted.
+
+**Both strips put the arsenal second.** The outing page runs `Line · Arsenal ·
+Innings · Opponent` — Line still leads, being what a reader presses an outing bar
+to see — and the player page runs `Overview · Arsenal · …`, so a reader crossing
+from a man's season to one of his nights finds the picture in the same place.
+**Which tab a page opens on is a separate question and did not move**: a finished
+outing opens on Line and a live one on Innings (`defaultOutingTab`). Order is
+where a reading lives; the default is which question was asked, and this page has
+answered them separately since the live case was written.
+
+**Cache versions, both of them.** `pitcherArsenal.ts`'s blob went to **v7** for
+the spread — a v6 blob deserializes with `hRange`/`vRange` undefined and the game
+chart then draws its dots over nothing at all, a cloud with no baseline behind it
+on the one chart whose whole claim is the comparison. `DAY_SNAPSHOT_VERSION` went
+to **10** for the per-pitch break and the spread riding on `PitchMix`; both are
+read straight back out of a stored day. **`FEED_CACHE_VERSION` did not move** and
+that is the same test v9 applied: `pitchData.breaks` has been in `FEED_FIELDS`
+since a `PitchMix` first averaged those very numbers, so every cached game blob
+already holds what the new fields are derived from.
+
+**Bundle**: JS **642.18 → 644.59 kB** raw, **190.88 → 191.54** gzipped. CSS
+**unchanged** at 169.51 / 30.45 — `.arsenal-charts` and `.outing-tab` were
+already the right two boxes and neither needed a line.
+
 #### What is deliberately not recreated
 
 **The "100 pitch sample" toggle.** The cloud is 100 dots by construction now —
@@ -836,7 +964,7 @@ a chart.
 
 
 - **Client**: **`PitcherCard` no longer renders anywhere, and neither does `PlayerCard`.** They were the Games view's cards, and that view is gone — folded into the feed as a grouping, and from there onto the player page as its Overview tab (see **Client**). Their *parts* very much live on, which is why both files stay: `PitchingTag`, `lineSummary` and `OpponentSection` here, `GameStatusBadge` next door (and `PlatoonSplit`, which the feed's Upcoming row read until it took `PlatoonSplits`' own card instead), all read by `LiveFeed` and, through it, by `PlayerDay.tsx`, plus everything `PitcherCard.tsx` imports from `PlayerCard.tsx`. What is unrendered is the two top-level components and the pieces only they used (`CardSection`, `GameLine`), which rollup drops from the bundle — 442KB to 425.
-  **All four sections are back, as a page.** The Games view took a pitcher's per-game **Line** (the `.ars-row` with its Results / Rates / Contact strips), the **Opponent** lineup and his per-game **Arsenal** off screen with it, and the way back to them was `OutingBreakdown`: a **Full breakdown** button inside the opened outing dialog, raising a *second* `Modal` over the three sections the item hasn't got. That is now **`OutingPage`** (`components/OutingPage.tsx`) — one full-screen page, the shape `PlayerDetails` (`.details-view`) and `LeagueMatchupView` (`.mup-view`) already have, opening straight onto the full read under a tab strip: **`Line · Innings · Opponent · Arsenal`**.
+  **All four sections are back, as a page.** The Games view took a pitcher's per-game **Line** (the `.ars-row` with its Results / Rates / Contact strips), the **Opponent** lineup and his per-game **Arsenal** off screen with it, and the way back to them was `OutingBreakdown`: a **Full breakdown** button inside the opened outing dialog, raising a *second* `Modal` over the three sections the item hasn't got. That is now **`OutingPage`** (`components/OutingPage.tsx`) — one full-screen page, the shape `PlayerDetails` (`.details-view`) and `LeagueMatchupView` (`.mup-view`) already have, opening straight onto the full read under a tab strip: **`Line · Innings · Opponent · Arsenal`** *(the arsenal has since moved to **second** and the strip reads `Line · Arsenal · Innings · Opponent` — see *An outing's arsenal is the same two pictures, one baseline nearer*)*.
 
   **The passage this replaces argued for the two dialogs, and its argument was about the button rather than the box.** It read: *the feed's outing item deliberately opens onto `InningsList` alone, an item being a stream entry rather than a full read* — and then bolted a door onto that stream entry to reach the read anyway. Two presses and two stacked dialogs to see a pitcher's line is a ladder built on a decision the second press immediately overturns; the honest reading is that pressing an outing **is** asking for the full read, so it should land on one. It also stops the innings and the line being two different kinds of thing: they are four tabs of one page now, in the order an outing is read — what he did, how it went inning by inning, whom he faced, what he threw.
 

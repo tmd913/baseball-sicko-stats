@@ -11,7 +11,11 @@ is `Overview · Percentile Rankings · [Arsenal] · Splits · News · Stats ·
 Game Log · Charts` *(the **Schedule** tab has since gone in second, so News is
 the ninth and the run reads `Overview · Schedule · Percentile Rankings ·
 [Arsenal] · Splits · News · Stats · Game Log · Charts`; its own reasoning is in
-`client-player-page.md`, **The Schedule tab: what he has coming**)* — which is the Overview's own block order one tier up and
+`client-player-page.md`, **The Schedule tab: what he has coming**. Schedule has
+since gone to the **end** and the **Arsenal** to **second**, so the strip as it
+stands is `Overview · [Arsenal] · Percentile Rankings · Splits · News · Stats ·
+Game Log · Schedule · Charts` — News is still the tab in front of Stats and the
+Game Log, which is the claim this paragraph is making)* — which is the Overview's own block order one tier up and
 for the same reason. What has *happened* to a player this week is a different
 kind of fact from what he has *done* this season, and it is the one that changes
 a decision fastest: a reader deciding about a stranger wants to know he went on
@@ -1160,6 +1164,15 @@ for the three that had never been described at all. That list is the one place
 in the app that tells a new reader what the player page *is*, so it is worth
 keeping in step with the strip rather than behind it — and the four renames it
 had accumulated are the argument for checking it whenever a tab moves.
+
+*(It has since been checked twice for exactly that reason, which is the rule
+earning itself. The run above is two entries adrift of what shipped — `News` is
+missing from it and `Arsenal` is written twice — and the **Arsenal** entry has
+since moved to second to follow the strip, so the page now reads `Overview ·
+Arsenal · Percentile Rankings · Splits · News · Stats · Game Log ·
+Schedule · Charts`, the last two sharing one entry. The pitcher chapter's own
+four moved with the outing strip: `Line · Arsenal · Innings · Opponent`, with
+the Arsenal entry rewritten to name the two charts it now leads with.)*
 
 ### The key is behind an ⓘ here too
 

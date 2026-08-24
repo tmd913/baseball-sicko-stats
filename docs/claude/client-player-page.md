@@ -1929,7 +1929,10 @@ two blocks of **one tab**, with a door between them. What is left for the tab is
 the fortnight behind that preview — a deeper reading rather than a first one —
 so it belongs where the other deep readings are. **The strip as rendered**, read
 off the page at 1200×900: `Overview · Percentile Rankings · Splits · News ·
-Stats · Game Log · Schedule · Charts`, with `Arsenal` third on a pitcher. At
+Stats · Game Log · Schedule · Charts`, with `Arsenal` third on a pitcher *(the
+arsenal has since gone in **second**, ahead of the percentile card — see
+**Pitchers**, *The Arsenal tab's two charts*; the rest of the run is as measured
+here)*. At
 390×844 the strip is **34px** tall, the selected tab lands **fully inside** it
 (Schedule sits 244px from the strip's left edge), and the page body and the
 overlay each overflow by **0**.

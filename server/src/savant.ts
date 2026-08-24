@@ -472,6 +472,11 @@ function toClientPitch(p: StatsApiPitch): Pitch {
     szTop: p.szTop,
     szBot: p.szBot,
     zone: p.zone,
+    // The same two numbers `aggregatePitches` averages into a `PitchMix` row,
+    // kept per pitch: an outing's Movement Profile draws one dot per pitch, and
+    // a mean cannot say how tight tonight's sliders were.
+    hBreak: p.hBreak,
+    vBreak: p.vBreak,
     launchSpeed: p.launchSpeed,
     launchAngle: p.launchAngle,
     hitDistance: p.hitDistance,
@@ -644,6 +649,8 @@ function aggregatePitches(pitches: StatsApiPitch[]): {
         seasonSpin: null,
         seasonHBreak: null,
         seasonVBreak: null,
+        seasonHRange: null,
+        seasonVRange: null,
         leagueVelo: null,
         leagueSpin: null,
         leagueHBreak: null,
@@ -790,6 +797,8 @@ function fillBaselines(
       m.seasonSpin = sea.spin;
       m.seasonHBreak = sea.hBreak;
       m.seasonVBreak = sea.vBreak;
+      m.seasonHRange = sea.hRange;
+      m.seasonVRange = sea.vRange;
       m.seasonPa = sea.pa;
       m.seasonBa = sea.ba;
       m.seasonSlg = sea.slg;
@@ -1117,8 +1126,20 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  blobs measured to be wrong are all healed by the seeded first poll (their
  *  last MLB update is between 0.84 and 10.45 days old against a 14-day
  *  lookback), so a bump would re-download 622 games to arrive at 614
- *  byte-identical ones. */
-const DAY_SNAPSHOT_VERSION = 9;
+ *  byte-identical ones.
+ *
+ *  **v10 puts the break on every pitch** (`Pitch.hBreak`/`vBreak`) and his own
+ *  season spread on every arsenal row (`PitchMix.seasonHRange`/`seasonVRange`),
+ *  which an outing's Movement Profile draws its cloud and its baseline blob
+ *  from. Both are read straight back out of a stored day — `getReport` hands
+ *  the snapshot's `games` to the client whole — so a v9 blob deserializes with
+ *  a full arsenal tab and an empty plot, which reads as a pitcher who threw
+ *  nothing rather than as a stale blob. **`FEED_CACHE_VERSION` did not move
+ *  with it**, and that is the same test v9 applied: `pitchData.breaks` is
+ *  already in `FEED_FIELDS` (a `PitchMix` row has averaged those very numbers
+ *  since it was written), so every cached game blob already holds what the new
+ *  fields are derived from. */
+const DAY_SNAPSHOT_VERSION = 10;
 
 /**
  * The on-the-wire form of a day.

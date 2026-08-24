@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -26,7 +25,12 @@ import type {
   XwobaSeries,
 } from '../types';
 import { handCell, headshotUrl, isRotationStarter, savantPlayerUrl, statusCorner } from '../lib';
-import { MovementChart, PitchUsageChart } from './ArsenalCharts';
+import {
+  MovementChart,
+  PitchUsageChart,
+  seasonChartPitches,
+  usePitchSelection,
+} from './ArsenalCharts';
 import { RemoveButton } from './RemoveButton';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -41,6 +45,7 @@ import { NewsTab } from './PlayerNews';
 import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
 import { LoadingBlock } from './Loading';
 import {
+  TAP_SLOP,
   useDelayedFlag,
   usePlayerStatus,
   useHandedness,
@@ -125,12 +130,6 @@ const EXPECTED_OF: Record<string, string> = {
   // have been worth.
   wobacon: 'xwobacon',
 };
-
-/**
- * How far a finger may travel between pointerdown and pointerup and still count
- * as a tap rather than the start of a scroll. Chromium's own touch-slop figure.
- */
-const TAP_SLOP = 8;
 
 /**
  * A combined actual/expected row. At rest it reads as a normal row for the
@@ -291,13 +290,13 @@ function renderMetricRows(metrics: PercentileMetric[], overlapPct: number): Reac
  */
 type DetailsTab =
   | 'overview'
+  | 'arsenal'
   | 'percentiles'
   | 'splits'
   | 'news'
   | 'stats'
   | 'gamelog'
   | 'schedule'
-  | 'arsenal'
   | 'charts';
 
 /**
@@ -328,105 +327,26 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
    * one arsenal, and a selection each would be two answers to "which pitch am I
    * looking at" on one screen.
    *
-   * **Two pieces of state, not one**, which is what makes a press mean something
-   * a hover does not: `preview` is where the pointer or the keyboard is, `picked`
-   * is what was pressed, and what is lit is the first of those that exists. See
-   * `PitchSelection` in `ArsenalCharts.tsx` for the whole of the rule and for the
-   * two faults a single `hovered` produced.
+   * **The whole of it lives in `usePitchSelection`**, which is where an outing's
+   * own copy of these two charts reads it from too. It was written out here
+   * while there was one caller, and every line of it — the preview/pin split, a
+   * leave that only clears its own, a press elsewhere that unpins, and the
+   * `TAP_SLOP` release test that keeps a scroll from counting as one — is a rule
+   * about the gesture rather than about this tab. Two copies of that would be
+   * two chances for a page and an outing to answer the same finger differently.
    */
-  const [preview, setPreview] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
-  // Turning a preview *off* only clears its own: focus can leave one button
-  // while the pointer sits on another, and an unconditional clear takes the
-  // wrong one down.
-  const onPreview = useCallback(
-    (pitchType: string, on: boolean) =>
-      setPreview((cur) => (on ? pitchType : cur === pitchType ? null : cur)),
-    [],
+  const selection = usePitchSelection();
+  // The charts read a `ChartPitch` — a pitch, its numbers, and whatever baseline
+  // it is drawn against — rather than this payload's own row, so that the same
+  // two pictures can be drawn for one game against his season. See `ChartPitch`.
+  const pitches = useMemo(() => seasonChartPitches(arsenal.pitches), [arsenal.pitches]);
+  const vsRight = useMemo(
+    () => (arsenal.vsRight ? seasonChartPitches(arsenal.vsRight) : null),
+    [arsenal.vsRight],
   );
-  const onPick = useCallback(
-    (pitchType: string) => setPicked((cur) => (cur === pitchType ? null : pitchType)),
-    [],
-  );
-
-  /**
-   * **A tap anywhere else unpins, and a scroll does not** — which is the other
-   * half of a press meaning something: on touch there is no pointer to move
-   * away, so without the first clause a tapped pitch would stay lit until the
-   * reader remembered which one it was and tapped it again.
-   *
-   * **The second clause is what this used to get wrong.** It cleared on the
-   * `pointerdown` itself, and on a touch device a *scroll* begins with a
-   * `pointerdown` on whatever happens to be under the finger — so dragging the
-   * player page anywhere but on a pitch button unpinned the pitch, which is the
-   * one gesture a reader makes constantly while reading a chart that is taller
-   * than a phone. Reported as the arsenal page dropping its touch highlight on
-   * scroll.
-   *
-   * So the press only **arms** and the release decides: a gesture that stayed
-   * within `TAP_SLOP` of where it started is a tap and clears the pin, and one
-   * that travelled further is a drag and does not. A scroll the browser takes
-   * over fires `pointercancel` and no `pointerup` at all, which disarms without
-   * ever reaching the test.
-   *
-   * **`PairRow` in this same file already had all of this**, and its comment is
-   * this bug stated one tab over — *"the card is a list of rows inside a
-   * scroller, and toggling on pointerdown meant every flick that happened to
-   * start on a row flipped it"*. The percentile card was fixed and the arsenal
-   * pin was written afterwards without it. Same constant, deliberately: two
-   * numbers for one question is two numbers to keep true.
-   *
-   * Judged on the release rather than on the `click` — which is the modal
-   * backdrop's own answer (**Client — popups**, *A tap can still reach behind a
-   * popup*) — because that fault was a box torn out mid-gesture and this has no
-   * box, so iOS's reluctance to deliver a `click` from a non-interactive
-   * element never has to be reasoned about.
-   *
-   * **Arming is judged on where the gesture started**, not where it ended: a
-   * drag that begins on a pitch button and releases on the page is that
-   * button's gesture, and a press that begins on the page and releases over a
-   * button is the page's.
-   *
-   * Deliberately **not `useDismissable`**, though it is the same shape: that hook
-   * also spends the press (`swallowNextClick`), because a popover is *in the
-   * reader's way* and a press past it is aimed at getting rid of it. A lit pitch
-   * covers nothing, so the press that clears it should also do what it was aimed
-   * at — a first tap on the Splits tab must switch tabs, not be eaten. Nothing
-   * here calls `preventDefault` or `stopPropagation`, so the click that follows
-   * a clearing tap still lands on whatever it was aimed at.
-   *
-   * `[data-pitch]` rather than the two class names, so the test names the thing
-   * (a pitch button) rather than either chart's markup.
-   */
-  useEffect(() => {
-    if (picked === null) return;
-    let armed: { x: number; y: number } | null = null;
-    const onDown = (e: globalThis.PointerEvent) => {
-      const t = e.target as Element | null;
-      armed = t?.closest?.('[data-pitch]') ? null : { x: e.clientX, y: e.clientY };
-    };
-    const onUp = (e: globalThis.PointerEvent) => {
-      const start = armed;
-      armed = null;
-      if (!start) return;
-      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) <= TAP_SLOP) setPicked(null);
-    };
-    const onCancel = () => {
-      armed = null;
-    };
-    window.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onCancel);
-    return () => {
-      window.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onCancel);
-    };
-  }, [picked]);
-
-  const selection = useMemo(
-    () => ({ selected: preview ?? picked, picked, onPreview, onPick }),
-    [preview, picked, onPreview, onPick],
+  const vsLeft = useMemo(
+    () => (arsenal.vsLeft ? seasonChartPitches(arsenal.vsLeft) : null),
+    [arsenal.vsLeft],
   );
 
   if (arsenal.pitches.length === 0) {
@@ -437,16 +357,16 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
       <div className="arsenal-charts">
         <PitchUsageChart
           season={arsenal.season ?? null}
-          pitches={arsenal.pitches}
-          vsRight={arsenal.vsRight}
-          vsLeft={arsenal.vsLeft}
+          pitches={pitches}
+          vsRight={vsRight}
+          vsLeft={vsLeft}
           selection={selection}
         />
         <MovementChart
           season={arsenal.season ?? null}
           hand={arsenal.hand ?? null}
           armAngle={arsenal.armAngle ?? null}
-          pitches={arsenal.pitches}
+          pitches={pitches}
           // `?? []` because a response is not a promise: `samples` is declared
           // non-optional and the two `types.ts` are mirrored by hand, so
           // TypeScript cannot catch a server that doesn't send it — and one
@@ -1613,29 +1533,36 @@ export function PlayerDetails({
         <>
           {/* First and default: what he is doing today, which is the question
               this page is opened with on a game day. The rest are readings of
-              his season, and they run pictures-before-numbers — the percentile
-              card, the arsenal (pitchers) and the splits, then the news, the
+              his season, and they run pictures-before-numbers — the arsenal
+              (pitchers), the percentile card and the splits, then the news, the
               stats and the games. */}
           <DetailsTabButton id="overview" tab={tab} onPick={setTab}>
             Overview
           </DetailsTabButton>
-          <DetailsTabButton id="percentiles" tab={tab} onPick={setTab}>
-            Percentile Rankings
-          </DetailsTabButton>
-          {/* **Arsenal is third on a pitcher, directly after the percentile
-              card**, where it used to trail the Game Log. It is the same
-              argument that put Splits there: the card and these two charts are
-              both a picture of *what kind of pitcher this is* — what he throws
-              and where it moves — where Stats and the Game Log are the numbers
-              he has put up. A reader deciding about a stranger takes the
-              pictures first, and for a pitcher the arsenal is the picture. It
-              also stops the one pitcher-only tab being the one furthest along a
-              strip that scrolls on a phone. */}
+          {/* **Arsenal is second on a pitcher, directly after the Overview**,
+              where it was third and, before that, trailed the Game Log. Each
+              move is the same argument one step further: the charts are a
+              picture of *what kind of pitcher this is* — what he throws and
+              where it moves — where Stats and the Game Log are the numbers he
+              has put up, and a reader deciding about a stranger takes the
+              pictures first. What the last step adds is that of the two
+              pictures, the arsenal is the one that is *only* his: a percentile
+              card is his season placed against everybody's, which is a reading
+              a pitcher shares with every batter on the strip, where nobody
+              else's arsenal is on this page at all. It also puts the one
+              pitcher-only tab where a phone can reach it without scrolling the
+              strip — measured at 390px, it is fully in view at `scrollLeft 0`.
+              Numbered nowhere: the strip's order is the order these buttons are
+              written in (see `DetailsTab`), so this is the whole of the
+              change. */}
           {isPitcher && (
             <DetailsTabButton id="arsenal" tab={tab} onPick={setTab}>
               Arsenal
             </DetailsTabButton>
           )}
+          <DetailsTabButton id="percentiles" tab={tab} onPick={setTab}>
+            Percentile Rankings
+          </DetailsTabButton>
           {/* **Splits reads with the percentile card (and, on a pitcher, the
               Arsenal), where it used to read after Stats.** The old order was
               the order the season is *cut* in — the whole of it, then the same season cut by handedness,
