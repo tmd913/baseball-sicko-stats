@@ -62,8 +62,11 @@ import type { ReactNode } from 'react';
  * - **`md` (28px)** — a block wait: a pane with genuinely nothing in it yet.
  *   The report's first read, the research board's first read, each lazily
  *   fetched tab of the player page, the highlight reel.
- * - **`lg` (44px)** — the boot splash, which is the one wait that owns the
- *   whole window.
+ * - **`lg` (44px)** — a wait that owns a whole surface with nothing behind it
+ *   to protect: the boot splash, which owns the window, and the Overview's
+ *   first draw, which owns the view. Both are the *only* thing on screen while
+ *   they are up, and at `md` a ball with that much room around it reads as a
+ *   pane still arriving rather than as the page being read.
  */
 export type BallSize = 'sm' | 'md' | 'lg';
 
@@ -142,11 +145,28 @@ export function LoadingLine({
  * The text is the point. "Loading…" is what five of these said before, on five
  * different panes, which told the reader nothing they could not see; each now
  * names its own subject the way this app's empty states name their own cause.
+ *
+ * **`size` is the slot's say in it, and `md` is what every slot but one
+ * wants.** A block wait is a pane's wait, and a pane has something above it —
+ * a tab strip, a card head, a board's chrome — which is the scale `md` is set
+ * against. The exception is a wait that owns the *whole view* with nothing
+ * behind it to protect, where the same 28px ball reads as a pane still
+ * arriving rather than as the page being read: the Overview's first draw takes
+ * `lg`, the size the boot splash already uses for the same reason. Passed
+ * rather than given its own component, which is this stylesheet's own rule —
+ * two things that are the same object share a selector rather than being given
+ * rules that agree today.
  */
-export function LoadingBlock({ children }: { children: ReactNode }) {
+export function LoadingBlock({
+  children,
+  size = 'md',
+}: {
+  children: ReactNode;
+  size?: Extract<BallSize, 'md' | 'lg'>;
+}) {
   return (
     <div className="loading-block" role="status">
-      <SpinningBaseball size="md" />
+      <SpinningBaseball size={size} />
       <p className="loading-what">{children}</p>
     </div>
   );

@@ -64,6 +64,7 @@ import {
   surname,
 } from '../lib';
 import { LoadingBlock } from './Loading';
+import { useDelayedFlag } from '../hooks';
 import { useOverflowArrows } from './TabStrip';
 import { MatchupCard, categoryGroups, fmtValue } from './LeagueView';
 import { ProjectedGlyph } from './Projection';
@@ -767,6 +768,7 @@ export default function OverviewView({
   onOpenPlayer,
   onSeeDay,
   connected,
+  ready,
 }: {
   board: EspnScoreboard | null;
   onOpenMatchup: (id: number) => void;
@@ -818,6 +820,18 @@ export default function OverviewView({
   onOpenPlayer: (id: number) => void;
   onSeeDay: (date: string) => void;
   connected: boolean;
+  /** **The page may be drawn** — every read behind it has answered, all nine of
+   *  them, the board included and including the four that only exist once the
+   *  board has said who the opponent is. Worked out in
+   *  `App.tsx::overviewSettled`, which is where the two things this component
+   *  cannot see live: whether a read has been *asked for* yet, and whether a
+   *  board is still coming.
+   *
+   *  **Latched there, so it is one-way.** A re-read — the tab crossed and come
+   *  back to, the clock rolling on resume — leaves this true and the cards
+   *  standing, which is rule 1: a curtain belongs where there is nothing to
+   *  show, and by then there is. */
+  ready: boolean;
 }) {
   /**
    * **The league's categories, or the standard 5×5.** A reader with no league
@@ -840,6 +854,11 @@ export default function OverviewView({
   const categoriesTitle = `Ranked over ${
     own > 0 ? `your league's ${own} categories` : 'the standard 5×5'
   } — ${categories.map((c) => c.label).join(' · ')}`;
+
+  /** The ball, once the wait has outlasted `WAIT_DELAY` — see the gate at the
+   *  foot of this component, where it is argued. Called here because it is a
+   *  hook and the gate is a return. */
+  const showWait = useDelayedFlag(!ready);
 
   const nameOf = useMemo(() => {
     const map = new Map<number, string>();
@@ -1048,6 +1067,50 @@ export default function OverviewView({
     today: oppTodayIsProjected,
     tomorrow: true,
   };
+
+  /**
+   * **The page arrives all at once, or not at all.**
+   *
+   * It is a composition of up to nine reads and it used to draw each of them
+   * the moment it had it. From a chair that is six reflows to reach one page:
+   * the matchup card lands and the headings below it are pushed down; the three
+   * day cards swap their own waits for figures one at a time, each a different
+   * height, resizing the carousel under a finger that may already be dragging
+   * it; and then the board answers and `Their days` appears out of nothing,
+   * growing the page by a whole second carousel. Nothing about that was a bug
+   * in any one block — every one of them was keeping rule 2 correctly, that a
+   * block wait belongs where there is nothing to show yet.
+   *
+   * **The unit was wrong.** Three cards of one row are not three panes, and a
+   * heading that appears a beat after the block it names is not one either.
+   * `ready` asks the question at the size of the thing a reader is actually
+   * looking at, and what the reader gets is a wait and then a page.
+   *
+   * **`lg`, and it is the second place in the app that takes it.** The other is
+   * the boot splash, and for the same reason: this wait owns the entire view
+   * with nothing behind it to protect, and at 28px a ball with that much room
+   * around it reads as a pane still arriving rather than as the page being
+   * read.
+   *
+   * **`WAIT_DELAY` before the ball and nothing before that** — rule 2's second
+   * half, and it matters more here than anywhere else in the app, because a
+   * gate this wide is one every warm load clears in tens of milliseconds. The
+   * *content* stays gated on `ready` itself, never on the delayed flag, or a
+   * fast load would show an empty page for a quarter of a second instead of
+   * showing the page.
+   *
+   * **The per-card waits stay** and are not dead. They are what a re-read
+   * draws — a card whose day has rolled over on resume, which is a block with
+   * genuinely nothing in it under headings that are already on screen, which is
+   * exactly the case `md` and `LoadingBlock` were written for.
+   */
+  if (!ready) {
+    return (
+      <div className="overview-view overview-wait">
+        {showWait ? <LoadingBlock size="lg">Reading your days</LoadingBlock> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="overview-view">

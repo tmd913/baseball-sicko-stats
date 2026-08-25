@@ -20857,6 +20857,34 @@ html[data-theme='light'] .league-table thead th {
   width: 100%;
   margin: 0 auto;
 }
+/* **The page's first draw is one wait, and it owns the view.** The nine reads
+   behind this page answer over about a second and used to be drawn as they
+   landed, which is six reflows to reach one page — the matchup card pushing the
+   headings down, three day cards each swapping a wait of its own for figures of
+   a different height, and `Their days` finally appearing out of nothing. So the
+   body is gated on all of them (`App.tsx::overviewSettled`) and the wait stands
+   in for the lot.
+
+   **One declaration, and it takes a number away rather than adding one.** The
+   app's own figure for a wait sitting directly under the pinned bar is **54px**
+   — the block's own 40 plus the bar's 14 — which is what `.app > .loading-block`
+   sets for the report's and the board's first reads, and this is the third of
+   them. Here it arrives for free: `.app` is block flow on this view and the bar
+   keeps its 14px bottom margin, so the block's untouched 40 lands on 54 with
+   nothing said. What had to go is the section's own `padding-top`, which is air
+   under the bar for a *heading* and there is no heading — measured at 1200×900
+   with the reads held: **64px** with it, **54** without, against 68 for an
+   earlier draft of this rule that declared the 54 itself and stacked it on the
+   bar's 14.
+
+   The auto margins on `.loading-block` are what center it: this is a column
+   flex, so an auto cross-axis margin suppresses the stretch and the block
+   shrinks to its content, which is the note under `.ov-matchup` below read the
+   other way up — there the shrink is the fault, here it is the whole point. */
+.overview-wait {
+  padding-top: 0;
+}
+
 /* **`width: 100%` beside the auto margins, and it is load-bearing.** An auto
    margin on the cross axis suppresses a flex item's stretch, so a centered
    block inside a column flex shrinks to its content — the fault

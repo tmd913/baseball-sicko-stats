@@ -288,6 +288,112 @@ with the opponent's four requests carrying `teamId=12` against the reader's own
 `teamId=6`, three ranked performers on his card, no console errors and 0
 page-body overflow.
 
+**Bundle**, for the whole-page wait below: **711.34 → 711.76 KB** of JS
+(210.21 → 210.36 gzipped) and **182.69 → 182.72 KB** of CSS (32.73 → 32.74
+gzipped) — 0.42KB and 0.03KB raw, 0.16KB over the wire between them, for one
+derived boolean, two latches, a gate and one `padding-top`.
+
+### The page arrives all at once, or not at all
+
+**Nine reads answer over about a second, and the page used to draw each of them
+the moment it had it.** From a chair that is not a page loading, it is a page
+assembling itself: the matchup card lands and pushes the two headings below it
+down; the three day cards swap their own waits for figures one at a time, each a
+different height, resizing the carousel under a finger that may already be
+dragging it; and then the board answers, `Their days` appears out of nothing and
+the page grows by a second carousel.
+
+Measured at 1200×900 on a warm local server, recording every distinct layout the
+first load passes through:
+
+| | `.overview-view` height | document height | day cards | headings | matchup | carousels |
+| --- | --- | --- | --- | --- | --- | --- |
+| | — | 900 | 0 | 0 | 0 | 0 |
+| | **127** | 900 | 3 | 1 | 0 | 1 |
+| | **798** | 957 | 6 | 2 | 1 | 2 |
+| | **1004** | 1163 | 6 | 2 | 1 | 2 |
+| | 1004 | **1200** | 6 | 2 | 1 | 2 |
+
+**Five states and four reflows to reach one page** — and not one of the blocks
+was doing anything wrong. Every one of them was keeping rule 2 correctly: a
+block wait belongs where there is nothing to show yet, and each card
+individually had nothing to show. **The unit was wrong.** Three cards of one
+carousel are not three panes, and a heading that appears a beat after the block
+it names was never one either.
+
+So the body is gated on **all** of it — `App.tsx::overviewSettled` — and the
+same measurement becomes three states and one:
+
+| | `.overview-view` height | document height | day cards | headings | matchup | carousels |
+| --- | --- | --- | --- | --- | --- | --- |
+| | — | 900 | 0 | 0 | 0 | 0 |
+| | 0 | 900 | 0 | 0 | 0 | 0 |
+| | **1004** | **1200** | 6 | 2 | 1 | 2 |
+
+**The question is only answerable in `App.tsx`**, which is why the view takes it
+as a prop rather than working it out from the eight loading flags it already
+holds. Those flags cannot say that four of them have not been *raised* yet — a
+fantasy reader's own four wait on `espnStatusSettled`, and the opponent's four
+wait on a board that lands later still — and *not started* and *finished* look
+identical from outside: nothing in flight, nothing in hand. `ovFired` and
+`ovOppFired` are the two latches that tell them apart, and `espnStatusSettled`
+plus `scoreboard`-or-`scoreboardError` is the third term, for the block whose
+absence is itself an answer.
+
+**A dead upstream must not spin this page for ever**, which is the `scoreboardError`
+half of that term and the app's own rule that a failure costs its own column and
+never the request. Driven with `*scoreboard*` blocked at the network layer: the
+page settles at **495ms** on **3 day cards, one heading, one carousel and no
+matchup card** — the reader's own days standing, the two blocks that needed the
+board absent rather than waited on. A failed *day* read settles the same way,
+`loading` going false whether it answered or threw, and the card draws the empty
+state it already had (`Nothing to report on — no roster is being read.`) —
+drawing that is finishing, not failing to finish.
+
+**And once drawn, never curtained again.** `overviewSettled` goes false on every
+re-read, and two of those are ordinary: crossing to another tab and back
+**unmounts and remounts** this view so its effects re-fire, and the clock rolling
+on resume does the same. Both leave the last answers in `App.tsx`'s own state, so
+a curtain over them would be rule 1 broken — a wait standing in front of data.
+The latch is `ovDrawn` and it is held in `App.tsx` for exactly that reason: a
+`useRef` in `OverviewView` is a *new* ref on every remount, which is the case it
+would be needed for. Driven — settle, press `Research`, press `Overview` — the
+page comes back in **one** state at its full 1004px with six cards and no wait
+drawn at any point. The live tick never moves it at all, being quiet.
+
+**The wait is the ball at `lg`, and this is the second place in the app that
+takes 44px.** The other is the boot splash, and the reason is the same one that
+document gives: this wait owns the entire view with nothing behind it to
+protect, and at `md` a 28px ball with that much room around it reads as a pane
+still arriving rather than as the page being read. It says `Reading your days`,
+which is the app's empty-state rule applied to waits.
+
+**`WAIT_DELAY` before the ball, and nothing before that.** It matters more here
+than anywhere else in the app, because a gate this wide is one that a warm load
+clears inside it: measured, the whole page settles at **226ms** warm, so the
+common case draws no ball at all and goes straight from blank to page. The
+*content* stays gated on `ready` itself and never on the delayed flag — gate it
+on the delayed one and a fast load shows an empty page for a quarter of a second
+instead of showing the page.
+
+**The per-card waits stay and are not dead.** They are what a **re**-read draws:
+a card whose day has rolled over on resume is a block with genuinely nothing in
+it under headings that are already on screen, which is exactly the case `md` and
+`LoadingBlock` were written for.
+
+Geometry, measured at 1200×900 and 390×844 with the reads held open at 500ms
+latency: the ball **44px**, four seams animating, the block **centered** (offset
+0 from the view's own center) and its top **54px** below the pinned bar's border
+edge at both widths, with 0 page-body overflow. **54 is the app's own number for
+a wait sitting directly under the bar** — the block's own 40 plus the bar's 14 —
+and here it arrives by *removing* a declaration rather than adding one:
+`.overview-wait` zeroes the section's `padding-top`, which is air under the bar
+for a heading and there is no heading. Measured: **64px** with the padding left
+in, **54** without, and **68** for an earlier draft that declared the 54 itself
+and stacked it on the bar's own 14. Settled, the class comes off and the section
+is byte-for-byte what it was — `padding-top` back to 10px, first child 24px
+below the seam.
+
 ### The `TODAY` card follows the day it is about
 
 **Every other card on this page is settled** — yesterday is played, tomorrow is
