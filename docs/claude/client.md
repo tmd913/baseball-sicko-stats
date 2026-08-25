@@ -1156,6 +1156,30 @@ It is **nine keyframes of `transform` and `opacity` on four paths, and no JavaSc
 2. **A block wait only when there is nothing to show yet**, and only after **`WAIT_DELAY` (250ms)**. That floor has guarded the report since it was written and is now `hooks.ts::useDelayedFlag`, which every block wait in the app takes — the five player-page tabs above all, where a warm percentile card comes back in tens of milliseconds and a wait that appears and vanishes inside a tenth of a second reads as the page breaking rather than as an answer. The *content* stays gated on the real flag, not the delayed one, or a fast tab would show a blank pane instead of a wait.
 3. **A press-triggered mark holds `MIN_SPIN` (450ms)**, unchanged and now stated as the other end of the same argument: `MIN_SPIN` is a floor on how long a mark stays up once a press put it there, `WAIT_DELAY` is a delay before a mark goes up at all for the waits nobody pressed. The two are deliberately different numbers because they answer different questions. Its one caller is the fantasy popover's Refresh from ESPN, which the ESPN page's own Refresh inherits through `onRefresh`, that being `refreshFantasy`; the sign-in submit and the Connect league button take neither, a Cognito or ESPN round trip having no fast answer to leave a press without a trace.
 
+### A response that is not JSON is an error with a sentence
+
+**`api.ts::json` parses the body itself now, and a 200 that will not parse is an
+`ApiError` naming what happened.** The failure path already knew this — a 404
+whose body is an HTML error page has its parse failure swallowed and becomes
+`404 Not Found`. The **success** path did not: it was `res.json()` on a 200, so
+a body that would not parse threw the browser's own `Unexpected end of JSON
+input` out of the fetch layer, with nothing in it naming the request, the status
+or the cause. It reached the reader as *"JSON.parse error"* and the view it
+belonged to as an exception it had no banner for.
+
+**A 200 that is not JSON is not hypothetical**, which is the whole reason this
+is worth a rule rather than a `try`. The case that reported it is a server
+restarting under `tsx watch` while the page polls: the response has already
+begun, so it is a `200 application/json` whose body is cut off part-way. A
+deploy does the same to a tab left open, and any host that serves the SPA for an
+unmatched `/api/*` path does it with a whole `index.html`.
+
+So the body is read as **text** and parsed here, and the two messages name the
+two things that actually produce it, in the order they are worth checking: an
+empty body means the server went away mid-answer, and anything else means
+something served the app in place of the API. The status rides along, so a
+caller that tests it still can.
+
 ### Rule 1 has a fifth clause: never over data, and never *above* it either
 
 **Never over data** is a rule about curtains — a wait must not stand in front

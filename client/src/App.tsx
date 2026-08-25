@@ -4789,6 +4789,17 @@ export default function App() {
    *  answer off an engine the page is already asking (`daysLeft` and the
    *  server's own cache do the rest). */
   const [ovTodayProjection, setOvTodayProjection] = useState<RosterProjection | null>(null);
+  /** **The same four again, for this week's opponent** — the Overview's foot.
+   *  Held separately rather than keyed by team id: there is exactly one
+   *  opponent at a time, and a map would be a cache nothing evicts. */
+  const [ovOppToday, setOvOppToday] = useState<OverviewDay | null>(null);
+  const [ovOppYesterday, setOvOppYesterday] = useState<OverviewDay | null>(null);
+  const [ovOppTomorrow, setOvOppTomorrow] = useState<RosterProjection | null>(null);
+  const [ovOppTodayProjection, setOvOppTodayProjection] = useState<RosterProjection | null>(null);
+  const [ovOppTodayLoading, setOvOppTodayLoading] = useState(false);
+  const [ovOppYesterdayLoading, setOvOppYesterdayLoading] = useState(false);
+  const [ovOppTomorrowLoading, setOvOppTomorrowLoading] = useState(false);
+  const [ovOppTodayProjLoading, setOvOppTodayProjLoading] = useState(false);
   const [ovTodayLoading, setOvTodayLoading] = useState(false);
   const [ovYesterdayLoading, setOvYesterdayLoading] = useState(false);
   const [ovTomorrowLoading, setOvTomorrowLoading] = useState(false);
@@ -4797,19 +4808,31 @@ export default function App() {
    *  independently and a slow projection must not discard a fresh Today. Only
    *  the newest of each may write, which is the app's own rule for any read
    *  that can be superseded — and these can, the clock moving on resume. */
-  const ovRead = useRef({ today: 0, yesterday: 0, tomorrow: 0, todayProj: 0 });
+  const ovRead = useRef({
+    today: 0,
+    yesterday: 0,
+    tomorrow: 0,
+    todayProj: 0,
+    oppToday: 0,
+    oppYesterday: 0,
+    oppTomorrow: 0,
+    oppTodayProj: 0,
+  });
 
   const loadOverviewDay = useCallback(
     (
       date: string,
-      which: 'today' | 'yesterday',
+      which: 'today' | 'yesterday' | 'oppToday' | 'oppYesterday',
       set: (d: OverviewDay | null) => void,
       setLoading: (on: boolean) => void,
+      /** Whose team — absent means the reader's own, which is what `/api/report`
+       *  already means by an absent `teamId`. */
+      teamId?: number,
     ) => {
       const seq = ++ovRead.current[which];
       setLoading(true);
       return api
-        .report(date, date, usingFantasy ? 'fantasy' : 'saved')
+        .report(date, date, usingFantasy ? 'fantasy' : 'saved', false, teamId)
         .then((r) => {
           if (seq !== ovRead.current[which]) return;
           const keys = r.lineups?.[date];
@@ -4827,6 +4850,28 @@ export default function App() {
     },
     [usingFantasy],
   );
+
+  /**
+   * **Who the Overview's foot is about** — the other side of this week's
+   * matchup, or null.
+   *
+   * Null on all three of the ways there can be nobody: no board yet, no matchup
+   * for this manager this period, and a **bye**, where `mine` is a matchup with
+   * one side in it. The section is drawn on this being non-null, so each of the
+   * three is answered by there being no section rather than by a heading over a
+   * message.
+   */
+  const overviewOpponent = useMemo(() => {
+    const me = scoreboard?.myTeamId;
+    if (!scoreboard || me == null) return null;
+    const m = scoreboard.matchups.find(
+      (x) => x.home.teamId === me || x.away?.teamId === me,
+    );
+    if (!m || !m.away) return null;
+    const otherId = m.home.teamId === me ? m.away.teamId : m.home.teamId;
+    const team = scoreboard.teams.find((t) => t.id === otherId);
+    return { teamId: otherId, name: team?.name ?? `Team ${otherId}` };
+  }, [scoreboard]);
 
   useEffect(() => {
     if (view !== 'overview') return;
@@ -4849,14 +4894,15 @@ export default function App() {
      *  land independently and only the newest of each may write. */
     const loadProjection = (
       date: string,
-      which: 'tomorrow' | 'todayProj',
+      which: 'tomorrow' | 'todayProj' | 'oppTomorrow' | 'oppTodayProj',
       set: (p: RosterProjection) => void,
       setLoading: (on: boolean) => void,
+      teamId: number | null = fantasyTeamId,
     ) => {
       const seq = ++ovRead.current[which];
       setLoading(true);
       api
-        .rosterProjection(date, date, usingFantasy ? 'fantasy' : 'watchlist', fantasyTeamId)
+        .rosterProjection(date, date, usingFantasy ? 'fantasy' : 'watchlist', teamId)
         .then((p) => {
           if (seq === ovRead.current[which]) set(p);
         })
@@ -4885,6 +4931,64 @@ export default function App() {
     rosterSource,
     espnStatusSettled,
   ]);
+
+  /**
+   * **The opponent's four reads, and they are their own effect** — because they
+   * depend on something the reader's own four do not: a board that has landed
+   * and has a matchup with two sides in it. Folding them into the effect above
+   * would make that effect wait on the scoreboard, which would put the *whole*
+   * page behind a read that only its foot needs.
+   *
+   * **The team id is in the deps, so a period step re-reads them.** Stepping the
+   * scoreboard's week changes who the opponent is, and four cards about last
+   * week's opponent would be four cards about the wrong manager.
+   *
+   * Each fails on its own and each is sequence-numbered like the four above:
+   * eight reads can be in flight at once here and only the newest of each may
+   * write.
+   */
+  const overviewOppId = overviewOpponent?.teamId ?? null;
+  useEffect(() => {
+    if (view !== 'overview' || overviewOppId == null || !usingFantasy) return;
+    void loadOverviewDay(
+      overviewDates.today,
+      'oppToday',
+      setOvOppToday,
+      setOvOppTodayLoading,
+      overviewOppId,
+    );
+    void loadOverviewDay(
+      overviewDates.yesterday,
+      'oppYesterday',
+      setOvOppYesterday,
+      setOvOppYesterdayLoading,
+      overviewOppId,
+    );
+    const proj = (
+      date: string,
+      which: 'oppTomorrow' | 'oppTodayProj',
+      set: (p: RosterProjection) => void,
+      setLoading: (on: boolean) => void,
+    ) => {
+      const seq = ++ovRead.current[which];
+      setLoading(true);
+      api
+        .rosterProjection(date, date, 'fantasy', overviewOppId)
+        .then((p) => {
+          if (seq === ovRead.current[which]) set(p);
+        })
+        .catch((e: Error) => {
+          if (seq === ovRead.current[which]) {
+            console.error(`reading the opponent's ${which} projection failed:`, e.message);
+          }
+        })
+        .finally(() => {
+          if (seq === ovRead.current[which]) setLoading(false);
+        });
+    };
+    proj(overviewDates.tomorrow, 'oppTomorrow', setOvOppTomorrow, setOvOppTomorrowLoading);
+    proj(overviewDates.today, 'oppTodayProj', setOvOppTodayProjection, setOvOppTodayProjLoading);
+  }, [view, overviewOppId, usingFantasy, overviewDates, loadOverviewDay]);
 
   /**
    * **A press on a day block's `See the day →`: the Roster view over that one
@@ -8033,6 +8137,20 @@ export default function App() {
           yesterday={ovYesterday?.players ?? null}
           tomorrow={ovTomorrow}
           todayProjection={ovTodayProjection}
+          /* The foot of the page: the same three days for whoever this manager
+             is playing. Null on no board, no matchup and a bye alike, which is
+             what keeps the section absent rather than empty. */
+          oppToday={ovOppToday?.players ?? null}
+          oppYesterday={ovOppYesterday?.players ?? null}
+          oppTomorrow={ovOppTomorrow}
+          oppTodayProjection={ovOppTodayProjection}
+          oppTodayLineup={ovOppToday?.lineup ?? null}
+          oppYesterdayLineup={ovOppYesterday?.lineup ?? null}
+          oppLoadingToday={ovOppTodayLoading}
+          oppLoadingYesterday={ovOppYesterdayLoading}
+          oppLoadingTomorrow={ovOppTomorrowLoading}
+          oppLoadingTodayProjection={ovOppTodayProjLoading}
+          opponentName={usingFantasy ? overviewOpponent?.name ?? null : null}
           todayLineup={ovToday?.lineup ?? null}
           yesterdayLineup={ovYesterday?.lineup ?? null}
           loadingToday={ovTodayLoading}

@@ -14,11 +14,13 @@ assemble by hand: cross to the League page for the matchup, come back, set the
 date to today, read the table, set it to yesterday, read it again, turn on
 `Projected` and set it to tomorrow.
 
-Two blocks and no controls:
+Three blocks and no controls:
 
 1. **Your matchup** — this week's scoreboard card.
 2. **Your days** — **Yesterday · Today · Tomorrow**, a card each, as a carousel
    that opens on Today.
+3. **Their days** — the same three cards for whoever you are playing this week,
+   where there is somebody.
 
 **It is a reader-with-a-league's default page**, and the first tab either way —
 see *The tab is the league's, and so is the default* below.
@@ -229,6 +231,62 @@ rule holding. (A finger could not be synthesized here — neither
 headless, measured at 0px over six attempts — so what is verified is the snap,
 the dots, the centering and the page staying put; the touch-drag itself is the
 browser's own `scroll-snap-type: x mandatory`.)
+
+### And the same three days for the opponent
+
+**It is the second half of the question the first block asks.** A matchup card
+says you are down five categories to four; *why* is two rosters, and the page
+held one of them. So the foot of the page is `Their days` — the same three
+cards, read for the other manager.
+
+**One component drawn twice, not two rows that agree today.** The carousel was
+written inline in the view while there was one of it; two copies of a
+scroll-snap row with its own centering, its own dot state and its own measuring
+is the thing this codebase folds on sight, so it came out as `DayCarousel` and
+the second section is a second call. `DayBlock`, `scorePlayed`, `scoreProjected`
+and `dayValue` are all the same functions — which is also what guarantees the
+two halves of the page are scored the same way, a guarantee two copies could
+not make.
+
+**Whose days it is, is a `teamId`** on the two routes the page already reads
+(`/api/report` and `/api/projection/roster` both take one, and `LeagueTeam` next
+door already reads a leaguemate's roster this way). No new endpoint again.
+
+**Its four reads are their own effect**, because they depend on something the
+reader's own four do not: a board that has landed with a two-sided matchup on
+it. Folding them in would put the *whole* page behind a read only its foot
+needs. The opponent's team id is in the deps, so stepping the scoreboard's week
+re-reads them — four cards about last week's opponent would be four cards about
+the wrong manager. Eight reads can be in flight at once and each is
+sequence-numbered on its own.
+
+**Absent rather than empty, on all three of the ways it can have no subject** —
+no league, no matchup this period, and a **bye**, where the reader has a matchup
+and no opponent in it. `opponentName` is null in each, and the section is drawn
+on that being non-null, so none of the three needs a message.
+
+**His day starts when *his* first game does.** Two managers' rosters are two
+sets of clubs, so `TODAY` can be measured on one half of the page and projected
+on the other for an hour of an afternoon. That reads oddly for a moment and is
+the truth; the alternative is telling the reader a projection is a result
+because somebody else's game had started.
+
+**`See the day →` is not drawn on these cards**, and it is the one thing that is
+not simply the same component. The door it opens is the Roster view, which is
+*yours*: a press promising somebody else's Tuesday and delivering your own would
+be worse than no press at all. A leaguemate's roster is read on the matchup
+page, which is one press away through the card at the top of this one. So
+`onSeeDay` is nullable and a null draws no foot.
+
+Driven at 390 with the live league:
+
+| | headings | carousels | dots each | opens on | foot buttons |
+| --- | --- | --- | --- | --- | --- |
+| | `Your days · Aug 24 – Aug 26`, `Their days · Baldy's Bozos` | 2 | 3 | `TODAY` / `TODAY` | 3 / **0** |
+
+with the opponent's four requests carrying `teamId=12` against the reader's own
+`teamId=6`, three ranked performers on his card, no console errors and 0
+page-body overflow.
 
 ### Today is a projection until the day starts
 
@@ -549,10 +607,12 @@ figures are estimates and the one least worth a whole row of its own.
 | | raw | gzip |
 | --- | --- | --- |
 | CSS | 178,368 → 182,679 | 31,919 → **32,692** |
-| JS | 693,662 → 708,163 | 202,673 → **207,203** |
+| JS | 693,662 → 710,530 | 202,673 → **207,924** |
 
-+773 bytes of CSS and +4.5KB of JS gzipped, for a view, a scoring module, a
-measured constant table, the narrow-screen tab rule above, and the carousel.
++773 bytes of CSS and +5.2KB of JS gzipped, for a view, a scoring module, a
+measured constant table, the narrow-screen tab rule above, the carousel and the
+opponent's half of the page — which costs no CSS at all, being the same
+component drawn a second time.
 
 ### Presentation, and the two rules it leans on hardest
 
