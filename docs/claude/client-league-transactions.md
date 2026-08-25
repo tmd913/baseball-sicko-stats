@@ -42,47 +42,71 @@ given to a screen reader as words, since a colored circle names nothing.
 what was asked for: the tabs are drawn only on the League view, so the dot is a
 statement about a page you are already on.
 
-### And the same dot in the header, which reverses the sentence above it
+### And the same dot on the League tab, which reverses the sentence above it
 
-**The paragraph before this one is left as written and is the argument this
-one overturns.** It is right about the *pill* — a mark saying *there are moves
-you have not seen* is worth nothing beside a control that leads to a page where
-you can already see them — and that is exactly why the mark is worth having on a
-button whose whole errand is asking the question from somewhere else.
+**The paragraph before this one is left as written and is the argument this one
+overturns — and it has now been overturned twice, by two different controls.**
+It says the dot is *not on the League pill itself*, on the grounds that "the
+tabs are drawn only on the League view, so the dot is a statement about a page
+you are already on".
 
-`.tx-btn` sits in the header's brand cluster **beside the fantasy button**, and
-it goes straight to this tab. The fantasy button opens a menu of *controls over
-the app*; the League pill opens the league's page on whichever tab it was last
-on. Neither answers the errand a manager has several times a day — *has anybody
-done anything* — which from the Roster view was three presses: the pill, then
-this tab, and this tab is the third of three on a strip that scrolls at 320.
+Read again, that sentence is about **this file's own three tabs**
+(`Scoreboard · Rankings · Transactions`), which really are drawn only on the
+League view. It was never true of `.main-tabs`, the app's own four-tab strip,
+which is on screen on **every** view — so a dot on the League pill there is
+exactly the statement the sentence says a dot should make: *there is something
+in here you have not seen*, made from somewhere else.
+
+**In between it was a header button**, `.tx-btn`, in the brand cluster beside
+the fantasy one. That button was the right idea in the wrong place, and its own
+paragraphs are worth keeping the argument of: the fantasy button opens a menu of
+*controls over the app*; the League pill opens the league's page on whichever
+tab it was last on; neither answers the errand a manager has several times a day
+— *has anybody done anything* — which from the Roster view was three presses.
+What it got wrong was spending a **sixth 36px square** in the app's tightest row
+to carry a mark, four inches from a pill that already says the word `League`. It
+cost the header a wrapped line below 390px, which **Client**, *the header's
+control line*, measured at twelve pixels and paid for by shrinking the wordmark.
+The mark has moved to the pill and the square and its line budget have gone
+back.
 
 **It is the same mark from the same comparison** (`unseenTransactions`), folded
-onto `.lg-tab-dot`'s own rule rather than given one that agrees today, so the two
-can never come to be two different reds. What differs is the corner: a 36px
-square has no label to keep clear of, so the dot sits 5px in from its own top
-right where the tab's sits 4px down and 5 in. Measured at 1200 with the marker
-rewound, the button is **36px wide with the dot and without it**, the dot lands
-inside its own rect, and its computed ground is `rgb(251, 139, 126)` —
-`--strikeout`, byte-identical to the tab's.
+onto `.lg-tab-dot`'s own rule rather than given one that agrees today, so the
+two can never come to be two different reds.
 
-**No `on` state**, where the fantasy button beside it has one. That button
-reports a *mode* — which list the roster views are reading — where this is a way
-to a page, and the app already says which page you are on twice over: the League
-tab is underlined and the Transactions tab is filled. A third mark for one fact
-is a mark that says nothing. The press does clear the matchup page first
-(`mup=`/`mt=`), a matchup being a page drawn *over* this view whatever tab is
-behind it — landing on the feed underneath one is landing behind it.
+**What did not fold is the corner, and the measurement is why.** A `.lg-tab` is
+a pill sized to its own word, so a dot 5px in from its right edge is a dot
+beside the word. A `.main-tab` is `flex: 1 1 0` — **a quarter of the window** —
+with its label centered in it. Measured at 1200 with the corner rule inherited:
+the tab is **289px wide** with its right edge at x=1178, which put the dot at
+**1167** against a `League` ending around **1057** — 110px of empty tab between
+the mark and the thing it marks, reading as a dot loose at the right edge of the
+row. So the main row's dot hangs off `.main-tab-label`, an inline box around the
+word, and sits just past its right edge like a superscript. Measured after, at
+320 / 350 / 360 / 390 / 768 / 1200 / 1920: the gap from the label's right edge
+to the dot's left is **3px at every one**, the dot is inside its tab's rect at
+every one, no tab clips (`scrollWidth - clientWidth` is 0 on all four at all
+seven), and page-body overflow is 0.
 
-**What it costs the header is a wrapped line below 390px, and that is paid
-rather than accepted** — see **Client**, *the header's control line*, where the
-twelve pixels and the three numbers that find them are measured.
+**And it is not drawn on the League view itself**, which is the paragraph above
+read one page further in. With the view open, this file's own Transactions tab
+wears the dot — and that one says *which of the three*, where the pill's can
+only say *in here somewhere*. Two reds for one fact, the more precise of them an
+inch under the vaguer one. So the render tests `view !== 'league'` and **at most
+one is ever on screen**. Driven in both states across the Roster, the Overview
+and the League view, with the marker rewound and with it current:
 
-**Driven at 1200 with `seenTransactions` rewound to `ts: 1`:** on the **Roster**
-view the button reads `League transactions — new moves since you last looked`
-and wears the dot; on the League view the button's dot and the tab's are both
-drawn and are the same color; one press takes the URL to
-`?view=league&lt=transactions`, draws **43** rows, and clears **both**.
+| | Roster | Overview | League view |
+| --- | --- | --- | --- |
+| marker current | no dot anywhere | no dot anywhere | no dot anywhere |
+| marker rewound | League pill | League pill | Transactions tab |
+
+**No `on` state and no press behavior of its own**, which is what the pill
+already had and the button had to be given. The pill goes where the pill goes —
+the league's page on the tab it was last on — and the reader presses
+`Transactions` from there, which is what clears the dot. The button's own
+`mup=`/`mt=` clearing went with it: a pill that lands on a tab is not landing
+behind a matchup page, that page being opened over a view rather than under one.
 
 ### The feed is read for the whole app now, not for the League view
 
@@ -90,9 +114,11 @@ drawn and are the same color; one press takes the URL to
 It was gated on this tab, on the reasoning that nobody who only looks at the
 scoreboard should pay for a 250-row activity feed; the dot overruled it, the tab
 row having to make its claim before the tab is opened. It is gated on nothing but
-`espnConnected` now, because the dot is in the **header** and the header is on
-every view — a mark that only tells the truth on the page it points at is a mark
-that says nothing.
+`espnConnected` now, because the dot is on **the app's own tab row** and that
+row is on every view — a mark that only tells the truth on the page it points at
+is a mark that says nothing. (It said *the header* here while `.tx-btn` carried
+the mark; the gate is unchanged either way, both controls being drawn on every
+view, which is the whole property the read depends on.)
 
 **Its half of the minute-long poll moved with it.** The poll's own timer is
 gated on the league rather than on the view; the three *other* reads in a tick —
