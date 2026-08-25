@@ -641,6 +641,26 @@ to be legible with the border out of view. The projected *line* keeps its
 decimals for the same reason — `0.7 H` reads as an expectation where `1 H` would
 read as a hit somebody got.
 
+**A ranking row is not a game line, and the two say different things.** The row
+under a performer's name is there to answer *why is this man first today*, which
+is a narrower question than *what happened in this game* — and two terms were
+answering the wider one:
+
+- **No strikeouts on a batter's row.** A strikeout is part of what happened and
+  is never why anybody led the day, so `3 K` sat in the middle of the best line
+  on the roster. `lib.ts::lineSummary` takes a `strikeouts` option rather than
+  growing a twin — the feed and the player card still print it, those being
+  records rather than rankings, and one implementation cannot come to disagree
+  with itself about how a double is spelled. Checked both ways: the default
+  reads `2-4, 2 R, 2B, 3 RBI, SB, BB, 3 K, 1.350 OPS` and the Overview's reads
+  the same line without the `3 K`.
+- **A pitcher's hits and walks, not the baserunners they add up to.** `5 BR` is
+  the WHIP numerator and nothing a reader thinks in: five hits and no walks is a
+  different outing from one hit and four, and the term was spending a word to
+  hide which. Each is dropped at nought rather than printed as one, the row
+  being a phrase and not a box score — measured on the live league,
+  `5.0 IP, 5 K, 2 ER, 5 H, 2 BB, W` and `6.0 IP, 5 K, 1 ER, 3 H, W`.
+
 **Color is spent on state, not on emphasis.** The value column is monochrome:
 the number is already the reason the row is where it is in the list, and a green
 scale down three rows would be the ranking said twice.
