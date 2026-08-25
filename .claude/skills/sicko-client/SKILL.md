@@ -6,8 +6,8 @@ description: The client shell every view sits in — App.tsx's URL-as-state, the
 # The client shell
 
 `App.tsx` holds all top-level state and persists it in the **URL query string**.
-Three views sit in one shell — Roster, Feed, Research, plus League when a
-fantasy league is connected — under a pinned chrome whose height is *measured*
+Five views sit in one shell — Roster, Feed, Research and MLB, plus Overview and
+League when a fantasy league is connected — under a pinned chrome whose height is *measured*
 at runtime (`--chrome-h`) rather than declared, because it wraps to two and
 three rows and stands down on any window it would take more than a third of.
 

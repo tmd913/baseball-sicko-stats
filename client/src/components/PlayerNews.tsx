@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { NewsItem, PlayerNews } from '../types';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
@@ -33,6 +34,7 @@ export function NewsList({
   items,
   shown,
   summaries,
+  owner,
 }: {
   items: NewsItem[];
   /** How many rows to draw. The preview takes 1 — the latest item is the one
@@ -46,20 +48,43 @@ export function NewsList({
    *  carries none and the guard below is what keeps that an absent child rather
    *  than an empty one. */
   summaries?: boolean;
+  /**
+   * **Who the row is about**, drawn above the meta line — the one thing a
+   * *league* feed needs and a player's own page cannot want, his name being the
+   * page it is on.
+   *
+   * A slot rather than a second list, which is this file's own standing rule
+   * (`GameLogTable` and its five-row preview, the Overview section and the News
+   * tab): two lists that merely resemble each other are two lists that will one
+   * day disagree about what a row is. The caller renders the line because it is
+   * the caller that knows whether a name is a door — a player the season roster
+   * cannot place opens nothing, and a press with nothing behind it is worse
+   * than a plain name. See `MlbNews.tsx`.
+   */
+  owner?: (item: NewsItem) => ReactNode;
 }) {
   const rows = shown === undefined ? items : items.slice(0, shown);
   return (
     <ul className="news-list">
       {rows.map((item) => (
-        <NewsRow key={item.id} item={item} summary={summaries ?? false} />
+        <NewsRow key={item.id} item={item} summary={summaries ?? false} owner={owner} />
       ))}
     </ul>
   );
 }
 
-function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
+function NewsRow({
+  item,
+  summary,
+  owner,
+}: {
+  item: NewsItem;
+  summary: boolean;
+  owner?: (item: NewsItem) => ReactNode;
+}) {
   const body = (
     <>
+      {owner?.(item)}
       <span className="news-meta">
         <span className="news-date">{formatDate(item.date)}</span>
         {item.kind && <span className="news-kind">{prettyKind(item)}</span>}

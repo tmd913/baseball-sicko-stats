@@ -71,7 +71,7 @@ what it is, and most of them are not recoverable from the code.
 | you are editing | invoke |
 | --- | --- |
 | `savant.ts` `mlbStats.ts` `research.ts` `statcastWindow.ts` `percentiles.ts` `teamHitting.ts` `leagueWoba.ts` `xwoba.ts` `expectedStats.ts` `armAngle.ts` `pitcherArsenal.ts` `parkFactors.ts` | `sicko-server` |
-| `index.ts` (routes) `etDate.ts` `schedule.ts` `rotations.ts` `gameLog.ts` `stints.ts` `nextGame.ts` `news.ts` `recentNews.ts` `rotowire.ts` `projectedStarts.ts` `warmer.ts` `revisions.ts` | `sicko-server` |
+| `index.ts` (routes) `etDate.ts` `schedule.ts` `rotations.ts` `gameLog.ts` `stints.ts` `nextGame.ts` `news.ts` `recentNews.ts` `rotowire.ts` `projectedStarts.ts` `warmer.ts` `revisions.ts` `mlbScoreboard.ts` `mlbStandings.ts` | `sicko-server` |
 | `store.ts` `storage.ts` `auth.ts` `cognito.ts` `auth.tsx` `invite.ts` | `sicko-server` |
 | `espn.ts` `projection.ts` `EspnSettings.tsx` `LeagueOnboarding.tsx` | `sicko-espn` |
 | `App.tsx` `hooks.ts` `lib.ts` `api.ts` `PlayerAdder.tsx` `Loading.tsx` `DateControls.tsx` `DateRangePicker.tsx` `simulate.ts` | `sicko-client` |
@@ -83,6 +83,7 @@ what it is, and most of them are not recoverable from the code.
 | `TeamDetails.tsx` `DetailsShell.tsx` `ParkFactors.tsx` | `sicko-team-page` |
 | `GamePage.tsx` `game.ts` `teamGames.ts` `DetailsShell.tsx` | `sicko-game-page` |
 | `LeagueView.tsx` `LeagueMatchup.tsx` `LeagueRankings.tsx` `LeagueTransactions.tsx` `LeagueTeam.tsx` `MatchupSeriesChart.tsx` `Projection.tsx` | `sicko-league` |
+| `MlbView.tsx` `MlbScoreboard.tsx` `MlbStandings.tsx` `MlbNews.tsx`, the main tab strip | `sicko-mlb` |
 | `PitcherCard.tsx` `Arsenal.tsx` `ArsenalCharts.tsx` `Innings.tsx` `OutingPage.tsx` `OpponentTable.tsx` `PitchSequence.tsx` `StrikeZone.tsx` | `sicko-pitchers` |
 | `Modal.tsx` `InfoKey.tsx`, `useDismissable`, anything that opens a popup | `sicko-dialogs` |
 | `styles.css` tokens or colors, `theme.ts` `ThemePicker.tsx` | `sicko-theming` |

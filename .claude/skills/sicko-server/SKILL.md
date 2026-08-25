@@ -30,9 +30,13 @@ a table of dashes.
 - **Read `docs/claude/server.md`** before adding or changing a route, or
   touching `etDate.ts`, `schedule.ts`, `rotations.ts`, `gameLog.ts`, `stints.ts`,
   `nextGame.ts`, `news.ts`, `recentNews.ts`, `rotowire.ts`, `projectedStarts.ts`,
-  `revisions.ts` or `warmer.ts`. It covers the 3am ET baseball day and why one module
+  `revisions.ts`, `warmer.ts`, `mlbScoreboard.ts` or `mlbStandings.ts`. It covers the 3am ET baseball day and why one module
   deliberately no longer reads it, every endpoint and what it answers, the
-  rotation engine, and video resolution.
+  rotation engine, video resolution, **and the three routes the MLB view reads** —
+one day's scoreboard, the standings over the season or a window (with the
+measurement that says the two arithmetics agree, and the one line of
+deduplication it rests on), and the league's ten biggest stories off the sweep
+the news mark already pays for.
 
 - **Read `docs/claude/auth-and-storage.md`** before touching `store.ts`,
   `storage.ts`, `auth.ts`, `cognito.ts`, `auth.tsx` or `invite.ts`, or before

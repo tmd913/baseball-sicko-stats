@@ -2027,3 +2027,242 @@ export interface BoardProjection {
   rows: ResearchRow[];
   fetchedAt: number;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * The MLB view — the league itself, rather than a roster or a fantasy league
+ *
+ * Three readings, one per tab: the day's games, where the thirty clubs stand,
+ * and what has been said about them. Everything below is the wire shape of one
+ * of those three, and all three are **league-wide and user-independent** —
+ * which is the class `getPlayerPool` and the recent-news sweep are in, so each
+ * is one upstream read shared by every reader rather than one per session.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** One club's half of a scoreboard row. */
+export interface MlbScoreboardTeam {
+  id: number;
+  /** In full — `Tampa Bay Rays`. The card draws the club name and the crest is
+   *  joined on the id, so no abbreviation is needed for the card itself; it is
+   *  here because a narrow card prints it in place of the name. */
+  name: string;
+  /** "TB". Empty where MLB's teams table carried none — the join-to-null rule
+   *  one cell wide, and the card falls back to the name. */
+  abbreviation: string;
+  /** Null before a pitch is thrown, which is a different fact from `0`. */
+  score: number | null;
+  /** The club's record **going into this game**, which is what MLB's schedule
+   *  carries and is the honest reading of a row about that game. */
+  wins: number | null;
+  losses: number | null;
+  /** Whom the club has *announced*, and nothing more — `ScheduleGame`'s own
+   *  rule. Null on a game already being played, where the starter is a fact
+   *  about the box score rather than a promise. */
+  probableId: number | null;
+  probableName: string | null;
+  /** Null on a game with no winner, which is two things at once — one still
+   *  being played, and a tie. `TeamGameResult.won`'s rule. */
+  winner: boolean | null;
+}
+
+/** One game on the day's board. */
+export interface MlbScoreboardGame {
+  gamePk: number;
+  /** The ET day MLB files it on, `YYYY-MM-DD`. */
+  date: string;
+  /** ISO first pitch, or null where the schedule gives none. */
+  startTime: string | null;
+  /** MLB's own state, off the two predicates every reading of a status in this
+   *  server goes through. Postponed is tested first — see `stateOf`. */
+  state: 'scheduled' | 'live' | 'final' | 'postponed';
+  /** MLB's wording — `Final`, `Warmup`, `Postponed`, `Delayed: Rain`. What the
+   *  card prints where it has no better line of its own. */
+  detailedState: string;
+  /** Why a game was called off or held up, where MLB gives a reason. */
+  reason: string | null;
+  away: MlbScoreboardTeam;
+  home: MlbScoreboardTeam;
+  /** Where a live game has got to, so a row can say `Top 6`. Null on anything
+   *  not being played — including a game MLB calls Live at Warmup, which it
+   *  hands a `Top 1` linescore half an hour before anybody plays it. */
+  inning: number | null;
+  inningState: string | null;
+  outs: number | null;
+  /** The ballpark, for the card's second line. */
+  venue: string | null;
+  /** Which game of the series this is, and how many there are — `Game 2 of 3`.
+   *  Null where the schedule carried neither. */
+  seriesGame: number | null;
+  seriesLength: number | null;
+  /** The three pitchers a finished game names. Null until it is final. */
+  winPitcher: { id: number; name: string } | null;
+  lossPitcher: { id: number; name: string } | null;
+  savePitcher: { id: number; name: string } | null;
+}
+
+/** One ET day's games, as `/api/mlb/scoreboard` answers it. */
+export interface MlbScoreboard {
+  /** The day asked for, `YYYY-MM-DD`. */
+  date: string;
+  games: MlbScoreboardGame[];
+  fetchedAt: number;
+}
+
+/**
+ * **How much of the season a standings board is drawn over.**
+ *
+ * Deliberately `ResearchWindow`'s own five values rather than a vocabulary of
+ * its own: the research board, a player's windows and a club's windows all
+ * already mean *the last N days* by these numbers, and a sixth span here would
+ * be a reader asking the same question of two boards and getting two answers.
+ */
+export type StandingsSpan = ResearchWindow;
+
+/** A won-lost pair, as a board draws it — `43-23`. Null where the club has not
+ *  played a game the cut selects, which on a seven-day window is an ordinary
+ *  answer and not a failure. */
+export interface StandingsRecord {
+  wins: number;
+  losses: number;
+}
+
+/**
+ * One club's row.
+ *
+ * **Every field is over the span asked for**, with three exceptions named
+ * below that only a season can have — and those are `null` on a window rather
+ * than carried over from the season, which is `BoardProjection`'s rule: a
+ * measured season figure standing on a seven-day row would be two arithmetics
+ * on one line.
+ */
+export interface StandingsTeam {
+  id: number;
+  name: string;
+  abbreviation: string;
+  /** 103 American, 104 National — MLB's own ids. */
+  leagueId: number;
+  divisionId: number;
+  wins: number;
+  losses: number;
+  /** `.595`, as MLB spells it, computed the same way on a window. */
+  pct: string;
+  /** Games behind the leader **of the group this row is in**, and `-` for the
+   *  leader — MLB's own string on the season board, the same arithmetic on a
+   *  window. */
+  gamesBack: string;
+  /** Games behind the third wild card, `+9.0` for a club holding one. **Null on
+   *  a window**, where a wild-card race is a fact about the season and not
+   *  about the last fortnight. */
+  wildCardGamesBack: string | null;
+  runsScored: number;
+  runsAllowed: number;
+  runDiff: number;
+  home: StandingsRecord | null;
+  away: StandingsRecord | null;
+  /** **Record against clubs at .500 or better**, where "or better" is measured
+   *  off the club's record *now* rather than on the day of the game. That is
+   *  MLB's own definition of its `winners` split, verified against it — see
+   *  `mlbStandings.ts`. */
+  vsOver500: StandingsRecord | null;
+  /** The last ten *games*, which is a window of its own and so **season
+   *  only** — on a seven-day board it would be a fortnight inside a week. */
+  lastTen: StandingsRecord | null;
+  /** One-run games, and the Pythagorean record MLB publishes as `xWinLoss`.
+   *  **Season only**, both being MLB's own figures rather than ours. */
+  oneRun: StandingsRecord | null;
+  expected: StandingsRecord | null;
+  /** `W2`, `L4`. Computed from the club's own games either way, so the season
+   *  and a window mean the same thing by it. Null where the span holds none. */
+  streak: string | null;
+  /** Whether the club leads its division, and whether it has clinched
+   *  something. **Season only** — a lens is not a standing. */
+  divisionLeader: boolean;
+  clinched: boolean;
+  /** MLB's own strings, `-` meaning none. Season only. */
+  magicNumber: string | null;
+  eliminationNumber: string | null;
+  /** How many games the club has played over the span, so a window's row can
+   *  say what it is drawn from — three games and a `.667` is not a standing. */
+  gamesPlayed: number;
+  /**
+   * Where the club stands **in its division** and **in its league**, 1-based.
+   *
+   * Carried rather than left to the client to derive, and that is a decision
+   * rather than a convenience: on the season board these are MLB's own ranks,
+   * which settle ties by a tiebreaker order this app has no business
+   * reimplementing, and a client sorting on `pct` would quietly disagree with
+   * the upstream exactly where the standings are interesting. On a window they
+   * are computed, by pct and then by run differential, and the board says the
+   * numbers are ours.
+   */
+  divisionRank: number;
+  leagueRank: number;
+}
+
+/** The whole board, as `/api/mlb/standings` answers it. */
+export interface MlbStandings {
+  span: StandingsSpan;
+  /** The days the rows are drawn over, inclusive. On the season board these are
+   *  the season's own ends as the schedule gives them. */
+  start: string;
+  end: string;
+  /** Every club, in no particular order — the client groups and ranks, there
+   *  being three groupings on one board and one order per group. */
+  teams: StandingsTeam[];
+  /**
+   * **The wild-card order, per league, as team ids.** It is not derivable from
+   * the rows: a wild-card board excludes division leaders and is ranked by a
+   * tiebreaker order MLB owns, so the alternative was the client re-deriving a
+   * standing the upstream had already stated. Computed on a window, where MLB
+   * has no opinion, by the same rule it applies — leaders out, then by pct.
+   */
+  wildcard: { leagueId: number; teamIds: number[] }[];
+  /** MLB's own divisions, so no copy of six names goes stale in the bundle. */
+  divisions: { id: number; name: string; shortName: string; leagueId: number }[];
+  fetchedAt: number;
+}
+
+/**
+ * One item on the league's news feed.
+ *
+ * **A `NewsItem` with the player it is about**, which is the whole difference
+ * between this and a player's own tab: there the player is the page and the
+ * item needs no owner, here 1,100 items are on one list and a row that cannot
+ * say who it is about is a row nobody can use.
+ */
+export interface LeagueNewsItem extends NewsItem {
+  /** MLB id, **or null where the note could not be joined to one** — the
+   *  join-to-null rule, which here costs the row its door into a player's page
+   *  and nothing else. */
+  playerId: number | null;
+  /** As the source names him, which is what the row prints: RotoWire's own
+   *  spelling on a note, MLB's on a transaction. Null on neither in practice,
+   *  and typed nullable because a shape change upstream must empty a field
+   *  rather than invent one. */
+  playerName: string | null;
+  /** The club the source files him under — `Tampa Bay Rays`. Null on a
+   *  transaction that names no MLB club. */
+  team: string | null;
+  /** His position as the source gives it — `P`, `1B`. RotoWire only. */
+  position: string | null;
+}
+
+/**
+ * **The league's biggest stories**, as `/api/mlb/news` answers it — ranked
+ * rather than merely dated, and short.
+ *
+ * It was the whole feed, ~970 items and 354KB of wire, and that is not news but
+ * an inbox: nine hundred of them are a desk noting that a man went 2-for-4.
+ * `recentNews.ts::getLeagueNews` carries how a story's size is decided and what
+ * it deliberately does not model.
+ */
+export interface LeagueNews {
+  /** Biggest first, one per player, at most ten. */
+  items: LeagueNewsItem[];
+  /** How many days back the sweep reaches, so the foot can say so rather than
+   *  leaving a reader to wonder whether the list simply stopped. */
+  days: number;
+  /** How many notes the ten were picked out of — the same honesty one field
+   *  over, and the one number that says this is a *selection*. */
+  considered: number;
+  fetchedAt: number;
+}

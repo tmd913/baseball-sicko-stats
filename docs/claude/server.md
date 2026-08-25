@@ -229,6 +229,110 @@ a cold Lambda with three readers sends one request. **`SEASON` is imported from
 `research.ts` rather than declared** — a *use* and not a pin, which is what
 `playerSplits.ts` does and for the same reason.
 
+### The three routes the MLB view reads
+
+Added with `MlbView.tsx` (`client-mlb.md`), which carries the whole of the
+reasoning; this is the routing half of it. All three are **league-wide and
+user-independent** — the class `getPlayerPool` and the recent-news sweep are in
+— so each is one upstream read shared by every reader rather than one per
+session, and none of them takes a user id.
+
+**`GET /api/mlb/scoreboard?date=`** — one ET day's games as `MlbScoreboard`: the
+score, where a live game has got to, both announced starters, the three pitchers
+a finished game names, the ballpark and which game of the series it is.
+
+It is a **third** schedule read beside `/api/schedule` (the forward window,
+thin, no scores, read once a baseball day by every surface that draws days
+ahead) and `/api/teams/:id/games` (one club's season backwards, fixtures
+dropped). It asks a third question — one day, both directions, every club — and
+neither of the other two can answer it: a scoreboard of yesterday is not in the
+window at all, and fifteen games on one day would be up to thirty reads of the
+club route, each carrying a season.
+
+`server/src/mlbScoreboard.ts` hydrates `linescore,probablePitcher,decisions` onto
+`/api/v1/schedule` and cuts it with `fields=`: **11,425 bytes** for a finished
+day of ten games and **9,662** for fifteen not yet started (measured; our own
+answer to a client is 1,453 gzipped). The alternative — a bare schedule plus a
+`feed/live` per game for the half-inning — is fifteen requests for a fact the
+linescore hydration carries. It borrows `isFinalStatus`, `isPostponedStatus` and
+`hasStarted` from `mlbStats.ts` and restates `teamGames.ts::stateOf`, four lines
+duplicated rather than an export tying two parsers together.
+
+Cached per date in memory, a minute while the day still has a game to start or
+being played and six hours once every game is final. **No blob**, which is
+`schedule.ts`'s rule: everything this server persists is a *finished* fact, and
+the whole reason to open a scoreboard is that the games are moving.
+
+**The date is the caller's**, unlike `/api/news/recent` whose day is the
+server's own: the tab has arrows and a calendar, so most reads are not of today.
+An unparseable one falls back to today rather than 400ing — `/api/research`'s
+rule for a param carried in a shareable URL.
+
+**`GET /api/mlb/standings?span=`** — every club's row as `MlbStandings`, plus the
+wild-card order per league and MLB's own six division names.
+
+`span=` takes `RESEARCH_WINDOWS`' five values, deliberately: that is what *the
+last 15 days* already means everywhere else in this app. Unrecognized falls back
+to the season.
+
+**Two arithmetics, and they agree exactly.** The season board is
+`/api/v1/standings` with `standingsTypes=regularSeason,wildCard` in one request
+(144,489 bytes measured) — MLB's own totals, and the only place games behind, the
+wild-card race, the magic number, the Pythagorean record and the split records
+exist at all. A *window* has no such upstream (`date=` gives the standings **as
+of** a day, not the record **since** it), so it is computed from the season's own
+schedule — 2,458 entries, **30,287 bytes on the wire** — plus one lookup into the
+season board for each club's division.
+
+Before any of it was built: computed wins, losses, runs scored and runs allowed
+were compared against `/api/v1/standings` on 2026-08-25 and **all thirty clubs
+match on all four**. That match rests on one line. MLB lists a rescheduled game
+**under both dates, the same `gamePk` twice** — 28 of them in 2026 — and naive
+first-wins deduplication is *worse than none*, because the first entry of a
+postponed game is the `Postponed` one: dropping the second drops the game that
+was played, and **22 of 30 clubs came out wrong**. `keepPlayed` lets a final
+entry displace a non-final one.
+
+Two more things worth knowing about that file. The `.500 or better` column is
+MLB's `winners` split, and the definition was **verified rather than assumed**:
+against three clubs it matches "vs clubs at .500 or better *now*" exactly and
+does not match "above .500". And the window ends **today**, where
+`statcastWindow.ts::windowDates` ends yesterday — that rule is Savant's one-day
+lag plus a partial day polluting a *rate*, and neither applies to a record made
+of finished games.
+
+Both boards are cached five minutes, which is one span rather than a live one
+and a settled one: a standings board changes only when a game **ends**, where the
+scoreboard beside it changes by the pitch.
+
+**Both routes 502 honestly**, the `/api/schedule` exception and the same test:
+the answer *is* the table. A day drawn empty because MLB was down is
+indistinguishable from an All-Star break, and a standings board of dashes says
+"these clubs have no record" rather than "we could not ask".
+
+**`GET /api/mlb/news`** — the league's ten biggest stories as `LeagueNews`.
+
+**No sweep of its own.** It is the second reader of the one `/api/statuses`'
+news mark already pays for: thirty RotoWire club pages and MLB's whole
+transaction log, ~2MB, once per thirty minutes for the entire user base. A feed
+with its own upstream would have read the same pages twice for the same items,
+against `recentNews.ts`' own opening rule. What that cost is a **blob version
+bump** — `news-recent-v2.json` stores the notes where v1 stored the reduced map,
+and the map is derived at read time.
+
+Two narrowings this route makes and the mark does not. **Minor-league moves are
+dropped** (73 of 216 transactions over three days name a major-league club); a
+feed of the whole organization is not what "the league" means. And the list is
+**ranked and cut to ten** — 973 notes over seven days is an inbox, not news, and
+ranking on the server rather than on the client takes the payload from **354KB
+to 3.6KB**. How a story's size is decided is at `getLeagueNews`, beside the
+sweep, along with the one signal it deliberately does not model.
+
+The transaction window widened from two days to `NEWS_DAYS` (7) with it, which
+is RotoWire's own reach — 25 notes per club spans four to seven days — so the
+feed's two halves stop in the same place. It costs the mark nothing: those days
+are classified and dropped exactly as the third day already was.
+
 ### The two routes a club's page reads
 
 Added with `TeamDetails.tsx` (`client-team-page.md`), and between them they cost

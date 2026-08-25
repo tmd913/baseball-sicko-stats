@@ -5710,7 +5710,8 @@ button.start-line:focus-visible {
 .stats-scroll,
 .opp-scroll,
 .game-box-scroll,
-.league-scroll {
+.league-scroll,
+.mlb-standings-scroll {
   overflow-x: auto;
   /* **The sideways axis alone, because that is the axis these boxes are
      declared to scroll in.** `overscroll-behavior-x: none` is what the rule was
@@ -5752,7 +5753,8 @@ button.start-line:focus-visible {
 .stats-table,
 .opp-table,
 .game-box-table,
-.league-table {
+.league-table,
+.mlb-standings-table {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
@@ -5772,7 +5774,8 @@ button.start-line:focus-visible {
 .glog-table,
 .stats-table,
 .opp-table,
-.game-box-table {
+.game-box-table,
+.mlb-standings-table {
   /* Named rather than repeated, because two rules read it now: the cells
      below, and the Stats tab's sort buttons, which zero the `th`'s padding and
      have to re-apply exactly this gutter or a header would line up differently
@@ -5806,7 +5809,9 @@ button.start-line:focus-visible {
 .opp-table th,
 .opp-table td,
 .game-box-table th,
-.game-box-table td {
+.game-box-table td,
+.mlb-standings-table th,
+.mlb-standings-table td {
   padding: 13px var(--row-gutter);
   line-height: 1.35;
   white-space: nowrap;
@@ -5820,7 +5825,8 @@ button.start-line:focus-visible {
 .opp-table tbody tr:nth-child(even) td,
 .opp-table tbody tr:nth-child(even) .glog-date,
 .game-box-table tbody tr:nth-child(even) td,
-.game-box-table tbody tr:nth-child(even) th {
+.game-box-table tbody tr:nth-child(even) th,
+.mlb-standings-table tbody tr:nth-child(even) td {
   background: var(--row-alt);
 }
 /* **A row is a press now, so it looks like one.** It carried no hover tint for
@@ -5843,27 +5849,32 @@ button.start-line:focus-visible {
    The zebra stripe is untouched: it is what keeps a fourteen-column row
    readable across, and it is the same device the summary table and the research
    board use. */
-.glog-table tbody tr {
+.glog-table tbody tr,
+.mlb-standings-table tbody tr {
   cursor: pointer;
 }
 @media (hover: hover) {
   .glog-table tbody tr:hover td,
-  .glog-table tbody tr:hover .glog-date {
+  .glog-table tbody tr:hover .glog-date,
+  .mlb-standings-table tbody tr:hover td {
     background: var(--panel-2);
   }
 }
-.glog-table tbody tr:focus-visible {
+.glog-table tbody tr:focus-visible,
+.mlb-standings-table tbody tr:focus-visible {
   outline: none;
 }
 .glog-table tbody tr:focus-visible td,
-.glog-table tbody tr:focus-visible .glog-date {
+.glog-table tbody tr:focus-visible .glog-date,
+.mlb-standings-table tbody tr:focus-visible td {
   background: var(--panel-2);
   box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
 }
 .glog-table thead th,
 .stats-table thead th,
 .opp-table thead th,
-.game-box-table thead th {
+.game-box-table thead th,
+.mlb-standings-table thead th {
   /* Sticky against .glog-scroll, which is the scroll container in both axes —
      which is the whole reason the Game Log tab reshapes the overlay below. */
   position: sticky;
@@ -5887,7 +5898,8 @@ button.start-line:focus-visible {
    a third of the window and nothing in it. */
 .glog-table .glog-num,
 .stats-table .glog-num,
-.opp-table .glog-num {
+.opp-table .glog-num,
+.mlb-standings-table .glog-num {
   width: auto;
   min-width: clamp(28px, 4.4vw, 46px);
   text-align: right;
@@ -5898,7 +5910,8 @@ button.start-line:focus-visible {
    it a row a few columns in belongs to no game in particular. */
 .glog-table .glog-date,
 .stats-table .glog-date,
-.opp-table .glog-date {
+.opp-table .glog-date,
+.mlb-standings-table .glog-date {
   position: sticky;
   left: 0;
   z-index: 1;
@@ -5912,7 +5925,8 @@ button.start-line:focus-visible {
    column, so neither slides over it. */
 .glog-table thead .glog-date,
 .stats-table thead .glog-date,
-.opp-table thead .glog-date {
+.opp-table thead .glog-date,
+.mlb-standings-table thead .glog-date {
   z-index: 3;
   background: var(--panel-2);
 }
@@ -5923,7 +5937,8 @@ button.start-line:focus-visible {
    writes that way everywhere else. The log's own headers are all-caps words and
    keep it. */
 .stats-table thead th,
-.league-table thead th {
+.league-table thead th,
+.mlb-standings-table thead th {
   text-transform: none;
 }
 /* The span column holds words rather than a date, so it is the one place this
@@ -10582,7 +10597,8 @@ button.start-line:focus-visible {
 .glog-scroll,
 .stats-scroll,
 .game-box-scroll,
-.league-scroll {
+.league-scroll,
+.mlb-standings-scroll {
   margin-left: calc(-1 * var(--table-bleed, 0px));
   margin-right: calc(-1 * var(--table-bleed, 0px));
   border-left: none;
@@ -21349,34 +21365,508 @@ html[data-theme='light'] .league-table thead th {
 }
 
 
-/* **The tab strip has a fourth tab, and 340 is where its words stop fitting.**
-   `.main-tab` is `flex: 1 1 0` — four equal columns whatever their words are —
-   so a fourth tab costs the strip **no height at all** (measured: 37px at 320 /
-   375 / 390 / 640 / 900 / 1200 / 1920 with three tabs and with four, and the
-   pinned chrome 148 / 100 / 100 / 100 / 102 / 102 / 102 either way). What it
-   costs is width per tab, and at the narrow end the two longest words run out
-   of it — measured as `scrollWidth - clientWidth` on each of the four:
+/* **The tab strip has a fifth tab, and below 430 five equal columns stop
+   holding five words.**
 
-   | window | Overview | Roster | Research | League |
-   | --- | --- | --- | --- | --- |
-   | 320 | **4px** | 0 | **4px** | 0 |
-   | 330 | **2px** | 0 | **2px** | 0 |
-   | 340 | **1px** | 0 | **1px** | 0 |
-   | 350 | 0 | 0 | 0 | 0 |
-   | 360 | 0 | 0 | 0 | 0 |
+   `.main-tab` is `flex: 1 1 0` — equal columns whatever their words are — so a
+   tab costs the strip **no height at all**: measured at 320 / 375 / 390 / 640 /
+   900 / 1200 / 1920, the row is 36–37px and the pinned chrome 99–102 with
+   three tabs, with four, and with five. What a tab costs is *width per tab*,
+   and the fifth is where the two longest words run out of it. Measured as
+   `scrollWidth - clientWidth` on each of the five, with the old rule (equal
+   columns, 13px type and 3px side padding under 350):
+
+   | window | Overview | Roster | Research | Fantasy | MLB |
+   | --- | --- | --- | --- | --- | --- |
+   | 320 | **6px** | 0 | **6px** | **1px** | 0 |
+   | 340 | **4px** | 0 | **4px** | 0 | 0 |
+   | 350 | **3px** | 0 | **3px** | 0 | 0 |
+   | 360 | **7px** | 0 | **7px** | **2px** | 0 |
+   | 390 | **4px** | 0 | **4px** | 0 | 0 |
+
+   Note 360 and 390, which are *above* the old 350 breakpoint and so were being
+   drawn at full size: with four tabs they had slack and with five they do not.
+   A fourth tab was a narrow-phone problem; a fifth is an every-phone one.
 
    They ellipsize rather than burst the page, which is what `min-width: 0` and
-   `text-overflow` are there for — but `Overvie…` on the tab that leads the
-   strip is the row failing to name the page it is pointing at. So below 350 the
-   type gives up a point and the side padding halves, which is the same trade
-   the header makes at 430 and for the same reason: a target you aim at with a
-   thumb is not where to find pixels, and a word is not a target.
+   `text-overflow` are there for — but `Overvie…` and `Researc…` are the row
+   failing to name the pages it is pointing at, on the device most of a season
+   is read on.
+
+   **So below 430 the equal columns give way to content columns**, which is the
+   fix rather than another point of type: `flex: 1 1 auto` lets `MLB` and
+   `Roster` hand their slack to the two long words, and what has to fit is the
+   total rather than each fifth of it. Re-measured with it: **0px over on all
+   five tabs at 360, 390, 430 and every width above**, and 2–3px at 320–350,
+   which the halved padding below 340 takes to 0. The row height and the chrome
+   are untouched at every width (36/99 at 320, 37/100 at 440 and up).
 
    **At the end of the file**, after `.main-tab`'s own declarations a thousand
    lines up, because a media query adds no specificity. */
-@media (max-width: 350px) {
+@media (max-width: 430px) {
   .main-tab {
     font-size: 13px;
-    padding-inline: 3px;
+    padding-inline: 6px;
+    /* **Equal columns give way to content columns, and only here.** Above this
+       width `flex: 1 1 0` is the right rule and is the reason a fifth tab cost
+       the strip no height at all — five equal quarters of the window, the
+       underline the same length under every word. Below it there is not enough
+       window for five equal columns to hold five words: at 320 each is 64px and
+       `Research` wants 70, so the two longest ellipsized (see the table above,
+       which is the same measurement re-taken with the fifth tab on the row).
+       `auto` lets `MLB` and `Roster` hand their slack to `Overview` and
+       `Research` — the total is what has to fit, not each fifth of it. */
+    flex: 1 1 auto;
+  }
+}
+/* And the last 30px, which content columns alone do not buy back: at 320 all
+   five words are still 2–3px over their box (measured), so the side padding
+   halves again. That is the same trade the header makes at 430 and for the same
+   reason — a target you aim at with a thumb is not where to find pixels, and a
+   word is not a target. Nested after the block above rather than merged into
+   it, because a media query adds no specificity and this one has to win. */
+@media (max-width: 340px) {
+  .main-tab {
+    padding-inline: 2px;
+  }
+}
+
+
+/* ============================================================================
+   The MLB view — the day's games, the standings, the league's news
+   ============================================================================
+
+   Three tabs under `.lg-tabs`, which this view borrows whole rather than
+   restyling: the League page's strip and this one are the same object — which
+   page of this view you are on, one tier under the main tabs — and two rules
+   that agree today about a pill's radius are two rules that will one day
+   differ. The same fold is why the standings table is `.glog-table`'s selector
+   lists with one more name in each, and why the news list is `PlayerNews`'
+   `NewsList` with a slot filled: a wide stat table read across, and a dated
+   list of headlines, are objects this stylesheet already has. What is below is
+   only what this view genuinely adds. */
+
+.mlb-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+
+/* ---- Scoreboard ---- */
+
+.mlb-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+/* **Auto-fill rather than a fixed count**, because the number of games is not
+   the reader's business and neither is his window: a fifteen-game Tuesday and
+   a four-game Monday both want as many cards per line as fit. 300px is the
+   narrowest a card can be and still hold a club's full name, its record and a
+   two-digit score on one line without the name ellipsizing (measured against
+   `San Francisco Giants`, the longest in the league at 20 characters); below
+   that the track collapses to one column and the card takes the width it is
+   given. */
+.mlb-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+/* A `<button>` rather than a div with a handler, so the card is in the tab
+   order and answers a keyboard — the rule every full-row door in this app
+   follows. The reset is `font-family` and not the `font` shorthand, which
+   would take the size with it. */
+.mlb-game {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+/* **Hover is scoped**, the standing rule for a pressable *surface*: a touch
+   device has no pointer to move away, so the tint sticks to the last card a
+   finger crossed and reads as a selection the app then declines to act on.
+   `:active` and `:focus-visible` are never scoped — there the affordance is
+   the press itself. */
+@media (hover: hover) {
+  .mlb-game:hover {
+    background: var(--panel-2);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  }
+}
+.mlb-game:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.mlb-game-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+/* How many are out, beside the half-inning it qualifies. Not inside the pill:
+   the pill is the *state* and takes the state's color, where this is a count
+   and would be a green number saying nothing green. */
+.mlb-game-outs {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Which game of the series, pushed to the far end — it is the least of the
+   three things on this line and the one a reader scans past. */
+.mlb-game-series {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.mlb-sides {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Four tracks: crest, name, record, score. The name takes the slack and
+   ellipsizes into it, so a long club name gives up characters before the score
+   gives up its column — the number being the whole of what a scoreboard is
+   read for. */
+.mlb-side {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.mlb-crest {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex: none;
+}
+.mlb-side-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mlb-side-rec {
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mlb-side-score {
+  min-width: 22px;
+  text-align: right;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* **The winner is told by weight and tone, not by hue.** Colour in this app is
+   spent on *state* — a live inning, a postponement, a role tint — and a
+   green-and-red scoreboard would be two more hues meaning "the same fact you
+   can already read off the two numbers". So the losing side stays at `--muted`
+   (which is where both sides start, so a game in progress favors neither) and
+   the winner comes forward to `--text`. */
+.mlb-side-won .mlb-side-name,
+.mlb-side-won .mlb-side-score {
+  color: var(--text);
+  font-weight: 800;
+}
+/* The one line under the score, and which line it is is the state — two
+   announced starters, the three decisions, or MLB's own reason. A hairline
+   above it rather than a gap, so the card reads as two registers. */
+.mlb-game-foot {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mlb-game-foot-none {
+  color: var(--faint);
+}
+.mlb-vs {
+  color: var(--faint);
+}
+
+/* ---- Standings ---- */
+
+.mlb-standings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+/* **The two controls sit in the tab, not in the app's tools row**, and that is
+   the League page's own decision read one view over: a control above the strip
+   is a control over the *page*, and these two govern exactly one third of it —
+   the Scoreboard has a date bar and the News has neither. Left in the app's
+   row, `Season · Last 60 · …` would sit over two tabs it says nothing about,
+   and a reader pressing it on the News tab would watch nothing happen.
+
+   **It is a `ScrollRow`**, so the two groups keep their words at every width
+   and give up only what runs off the end. Measured at 390 before: the row was
+   **96px tall** — the span run is 358px wide, so it broke to a second line and
+   `Last 60` then wrapped inside its own pill, taking every span pill from 25px
+   to 40 — and at 640 it was still 84. Scrolling, it is one 36px line at every
+   width from 320 up.
+
+   The one thing this row states of its own is `flex: none`. `.tool-scroll` is
+   `flex: 1 1 100%`, which is right inside `.view-tools` — a *wrapping row*,
+   where a 100% basis is what puts the run on a line of its own — and is a
+   height in a flex **column**, which is what this tab is. The gap between the
+   two groups is `.tool-scroll-inner`'s own 12px and wants nothing from here. */
+.mlb-standings-tools {
+  flex: none;
+}
+/* And the other half of the same fault: a pill must not wrap inside itself.
+   `Last 60` is two words and the run is `flex: none`, so without this the
+   pills grow a line each the moment the row is tight — which is the shape the
+   scroller exists to prevent, happening one level down. */
+.mlb-standings-tools .view-tab {
+  white-space: nowrap;
+}
+/* What the board is drawn from, in words, because on a window the numbers are
+   *ours* rather than MLB's and a table that does not say so is a table making a
+   claim it has not earned. Capped at the prose column the news list uses: this
+   is a sentence, and a sentence read across a 1920px window is a sentence read
+   twice. */
+.mlb-standings-note {
+  margin: 0;
+  max-width: var(--card-column);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+.mlb-standings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mlb-standings-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* **Sixteen columns is more than the log's gutter was sized for.** `--row-gutter`
+   is `clamp(5px, 1.9vw, 28px)` on the tables this one is folded onto, and those
+   carry eight to fourteen columns of two or three characters; this one carries
+   sixteen, five of them a `43-23` pair. Measured at 1280 with the inherited
+   clamp the table is **1396px in a 1280 scrollport** — it scrolls to show `MAG`
+   — and at the board's own narrower clamp it is **1046**, which fits with room.
+   The research board declares its own `--research-gutter` for exactly this
+   reason and at exactly this kind of width; this is that decision, one table
+   over. The header reads the same property, so the two cannot part.
+
+   Declared **after** the fold above rather than inside it, which is the only
+   thing keeping it: the two rules have equal specificity and source order is
+   what decides them. */
+.mlb-standings-table {
+  --row-gutter: clamp(4px, 1vw, 13px);
+}
+/* The club cell, which is the sticky first column — so the crest and the name
+   are laid out inside `.glog-date`'s own box rather than given one.
+
+   **The `min-width` is load-bearing and it is the fix for a shipped fault.**
+   `.glog-date` is `width: 1%` — shrink-to-fit, which is right for a date and a
+   span label — and a flex child with `overflow: hidden` has a minimum content
+   width of zero, so the two together collapsed the column onto the crest and
+   drew **thirty rows with no club name on them** (measured: cell 48.6px, name
+   **0px**, `Tampa Bay Rays` inside it). The floor is `San Francisco Giants`,
+   the longest name in the league at 20 characters — 148px at this weight and
+   size, plus the crest and its gap — and it is a `clamp` rather than that
+   number because on a phone a first column of 178px is a third of the window
+   and the name ellipsizing is the better of the two failures there. */
+.mlb-standings-table .glog-date {
+  min-width: clamp(120px, 17vw, 206px);
+}
+.mlb-club {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mlb-club-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* **The club's abbreviation, for the widths where its name stops identifying
+   it** — and that width is a measurement rather than a guess.
+
+   The name ellipsizes as the column's `clamp` scales down, which is harmless
+   until two clubs ellipsize to the *same* string. Measured across widths with
+   the thirty names at this weight and size, taking the rendered prefix of each:
+   **900px and up, no two collide** (`New York Yan…` against `New York Mets`);
+   at 800 `Los Angeles Angels` and `Los Angeles Dodgers` are both
+   `Los Angele…`; at 700 three pairs collide — the two New Yorks, the two Los
+   Angeleses and the two Chicagos. A standings row that cannot say which of two
+   clubs it is about is worse than one that says `NYY`, which is what every
+   scoreboard in the sport says.
+
+   So below 900 the abbreviation, above it the name. Hidden rather than absent
+   in each direction, so the swap is one rule and the markup is one shape. */
+.mlb-club-abbr {
+  display: none;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 899px) {
+  .mlb-club-name {
+    display: none;
+  }
+  .mlb-club-abbr {
+    display: inline;
+  }
+  /* And the column gives back what the name was holding: three characters and a
+     crest do not want 153px of a 390px window, and every pixel it returns is a
+     stat column that does not have to be scrolled to. The floor is the crest,
+     its gap and the widest abbreviation in the league. */
+  .mlb-standings-table .glog-date {
+    min-width: 74px;
+  }
+}
+/* Clinched, in the notation every standings page in the world uses. It is a
+   *state* and so takes a color, and it is the only color on this board
+   besides the run differential's sign. */
+.mlb-clinch {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--hit);
+  border: 1px solid color-mix(in srgb, var(--hit) 55%, transparent);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+/* **The pinned edge, only where there is something behind it.**
+
+   `--pin-edge` is the shadow that says *the table goes on under this column*,
+   and on the tables it was borrowed from (a game log in an overlay, a nine-cut
+   opposing lineup) there always is. This board is the first that sometimes
+   fits: the season table is 1280px wide and a 1280px window holds it, and the
+   division boards are five rows of the same columns. Drawn unconditionally it
+   was a **vertical bar down the middle of six tables**, marking an edge nothing
+   was moving past.
+
+   It cannot be a media query — whether a table fits depends on how wide
+   `Arizona Diamondbacks` renders in a font this app does not choose — so
+   `StandingsTable` measures its own scroller and puts `is-pinned` on the table
+   when there is more of it than fits. Off by default, which is the safe
+   direction: a missing shadow on a scrolling table costs an affordance, where a
+   present one on a table that fits is a line the reader has to explain. */
+.mlb-standings-table:not(.is-pinned) .glog-date {
+  box-shadow: none;
+}
+/* **The wild-card line**, drawn as a border under the last club that would be
+   in rather than as a row of its own — a `<tr>` with a `<td colspan>` would be
+   a row in the table's accessibility tree saying nothing, and it would take the
+   zebra stripe. Two pixels and the accent, because it is the one thing on this
+   table a reader is looking *for*. */
+.mlb-standings-table tbody tr.mlb-cut td {
+  border-bottom: 2px solid var(--accent);
+}
+.mlb-cut-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+/* A run differential's sign **is** the reading rather than an emphasis on it,
+   which is what earns it the one hue on a monochrome stat table. `--hit` and
+   `--strikeout` are the app's own good-and-bad pair, already carrying that
+   meaning on the feed. */
+.mlb-diff-up {
+  color: var(--hit);
+}
+.mlb-diff-down {
+  color: var(--strikeout);
+}
+
+/* ---- News ---- */
+
+.mlb-news {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+/* Centered on the page, the way the player page's own News tab is
+   (`.news-tab`): ten headlines capped at the reading column sat hard against
+   the left of a 1,280px window with 480px of nothing beside them, which reads
+   as a column that failed to fill rather than as prose set to a measure.
+
+   **`width: 100%` is beside the auto margin rather than implied by it**, which
+   is this stylesheet's own recorded trap: an auto margin on the *cross* axis
+   suppresses a flex item's stretch, so the list would have shrunk to its
+   longest headline and the hairlines under each row would have ended in
+   different places. `.upcoming-detail .pct-card` is where that is written down,
+   and it has bitten the same card twice. */
+.mlb-news .news-list,
+.mlb-news-foot {
+  width: 100%;
+  margin-inline: auto;
+}
+/* Who the row is about, above the date and the kind — the one line a league
+   feed has that a player's own News tab does not, his name there being the page
+   it is on. `.lg-tx-name` carries the press itself, folded on rather than
+   copied: a player's name as a door into his page is one object in this app and
+   the transactions feed is where it is written. */
+.mlb-news-who {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.mlb-news-club {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
+/* His position, in the source's own abbreviation. An outlined pill and
+   `--faint` for `.news-kind`'s stated reason: this is a *label* and not a
+   state, and the app's color is spent on what is happening to a player. */
+.mlb-news-pos {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 5px;
+}
+.mlb-news-foot {
+  margin: 0;
+  max-width: var(--card-column);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+/* **Narrow screens, and at the end of the file** — a media query adds no
+   specificity, so a block that overrides the rules above has to sit after them.
+   Two things give at 430: the card grid drops its 300px floor (below that a
+   single column is the only honest answer and `minmax` would otherwise force a
+   horizontal scroll), and the score gives back the two points it took to be the
+   thing the eye lands on, a 17px number and a 13px name being a ratio that
+   needs the width. */
+@media (max-width: 430px) {
+  .mlb-games {
+    grid-template-columns: 1fr;
+  }
+  .mlb-side-score {
+    font-size: 15px;
   }
 }
