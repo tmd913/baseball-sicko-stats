@@ -361,6 +361,73 @@ Two things follow from the shape of that cell:
   reaches for two absences by its own arithmetic. The tie rule was argued from
   first principles a section ago and ESPN agrees with it in the payload.
 
+#### And the next morning it was `—` again, twice over
+
+**Reported as "ERA/WHIP aren't showing again"**, on 2026-08-25, the day after
+the section above shipped. Two separate faults, found together, both of which
+the section above had walked right past because the read that found it happened
+to be one where neither could bite.
+
+**The first: the rebuild was conditional on there being a day to add.**
+`withLiveDay` opened `if (!today) return scores;`, so a side whose clubs were all
+idle this morning — `today?.[teamId]` undefined, the ordinary case at 10am —
+skipped the rebuild entirely and shipped ESPN's map exactly as it arrived. Which
+is precisely the map that does not carry the rates. The day is optional and the
+rebuild is not, so it is `withAddedComponents` where there is a day (recomputing
+every rate after adding) and a new `fillRates` where there is not (filling gaps,
+overwriting nothing).
+
+**The second: `ineligible` is not merely overloaded, it is anti-correlated.**
+Read straight off ESPN at 10:14 ET, period 20, every rate cell:
+
+| team | outs | ERA cell |
+| --- | --- | --- |
+| 12 | 38 | `score 4.263, ineligible true, result TIE` |
+| 6 | 17 | `score 3.176, ineligible true, result TIE` |
+| 1 | 21 | `score 0, ineligible true, result TIE` |
+| 7 | 22 | `score 2.455, ineligible false` |
+| 10 | 35 | `score 8.486, ineligible false` |
+| 11 | **0** | `score "Infinity", ineligible false` |
+
+Six sides with real innings and real figures are flagged; **the one side with no
+denominator at all is not** — the exact inverse of what the section above
+concluded from a payload where every cell happened to read `Infinity`. Team 1's
+`0` is the case the old rule was written to fear (*a zero in a `lowerBetter`
+category would read as the best score in the league*) and it is a genuine 0.00
+ERA over seven innings, which is what the best score in the league looks like.
+
+**The pattern is which matchup the cell is in.** Period 20 is a playoff round —
+three contested matchups and six byes — and every rate cell in the three
+contested ones is `ineligible: true` while every one on the six byes is false.
+The flag tracks *being part of a comparison*, which is not eligibility and is
+not something this app has any use for. The league's settings were checked for
+the innings minimum that would make a real ineligibility: there is none,
+`scoringItems` carrying no threshold on any of the ten.
+
+So **a `DERIVED` rate ESPN sends a number for is taken**, flag and all. The
+guard the old rule actually wanted is structural rather than a flag — a rate
+with no denominator arrives as `"Infinity"` and is caught by the test one line
+up — and **a counting category is untouched**, those having no denominator to be
+undefined, so a flagged one is genuinely a category the side cannot score in.
+
+**It moves the headline, and the movement is a deliberate disagreement.** Those
+cells carry ESPN's own `result: TIE`, and with the figures in hand
+`tallyCategories` decides them instead: measured on the same read, team 12
+against team 6 went **`7-0-3` / `0-7-3` → `8-1-1` / `1-8-1`** — ERA to team 6
+(3.18 against 4.26), WHIP to team 12 (1.184 against 1.412), ties from three to
+one, and the triple still summing to ten. The reason to back this file's
+arithmetic over ESPN's flag is the table above: the same cell that says `TIE`
+says `ineligible` about a 0.00 ERA over seven innings, and the league has no rule
+that would make either true. The computation doing the deciding is the one
+checked against ESPN on **1,080 of 1,080** comparisons over eighteen settled
+periods, where these flags are clean and the two agree.
+
+**Measured after, all twelve sides**: every side that has pitched has both rates
+(`t12 4.26/1.18`, `t6 3.18/1.41`, `t4 3.00/1.00`, `t9 4.50/1.50`, `t1 0.00/0.57`,
+`t5 1.50/1.50`, `t7 2.45/1.23`, `t2 3.38/2.63`, `t13 3.00/1.00`, `t3 1.50/0.67`,
+`t10 8.49/1.97`) and **team 11, with 0 outs, still has neither** — the
+zero-denominator guard holding, which is the one thing this must not break.
+
 #### What it moves, and what it does not
 
 **Measured through the route, before → after**, on one fetch with both tallies

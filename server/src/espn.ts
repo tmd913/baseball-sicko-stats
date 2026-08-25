@@ -3629,9 +3629,65 @@ export function withAddedComponents(
 }
 
 /**
+ * **Rebuild every scored rate the map is missing, from the components it has.**
+ *
+ * `withAddedComponents` does this as its last pass and *recomputes* — a day has
+ * been added, so a rate ESPN already gave is stale and must be replaced. This
+ * one only **fills gaps**: it is for the side that has no day to add, where
+ * every figure ESPN sent is still current and the only thing to do is put back
+ * the two it wrote as `Infinity`. It never overwrites a number ESPN sent.
+ *
+ * The zero-denominator guard is `DERIVED`'s own — every rule returns `null` on
+ * one — so a side that has genuinely not pitched gets no ERA rather than a
+ * `0.00` that would read as the best score in the league.
+ */
+function fillRates(
+  merged: Record<number, number>,
+  categories: EspnCategory[],
+): Record<number, number> {
+  for (const cat of categories) {
+    const rule = DERIVED[cat.statId];
+    if (!rule) continue;
+    if (merged[cat.statId] !== undefined) continue;
+    if (!rule.needs.every((n) => typeof merged[n] === 'number')) continue;
+    const v = rule.of(merged);
+    if (typeof v === 'number' && Number.isFinite(v)) merged[cat.statId] = v;
+  }
+  return merged;
+}
+
+/**
  * **ESPN's through-yesterday score with today's day added on, for the live
  * scoreboard** — `withAddedComponents` with the two things this caller needs
  * and `projection.ts`'s does not.
+ *
+ * ### The rebuild does not depend on there being a day
+ *
+ * **Everything below this heading was written for the side that *has* a live
+ * day, and it left the side that has not with no rates at all.** The function
+ * opened `if (!today) return scores;`, so a team whose clubs were all idle this
+ * morning — `today?.[teamId]` undefined, which is the ordinary case at 10am —
+ * skipped the whole rebuild and shipped ESPN's map exactly as it arrived. And
+ * ESPN's map is precisely the thing that does not carry the two rates: they
+ * come back flagged `ineligible` with the string `"Infinity"` and `sideFrom`
+ * drops them on purpose, on the understanding that this function would put them
+ * back.
+ *
+ * Which it did, on the day it was written, because on that day the read that
+ * found it (19:49 ET) had a live day for every side. **Reported the next
+ * morning as "ERA/WHIP aren't showing again"**, and measured on the live league
+ * at 10:02 ET on 2026-08-25, mid-period-20: team 6 came back with
+ * `OUTS 17 · ER 2 · H 6 · BB 2` and **no `41` and no `47`** — an ERA of
+ * `2 × 9 ÷ (17/3) = 3.18` and a WHIP of `(6 + 2) ÷ (17/3) = 1.41` sitting
+ * right there in the components, which is the pair the card had drawn the
+ * afternoon before and was now drawing as `—`.
+ *
+ * So the day is optional and the rebuild is not: with a day it is
+ * `withAddedComponents`, which recomputes every rate after adding; without one
+ * it is `fillRates`, which fills the gaps and overwrites nothing. Every guard
+ * the two paragraphs below describe is unchanged and holds on both paths —
+ * `ineligible` is still honored, a counting category is still never created,
+ * and an empty denominator still yields no figure at all.
  *
  * **It passes `createRates`**, and the reason that flag exists is the same one
  * read on the other surface of the same page. At the top of a week nobody has a
@@ -3713,8 +3769,12 @@ function withLiveDay(
   categories: EspnCategory[],
   ineligible: Set<number>,
 ): Record<number, number> {
-  if (!today) return scores;
-  const merged = withAddedComponents(scores, today, categories, true);
+  // **The day is optional and the rebuild is not**, which is the whole of the
+  // fix below this function's own note. A side with no day to add still has
+  // components ESPN sent and rates ESPN did not.
+  const merged = today
+    ? withAddedComponents(scores, today, categories, true)
+    : fillRates({ ...scores }, categories);
   const scored = new Set(categories.map((c) => c.statId));
   const out: Record<number, number> = {};
   for (const [id, v] of Object.entries(merged)) {
@@ -3765,6 +3825,72 @@ function sideFrom(
        * one it is losing, and a zero in a `lowerBetter` category would read as
        * the best score in the league.
        */
+      /**
+       * **And a *rate* ESPN sent a number for is a number, whatever the flag
+       * says.** This is the second thing found out about `ineligible`, and it
+       * goes further than the first: on the live league the flag is not merely
+       * overloaded, it is **anti-correlated** with the thing it is supposed to
+       * mean.
+       *
+       * Read straight off ESPN at 10:14 ET on 2026-08-25, period 20, all six
+       * matchups, the ERA and WHIP cells:
+       *
+       * | team | outs | ERA cell |
+       * | --- | --- | --- |
+       * | 12 | 38 | `score 4.263, ineligible true, result TIE` |
+       * | 6 | 17 | `score 3.176, ineligible true, result TIE` |
+       * | 1 | 21 | `score 0, ineligible true, result TIE` |
+       * | 7 | 22 | `score 2.455, ineligible false` |
+       * | 10 | 35 | `score 8.486, ineligible false` |
+       * | 11 | **0** | `score "Infinity", ineligible false` |
+       *
+       * Six sides with real innings and real figures are flagged; the one side
+       * with **no denominator at all** is not. Team 1's `0` is the case the old
+       * rule was written to fear — *a zero in a `lowerBetter` category would
+       * read as the best score in the league* — and it is a genuine 0.00 ERA
+       * over seven innings, which is exactly what the best score in the league
+       * looks like.
+       *
+       * **The pattern is which matchup the cell is in, not what the side can
+       * score.** Period 20 is a playoff round: three contested matchups and six
+       * byes. Every rate cell in the **three contested** ones is
+       * `ineligible: true` with `result: TIE`; every rate cell on the **six
+       * byes** is `ineligible: false`. So the flag tracks *being part of a
+       * comparison*, which is not eligibility and is not something this app has
+       * any use for. The league's own settings were checked for the innings
+       * minimum that would explain a real ineligibility: there is none,
+       * `scoringItems` carrying no threshold on any of the ten.
+       *
+       * So for a `DERIVED` rate the flag carries nothing usable and the score
+       * does. Taking it is also the *safe* direction, because the guard the old
+       * rule really wanted is structural rather than a flag: a rate with no
+       * denominator arrives as `"Infinity"` and is caught one line up.
+       *
+       * **A counting category is untouched by this** and is still taken at its
+       * word — those have no denominator to be undefined, so a flagged one is
+       * genuinely a category the side cannot score in, and the old rule is
+       * exactly right about it.
+       *
+       * **It moves the headline, and the movement is stated rather than
+       * hidden.** Those cells carry ESPN's own `result: TIE`, and with the
+       * figures in hand `tallyCategories` now *decides* them instead — measured
+       * on the same read, team 12 against team 6 went `7-0-3` / `0-7-3` to
+       * **`8-1-1` / `1-8-1`**, ERA to team 6 (3.18 against 4.26) and WHIP to
+       * team 12 (1.184 against 1.412), with the ties falling from three to one
+       * and the triple still summing to ten.
+       *
+       * That is a deliberate disagreement with a live cell, and the reason to
+       * back this file's own arithmetic over ESPN's flag is on the table above:
+       * the same cell that says `TIE` says `ineligible` about a 0.00 ERA over
+       * seven innings, and the league has no rule that would make either true.
+       * The computation doing the deciding is the one checked against ESPN on
+       * **1,080 of 1,080** category comparisons over eighteen settled periods,
+       * where these flags are clean and the two agree.
+       */
+      if (DERIVED[Number(id)] && typeof cell.score === 'number') {
+        scores[Number(id)] = cell.score;
+        continue;
+      }
       if (String(cell.score) !== 'Infinity') ineligible.add(Number(id));
       continue;
     }

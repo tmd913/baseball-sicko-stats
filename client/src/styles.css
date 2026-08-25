@@ -20842,6 +20842,12 @@ html[data-theme='light'] .league-table thead th {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  /* **The page starts with a heading, and a heading wants air above it.** The
+     tools row above ends at the app's own chrome seam, so `Your matchup` sat
+     hard against it and read as a caption on the bar rather than as the title
+     of the block under it. The two headings on this page are the only things
+     that set its rhythm, so the space is theirs. */
+  padding-top: 10px;
   /* Wide enough for three day blocks at ~360 apiece and their gaps, which is
      what sets it: measured, three blocks at 1120 are 365 / 365 / 365 with two
      12px gaps, and the matchup card above keeps its own `--card-column` cap of
@@ -20903,9 +20909,17 @@ html[data-theme='light'] .league-table thead th {
 /* The section's own heading sits above the carousel rather than inside it, so
    the row it labels can bleed out through the app's gutters underneath it while
    the words stay on the page's own left edge — the same relationship
-   `.ov-matchup`'s heading has to the card under it. */
+   `.ov-matchup`'s heading has to the card under it.
+
+   **It sits closer to its row than the matchup heading does to its card**, and
+   the two are deliberately different: this one is a direct child of the column
+   flex, so it already has the container's own 18px gap under it where
+   `.ov-matchup`'s heading has only its own margin. Zeroing the margin makes the
+   *rendered* gap the same **8px** `.ov-matchup`'s heading has, measured both
+   ways off the rendered page — the negative value is the container's own 18px
+   being paid back, not a heading being crowded. */
 .overview-view > .ov-heading {
-  margin-bottom: 0;
+  margin-bottom: -10px;
 }
 .ov-days {
   display: flex;
@@ -20989,10 +21003,16 @@ html[data-theme='light'] .league-table thead th {
   text-transform: uppercase;
   color: var(--muted);
 }
+/* **No separator between the day and the tag**, where a `·` stood. The two are
+   not two facts of equal weight with a dot to hold them apart — `PROJECTED`
+   qualifies `TODAY`, the way `SCHEDULE · WEEK 19` on the roster's own face does
+   not. What holds them apart now is space and the glyph, which is what a
+   qualifier gets. */
 .ov-day-proj-tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  margin-left: 7px;
   color: var(--faint);
 }
 .ov-day-date {

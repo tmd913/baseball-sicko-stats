@@ -341,7 +341,6 @@ function DayBlock({
   categories,
   categoriesTitle,
   performers,
-  who,
   loading,
   onOpenPlayer,
   onSeeDay,
@@ -355,13 +354,6 @@ function DayBlock({
   categories: EspnCategory[];
   categoriesTitle: string;
   performers: Performer[] | null;
-  /** **Whose day this is a day of**, already in words — `Lineup · 20 of 29` on
-   *  a fantasy team, `Watchlist · 16` without one. Computed by the view rather
-   *  than here because each of the three blocks knows it differently: the two
-   *  played days read ESPN's own lineup off their report, and the projected one
-   *  reads the *plan* off the projection, there being no lineup for tomorrow to
-   *  have. A block that worked it out itself would need all three. */
-  who: string;
   loading: boolean;
   onOpenPlayer: (id: number) => void;
   onSeeDay: (date: string) => void;
@@ -402,16 +394,12 @@ function DayBlock({
         <span className="ov-day-lead">
           {lead}
           {projected ? (
-            <>
-              {' · '}
-              <span className="ov-day-proj-tag">
-                <ProjectedGlyph size={12} /> PROJECTED
-              </span>
-            </>
+            <span className="ov-day-proj-tag">
+              <ProjectedGlyph size={12} /> PROJECTED
+            </span>
           ) : null}
         </span>
         <span className="ov-day-date">{prettyGameDate(date)}</span>
-        <span className="ov-day-who">{who}</span>
       </header>
 
       {performers === null ? (
@@ -481,7 +469,6 @@ export default function OverviewView({
   loadingYesterday,
   loadingTomorrow,
   loadingTodayProjection,
-  usingFantasy,
   knownPlayers,
   dates,
   onOpenPlayer,
@@ -513,7 +500,6 @@ export default function OverviewView({
   loadingYesterday: boolean;
   loadingTomorrow: boolean;
   loadingTodayProjection: boolean;
-  usingFantasy: boolean;
   /** For the projected block's names: a projected line carries a key, an id and
    *  a kind and no name at all, the engine having no business holding one. */
   knownPlayers: SeasonPlayer[];
@@ -650,37 +636,20 @@ export default function OverviewView({
     return map;
   }, [board]);
 
-  /**
-   * **How many men this block is a block of.** `Lineup · 20 of 29` where there
-   * is a lineup to have been in, `Watchlist · 16` where there is not — and the
-   * distinction is not cosmetic, a lineup total being the one that agrees with
-   * the scoreboard above it and a roster total being the one that does not.
-   *
-   * A fantasy team whose per-day lineup read failed falls back to the second
-   * form, which is the honest direction: it counted everybody, so it says so.
-   */
-  const whoPlayed = (reports: PlayerReport[] | null, lineup: Set<string> | null) => {
-    const roster = reports?.length ?? 0;
-    if (!usingFantasy || !lineup) return `Watchlist · ${roster}`;
-    // The lineup ESPN published can name men this roster read does not carry —
-    // somebody dropped since — so the count is the intersection rather than the
-    // set's own size, which is what the block actually drew.
-    const inBoth = (reports ?? []).filter((r) => lineup.has(playerKey(r))).length;
-    return `Lineup · ${inBoth} of ${roster}`;
-  };
+  /* **`Lineup · 20 of 29` is gone from the card head**, and with it the two
+     functions that worked it out — for a played day off ESPN's own lineup, for
+     a projected one off the engine's plan.
 
-  /** The projected block's, off the **plan** rather than off a lineup: tomorrow
-   *  has none, and what the engine can say is which seat it would start him in
-   *  (`ProjectedPlayerLine.lineup.days`). A man it would bench every day of the
-   *  span has an empty `days` and is not in the count, which is the same cut the
-   *  block itself makes. */
-  const whoProjected = (proj: RosterProjection | null, date: string): string => {
-    if (!proj) return '';
-    const roster = proj.players.length;
-    if (!usingFantasy || !proj.players.some((p) => p.lineup)) return `Watchlist · ${roster}`;
-    const started = proj.players.filter((p) => p.lineup?.days.some((d) => d.day === date)).length;
-    return `Lineup · ${started} of ${roster}`;
-  };
+     It was argued for and the argument was about *arithmetic*: a lineup total
+     and a roster total are different numbers, only one of them agrees with the
+     scoreboard above, and the head said which. All of that is still true and
+     none of it is the reader's question. Three lines of head — the day, the
+     date, and a count of men — put the thing a manager came for one line lower
+     on a card that is already the second block of the page, to answer something
+     nobody standing in front of it was asking. The fact survives where it is
+     load-bearing: in this file, and in the ESPN check the document records,
+     which is what establishes that these figures agree with the scoreboard at
+     all. */
 
   /**
    * **Today is a projection until the day starts.**
@@ -715,13 +684,6 @@ export default function OverviewView({
     yesterday: yesterdayPerf,
     today: todayIsProjected ? todayProj : todayPerf,
     tomorrow: scoreProjected(tomorrow, dates.tomorrow),
-  };
-  const who: Record<DayKey, string> = {
-    yesterday: whoPlayed(yesterday, yesterdayLineup),
-    today: todayIsProjected
-      ? whoProjected(todayProjection, dates.today)
-      : whoPlayed(today, todayLineup),
-    tomorrow: whoProjected(tomorrow, dates.tomorrow),
   };
   const loading: Record<DayKey, boolean> = {
     yesterday: loadingYesterday,
@@ -908,7 +870,6 @@ export default function OverviewView({
               categories={categories}
               categoriesTitle={categoriesTitle}
               performers={perf[d]}
-              who={who[d]}
               loading={loading[d]}
               onOpenPlayer={onOpenPlayer}
               onSeeDay={onSeeDay}

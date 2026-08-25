@@ -8039,7 +8039,6 @@ export default function App() {
           loadingYesterday={ovYesterdayLoading}
           loadingTomorrow={ovTomorrowLoading}
           loadingTodayProjection={ovTodayProjLoading}
-          usingFantasy={usingFantasy}
           /* The projected block's names: a projected line carries a key, an id
              and a kind and no name at all. */
           knownPlayers={knownPlayers}
