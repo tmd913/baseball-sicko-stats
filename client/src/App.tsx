@@ -786,13 +786,22 @@ export default function App() {
   // where you left rather than resetting to Summary.
   const [view, setView] = useState<View>(() => {
     const v = initialParams.get('view');
-    // **The front page — the first tab, and deliberately not the default.**
-    // `summary` is still what a bare URL means and what every link in the wild
-    // that omits `view=` has always meant, which is the rule this app applies
-    // to every other param: an omitted one is the default, and changing the
-    // default changes what somebody else's link says. Leading the strip is a
-    // statement about where the page belongs, not about where a reader who
-    // never asked for it should land.
+    // **The front page, and the app's default — for a reader with a league.**
+    //
+    // This paragraph used to say the opposite, and the argument it made is
+    // still the reason the change is shaped the way it is: an omitted param is
+    // the default, so moving a default changes what somebody else's link says.
+    // What that misses is *which* link. A bare `?` is not a link anybody wrote;
+    // it is the app being opened, and the page a manager wants when they open
+    // it is the one that says how it is going. Every link that names a view
+    // still opens that view, and `?view=summary` is written out in full the
+    // moment anything else is on screen.
+    //
+    // It cannot be decided here. Whether there is a league is an answer
+    // `/api/espn` has not given yet on this render, so the seed stays `summary`
+    // and `wantOverview` below resolves it the moment the status lands — the
+    // same want-then-resolve shape `wantMyMatchup` uses one param over, and for
+    // the same reason.
     if (v === 'overview') return 'overview';
     if (v === 'research') return 'research';
     // Only reachable with a league connected — the pill is not drawn without
@@ -830,6 +839,17 @@ export default function App() {
      reading is on screen, so a crossing leaves the last one standing. (That one
      is declared further down now, its answer depending on two toggles that are
      not in scope up here.) */
+  /**
+   * **Nobody said which page, so the league gets to.**
+   *
+   * True only for a URL with no `view=` on it at all — a link that names one is
+   * a link that means it, `view=summary` included. It is cleared on the first
+   * render at which the connection status has an answer, whichever way that
+   * answer goes, so this can move the reader exactly once and only before the
+   * tab strip they might have pressed has been drawn (`initialLoadSettled`
+   * gates that strip on the very same status).
+   */
+  const [wantOverview, setWantOverview] = useState(() => !initialParams.has('view'));
   const lastRosterView = useRef<View>('summary');
   if (isRosterView(view)) lastRosterView.current = view;
   // Demo toggle: overlay a synthetic live-day state on the loaded reports so the
@@ -4760,14 +4780,24 @@ export default function App() {
   const [ovToday, setOvToday] = useState<OverviewDay | null>(null);
   const [ovYesterday, setOvYesterday] = useState<OverviewDay | null>(null);
   const [ovTomorrow, setOvTomorrow] = useState<RosterProjection | null>(null);
+  /** **What today is worth, for the hours before it starts.** The Overview's
+   *  `TODAY` card draws this in place of a line of noughts until the first game
+   *  on the roster is under way — see `OverviewView`, where the swap is
+   *  argued. Read alongside the other three rather than after the report has
+   *  said whether it is wanted: a dependent read would put a second wait in
+   *  front of the one card a reader opens this page for, and this is one more
+   *  answer off an engine the page is already asking (`daysLeft` and the
+   *  server's own cache do the rest). */
+  const [ovTodayProjection, setOvTodayProjection] = useState<RosterProjection | null>(null);
   const [ovTodayLoading, setOvTodayLoading] = useState(false);
   const [ovYesterdayLoading, setOvYesterdayLoading] = useState(false);
   const [ovTomorrowLoading, setOvTomorrowLoading] = useState(false);
+  const [ovTodayProjLoading, setOvTodayProjLoading] = useState(false);
   /** One sequence number per block, not one for the view: the three reads land
    *  independently and a slow projection must not discard a fresh Today. Only
    *  the newest of each may write, which is the app's own rule for any read
    *  that can be superseded — and these can, the clock moving on resume. */
-  const ovRead = useRef({ today: 0, yesterday: 0, tomorrow: 0 });
+  const ovRead = useRef({ today: 0, yesterday: 0, tomorrow: 0, todayProj: 0 });
 
   const loadOverviewDay = useCallback(
     (
@@ -4813,26 +4843,36 @@ export default function App() {
       setOvYesterday,
       setOvYesterdayLoading,
     );
-    const seq = ++ovRead.current.tomorrow;
-    setOvTomorrowLoading(true);
-    api
-      .rosterProjection(
-        overviewDates.tomorrow,
-        overviewDates.tomorrow,
-        usingFantasy ? 'fantasy' : 'watchlist',
-        fantasyTeamId,
-      )
-      .then((p) => {
-        if (seq === ovRead.current.tomorrow) setOvTomorrow(p);
-      })
-      .catch((e: Error) => {
-        if (seq === ovRead.current.tomorrow) {
-          console.error("reading tomorrow's projection failed:", e.message);
-        }
-      })
-      .finally(() => {
-        if (seq === ovRead.current.tomorrow) setOvTomorrowLoading(false);
-      });
+    /** The two projected days, which are the same read over two dates — one
+     *  request each, the engine having no per-day breakdown to hand back over a
+     *  span. Sequence-numbered per day for the reason the reports are: they
+     *  land independently and only the newest of each may write. */
+    const loadProjection = (
+      date: string,
+      which: 'tomorrow' | 'todayProj',
+      set: (p: RosterProjection) => void,
+      setLoading: (on: boolean) => void,
+    ) => {
+      const seq = ++ovRead.current[which];
+      setLoading(true);
+      api
+        .rosterProjection(date, date, usingFantasy ? 'fantasy' : 'watchlist', fantasyTeamId)
+        .then((p) => {
+          if (seq === ovRead.current[which]) set(p);
+        })
+        .catch((e: Error) => {
+          // The block's own failure and the block's own fallback: `TODAY` goes
+          // back to its measured reading and `TOMORROW` says it has nothing.
+          if (seq === ovRead.current[which]) {
+            console.error(`reading the ${which} projection failed:`, e.message);
+          }
+        })
+        .finally(() => {
+          if (seq === ovRead.current[which]) setLoading(false);
+        });
+    };
+    loadProjection(overviewDates.tomorrow, 'tomorrow', setOvTomorrow, setOvTomorrowLoading);
+    loadProjection(overviewDates.today, 'todayProj', setOvTodayProjection, setOvTodayProjLoading);
   }, [
     view,
     overviewDates,
@@ -6139,6 +6179,27 @@ export default function App() {
     setWantMyMatchup(false);
     if (myMatchupId != null) setMatchupId(myMatchupId);
   }, [wantMyMatchup, scoreboard, myMatchupId]);
+
+  /**
+   * **A bare URL opens on the Overview, once the league has said there is one.**
+   *
+   * It fires once and gives up rather than waiting, which is `wantMyMatchup`'s
+   * own rule above and is what keeps it from being a page that reopens itself:
+   * `espnStatusSettled` means *we know*, not *the answer is yes*, so a reader
+   * with no league has the flag cleared on the same render and stays where a
+   * bare URL has always put them.
+   *
+   * **Nothing can have moved under it.** The tab strip is gated on
+   * `initialLoadSettled`, which includes this very status, so there is no
+   * render on which a reader could have pressed a tab before this has run —
+   * which is why it needs no "unless they have already navigated" test, and why
+   * a test like that would be the thing to add if that gate ever moved.
+   */
+  useEffect(() => {
+    if (!wantOverview || !espnStatusSettled) return;
+    setWantOverview(false);
+    if (espnConnected) setView('overview');
+  }, [wantOverview, espnStatusSettled, espnConnected]);
 
   const leagueTabsRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
@@ -7611,14 +7672,23 @@ export default function App() {
                   actually came for, and it is drawn from those three pages'
                   own data rather than from anything of its own.
 
-                  **It appears on the same terms as the Roster.** Its three day
-                  blocks are about a roster, so with nothing watched and no
-                  league there is nothing for any of them to report on and the
-                  tab would lead to a page of empty states — which is the same
-                  test `showRosterViews` already makes for the tab beside it,
-                  read one condition wider because a connected league gives the
-                  matchup block a subject on its own. */}
-              {(showRosterViews || espnConnected) && (
+                  **It is drawn for a connected league and for nobody else**,
+                  and it is that reader's **default page**. Three of its four
+                  blocks would stand on a saved watchlist — a watchlist has days
+                  and top performers like any roster, and `STANDARD_5X5` is
+                  there so the ranking has a meaning without a league — but the
+                  block that makes the page a *front* page is the matchup, and
+                  without one this is three cards a reader can already reach by
+                  setting a date. So it is not offered, and `summary` stays the
+                  default it has always been.
+
+                  A `?view=overview` link is still honored either way, which is
+                  the courtesy `view=league` already extends: the page works
+                  without a league (it draws the standard 5×5 and no matchup
+                  block), and silently dropping somebody who was handed a link
+                  onto a different page is the direction this app declines to
+                  fail in. */}
+              {espnConnected && (
                 <button
                   type="button"
                   role="tab"
@@ -7962,11 +8032,13 @@ export default function App() {
           today={ovToday?.players ?? null}
           yesterday={ovYesterday?.players ?? null}
           tomorrow={ovTomorrow}
+          todayProjection={ovTodayProjection}
           todayLineup={ovToday?.lineup ?? null}
           yesterdayLineup={ovYesterday?.lineup ?? null}
           loadingToday={ovTodayLoading}
           loadingYesterday={ovYesterdayLoading}
           loadingTomorrow={ovTomorrowLoading}
+          loadingTodayProjection={ovTodayProjLoading}
           usingFantasy={usingFantasy}
           /* The projected block's names: a projected line carries a key, an id
              and a kind and no name at all. */

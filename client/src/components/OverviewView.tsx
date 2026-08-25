@@ -41,7 +41,7 @@
  *
  * See `docs/claude/client-overview.md`.
  */
-import { useMemo } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   EspnCategory,
   EspnScoreboard,
@@ -59,10 +59,12 @@ import {
   formatIp,
   headshotUrl,
   lineSummary,
+  prettyDate,
   prettyGameDate,
   surname,
 } from '../lib';
 import { LoadingBlock } from './Loading';
+import { useOverflowArrows } from './TabStrip';
 import { MatchupCard, categoryGroups, fmtValue } from './LeagueView';
 import { ProjectedGlyph } from './Projection';
 
@@ -73,6 +75,32 @@ import { ProjectedGlyph } from './Projection';
  *  the whole roster's day is the Roster view with the date set to that day,
  *  which is where the `See the day →` foot goes. */
 const TOP_N = 3;
+
+/**
+ * **The three days, in the order they happened.**
+ *
+ * They were drawn `Today · Yesterday · Tomorrow` — the order a manager *asks*
+ * after them — and that reads as a list where the row is a **carousel**, whose
+ * whole grammar is that left is back and right is forward. Chronological is
+ * what a swipe means, and it costs nothing: the row opens on `Today` (below),
+ * so what leads is unchanged and what has moved is where the other two are. It
+ * reads the same way on a desk, where left-to-right through three columns is a
+ * timeline rather than a ranking.
+ */
+const DAYS = ['yesterday', 'today', 'tomorrow'] as const;
+type DayKey = (typeof DAYS)[number];
+
+/** **Today is the one the row opens on**, and the index is derived from the
+ *  array rather than written as `1`, so re-ordering `DAYS` cannot leave the
+ *  opening card behind. */
+const OPENS_ON = DAYS.indexOf('today');
+
+/** Title case, for the dots' own labels — the card heads are small caps. */
+const DAY_WORD: Record<DayKey, string> = {
+  yesterday: 'Yesterday',
+  today: 'Today',
+  tomorrow: 'Tomorrow',
+};
 
 /** An empty batting line, for a pitcher's row reaching the batter's summary —
  *  which cannot happen and is what the fallback is for. Its own constant rather
@@ -311,7 +339,6 @@ function DayBlock({
   date,
   projected = false,
   categories,
-  categoriesName,
   categoriesTitle,
   performers,
   who,
@@ -326,7 +353,6 @@ function DayBlock({
   date: string;
   projected?: boolean;
   categories: EspnCategory[];
-  categoriesName: string;
   categoriesTitle: string;
   performers: Performer[] | null;
   /** **Whose day this is a day of**, already in words — `Lineup · 20 of 29` on
@@ -344,13 +370,30 @@ function DayBlock({
     () => addLines((performers ?? []).map((p) => p.line)),
     [performers],
   );
+  /**
+   * **The list is of men who *played*, which is a filter the totals do not
+   * take.** A man in the lineup whose club was idle contributes 0 to every
+   * counting category and nothing at all to the rates, so counting him in the
+   * day's figures is right and costs nothing — and ranking him is not: a score
+   * of exactly `+0.0` for having done nothing sorts **above** a man who went
+   * 0-for-4, whose OPS contribution is genuinely negative.
+   *
+   * Found at 4am ET the morning after this shipped, which is the hour that
+   * makes it visible: the baseball day had rolled to a card with no games
+   * played on it, and `TODAY` listed three men at `0-0` and `+0.0` under a
+   * category line of noughts — where the block has a sentence for exactly that
+   * state and was one empty list away from saying it.
+   *
+   * A projected block takes no such filter: every line in it is a fraction of a
+   * game nobody has played, which is the whole point of it.
+   */
   const top = useMemo(
     () =>
       (performers ?? [])
-        .filter((p) => p.value !== null)
+        .filter((p) => p.value !== null && (projected || anyPlay(p.line)))
         .sort((a, b) => b.value! - a.value!)
         .slice(0, TOP_N),
-    [performers],
+    [performers, projected],
   );
 
   return (
@@ -383,7 +426,7 @@ function DayBlock({
           {top.length === 0 ? (
             <p className="ov-day-empty">
               {projected
-                ? 'Nobody in tomorrow’s lineup has a game to play.'
+                ? `Nobody in ${lead.toLowerCase()}’s lineup has a game to play.`
                 : anyPlay(total)
                   ? 'Nobody in the lineup has done anything worth ranking yet.'
                   : 'No games played yet.'}
@@ -397,12 +440,24 @@ function DayBlock({
               ))}
             </ol>
           )}
+          {/* **The foot is one control, where it was a caption and a control.**
+              `10 LEAGUE CATEGORIES` sat at the left end of every card saying
+              which set the ranking was made over — a fact that is true, is the
+              same on all three cards, and is the same on every card a reader
+              will ever see, since a league's categories do not change. A mark
+              that would be on every row marks nothing, and this one was on nine
+              of them. It survives where a fact of that kind belongs: as the
+              `title` of the list it qualifies, and in this file's own note on
+              `STANDARD_5X5` for the reader with no league, whose block is the
+              one case where the answer is not what they'd assume. */}
           <footer className="ov-day-foot">
-            <span className="ov-day-scale" title={categoriesTitle}>
-              {categoriesName}
-            </span>
-            <button type="button" className="ov-day-more" onClick={() => onSeeDay(date)}>
-              See the day →
+            <button
+              type="button"
+              className="ov-day-more"
+              onClick={() => onSeeDay(date)}
+              title={categoriesTitle}
+            >
+              See the day
             </button>
           </footer>
         </>
@@ -419,11 +474,13 @@ export default function OverviewView({
   today,
   yesterday,
   tomorrow,
+  todayProjection,
   todayLineup,
   yesterdayLineup,
   loadingToday,
   loadingYesterday,
   loadingTomorrow,
+  loadingTodayProjection,
   usingFantasy,
   knownPlayers,
   dates,
@@ -439,6 +496,13 @@ export default function OverviewView({
   today: PlayerReport[] | null;
   yesterday: PlayerReport[] | null;
   tomorrow: RosterProjection | null;
+  /** **What today is worth, for the hours before it starts.** Read alongside
+   *  the other three rather than after the report has said whether it is
+   *  wanted: a dependent read would put a second wait in front of the one card
+   *  a reader opens this page for, and it is one more answer off an engine the
+   *  page is already asking. Null where it failed, which costs the card its
+   *  lens and nothing else. */
+  todayProjection: RosterProjection | null;
   /** Who was in the lineup on each played day, as player keys. Null in
    *  saved-roster mode and on a day the per-day read could not answer for, in
    *  which case the block counts everybody and says `Watchlist` rather than
@@ -448,6 +512,7 @@ export default function OverviewView({
   loadingToday: boolean;
   loadingYesterday: boolean;
   loadingTomorrow: boolean;
+  loadingTodayProjection: boolean;
   usingFantasy: boolean;
   /** For the projected block's names: a projected line carries a key, an id and
    *  a kind and no name at all, the engine having no business holding one. */
@@ -475,8 +540,9 @@ export default function OverviewView({
    * in its `title`.
    */
   const own = board?.categories?.length ? board.categories.length : 0;
-  const categoriesName = own > 0 ? `${own} league categories` : 'standard 5×5';
-  const categoriesTitle = `Ranked over ${categories.map((c) => c.label).join(' · ')}`;
+  const categoriesTitle = `Ranked over ${
+    own > 0 ? `your league's ${own} categories` : 'the standard 5×5'
+  } — ${categories.map((c) => c.label).join(' · ')}`;
 
   const nameOf = useMemo(() => {
     const map = new Map<number, string>();
@@ -511,17 +577,21 @@ export default function OverviewView({
     return out;
   };
 
-  /** The projected day. **`lineup` is the projection's own plan**, not a read of
-   *  ESPN — tomorrow has no lineup yet, and what the engine can say is what it
-   *  would start him for (`ProjectedPlayerLine.lineup`). A man it would bench
-   *  every day of the span has an empty `days` and is not in the block, which
-   *  is the same cut the played days make and the reason the three read alike. */
-  const projected = useMemo((): Performer[] | null => {
-    if (!tomorrow) return null;
+  /** A projected day. **`lineup` is the projection's own plan**, not a read of
+   *  ESPN — a day nobody has played has no lineup yet, and what the engine can
+   *  say is what it would start him for (`ProjectedPlayerLine.lineup`). A man
+   *  it would bench every day of the span has an empty `days` and is not in the
+   *  block, which is the same cut the played days make and the reason the three
+   *  read alike.
+   *
+   *  **Two callers now**, which is why it takes its day: Tomorrow always, and
+   *  Today until Today starts. */
+  const scoreProjected = (proj: RosterProjection | null, date: string): Performer[] | null => {
+    if (!proj) return null;
     const out: Performer[] = [];
-    for (const p of tomorrow.players) {
+    for (const p of proj.players) {
       const seat = p.lineup;
-      const day = seat?.days.find((d) => d.day === dates.tomorrow);
+      const day = seat?.days.find((d) => d.day === date);
       // Without a lineup at all — a saved watchlist, or a league that published
       // no slot counts — every man with a game is in the block, which is what
       // the roster table's own projected reading does in the same case.
@@ -546,7 +616,7 @@ export default function OverviewView({
       });
     }
     return out;
-  }, [tomorrow, dates.tomorrow, nameOf, categories]);
+  };
 
   const todayPerf = useMemo(
     () => scorePlayed(today, dates.today, todayLineup),
@@ -604,17 +674,165 @@ export default function OverviewView({
    *  (`ProjectedPlayerLine.lineup.days`). A man it would bench every day of the
    *  span has an empty `days` and is not in the count, which is the same cut the
    *  block itself makes. */
-  const whoProjected = useMemo(() => {
-    if (!tomorrow) return '';
-    const roster = tomorrow.players.length;
-    if (!usingFantasy || !tomorrow.players.some((p) => p.lineup)) {
-      return `Watchlist · ${roster}`;
-    }
-    const started = tomorrow.players.filter((p) =>
-      p.lineup?.days.some((d) => d.day === dates.tomorrow),
-    ).length;
+  const whoProjected = (proj: RosterProjection | null, date: string): string => {
+    if (!proj) return '';
+    const roster = proj.players.length;
+    if (!usingFantasy || !proj.players.some((p) => p.lineup)) return `Watchlist · ${roster}`;
+    const started = proj.players.filter((p) => p.lineup?.days.some((d) => d.day === date)).length;
     return `Lineup · ${started} of ${roster}`;
-  }, [tomorrow, usingFantasy, dates.tomorrow]);
+  };
+
+  /**
+   * **Today is a projection until the day starts.**
+   *
+   * A card of noughts under `No games played yet.` is a true statement and a
+   * useless one: at nine in the morning the thing a manager wants off the
+   * Overview is *what is my day worth*, which is the question the Tomorrow
+   * block already answers and the engine that answers it is already in hand. So
+   * until the first game on this roster is under way, `TODAY` draws the
+   * projection — dashed, muted, tagged `PROJECTED`, exactly as Tomorrow is —
+   * and it swaps to the measured reading the moment a game does start.
+   *
+   * **The test is a game of *this roster's* that is live or final**, which is
+   * what `DayLine.games` already counts (`lineOf` puts a scheduled fixture in
+   * neither). Not MLB's first pitch of the day, which is a fact about somebody
+   * else's afternoon; and not *has anybody had a plate appearance*, which would
+   * leave the card projected through the top of the first.
+   *
+   * **A failed or absent projection falls back to the measured block**, which
+   * is the rule that a failure costs its own column and never the request: the
+   * noughts are honest, and they are what the card showed before this.
+   */
+  const todayStarted = todayPerf !== null && todayPerf.some((p) => p.line.games > 0);
+  const todayProj = scoreProjected(todayProjection, dates.today);
+  const todayIsProjected = todayPerf !== null && !todayStarted && todayProj !== null;
+
+  /** **The three days as three lookups**, so the row is a `map` over `DAYS`
+   *  rather than three hand-written blocks in an order that has to be kept in
+   *  step with the array beside it. It is the same values either way; what it
+   *  buys is that `DAYS` is the *only* place the order is stated. */
+  const perf: Record<DayKey, Performer[] | null> = {
+    yesterday: yesterdayPerf,
+    today: todayIsProjected ? todayProj : todayPerf,
+    tomorrow: scoreProjected(tomorrow, dates.tomorrow),
+  };
+  const who: Record<DayKey, string> = {
+    yesterday: whoPlayed(yesterday, yesterdayLineup),
+    today: todayIsProjected
+      ? whoProjected(todayProjection, dates.today)
+      : whoPlayed(today, todayLineup),
+    tomorrow: whoProjected(tomorrow, dates.tomorrow),
+  };
+  const loading: Record<DayKey, boolean> = {
+    yesterday: loadingYesterday,
+    // **Two reads behind one card, and one wait.** Until both have answered, a
+    // block drawn off either is a block the other may be about to replace —
+    // which is the flicker the app's loading discipline exists to prevent, and
+    // the only case on this page where a card waits on more than its own read.
+    today: loadingToday || (todayPerf !== null && !todayStarted && loadingTodayProjection),
+    tomorrow: loadingTomorrow,
+  };
+  /** Which of the three are estimates: Tomorrow always, Today until it starts. */
+  const isProjected: Record<DayKey, boolean> = {
+    yesterday: false,
+    today: todayIsProjected,
+    tomorrow: true,
+  };
+
+  /* ---- The carousel ------------------------------------------------------
+   *
+   * **One mechanism at every width.** `.ov-days` is a scroll-snap row always;
+   * what changes at 900px is the cards' flex basis — a whole scrollport apiece
+   * below it, an equal share above. So above the breakpoint the row simply does
+   * not overflow and none of this does anything. There is no "carousel mode":
+   * the desktop layout *is* a carousel that fits.
+   *
+   * **`useOverflowArrows` does the measuring**, which is a fold rather than a
+   * second copy of it: that hook is documented as the general answer to *does
+   * this row overflow*, it already measures on every render (the content can
+   * change without the box doing so — a day block gains rows when its read
+   * lands) and it already owns the one `ResizeObserver`. What this file adds is
+   * the two things that are a carousel's rather than a scrolling row's: which
+   * card is centered, and putting one there.
+   */
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const { state, measure } = useOverflowArrows(boxRef, wrapRef);
+  const over = state.over;
+  const [active, setActive] = useState(OPENS_ON);
+
+  /**
+   * **Put card `i` in the middle of the scrollport.**
+   *
+   * Written as a `scrollTo` on the row itself rather than as `scrollIntoView`,
+   * which is the rule the League page's week list already records: that walks
+   * *every* scrollable ancestor including the page, so centering a card would
+   * also carry the whole Overview up or down under a reader who asked for
+   * neither.
+   *
+   * The offset is measured off the two rects rather than computed from a card
+   * width and a gap. Those are a percentage and a token, and the arithmetic
+   * would be a third opinion about a number the browser already has — and the
+   * wrong one at the ends, where the row's own padding is what lets the first
+   * and last cards reach the middle at all.
+   */
+  const center = useCallback((i: number, behavior: ScrollBehavior = 'auto') => {
+    const box = boxRef.current;
+    const card = box?.children[i] as HTMLElement | undefined;
+    if (!box || !card) return;
+    const delta =
+      card.getBoundingClientRect().left -
+      box.getBoundingClientRect().left -
+      (box.clientWidth - card.clientWidth) / 2;
+    box.scrollTo({ left: box.scrollLeft + delta, behavior });
+  }, []);
+
+  /** Which card the row is showing: the one whose center is nearest the
+   *  scrollport's. A distance test rather than a division by the card pitch,
+   *  for the reason `center` measures — and it is the honest answer mid-swipe,
+   *  where there is no whole card on screen and the dot should already have
+   *  moved to the one arriving. */
+  const onScroll = useCallback(() => {
+    measure();
+    const box = boxRef.current;
+    if (!box) return;
+    const mid = box.getBoundingClientRect().left + box.clientWidth / 2;
+    let best = 0;
+    let bestGap = Infinity;
+    for (let i = 0; i < box.children.length; i++) {
+      const r = (box.children[i] as HTMLElement).getBoundingClientRect();
+      const gap = Math.abs(r.left + r.width / 2 - mid);
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = i;
+      }
+    }
+    // Guarded, because this fires on every frame of a flick and the dots are
+    // the only thing reading it.
+    setActive((a) => (a === best ? a : best));
+  }, [measure]);
+
+  /**
+   * **The row opens on Today**, and it opens there *before paint* — a layout
+   * effect, so nobody sees Yesterday for a frame and watches it slide.
+   *
+   * **Keyed on `over`**, which is what makes it fire at the two moments it has
+   * to and no other. On mount the hook measures in its own layout effect,
+   * `over` goes false → true, and this runs on the flush that follows, still
+   * before paint. The other moment is a window crossing 900px from a desk width
+   * down to a phone one, where a row that could not scroll now can and would
+   * otherwise sit at `scrollLeft: 0` showing Yesterday.
+   *
+   * It deliberately does **not** re-center on anything else. A reader who has
+   * swiped to Tomorrow and is reading it must not be carried back to Today
+   * because a projection landed — the same rule as *never over data*, one axis
+   * over.
+   */
+  useLayoutEffect(() => {
+    if (!over) return;
+    center(OPENS_ON, 'auto');
+    setActive(OPENS_ON);
+  }, [over, center]);
 
   return (
     <div className="overview-view">
@@ -646,44 +864,78 @@ export default function OverviewView({
         </section>
       ) : null}
 
-      <div className="ov-days">
-        <DayBlock
-          lead="TODAY"
-          date={dates.today}
-          categories={categories}
-          categoriesName={categoriesName}
-          categoriesTitle={categoriesTitle}
-          performers={todayPerf}
-          who={whoPlayed(today, todayLineup)}
-          loading={loadingToday}
-          onOpenPlayer={onOpenPlayer}
-          onSeeDay={onSeeDay}
-        />
-        <DayBlock
-          lead="YESTERDAY"
-          date={dates.yesterday}
-          categories={categories}
-          categoriesName={categoriesName}
-          categoriesTitle={categoriesTitle}
-          performers={yesterdayPerf}
-          who={whoPlayed(yesterday, yesterdayLineup)}
-          loading={loadingYesterday}
-          onOpenPlayer={onOpenPlayer}
-          onSeeDay={onSeeDay}
-        />
-        <DayBlock
-          lead="TOMORROW"
-          date={dates.tomorrow}
-          projected
-          categories={categories}
-          categoriesName={categoriesName}
-          categoriesTitle={categoriesTitle}
-          performers={projected}
-          who={whoProjected}
-          loading={loadingTomorrow}
-          onOpenPlayer={onOpenPlayer}
-          onSeeDay={onSeeDay}
-        />
+      {/* **A heading of its own, beside the matchup's.** The block had none —
+          the three cards each name their day, so the section looked like it was
+          already saying what it was. As a carousel it is not: one card is on
+          screen and the other two are 22px of edge, so the page went from a
+          labeled block to an unlabeled one that happened to begin with the word
+          `TODAY`. The heading is the section's name where the card heads are
+          the items' — the same split `Your matchup` makes above it.
+
+          **The note is the span**, which is the one fact a carousel takes away:
+          with only the middle card in view, nothing on screen says the row
+          reaches back to yesterday and on to tomorrow. Same shape as the
+          matchup heading's `through Aug 25` an inch above. */}
+      <h2 className="ov-heading">
+        Your days
+        <span className="ov-heading-note">
+          {prettyDate(dates.yesterday)} – {prettyDate(dates.tomorrow)}
+        </span>
+      </h2>
+
+      {/* **A carousel below 900px and three columns above it**, which is one
+          mechanism rather than two: `.ov-days` is a scroll-snap row at every
+          width, and the cards are `flex: 0 0 100%` of it on a phone and
+          `flex: 1 1 0` on a desk. Above the breakpoint the row does not
+          overflow, so nothing scrolls, nothing snaps, and the dots are not
+          drawn — the desktop layout is what a carousel that fits looks like. */}
+      <div className="ov-carousel" ref={wrapRef}>
+        <div
+          className="ov-days"
+          ref={boxRef}
+          onScroll={onScroll}
+          /* A carousel is a list of days and the cards are its items. It is not
+             a tablist: a tab swaps what is on screen, where every one of these
+             is on screen and two of them are just off the edge. */
+          aria-label="Yesterday, today and tomorrow"
+        >
+          {DAYS.map((d) => (
+            <DayBlock
+              key={d}
+              lead={d.toUpperCase()}
+              date={dates[d]}
+              projected={isProjected[d]}
+              categories={categories}
+              categoriesTitle={categoriesTitle}
+              performers={perf[d]}
+              who={who[d]}
+              loading={loading[d]}
+              onOpenPlayer={onOpenPlayer}
+              onSeeDay={onSeeDay}
+            />
+          ))}
+        </div>
+        {/* **Drawn only while the row overflows**, which is the measurement
+            deciding rather than the breakpoint: three dots over a row already
+            showing all three days would be a control for a scroll that cannot
+            happen. They are buttons as well as a position — a pointer user has
+            no swipe, and the peek at the card edges is the only other thing
+            saying there is more of the row than this. */}
+        {over && (
+          <div className="ov-dots" role="group" aria-label="Which day">
+            {DAYS.map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                className={`ov-dot${i === active ? ' is-on' : ''}`}
+                aria-current={i === active ? 'true' : undefined}
+                aria-label={`${DAY_WORD[d]} — ${prettyGameDate(dates[d])}`}
+                title={`${DAY_WORD[d]} — ${prettyGameDate(dates[d])}`}
+                onClick={() => center(i, 'smooth')}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

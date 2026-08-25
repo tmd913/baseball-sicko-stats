@@ -211,19 +211,29 @@ one is a **question**: how is it going. The matchup you are in, the day being
 played, the day behind it and the day ahead, on one page with no controls at
 all.
 
-**It leads, and it is deliberately not the default.** `view=overview` is opted
-into; `summary` is still what a bare URL means and what every link in the wild
-that omits `view=` has always meant. That is the rule this app applies to every
-other param — an omitted one is the default, and changing a default changes what
-somebody else's link says. Leading the strip is a statement about where the page
-belongs, not about where a reader who never asked for it should land.
+**It leads, and for a reader with a league it is the default.** The paragraph
+that stood here argued the opposite — *`summary` is what a bare URL means, and
+changing a default changes what somebody else's link says* — and the half of
+that which is still true is why the change is as small as it is: every link
+naming a view still opens that view, `?view=summary` included, and `view=` is
+written out in full the moment anything else is on screen. What it missed is
+*which* link. A bare `?` is not a link anybody wrote; it is the app being
+**opened**, and the page a manager wants on opening it is the one that says how
+it is going.
 
-**It appears on the same terms as the Roster, read one condition wider**:
-`showRosterViews || espnConnected`. Its three day blocks are about a roster, so
-with nothing watched *and* no league there is nothing for any of them to report
-on and the tab would lead to a page of empty states — which is the test
-`showRosterViews` already makes for the tab beside it. A connected league gives
-the matchup block a subject on its own, which is the extra clause.
+It cannot be decided in the seed, `/api/espn` not having answered on that
+render, so it is a **want resolved once** (`wantOverview`) on the same terms
+`wantMyMatchup` uses: it fires at the first render where `espnStatusSettled`,
+clears the flag whichever way the answer went, and cannot have been overtaken
+because the strip itself is gated on that very status.
+
+**And it is drawn for a connected league and for nobody else** — `espnConnected`,
+where it was `showRosterViews || espnConnected` for a while. Three of its four
+blocks stand on a saved watchlist, but the one that makes it a *front* page is
+the matchup, and without one it is three cards a reader can already reach by
+setting a date. So it is not offered, and `summary` is that reader's default as
+it always was. A `?view=overview` link is honored either way, the courtesy
+`view=league` already extends.
 
 **And it is a composition rather than a fourth data source** — the same
 scoreboard the Roster's `Matchup` button reads, `/api/report` over one day

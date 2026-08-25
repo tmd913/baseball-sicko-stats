@@ -1,15 +1,17 @@
 ---
 name: sicko-overview
-description: The Overview — the app's front page and its first tab, which answers "how is it going" out of reads three other pages already make: this week's matchup card, then today, yesterday and tomorrow as a block each, printing the day's totals in the league's own scoring categories and naming the three men who did most for them. Also `categoryValue.ts`, which is how a day is scored — the rate contributions, the measured per-player-day scales, and why a batter's day and a pitcher's day are comparable at all. Use when editing OverviewView.tsx or categoryValue.ts, when changing what the Overview shows or how a performer is ranked, when adding a scoring category the day blocks can compute, or when refreshing the scales for a new season.
+description: The Overview — the app's front page, its first tab and a connected reader's default landing page, which answers "how is it going" out of reads other pages already make: this week's matchup card, then yesterday, today and tomorrow as a swipeable carousel of day cards, each printing the day's totals in the league's own scoring categories and naming the three men who did most for them (with today drawn as a projection until its first game starts). Also `categoryValue.ts`, which is how a day is scored — the rate contributions, the measured per-player-day scales, and why a batter's day and a pitcher's day are comparable at all. Use when editing OverviewView.tsx or categoryValue.ts, when changing what the Overview shows, how a performer is ranked or how the carousel behaves, when touching which view a bare URL lands on, when adding a scoring category the day blocks can compute, or when refreshing the scales for a new season.
 ---
 
 # The Overview
 
-`components/OverviewView.tsx` — the app's front page and the first of its four
-tabs (**Overview · Roster · Research · League**). Four blocks and no controls:
-this week's matchup card, then **Today**, **Yesterday** and **Tomorrow**, each
-printing the day's totals in the league's own scoring categories and naming the
-three men who did most for them.
+`components/OverviewView.tsx` — the app's front page, the first of its four tabs
+(**Overview · Roster · Research · League**) and the page a bare URL lands on when
+a league is connected. Two blocks and no controls: this week's matchup card, then
+**Your days** — **Yesterday · Today · Tomorrow** as a carousel that opens on
+Today — each card printing the day's totals in the league's own scoring
+categories and naming the three men who did most for them. **Today is drawn as a
+projection until its first game starts.**
 
 It is a **composition, not a data source**: the matchup is the same
 `/api/espn/scoreboard` the Roster's own `Matchup` button reads, the two played
@@ -25,8 +27,10 @@ averaged over the categories the player's own side of the ball scores.
 
 - **Read `docs/claude/client-overview.md`** before editing `OverviewView.tsx` or
   `categoryValue.ts`, before changing what the page shows or how a performer is
-  ranked, and before touching the scales. It covers: why the categories are the
-  reading rather than a stat line; why the totals are the *lineup's* and the
+  ranked, and before touching the scales. It covers: the carousel and why it is
+  one mechanism at every width; the bleed that *is* the peek; which view a bare
+  URL lands on and the want that resolves it; why the categories are the reading
+  rather than a stat line; why the totals are the *lineup's* and the
   verification against ESPN that establishes it (10 of 10 over a 14-day period,
   and the older-period drift that check found); the three steps of `dayValue`
   and why scarcity is value; the ten-date sample the scales were measured off
