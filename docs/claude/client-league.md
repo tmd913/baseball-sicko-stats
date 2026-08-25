@@ -995,7 +995,7 @@ nothing else on the wire carries it. So the read moves one level out and the
 86KB is paid on entry — answered from the server's own minute-long cache, and
 about a tenth of that over the wire once `compression()` has had it.
 
-### The page updates itself, a minute at a time
+### The page updates itself, half a minute at a time
 
 **Polling was half the fix, and on its own it fixed nothing.** The page was
 still reported stale after the poll shipped, and the cause was not on this side
@@ -1015,13 +1015,34 @@ under them climb with them, a leaguemate can drop somebody at any hour, and a
 page anybody actually sits on quietly went stale. It polls now
 (`App.tsx::LEAGUE_POLL_MS`), and the whole of the design is four rules.
 
-**A minute, not the report's twenty seconds**, and the difference is what is
-being watched. That poll tracks a *plate appearance* — the bases, the count, the
-batter at the plate — where this tracks a **week's** totals, which ESPN's own
-scoreboard does not move faster than about a minute anyway. The number is matched
-to `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
-or goes and asks, which is the cheapest way to be a minute behind ESPN and no
-more.
+**Thirty seconds, not the report's twenty**, and the difference is what is being
+watched. That poll tracks a *plate appearance* — the bases, the count, the batter
+at the plate — where this tracks a **week's** totals off ESPN's own board. The
+number is matched to `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache
+under thirty seconds old or goes and asks.
+
+**It was a minute, and a minute was the wrong half of the arithmetic.** The
+reasoning was sound as far as it went — ESPN does not move faster than about a
+minute, so why ask more often — and it missed that what the reader waits is not
+the poll but **the poll plus the server's cache**, two independent windows of the
+same length stacked end to end. At 60/60 a tick lands on a blob up to 60s old, so
+the page sat **up to two minutes behind ESPN and about a minute behind on
+average**. The claim in this paragraph, *a minute behind ESPN and no more*, was
+out by a factor of two for as long as it stood.
+
+**ESPN's own cadence is measured now rather than assumed.** Sampled straight
+through the server every 20s across four minutes of live games (2026-08-24,
+22:21–22:25 ET), the board moved at **22:23:10, 22:24:12 and 22:25:13** — gaps of
+123s, 61s, 61s, and never inside a 20s window. The movement quantum is a minute.
+So polling faster than that buys nothing *from ESPN*; what buys something is not
+letting two minutes' worth of window stack in front of it. Both halves were
+halved together and the worst case goes **120s → 60s** — exactly that quantum, so
+the reader can never be more than one of ESPN's own updates behind. Below 30 the
+returns go with it: a 15s pair doubles the upstream traffic to be told the same
+numbers. Verified after the change: the server's blob is a hit at 0.00s
+immediately and a 0.69s upstream fetch at +35s, where it was a hit before; and a
+matchup page open on a live week made **2** `espn/scoreboard` reads in 70
+seconds.
 
 **A projected card is polled with the board it is drawn over.** Half of what one
 shows is what the side has *already* scored and half is what the projection adds
@@ -1032,11 +1053,45 @@ are played (the engine projects the games that have not started), so the two
 drifted apart in the one direction nobody can see on screen. The read rides the
 same rules as the board: the lens on, a card open, and the week still live —
 `App.tsx::pollLeague`, and `LeagueMatchup`'s **team pages** set their own timer
-by the same minute for the same reason (`LEAGUE_POLL_MS`, which moved to
+by the same tick for the same reason (`LEAGUE_POLL_MS`, which moved to
 `lib.ts` when the second file needed it). Measured on the live league with a
 card open and `proj=1`: `espn/projection` on the open, then paired with
 `espn/scoreboard` at 60s and at 120s — one read a minute, on the same tick,
-with **0** spinners on the button.
+with **0** spinners on the button. *(Those two timings are the old minute; the
+pairing they were checked for is what matters and is unchanged.)*
+
+#### The team page under the card was not polled at all
+
+**One page, two clocks, and one of them had stopped.** `LeagueTeam`'s two reads
+run on `[teamId, start, end]` and nothing else, so a manager's page opened at
+seven o'clock was still drawing seven o'clock's lines at ten — the card above it
+moving every minute, and the app's own Roster view, **which is the same
+`SummaryTable` over the same shape of report**, moving every twenty seconds.
+Reported as the matchup page being out of sync with other data sources, and that
+is precisely what it was.
+
+- **The roster's clock, not the league's.** These rows are the roster's rows and
+  their fastest-moving fact is a plate appearance, so the poll is
+  `LIVE_POLL_MS`. `LEAGUE_POLL_MS` is about a *week's* totals off ESPN's board
+  and nothing about that number applies to a column of H/AB — two components
+  drawing one object on two clocks is what the app's one-clock rule exists to
+  prevent.
+- **Gated on a real live game**, which is `App.tsx`'s own test for the same poll
+  (`hasRealLiveGame`) read off this page's own report. A team whose men are all
+  done for the night has nothing to re-read, and the gate comes down on its own
+  as the last game goes final.
+- **Only the report.** The roster behind the slot chips is a fact about the end
+  of the span and does not move with a plate appearance.
+- **Quiet, and sequence-numbered** — rule 1, and the effect's own `live` flag
+  covers a crossing to the other manager while this covers two ticks of the same
+  team overtaking each other.
+- **Measured after the change**, on a live week: `/api/report` fires every 20s
+  and carries the page's own `teamId` (`…&source=fantasy&teamId=12`, paired a
+  second apart with App's own team-less read, which is the reader's roster
+  behind the overlay); **0** loading blocks and **0** spinners across 70s of
+  polling; and a doctored poll response — `hr + 3` on every line, returned at
+  t=15s — moved the foot from `HR 1` to `HR 23`, which is the write path proven
+  end to end rather than inferred from a request count.
 
 **Only what is on screen, and only what can still change.** The scoreboard is
 polled when its tab is open **and the week it is showing is still being played**

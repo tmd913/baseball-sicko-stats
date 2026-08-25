@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
-import { projectStarters, rangeDatesOf, seatKinds, startedOn } from '../lib';
+import { LIVE_POLL_MS, projectStarters, rangeDatesOf, seatKinds, startedOn } from '../lib';
 import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
@@ -215,6 +215,60 @@ export default function LeagueTeam({
       live = false;
     };
   }, [teamId, start, end]);
+
+  /**
+   * **And it re-reads itself while one of his men is batting**, on the roster's
+   * own twenty seconds.
+   *
+   * This page had **no poll at all**. The two reads above run on
+   * `[teamId, start, end]` and nothing else, so a team page opened at seven
+   * o'clock was still drawing seven o'clock's lines at ten — while the matchup
+   * card directly above it moved every minute (`LEAGUE_POLL_MS`) and the app's
+   * own Roster view, which is *the same component over the same shape of
+   * report*, moved every twenty seconds. Reported as the matchup page being out
+   * of sync with everything else, and that is exactly what it was: one page
+   * drawing two clocks, one of which had stopped.
+   *
+   * **The roster's clock, not the league's**, because these rows are the
+   * roster's rows: `SummaryTable` over a `PlayerReport`, whose fastest-moving
+   * fact is a plate appearance. `LEAGUE_POLL_MS` is a minute because it tracks
+   * a *week's* totals off ESPN's own board; nothing about that number applies
+   * to a table of H/AB. Two components drawing one object on two clocks is the
+   * thing the app's one-clock rule exists to prevent — see `LIVE_POLL_MS`.
+   *
+   * **Gated on a real live game**, which is `App.tsx`'s own test for the same
+   * poll (`hasRealLiveGame`) read off this page's own report: a team whose men
+   * are all done for the night has nothing to re-read, and a matchup left open
+   * overnight must not ask every twenty seconds to be told so. The gate moves
+   * on its own as the answer lands — the last game going final takes the poll
+   * down with it.
+   *
+   * **Quiet, by rule 1**: nothing is blanked, `loading` is not raised, and a
+   * tick that fails leaves the last good answer standing with no banner. Only
+   * the report is re-read — the roster behind the slot chips is a fact about
+   * the end of the span and does not move with a plate appearance.
+   *
+   * **Sequence-numbered**, so a slow tick cannot land on a fresh one: the
+   * effect's own `live` flag covers a crossing to the other manager, and this
+   * covers two ticks of the same team overtaking each other.
+   */
+  const anyLive = report?.some((r) => r.games.some((g) => g.status.state === 'live')) ?? false;
+  const pollSeq = useRef(0);
+  useEffect(() => {
+    if (!anyLive) return;
+    const t = setInterval(() => {
+      const seq = ++pollSeq.current;
+      api
+        .report(start, end, 'fantasy', false, teamId)
+        .then((rep) => {
+          if (seq !== pollSeq.current) return;
+          setReport(rep.players);
+          setLineups(rep.lineups ?? null);
+        })
+        .catch((e: Error) => console.error(`team page poll failed:`, e.message));
+    }, LIVE_POLL_MS);
+    return () => clearInterval(t);
+  }, [anyLive, teamId, start, end]);
 
   /** The per-day lineup map, as `projectStarters` wants it — **player keys**,
    *  a seat having a side of the ball (see `espn.ts::startedKeys`). Collapsed to
