@@ -68,6 +68,7 @@ import {
   setSeenTransactions,
   setSeenPlays,
   setLeagueSharing,
+  setProjectedColumns,
   setResearchColumns,
   setStatsColumns,
   setResearchInclude,
@@ -491,6 +492,21 @@ app.put(
     const body = readColumnBody(req, res);
     if (!body) return;
     res.json(await setResearchColumns(userId(req), body.kind, body.keys));
+  }),
+);
+
+/** The board's **projected** reading, which keeps its own set — see
+ *  `UserPrefs.projectedColumns`. The same body check and the same store path as
+ *  the two beside it; what it must not be is a share of the board's entry,
+ *  since the lens offers a strict subset of that vocabulary and a write from
+ *  it would drop every column it does not list. */
+app.put(
+  '/api/prefs/projected-columns',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const body = readColumnBody(req, res);
+    if (!body) return;
+    res.json(await setProjectedColumns(userId(req), body.kind, body.keys));
   }),
 );
 

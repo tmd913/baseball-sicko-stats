@@ -59,11 +59,13 @@ import {
   includeParam,
   isDefaultColumns,
   isDefaultInclude,
+  isDefaultProjectedColumns,
   fromIncludeKeys,
   researchKindFor,
   toColumnKeys,
   toResearchInclude,
   toResearchPos,
+  toProjectedColumnKeys,
   toResearchWindow,
 } from './components/ResearchTable';
 import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
@@ -1610,14 +1612,56 @@ export default function App() {
   // A `cols=` on the opening URL names one board — the one `pos=` selects.
   // Remembered so the saved preferences that arrive a moment later don't
   // overwrite it: a link someone was handed should show what it says.
+  /** Whether the opening link says the **projected** reading is the one on
+   *  screen, which is what decides which vocabulary its `cols=` is read
+   *  against. Read straight off the params rather than off `researchProjected`,
+   *  which is declared a long way below this. */
+  const urlIsProjected = useMemo(
+    () => initialParams.get('bproj') === '1' && initialParams.get('view') === 'research',
+    [initialParams],
+  );
   const urlColumns = useMemo(() => {
     const kind = researchKindFor(toResearchPos(initialParams.get('pos')));
     const keys = toColumnKeys(kind, initialParams.get('cols'));
     return keys ? { kind, keys } : null;
   }, [initialParams]);
   const [researchCols, setResearchCols] = useState<Partial<Record<PlayerKind, string[]>>>(
-    () => (urlColumns ? { [urlColumns.kind]: urlColumns.keys } : {}),
+    () => (urlColumns && !urlIsProjected ? { [urlColumns.kind]: urlColumns.keys } : {}),
   );
+  /** …and the same `cols=` read against the **lens's** vocabulary where the
+   *  link says the lens is the reading (`bproj=1`). One param, one reading, and
+   *  the flag beside it is what says which — see `projCols`. */
+  const urlProjColumns = useMemo(() => {
+    if (!urlIsProjected) return null;
+    const kind = researchKindFor(toResearchPos(initialParams.get('pos')));
+    const raw = initialParams.get('cols');
+    // The span is not known at boot — the answer decides `oneDay` — so the list
+    // is narrowed against the wider of the two vocabularies (a single day's,
+    // which is the range's plus the opponent) and `toProjectedColumnKeys` in the
+    // table narrows it again against the span actually drawn.
+    const keys = toProjectedColumnKeys(kind, true, raw ? raw.split(',') : null);
+    return keys ? { kind, keys } : null;
+  }, [initialParams, urlIsProjected]);
+  /**
+   * The **projected reading's** columns, per kind — a third entry beside the
+   * board's and the Stats tab's, and its own for the identical reason that one
+   * is: the lens offers a *strict subset* of the board's vocabulary, so a write
+   * from its picker would hand the board a list with every Statcast and
+   * roster-% key missing and silently drop them from a set the reader never
+   * touched.
+   *
+   * **In the URL as `cols=`, and that is not a second meaning on one param.**
+   * `cols=` has always named *the column set of the reading on screen*, which
+   * `pos=` said which board it was; `bproj=1` beside it now says which
+   * **reading**, exactly as it does for `start`/`end`. A link carries one set
+   * because a link describes one page. The Stats tab is out of the URL for the
+   * different reason it always was: that tab is a page over this one and its
+   * open state is in no URL either.
+   */
+  const [projCols, setProjCols] = useState<Partial<Record<PlayerKind, string[]>>>(
+    () => (urlProjColumns ? { [urlProjColumns.kind]: urlProjColumns.keys } : {}),
+  );
+
   /**
    * The **player page's Stats tab** columns, per kind, and its own entry rather
    * than a share of the board's above.
@@ -1852,6 +1896,21 @@ export default function App() {
           }
           return next;
         });
+        // The lens's own set, defended against its own `cols=` exactly as the
+        // board's is above: a link that names the projected reading carries the
+        // projected columns, and the saved list arriving a moment later must not
+        // overwrite what the link said. Narrowed against a single day's
+        // vocabulary — the wider of the two — with the table narrowing it again
+        // against the span actually drawn.
+        setProjCols((prev) => {
+          const next = { ...prev };
+          for (const kind of ['batter', 'pitcher'] as const) {
+            if (next[kind] || urlProjColumns?.kind === kind) continue;
+            const saved = toProjectedColumnKeys(kind, true, prefs.projectedColumns?.[kind] ?? null);
+            if (saved) next[kind] = saved;
+          }
+          return next;
+        });
         // The Stats tab's own set. No URL to defend it against — see the state
         // above — so it is a plain "fill in what hasn't been touched", and it is
         // narrowed to that table's vocabulary on the way in exactly as the
@@ -1901,6 +1960,32 @@ export default function App() {
         api
           .saveResearchColumns(researchKind, keys)
           .catch((e: Error) => console.error('saving columns failed:', e.message));
+      }, 600);
+    },
+    [researchKind],
+  );
+
+  /** The projected reading's write — its own entry, its own timer, and the same
+   *  600ms debounce and the same reasoning as the two beside it: a shared timer
+   *  would let a measured edit swallow a projected one made half a second
+   *  later. */
+  const saveProjColsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (saveProjColsTimer.current) clearTimeout(saveProjColsTimer.current);
+  }, []);
+  const setProjectedColumns = useCallback(
+    (keys: string[] | null) => {
+      setProjCols((prev) => {
+        const next = { ...prev };
+        if (keys) next[researchKind] = keys;
+        else delete next[researchKind];
+        return next;
+      });
+      if (saveProjColsTimer.current) clearTimeout(saveProjColsTimer.current);
+      saveProjColsTimer.current = setTimeout(() => {
+        api
+          .saveProjectedColumns(researchKind, keys)
+          .catch((e: Error) => console.error('saving projected columns failed:', e.message));
       }, 600);
     },
     [researchKind],
@@ -3984,9 +4069,20 @@ export default function App() {
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
-    const cols = researchCols[researchKind];
-    if (view === 'research' && cols && !isDefaultColumns(researchKind, cols)) {
-      p.set('cols', cols.join(','));
+    // **…and under the lens it is the lens's set**, which is the same sentence
+    // one reading over: `cols=` names the columns of the reading on screen, and
+    // `bproj=1` beside it says which reading that is. `oneDay` is taken off the
+    // answer where there is one, so a link written over a single day carries the
+    // opponent column and one written over a range does not claim it.
+    if (view === 'research' && researchProjected) {
+      const pc = projCols[researchKind];
+      const one = boardProjection?.oneDay ?? boardRange.start === boardRange.end;
+      if (pc && !isDefaultProjectedColumns(researchKind, one, pc)) p.set('cols', pc.join(','));
+    } else {
+      const cols = researchCols[researchKind];
+      if (view === 'research' && cols && !isDefaultColumns(researchKind, cols)) {
+        p.set('cols', cols.join(','));
+      }
     }
     // Only once the reader has navigated off the period being played. Absent
     // means "current", which is a rule and not a value — so a link shared this
@@ -4121,6 +4217,7 @@ export default function App() {
     researchInclude,
     researchWatchlist,
     researchCols,
+    projCols,
     researchKind,
     matchupPeriod,
     leagueTab,
@@ -7754,6 +7851,8 @@ export default function App() {
           onPosChange={setResearchPos}
           columnKeys={researchCols[researchKind] ?? null}
           onColumnsChange={setResearchColumns}
+          projColumnKeys={projCols[researchKind] ?? null}
+          onProjColumnsChange={setProjectedColumns}
           window={researchWindow}
           onWindowChange={setResearchWindow}
           /* One flag and one span for both wide tables — see `scheduleSpan`. */

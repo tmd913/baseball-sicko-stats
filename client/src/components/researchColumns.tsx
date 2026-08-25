@@ -634,8 +634,17 @@ export const PITCHER_COLUMNS: Column[] = [
  * comparison neither number can survive. `BABIP` is out on the same ground: it
  * is a *luck* metric, and there is no luck in an expected value.
  */
+// **In the board's own canonical order**, not an order of their own, and that
+// is load-bearing rather than tidy: `ColumnPicker`'s `insertAt` puts a
+// newly-ticked column back *at its canonical place* — ahead of the first column
+// that follows it in `allColumns(kind)` — and that function reads the measured
+// board's array whichever picker raised it. A projected list in a different
+// order would have `CS` ticked on and land somewhere the run does not read, and
+// the two orders would disagree about where a column belongs. Measured: with
+// `sb`/`cs` ahead of `walks`/`strikeouts` here, ticking `CS` on dropped it after
+// `K` rather than after `SB`.
 const PROJECTED_BATTER_KEYS = [
-  'games', 'pa', 'ab', 'hAb', 'runs', 'hr', 'rbi', 'sb', 'cs', 'walks', 'strikeouts',
+  'games', 'pa', 'ab', 'hAb', 'runs', 'hr', 'rbi', 'walks', 'strikeouts', 'sb', 'cs',
   'avg', 'obp', 'slg', 'ops', 'iso',
   'bbRate', 'kRate',
 ] as const;
@@ -795,6 +804,56 @@ export function projectedColumns(kind: PlayerKind, oneDay: boolean): Column[] {
         : c,
     );
   return oneDay ? [projectedOpponentColumn(), ...stats] : stats;
+}
+
+/**
+ * **Which of the lens's columns show, before the reader has said** — its own
+ * vocabulary less `DEFAULT_OFF`.
+ *
+ * **The board's own off-list, not a second one.** Every key the lens draws is a
+ * key the measured board draws, so a column the reader would not want among 44
+ * is a column he would not want among 19 either — `H` and `AB` are what `H/AB`
+ * prints on both, `SVHD` is the read and the `SV`/`HLD` split is the follow-up
+ * question on both. A second table would be the same call written twice and one
+ * of them would drift.
+ *
+ * It leaves **15 of 18** columns on the batting board and **17 of 26** on the
+ * pitching one, plus the opponent on a single day — which is the point of the
+ * lens having a picker at all: what is off is a tick away rather than gone.
+ */
+export function projectedColumnKeys(kind: PlayerKind, oneDay: boolean): string[] {
+  return projectedColumns(kind, oneDay)
+    .filter((c) => !DEFAULT_OFF[kind].has(c.key))
+    .map((c) => c.key);
+}
+
+/** Whether a saved list is just this reading's defaults — the test that decides
+ *  a selection is stored as **nothing at all**, so a reset goes on following the
+ *  defaults as they change rather than pinning today's copy of them. It is
+ *  `isDefaultColumns` one vocabulary over, and it takes `oneDay` because the
+ *  opponent column comes and goes with the span. */
+export function isDefaultProjectedColumns(
+  kind: PlayerKind,
+  oneDay: boolean,
+  keys: string[],
+): boolean {
+  const def = projectedColumnKeys(kind, oneDay);
+  return keys.length === def.length && def.every((k, i) => keys[i] === k);
+}
+
+/** Narrows a saved or `cols=` list to this reading's vocabulary — a list from
+ *  the measured board, or from an older build, or from the other kind. Anything
+ *  left empty falls back to the defaults rather than an empty table, the rule
+ *  `toColumnKeys` follows one vocabulary over. */
+export function toProjectedColumnKeys(
+  kind: PlayerKind,
+  oneDay: boolean,
+  keys: string[] | null,
+): string[] | null {
+  if (!keys) return null;
+  const known = new Set(projectedColumns(kind, oneDay).map((c) => c.key));
+  const kept = keys.filter((k) => known.has(k));
+  return kept.length > 0 ? kept : null;
 }
 
 // ---- Which columns show ---------------------------------------------------

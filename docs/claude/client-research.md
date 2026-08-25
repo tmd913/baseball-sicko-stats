@@ -1264,11 +1264,14 @@ the Schedule view already does with a different answer:
   of his row is already dashes, and a lone `0` among them would be the one cell
   claiming a measurement (*he appears in no games*) where the truth is *there is
   nothing here to project*.
-- **`Columns` and `Ranks` come off the bar**, the rule that takes them off in
-  schedule mode: the vocabulary is not the reader's to pick here, and a
-  percentile is a standing among the *qualified* players on a measured board —
-  nobody qualifies for a week nobody has played, and ranking an estimate against
-  a field of estimates would put a solid badge under a number this app's own rule
+- **`Ranks` comes off the bar and `Columns` does not**, which is that pair's own
+  rule read one control at a time rather than as a block. *(It took both off for
+  one round, on the reading that the vocabulary was not the reader's to pick
+  here. That was wrong about Columns and is corrected below — see* The columns
+  are the reader's under the lens too*.)* Ranks genuinely has no subject: a
+  percentile is a standing among the *qualified* players on a measured board, and
+  nobody qualifies for a week nobody has played — ranking an estimate against a
+  field of estimates would put a solid badge under a number this app's own rule
   says must never wear a measurement's clothes. (`columnRanks.tsx`'s note that
   "neither surface that draws a `.col-rank` percentile has a projected reading"
   is what this answers: one of them does now, and it answers by not drawing
@@ -1462,33 +1465,128 @@ the same box, the head's quiet caption line, differing only in which sentence it
 carries. The lead word takes the app's accent, this being a *state* the table is
 in rather than emphasis.
 
-#### `How the projection works`, and why it is a glyph
+#### The columns are the reader's under the lens too
 
-**The button is in the run beside the toggle it explains and its panel is in the
-head** — the split the section above forces. It is drawn **only while the lens is
-on**, so the run does not carry a footnote to a control that is doing nothing.
+**A picker that lists what the lens can draw.** The lens showed its whole
+vocabulary outright for one round, which made it the one table in this app whose
+columns were not the reader's to choose — and the argument for that ("the
+vocabulary is not the reader's to pick here") does not survive contact with the
+rule it was borrowed from. That rule is *a control whose whole subject has been
+swapped out is a setting lying about its own reach*, and the lens does not swap
+the columns out: it swaps them for **a smaller set of its own**. There is still
+an order to set and still a `SV` a reader may want split out of `SVHD`.
 
-**A glyph and no word**, which is where it parts from the four buttons beside it:
-those are *nouns* — Search, Filters, Schedule, Projected — and each names a thing
-the board can be, where this is a footnote to the one beside it and a fifth word
-would read as a fifth setting. `.research-proj-help` is the app's own 30px icon
-square, everything else about it `.research-toggle`'s. The label is `.sr-only`
-rather than absent, this run's standing rule: a button whose only content is an
-`aria-hidden` mark has no accessible name at all.
+So `Columns` stays on the bar under the lens and the dialog is handed the lens's
+vocabulary. **The picker itself needed nothing** — it takes a list and a
+selection and has no opinion about which reading produced them, which is what
+lets one dialog serve three tables.
 
-**The sentences are `ProjectionNote`'s**, split out of `ProjectionKey` so that a
-fourth caller which cannot use a popover at all still says what the other three
-say. One engine, one set of words. Its **board branch is a branch rather than a
-wording tweak**: the Roster's rows and the matchup's card are both *what has
-already happened + what is left*, and this board has no played half whatever —
-its span is clamped forward to today and every figure on it is an estimate end to
-end. A key telling a reader of *this* table that part of his row was a real line
-would be the one sentence on the page that is untrue.
+**It is a saved entry of its own, and that is the hazard rather than the
+tidiness.** `UserPrefs.projectedColumns`, beside `researchColumns` and
+`statsColumns`, through the same `readColumnBody` and the same
+`store.ts::setColumnPrefs`. The lens lists a **strict subset** of the board's
+vocabulary, so a write from its picker would hand the board a list with every
+Statcast and roster-% key missing and **silently drop them from a set the reader
+never touched** — which is, word for word, the hazard `statsColumns` exists to
+avoid one table over. Measured: untick `SB` and tick `CS` under the lens, then
+turn the lens off, and the measured board still draws all 31 of its saved
+columns with `SB` among them.
 
-The note is capped at a **62-character measure**. Uncapped it took the head's full
-width — measured at 1400, paragraphs **1,356px** long, three times the line
-anybody reads — where `.info-key-panel` holds the same sentences at 320 on every
-other surface.
+- **The defaults are the board's own `DEFAULT_OFF`, not a second table.** Every
+  key the lens draws is a key the measured board draws, so a column a reader
+  would not want among 44 is one he would not want among 19 — `H` and `AB` are
+  what `H/AB` prints on both, `SVHD` is the read and the split is the follow-up
+  on both. It leaves **15 of 18** on the batting board and **17 of 26** on the
+  pitching one, plus the opponent on a single day.
+- **`PROJECTED_*_KEYS` are in the board's canonical order**, which is
+  load-bearing rather than tidy: `ColumnPicker`'s `insertAt` puts a newly-ticked
+  column back at its canonical place — ahead of the first column that follows it
+  in `allColumns(kind)` — and that reads the *measured* array whichever picker
+  raised it. Measured with `sb`/`cs` ahead of `walks`/`strikeouts` in the
+  projected list: ticking `CS` on dropped it after `K` rather than after `SB`.
+- **A saved list is narrowed to the vocabulary it is read against**
+  (`toProjectedColumnKeys`), so a list stored under an older build — or one that
+  carries the opponent column into a span that has stopped being a single day —
+  comes back as the columns that still exist rather than as gaps.
+- **A selection that is just the defaults is stored as nothing at all**
+  (`isDefaultProjectedColumns`), so a reset goes on following the defaults as
+  they change rather than pinning today's copy. Checked: `Reset to defaults`
+  leaves `projectedColumns` as `{}` on the server and puts `SB` back.
+- **In the URL as `cols=`, and that is not a second meaning on one param.**
+  `cols=` has always named *the column set of the reading on screen* — `pos=`
+  said which board — and `bproj=1` beside it now says which **reading**, exactly
+  as it does for `start`/`end`. A link carries one set because a link describes
+  one page, and the boot path reads it against the lens's vocabulary where the
+  flag is there and the board's where it is not.
+- **Its own 600ms debounce and its own timer**, the reasoning the two beside it
+  give: turning a group on is one intent and a dozen state changes, and a shared
+  timer would let a measured edit swallow a projected one made half a second
+  later.
+
+**Sorting needed nothing** — `visibleKeys` was already the union of the drawn
+columns and the reader's saved list, so a board sorted by `HR` becomes a
+projected home-run leaderboard rather than falling back. Checked on the pitching
+board: pressing `K` under the lens sorts it, and the first page is nothing but
+men with two turns in the span.
+
+#### `How the projection works` is the same popover as everywhere else
+
+**`ProjectionKey` beside the toggle, from the same `.proj-key` anchor the Roster
+row and the League page use** — one engine explained by one component on three
+surfaces, drawn only while the lens is on so the run carries no footnote to a
+control that is doing nothing. Its sentences are `ProjectionNote`'s, split out of
+`ProjectionKey` so the board's own branch could be a branch: the Roster's rows
+and the matchup's card are both *what has already happened + what is left*, where
+this board's span is clamped forward to today and every figure on it is an
+estimate end to end. A key telling a reader of this table that part of his row
+was a real line would be the one sentence on the page that is untrue.
+
+**It was an accordion in the head for one round, and the fix is one CSS value.**
+`.research-scroll > .view-tools` was `overflow: hidden` — it is a sticky box in a
+pane that scrolls sideways and the run must not slide with it — and `hidden` on
+one axis computes `visible` on the other to `auto`, so the panel was **clipped to
+the row's own 36px**: measured at 1400, a 320px key painting as a 46px sliver.
+
+**`clip` is the one value that does not drag its partner.** `overflow-x: clip`
+with `overflow-y: visible` is explicitly allowed to stay as specified where
+`hidden` + `visible` is not, so the row goes on clipping the axis it has to and
+lets the panel hang below it. With the `:has(.info-key-panel)` layer bump above
+the head — a sticky sibling at the same 5 and later in the tree — the key opens
+in full at **1400, 390 and 320**, entirely on screen at each, with the control
+rows still 36px and page-body overflow 0.
+
+**A glyph and no word.** The four buttons beside it are *nouns* — Search,
+Filters, Schedule, Projected — each naming a thing the board can be; this is a
+footnote to the one beside it, and a fifth word in the run would read as a fifth
+setting.
+
+#### One panel at a time
+
+The bar's disclosures each set only their own flag, so Search, Filters, the day
+strip and the lens's span picker could all be open at once — and every one of
+them opens **into the head**. A reader who pressed `Projected`, thought better of
+it and pressed `Filters` got the filter row *under* a month of calendar he had
+not dismissed, with the table three hundred pixels further down than he left it.
+
+They are mutually exclusive now: opening one closes the rest. That is what a
+reader means by pressing a second button — the first question is abandoned, not
+stacked — and it is the rule the app's dialog layer already keeps one tier up.
+**The `Schedule` toggle closes the lens's panel too**, since pressing it turns
+the lens off and a span picker left open over a mode that is no longer on is the
+same fault arriving from a control that is not a disclosure.
+
+**`projCustom` is not in the run**, being a state *of* the span picker rather
+than a sibling of it — passing it through would have `Custom` closing the panel
+it lives inside. It is cleared on the **result** rather than in the `projected`
+branch, which is the bug that came first: clearing it only where that button was
+pressed left it set when the panel was shut by the exclusivity, so `Projected →
+Custom → Filters → Projected` came back on a calendar the reader had last seen
+three presses earlier, at 383px of head.
+
+Driven through the whole run at 1400 — `Projected`, `Custom`, `Filters`,
+`Search`, `Starting`, `Projected`, `Starting`, `Schedule` — exactly one panel is
+open at every step and the lit button matches it, with the head at 31px empty,
+73–86 with a one-row panel and 383 with the calendar.
 
 #### What the server answers with, and what it costs
 
@@ -1722,7 +1820,10 @@ H 5.9 · ER 3.4 · BB 2.1 · K 4.1 · ERA 5.92 · WHIP 1.56 · K/9 7.2` — 24.8
 faced over 15.4 outs, and the four rates recompute off the counts printed beside
 them.
 
-**Bundle: 678.09 → 686.02 KB of JS** (200.37 → 202.66 gzipped) and **176.48 →
-177.37 KB of CSS** (31.61 → 31.78) — 7.9KB and 0.9KB raw, 2.3KB and 0.17KB over
-the wire, for a second reading of the app's widest table, a server route, a
-column vocabulary and a picker.
+**Bundle: 678.09 → 687.23 KB of JS** (200.37 → 202.94 gzipped) and **176.48 →
+177.17 KB of CSS** (31.61 → 31.74) — 9.1KB of JS raw and 2.6KB over the wire,
+against **0.7KB of CSS given back** raw and 0.04 gzipped, for a second reading of
+the app's widest table, a server route, a column vocabulary, a picker, a span
+control and a key. The stylesheet shrinking is the honest report: the accordion
+the key opened into needed a block of rules, and the popover it became needs one
+CSS value on a row that already had one.

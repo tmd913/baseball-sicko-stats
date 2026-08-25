@@ -1597,6 +1597,15 @@ export interface UserPrefs {
    *  the board's saved set. Absent means that kind's defaults; not in the URL,
    *  where `cols=` names the board `pos=` selects. */
   statsColumns?: Partial<Record<PlayerKind, string[]>>;
+  /**
+   * The research board's **projected** reading, per kind — a third entry
+   * alongside the two above and its own for the identical reason the Stats
+   * tab's is: the lens offers a **strict subset** of the board's vocabulary
+   * (only what a projection can actually fill), so a write from it would drop
+   * every Statcast and roster-% column from the board's saved list. Absent
+   * means that kind's projected defaults, the same convention.
+   */
+  projectedColumns?: Partial<Record<PlayerKind, string[]>>;
   /** Absent means off, the default — the server stores off as no entry. */
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */

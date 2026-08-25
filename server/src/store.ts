@@ -83,6 +83,15 @@ export interface UserPrefs {
    * the board `pos=` selects, and the open player-page tab is in no URL at all.
    */
   statsColumns?: Partial<Record<PlayerKind, string[]>>;
+  /**
+   * The research board's **projected** reading, per kind — a third entry
+   * alongside the two above and its own for the identical reason the Stats
+   * tab's is: the lens offers a **strict subset** of the board's vocabulary
+   * (only what a projection can actually fill), so a write from it would drop
+   * every Statcast and roster-% column from the board's saved list. Absent
+   * means that kind's projected defaults, the same convention.
+   */
+  projectedColumns?: Partial<Record<PlayerKind, string[]>>;
   /** Keep players on the IL off the players view (the settings-menu toggle).
    *  Absent means off, which is the default — see `setHideInjured`. */
   hideInjured?: boolean;
@@ -875,6 +884,17 @@ export async function setResearchColumns(
   return setColumnPrefs(userId, 'researchColumns', kind, keys);
 }
 
+/** …and for the research board's **projected** reading, which offers a strict
+ *  subset of the board's own vocabulary and so keeps its own entry for exactly
+ *  the reason the Stats tab does — see `UserPrefs.projectedColumns`. */
+export async function setProjectedColumns(
+  userId: string,
+  kind: PlayerKind,
+  keys: string[] | null,
+): Promise<UserPrefs> {
+  return setColumnPrefs(userId, 'projectedColumns', kind, keys);
+}
+
 /** The same, for the player page's Stats tab — see `UserPrefs.statsColumns`
  *  for why it is its own entry rather than a share of the board's. */
 export async function setStatsColumns(
@@ -885,13 +905,13 @@ export async function setStatsColumns(
   return setColumnPrefs(userId, 'statsColumns', kind, keys);
 }
 
-/** One read/modify/write for both, since the rule is the same one twice: a
- *  per-kind slot, and `null` clearing the slot rather than storing a copy of
- *  today's defaults. Written once so the two cannot come to disagree about
+/** One read/modify/write for all three, since the rule is the same one three
+ *  times: a per-kind slot, and `null` clearing the slot rather than storing a
+ *  copy of today's defaults. Written once so they cannot come to disagree about
  *  what "back to the defaults" stores. */
 async function setColumnPrefs(
   userId: string,
-  field: 'researchColumns' | 'statsColumns',
+  field: 'researchColumns' | 'statsColumns' | 'projectedColumns',
   kind: PlayerKind,
   keys: string[] | null,
 ): Promise<UserPrefs> {

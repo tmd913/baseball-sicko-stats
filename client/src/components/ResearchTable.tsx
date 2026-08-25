@@ -10,7 +10,7 @@ import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
 import { ColumnPicker, ColumnsButton } from './ColumnPicker';
 import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } from './columnRanks';
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
-import { ProjectedToggle, ProjectionNote } from './Projection';
+import { ProjectedToggle, ProjectionKey } from './Projection';
 import { DateCalendar } from './DateRangePicker';
 import { TurnButton, TurnDayStrip } from './TurnPicker';
 import {
@@ -68,6 +68,9 @@ import {
   opponentColumn,
   PITCHER_COLUMNS,
   projectedColumns,
+  projectedColumnKeys,
+  isDefaultProjectedColumns,
+  toProjectedColumnKeys,
   TEAM_HIDDEN,
   TEAM_ONLY,
   TREND_BY_KEY,
@@ -78,7 +81,14 @@ import type { Column } from './researchColumns';
 // link handling that grows later) goes on naming this file: the *selection* is
 // a board setting, and the board is what App is configuring, even though the
 // vocabulary behind it now lives next door.
-export { defaultColumnKeys, isDefaultColumns, toColumnKeys } from './researchColumns';
+export {
+  defaultColumnKeys,
+  isDefaultColumns,
+  isDefaultProjectedColumns,
+  projectedColumnKeys,
+  toColumnKeys,
+  toProjectedColumnKeys,
+} from './researchColumns';
 
 /**
  * A league-wide, season-to-date stat table: every player on one board, sortable
@@ -696,6 +706,17 @@ interface Props {
   /** The app's own baseball today — what the `Custom` calendar opens on where
    *  no range is in force, and this app's one clock. */
   today: string;
+  /**
+   * **The lens's own visible columns**, or null for its defaults — a separate
+   * entry from `columnKeys` beside it and its own for the reason the player
+   * page's Stats tab keeps one: the lens offers a **strict subset** of this
+   * board's vocabulary, so a write from its picker would drop every Statcast
+   * and roster-% column from the measured board's saved list. Saved per user
+   * (`UserPrefs.projectedColumns`) and carried in `cols=` while the lens is the
+   * reading on screen, exactly as the measured set is while it is.
+   */
+  projColumnKeys: string[] | null;
+  onProjColumnsChange: (keys: string[] | null) => void;
   /** The latest day the calendar may reach — the app's own ceiling, so the
    *  board and the Roster cannot disagree about where the season ends. */
   maxDate: string;
@@ -928,15 +949,6 @@ export interface ResearchUi {
      *  finds the calendar showing their range rather than a run of pills that
      *  says nothing is selected. */
     projCustom: boolean;
-    /** …and *How the projection works*, whose **button is in the tools run
-     *  beside `Projected`** and whose panel is in the head, which is the
-     *  arrangement every other disclosure on this board has. It has to be: the
-     *  run is `overflow: hidden` — a sticky box in a pane that scrolls sideways
-     *  must not slide with it — so a popover opened from a button inside it is
-     *  clipped to the run's own 36px. Measured before it moved: a 320px
-     *  `InfoKey` painting as a 46px sliver. In the head it is an accordion,
-     *  which is what the two panels beside it already are. */
-    projHelp: boolean;
   };
   /** The condition being typed, deliberately *not* per board — it is a
    *  keystroke rather than a setting. The column it names does belong to one
@@ -977,7 +989,6 @@ export const freshResearchUi = (): ResearchUi => ({
     columns: false,
     projected: false,
     projCustom: false,
-    projHelp: false,
   },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
@@ -1098,6 +1109,8 @@ export function ResearchTable({
   onProjSpanChange,
   projSpans,
   today,
+  projColumnKeys,
+  onProjColumnsChange,
   maxDate,
   turnDays,
   onTurnDaysChange,
@@ -1199,9 +1212,29 @@ export function ResearchTable({
             };
       });
   }, [kind, teams, hasRosterPct, measured, statuses]);
+  /**
+   * **The vocabulary in force** — the board's, or the lens's strict subset of
+   * it while the lens is drawing.
+   *
+   * This is what the **Columns picker lists**, what the **filter builder**
+   * offers a threshold on, and what the sort resolves a key through. All three
+   * have to move together with the figures: a picker offering `xwOBA` on a
+   * board that cannot draw it is a control lying about its reach, and a
+   * threshold on a column whose value is null on every row is a filter that
+   * empties the table for no reason a reader can see.
+   *
+   * `allColumns` above stays the **measured** vocabulary whatever the lens is
+   * doing, because two things still need it: the picker's own `DEFAULT_OFF`
+   * arithmetic for the measured set, and the reader's saved measured list
+   * surviving a press of the toggle untouched.
+   */
+  const vocabulary = useMemo(
+    () => (projectedOn ? projectedColumns(kind, projection.oneDay) : allColumns),
+    [projectedOn, projection, kind, allColumns],
+  );
   const columnsByKey = useMemo(
-    () => new Map(allColumns.map((c) => [c.key, c])),
-    [allColumns],
+    () => new Map(vocabulary.map((c) => [c.key, c])),
+    [vocabulary],
   );
 
   /**
@@ -1326,10 +1359,26 @@ export function ResearchTable({
   // and into the header row below. The set is kept beside it for the half-dozen
   // membership tests that don't care about order (the picker's ticks, the
   // sort's "is this column still shown").
-  const orderedKeys = useMemo(
-    () => columnKeys ?? defaultColumnKeys(kind),
-    [columnKeys, kind],
-  );
+  /**
+   * **Which columns are shown and in what order** — the reader's own list, or
+   * this reading's defaults.
+   *
+   * **Two lists, one per reading**, and they are kept apart for the reason the
+   * player page's Stats tab keeps its own: the lens draws a strict subset of
+   * this board's vocabulary, so one shared entry would let a write from its
+   * picker drop every Statcast and roster-% column from the measured board's.
+   * A saved list is narrowed to the vocabulary it is being read against
+   * (`toProjectedColumnKeys`), so a list stored under an older build — or one
+   * that has lost the opponent column because the span stopped being a single
+   * day — comes back as the columns that still exist rather than as gaps.
+   */
+  const orderedKeys = useMemo(() => {
+    if (projectedOn) {
+      const one = projection.oneDay;
+      return toProjectedColumnKeys(kind, one, projColumnKeys) ?? projectedColumnKeys(kind, one);
+    }
+    return columnKeys ?? defaultColumnKeys(kind);
+  }, [projectedOn, projection, projColumnKeys, columnKeys, kind]);
   /**
    * **What the table draws** — the reader's stat columns, or the days ahead.
    *
@@ -1421,15 +1470,18 @@ export function ResearchTable({
      * is precisely the pair the two controls answer together — the same reason
      * `Starting` stays on the bar in schedule mode where Columns and Ranks go.
      */
-    const byKey = new Map(allColumns.map((c) => [c.key, c]));
+    const byKey = new Map(vocabulary.map((c) => [c.key, c]));
     // `filter(Boolean)` rather than a fallback: a key with no column on this
     // board is one the board doesn't have — Ros% without a league, a trend
     // window with no baseline — and dropping it is what those two rules
     // already do. A saved list keeps the key, so connecting a league puts the
     // column back where the reader had it.
-    const stats = projectedOn
-      ? projectedColumns(kind, projection.oneDay)
-      : orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
+    // **One line for both readings now.** The lens used to draw its whole
+    // vocabulary outright, which made it the one table in the app whose columns
+    // were not the reader's to choose; it has a saved list of its own, so this
+    // is the same `map` over the same kind of list, and what differs is only
+    // which vocabulary `byKey` was built from.
+    const stats = orderedKeys.map((k) => byKey.get(k)).filter((c): c is Column => c !== undefined);
     /**
      * **The `Start` column leads them while the turn filter is on**, and it is
      * the filter's own rather than a member of the vocabulary: it is not in
@@ -1450,7 +1502,7 @@ export function ResearchTable({
       ? [turnColumn(activeTurn.index, activeTurn.set, turnDoors), ...stats]
       : stats;
   }, [
-    allColumns,
+    vocabulary,
     orderedKeys,
     schedule,
     kind,
@@ -1458,8 +1510,6 @@ export function ResearchTable({
     openFixture,
     activeTurn,
     turnDoors,
-    projectedOn,
-    projection,
   ]);
   /**
    * Which keys the sort's fallback will accept. Out of schedule mode that is
@@ -1524,7 +1574,6 @@ export function ResearchTable({
     columns: columnsOpen,
     projected: projectedOpen,
     projCustom: projCustomOpen,
-    projHelp: projHelpOpen,
   } = ui.panels;
   /**
    * **What the `Custom` calendar opens on** — the reader's own range where they
@@ -1552,8 +1601,40 @@ export function ResearchTable({
    *  so left open and carried to the batters it would go on counting a strip
    *  nobody is drawing: 166 rows walked for a `Map` nothing reads. */
   const turnStripOpen = turnsOpen && kind === 'pitcher' && !teams;
+  /**
+   * **One panel at a time**, which the bar's disclosures were not.
+   *
+   * Each of them set only its own flag, so Search, Filters, the day strip and
+   * the lens's span picker could all be open at once — and every one of them
+   * opens **into the head**, so the reader who pressed `Projected`, thought
+   * better of it and pressed `Filters` got the filter row *under* a month of
+   * calendar he had not dismissed, with the table three hundred pixels further
+   * down than he left it. Reported as exactly that.
+   *
+   * They are mutually exclusive now: opening one closes the rest. That is what
+   * a reader means by pressing a second button — the first question is
+   * abandoned, not stacked — and it is the rule the app's own dialog layer
+   * already keeps one tier up, where a popup dismisses on a press outside it.
+   *
+   * **`projCustom` is not a panel and is not in the run.** It is a *state of*
+   * the span picker — which of that panel's three doors is open — so it clears
+   * when its own panel closes and is otherwise left alone. Passing it here at
+   * all would have `Custom` closing `Projected`, which is the panel it lives
+   * inside.
+   */
   const setPanel = (which: keyof ResearchUi['panels'], on: boolean) =>
-    onUiChange((u) => ({ ...u, panels: { ...u.panels, [which]: on } }));
+    onUiChange((u) => {
+      if (which === 'projCustom') return { ...u, panels: { ...u.panels, projCustom: on } };
+      const shut = { search: false, filters: false, turns: false, columns: false, projected: false };
+      const panels = { ...u.panels, ...(on ? shut : {}), [which]: on };
+      // **The span picker's own door goes wherever its panel goes**, and that
+      // is tested on the *result* rather than on which button was pressed —
+      // which is the bug this replaced. Clearing it in the `projected` branch
+      // alone left it set when the panel was shut by the exclusivity above, so
+      // `Projected → Custom → Filters → Projected` came back on a calendar the
+      // reader had last seen three presses earlier, at 383px of head.
+      return { ...u, panels: { ...panels, projCustom: panels.projected && panels.projCustom } };
+    });
 
   /**
    * The search, the sort and the filters, **kept per board**.
@@ -3034,11 +3115,17 @@ export function ResearchTable({
                  and hands it down only once it has landed, so this needs no
                  fourth prop to know it. */
               loading={scheduleSpan !== null && !schedule}
-              onToggle={() =>
+              onToggle={() => {
+                // **The lens's panel goes with the lens.** Pressing this turns
+                // the projected reading off (App's `setBoardScheduleSpan`), and
+                // a span picker left open over a mode that is no longer on is
+                // the same fault the run's own exclusivity fixes, arriving from
+                // a control that is not a disclosure.
+                if (scheduleSpan === null) setPanel('projected', false);
                 onScheduleSpanChange(
                   scheduleSpan === null ? defaultScheduleSpan(matchupWindow) : null,
-                )
-              }
+                );
+              }}
             />
             {/* **How far ahead, immediately after the button that turns the
                 mode on** — and it was at the far end of the run.
@@ -3114,7 +3201,7 @@ export function ResearchTable({
              * calendar, where nothing is lit to press.
              */}
             {!teams && (
-              <>
+              <span className="projected-group">
                 <ProjectedToggle
                   on={projected}
                   active={projectedOpen}
@@ -3128,48 +3215,59 @@ export function ResearchTable({
                 />
                 {/**
                  * **The key, beside the control it explains and drawn only
-                 * while that control is doing something.**
+                 * while that control is doing something** — `ProjectionKey`, the
+                 * same popover the Roster row and the League page open, from the
+                 * same `.proj-key` anchor. One engine explained by one component
+                 * on all three surfaces.
                  *
-                 * Where the Roster row and the League page keep theirs, and it
-                 * is the same component's words (`ProjectionNote`) — one engine
-                 * explained in one set of sentences, which is why that block
-                 * was split out of `ProjectionKey` rather than restated.
+                 * It was an accordion in the head for one round, because
+                 * `.research-scroll > .view-tools` was `overflow: hidden` and a
+                 * panel opened from a button inside it painted as a 46px sliver.
+                 * That row clips on the **inline axis only** now
+                 * (`overflow-x: clip`, which is the one value that does not drag
+                 * `visible` on the other axis to `auto`), so the popover hangs
+                 * below the row exactly as it does everywhere else and the
+                 * board needs no shape of its own.
                  *
-                 * **The button is here and the panel is in the head**, which is
-                 * the arrangement the board's other three disclosures already
-                 * have and which this one has to have: `.research-scroll >
-                 * .view-tools` is `overflow: hidden` — a sticky box in a pane
-                 * that scrolls sideways must not slide with it — so an
-                 * `InfoKey`'s popover opened from a button in this run is
-                 * clipped to the run. Measured before the split: a 320px panel
-                 * painting as a 46px sliver at 1400.
-                 *
-                 * **A glyph and no word**, which is where it parts from the
-                 * four buttons beside it. Those are *nouns* — Search, Filters,
-                 * Schedule, Projected — and each names a thing the board can
-                 * be; this is a footnote to the one beside it, and a fifth word
-                 * in the run would read as a fifth setting. The label is
-                 * visually hidden rather than absent, which is this run's own
-                 * standing rule: a button whose only content is an
-                 * `aria-hidden` mark has no accessible name at all.
+                 * Drawn on the **press** rather than on the answer, the rule the
+                 * Roster's copy states: a key that arrived a quarter of a second
+                 * later would move the run under the finger that had gone on to
+                 * the next control. `days` is 0 until the read lands and the
+                 * panel words that as *over the days left*.
                  */}
                 {projected && (
-                  <button
-                    type="button"
-                    className={`research-toggle research-proj-help${projHelpOpen ? ' active' : ''}`}
-                    aria-expanded={projHelpOpen}
-                    onClick={() => setPanel('projHelp', !projHelpOpen)}
-                    title="How the projection works"
-                  >
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 11v5" strokeLinecap="round" />
-                      <circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
-                    </svg>
-                    <span className="sr-only">How the projection works</span>
-                  </button>
+                  <ProjectionKey board days={projection?.daysLeft ?? 0} className="proj-key" />
                 )}
-              </>
+              </span>
+            )}
+            {/**
+             * **Columns is drawn under the lens and Ranks is not**, which is
+             * this pair's own rule read one control at a time rather than as a
+             * block.
+             *
+             * That rule is *a control whose whole subject has been swapped out
+             * is a setting lying about its own reach* — and the lens does not
+             * swap the columns out, it swaps them for **a smaller set of its
+             * own**. There is still a vocabulary to pick from, still an order to
+             * set, and a reader who wants `SV` split out of `SVHD` on a
+             * projected board wants it exactly as much as on a measured one. So
+             * the picker stays and lists what the lens can actually draw.
+             *
+             * **Ranks genuinely has no subject.** A percentile is a standing
+             * among the *qualified* players on a measured board — Savant's own
+             * bar — and nobody qualifies for a week nobody has played; ranking
+             * an estimate against a field of estimates would put a solid badge
+             * under a number this app's rule says must never wear a
+             * measurement's clothes. Schedule mode still takes both off, the
+             * day columns being a vocabulary nobody picks.
+             */}
+            {!schedule && projectedOn && (
+              <ColumnsButton
+                open={columnsOpen}
+                count={vocabulary.length - (activeTurn ? 1 : 0)}
+                customised={!!projColumnKeys}
+                onToggle={() => setPanel('columns', !columnsOpen)}
+              />
             )}
             {!schedule && !projectedOn && (
               <>
@@ -3419,19 +3517,6 @@ export function ResearchTable({
         </div>
       )}
 
-      {/* **How the projection works** — the button is up in the tools run
-          beside the toggle it explains, and this is what it opens. The two are
-          apart for the reason the board's other three disclosures are: the run
-          is `overflow: hidden`, so a popover opened from a button inside it is
-          clipped to the run. In the head it is an accordion, and it grows the
-          head under the rows rather than under the finger that pressed it —
-          that finger is on the condensed rail, which has no height to move. */}
-      {projected && projHelpOpen && (
-        <div className="research-panel research-proj-note">
-          <ProjectionNote board days={projection?.daysLeft ?? 0} />
-        </div>
-      )}
-
       {filtersOpen && (
         <div className="research-panel research-filter-add">
           {/* Every column, not just the shown ones: a threshold on a stat you
@@ -3648,11 +3733,29 @@ export function ResearchTable({
           {columnsOpen && (
             <ColumnPicker
               kind={kind}
-              all={allColumns}
+              /* **The vocabulary in force**, which under the lens is its own
+                 subset — see `vocabulary`. The picker is handed a list and a
+                 selection and has no opinion about which reading produced
+                 them, which is what lets one dialog serve three tables. */
+              all={vocabulary}
               keys={orderedKeys}
-              onChange={(keys) => onColumnsChange(isDefaultColumns(kind, keys) ? null : keys)}
-              onReset={() => onColumnsChange(null)}
-              canReset={!!columnKeys}
+              /* …and the write goes to that reading's own entry. The two are
+                 kept apart for the reason the Stats tab's is: the lens lists a
+                 strict subset, so one shared entry would let a write from here
+                 drop every Statcast column from the measured board's list. A
+                 selection that is just this reading's defaults is stored as
+                 **nothing at all**, so a reset goes on following the defaults
+                 as they change rather than pinning today's copy of them —
+                 the policy is this board's on both branches. */
+              onChange={(keys) =>
+                projectedOn
+                  ? onProjColumnsChange(
+                      isDefaultProjectedColumns(kind, projection.oneDay, keys) ? null : keys,
+                    )
+                  : onColumnsChange(isDefaultColumns(kind, keys) ? null : keys)
+              }
+              onReset={() => (projectedOn ? onProjColumnsChange(null) : onColumnsChange(null))}
+              canReset={projectedOn ? !!projColumnKeys : !!columnKeys}
               onClose={() => setPanel('columns', false)}
             />
           )}

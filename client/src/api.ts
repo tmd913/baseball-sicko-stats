@@ -233,6 +233,17 @@ export const api = {
       body: JSON.stringify({ kind, keys }),
     });
   },
+  /** The research board's **projected** reading keeps its own set — same body,
+   *  its own entry. Its own for the reason the Stats tab's is: the lens lists a
+   *  strict subset of the board's vocabulary, so a write from its picker would
+   *  drop every Statcast and roster-% column from the board's saved list. */
+  async saveProjectedColumns(kind: PlayerKind, keys: string[] | null): Promise<UserPrefs> {
+    return request('/api/prefs/projected-columns', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ kind, keys }),
+    });
+  },
   // The player page's Stats tab keeps its own set — same body, its own entry.
   async saveStatsColumns(kind: PlayerKind, keys: string[] | null): Promise<UserPrefs> {
     return request('/api/prefs/stats-columns', {
