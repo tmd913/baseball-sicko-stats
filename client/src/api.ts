@@ -76,18 +76,55 @@ export function setReauthHandler(handler: (() => Promise<string | null>) | null)
   reauth = handler;
 }
 
+/**
+ * **Every response is parsed here, and a body that is not JSON is an error with
+ * a sentence rather than a `SyntaxError`.**
+ *
+ * The failure path already knew this: a 404 whose body is an HTML error page
+ * has its parse failure swallowed and becomes `404 Not Found`. The **success**
+ * path did not — it was `res.json()` on a 200, so a body that would not parse
+ * threw the browser's own `Unexpected end of JSON input` out of the fetch
+ * layer, with nothing in it naming the request, the status or the cause. It
+ * reached the reader as *"JSON.parse error"* and the view it belonged to as an
+ * exception it had no banner for.
+ *
+ * **A 200 that is not JSON is not hypothetical.** The case that reported this
+ * is a server restarting under `tsx watch` while the page polls: the response
+ * has already begun, so it is a `200 application/json` whose body is cut off
+ * part-way. A deploy does the same thing to a tab left open, and any host that
+ * serves the SPA for an unmatched `/api/*` path does it with a whole
+ * `index.html`.
+ *
+ * So the body is read as **text** and parsed here. What the reader gets names
+ * what happened and what to check; the status rides along so a caller that
+ * tests it still can.
+ */
 async function json<T>(res: Response): Promise<T> {
+  const body = await res.text();
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body.error) msg = body.error;
+      const parsed = JSON.parse(body) as { error?: string };
+      if (parsed.error) msg = parsed.error;
     } catch {
-      /* ignore */
+      /* An error page rather than an error object — the status says enough. */
     }
     throw new ApiError(msg, res.status);
   }
-  return res.json() as Promise<T>;
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    // Named for the two things that actually produce it, in the order they are
+    // worth checking: an empty or truncated body means the server went away
+    // mid-answer, and a body that starts with a tag means something served the
+    // app in place of the API.
+    throw new ApiError(
+      body.trim() === ''
+        ? 'The server closed the connection before answering — is it still running?'
+        : 'The server answered with something other than JSON — is the API running?',
+      res.status,
+    );
+  }
 }
 
 /**
