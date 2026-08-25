@@ -1589,6 +1589,29 @@ function currentRole(
   return season && num(season.gamesStarted) * 2 > num(season.games) ? 'starter' : 'reliever';
 }
 
+/**
+ * **Which of his club's remaining games a projection is drawn over**, and it is
+ * two narrowings rather than one because they answer two different questions.
+ *
+ * `allow` is a set of **days** — the lineup planner's, *the days your fantasy
+ * team actually starts him* — and `onlyPk` is a single **game**, the game
+ * preview's *this one fixture*.
+ *
+ * **The second is deliberately not a set of one day.** A doubleheader is two
+ * games on one date, and a preview opened on the nightcap that narrowed by date
+ * would project the afternoon's work into it as well — a line claiming eight
+ * plate appearances for a game that has four in it. Narrowing on the `gamePk`
+ * the reader pressed is the only one of the two that cannot.
+ */
+function chancesOf(
+  all: ScheduleGame[],
+  allow: ReadonlySet<string> | null,
+  onlyPk: number | null,
+): ScheduleGame[] {
+  const byDay = allow ? all.filter((g) => allow.has(g.date)) : all;
+  return onlyPk === null ? byDay : byDay.filter((g) => g.gamePk === onlyPk);
+}
+
 /** One batter's expected line over the context's remaining games, and how many
  *  of his club's games he is expected to be in. */
 function projectOneBatter(
@@ -1599,12 +1622,14 @@ function projectOneBatter(
    *  is the roster page's question and was this file's only one. See
    *  `planLineups`. */
   allow: ReadonlySet<string> | null = null,
+  /** One game of the span and nothing else — the game preview's own narrowing.
+   *  Null is every game the filter above leaves. See `chancesOf`. */
+  onlyPk: number | null = null,
 ): { games: number; placed: boolean } {
   const { pools } = ctx;
   const row = pools.batSeason.get(id);
   if (!row || row.teamId === null) return { games: 0, placed: false };
-  const all = ctx.remaining.get(row.teamId) ?? [];
-  const games = allow ? all.filter((g) => allow.has(g.date)) : all;
+  const games = chancesOf(ctx.remaining.get(row.teamId) ?? [], allow, onlyPk);
   const mults = games.map((g) => {
     const oppSide = g.homeId === row.teamId ? g.awayId : g.homeId;
     const named = [...(ctx.starters.get(g.gamePk) ?? [])].find((sid) => {
@@ -1631,12 +1656,14 @@ function projectOnePitcher(
   /** As `projectOneBatter`'s — the days he has a lineup slot, or `null` for all
    *  of them. A start he is not started for is not a start he gets. */
   allow: ReadonlySet<string> | null = null,
+  /** As `projectOneBatter`'s — one game of the span, the game preview's own
+   *  narrowing. See `chancesOf`. */
+  onlyPk: number | null = null,
 ): { starts: number; reliefGames: number; placed: boolean } {
   const { pools } = ctx;
   const row = pools.pitSeason.get(id);
   if (!row || row.teamId === null) return { starts: 0, reliefGames: 0, placed: false };
-  const all = ctx.remaining.get(row.teamId) ?? [];
-  const games = allow ? all.filter((g) => allow.has(g.date)) : all;
+  const games = chancesOf(ctx.remaining.get(row.teamId) ?? [], allow, onlyPk);
   const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
   // His own turns: every remaining game he is named for or projected into.
   const his = games.filter((g) => ctx.starters.get(g.gamePk)?.has(id) === true);
@@ -2954,14 +2981,6 @@ const round2 = (n: number | null): number | null => (n === null ? null : Math.ro
  *
  * Only ever called on a one-day span — see `BoardProjection.oneDay`, and the
  * reason a range gets no fixture at all.
- *
- * **The tier is re-derived here rather than read off `ctx.starters`**, which
- * flattens the three into one set: an announced start is a probable id on the
- * game itself, and everything else is the rotation map's, `estimated` where
- * that projection came off the club's pooled cadence rather than the man's own.
- * That is the same ladder the Schedule view's cell draws, and deriving it from
- * the same two facts is what stops the board and the grid disagreeing about how
- * firm a Thursday start is.
  */
 function fixtureOn(
   ctx: ProjectionContext,
@@ -2970,7 +2989,47 @@ function fixtureOn(
   day: string,
 ): ProjectedFixture | null {
   const g = (ctx.remaining.get(teamId) ?? []).find((x) => x.date === day);
-  if (!g) return null;
+  return g ? fixtureOf(ctx, rotations, teamId, g) : null;
+}
+
+/**
+ * **The same fixture, found by the game rather than by the day** — the game
+ * preview's own lookup.
+ *
+ * A separate finder rather than a `day` that happens to match, for the reason
+ * `chancesOf` gives: a doubleheader is two games on one date, and a dialog
+ * opened on the nightcap must be told about the nightcap. The *reading* below
+ * is one function either way, so a fixture named on the board and the same
+ * fixture named in a preview cannot disagree about who is on the mound.
+ */
+function fixtureFor(
+  ctx: ProjectionContext,
+  rotations: Record<string, RotationProjection>,
+  teamId: number,
+  gamePk: number,
+): ProjectedFixture | null {
+  const g = (ctx.remaining.get(teamId) ?? []).find((x) => x.gamePk === gamePk);
+  return g ? fixtureOf(ctx, rotations, teamId, g) : null;
+}
+
+/**
+ * **What either finder reads off the game it found** — the opponent, the side
+ * and the arm.
+ *
+ * **The tier is re-derived here rather than read off `ctx.starters`**, which
+ * flattens the three into one set: an announced start is a probable id on the
+ * game itself, and everything else is the rotation map's, `estimated` where
+ * that projection came off the club's pooled cadence rather than the man's own.
+ * That is the same ladder the Schedule view's cell draws, and deriving it from
+ * the same two facts is what stops the board, the grid and a game preview
+ * disagreeing about how firm a Thursday start is.
+ */
+function fixtureOf(
+  ctx: ProjectionContext,
+  rotations: Record<string, RotationProjection>,
+  teamId: number,
+  g: ScheduleGame,
+): ProjectedFixture {
   const home = g.homeId === teamId;
   const oppId = home ? g.awayId : g.homeId;
   const oppProbable = home ? g.awayProbableId : g.homeProbableId;
@@ -3086,6 +3145,132 @@ export async function getBoardProjection(
 
   return { kind, start: from, end, daysLeft: ctx.daysLeft, oneDay, rows, fetchedAt: Date.now() };
 }
+
+/**
+ * ---------------------------------------------------------------------------
+ * One man, one game
+ * ---------------------------------------------------------------------------
+ *
+ * **What a player is expected to do in a single fixture** — the line the game
+ * preview draws, which is the third question this engine is asked and the
+ * narrowest.
+ *
+ * The other two are spans: `getRosterProjection` is *sixteen men over a week*
+ * and `getBoardProjection` is *six hundred over one*. This is **one man over
+ * one game**, and it is the same arithmetic narrowed rather than a second one —
+ * `projectOneBatter` and `projectOnePitcher` do the work, over a context built
+ * for the fixture's own day, so a figure here and the same man's figure under
+ * the roster's `Projected` toggle come off one function over one set of boards.
+ * Two engines answering *what is he worth tonight* is exactly the drift this
+ * file's shape exists to prevent.
+ *
+ * **Narrowed by `gamePk` and not by the date**, which is the one thing this
+ * adds to the pair above: a doubleheader is two games on one day, and a preview
+ * opened on the nightcap that took the day would draw it both games' work. See
+ * `chancesOf`.
+ *
+ * **A fraction is the answer, not a rounding of one.** `chances` is his share
+ * of this game — how often he is in the lineup, or for a reliever how often he
+ * is used — and the line beside it is worth the same share. A batter who sits
+ * one start in five is `0.8` of a game and eight tenths of a line, which is the
+ * honest reading of *what is he worth to me tonight*; rounding it to a whole
+ * game would claim he plays, and rounding it to none would claim he does not.
+ * It is the reading the board's own one-day lens already gives, in its `Games`
+ * column.
+ *
+ * **Everything it declines to answer, it answers with an empty line.** A day
+ * already played, a game already under way (`remainingGames` has dropped it),
+ * a man neither board has a row for, a fixture that is not his club's: all of
+ * them come back with `chances: 0` and two nulls, and the client draws that as
+ * a sentence naming the cause rather than as a line of noughts.
+ */
+export interface GameProjection {
+  playerId: number;
+  kind: PlayerKind;
+  /** **The game asked about, echoed back.** The dialog is opened a fixture at a
+   *  time and a slow read must not land in a box that has moved on, so the
+   *  client checks this against the game it is drawing — the same guard every
+   *  supersedable read in this app carries. */
+  gamePk: number;
+  /** Its date, echoed for the same reason. */
+  date: string;
+  /**
+   * **What the line was drawn over** — a batter's share of the game, a
+   * pitcher's start (1) or his share of an appearance. **Zero is the honest
+   * absence** and every figure beside it is null; see the note above.
+   */
+  chances: number;
+  /** 1 where this is one of his turns, 0 where he would be coming out of the
+   *  bullpen. What the head's chip is written from — a start is a start and a
+   *  relief appearance is a fraction. */
+  starts: number;
+  batting: BattingLine | null;
+  pitching: PitchingLine | null;
+  /** The fixture as the projection sees it — the opponent, the side, and the
+   *  arm the other club is throwing with the tier that says how firm that is.
+   *  Null where the game is not one his club has left to play. */
+  fixture: ProjectedFixture | null;
+  fetchedAt: number;
+}
+
+export async function getGameProjection(
+  kind: PlayerKind,
+  playerId: number,
+  gamePk: number,
+  date: string,
+): Promise<GameProjection> {
+  const empty = (): GameProjection => ({
+    playerId,
+    kind,
+    gamePk,
+    date,
+    chances: 0,
+    starts: 0,
+    batting: null,
+    pitching: null,
+    fixture: null,
+    fetchedAt: Date.now(),
+  });
+  // A day that has been played is not a day anybody projects — the roster and
+  // board lenses' own clamp, which here is a refusal rather than a clamp: those
+  // two are given a span and answer over the part of it still to come, and this
+  // is given one game, which either is still to come or is not.
+  if (date < baseballToday()) return empty();
+
+  const [ctx, window] = await Promise.all([contextFor(date, date), getScheduleWindow()]);
+  if (ctx.daysLeft === 0) return empty();
+  const pool = kind === 'pitcher' ? ctx.pools.pitSeason : ctx.pools.batSeason;
+  const season = pool.get(playerId);
+  // No row on the season board, or no club to have a fixture: there is nothing
+  // to project him from and nothing to project him into.
+  if (!season || season.teamId === null) return empty();
+  // **The fixture is looked up before the line is built**, so a game that is not
+  // his club's — a stale link, a trade since the page was drawn — is an empty
+  // answer rather than a line drawn over no games at all that reads the same.
+  const fixture = fixtureFor(ctx, window.rotations ?? {}, season.teamId, gamePk);
+  if (!fixture) return empty();
+
+  const bucket: Bucket = {};
+  if (kind === 'pitcher') {
+    const made = projectOnePitcher(ctx, playerId, bucket, null, gamePk);
+    const chances = made.starts + made.reliefGames;
+    return {
+      ...empty(),
+      chances,
+      starts: made.starts,
+      pitching: chances > 0 ? pitchingOf(bucket) : null,
+      fixture,
+    };
+  }
+  const made = projectOneBatter(ctx, playerId, bucket, null, gamePk);
+  return {
+    ...empty(),
+    chances: made.games,
+    batting: made.games > 0 ? battingOf(bucket) : null,
+    fixture,
+  };
+}
+
 
 /**
  * **His identity and nothing else** — the base every projected row is built on,

@@ -97,7 +97,12 @@ import {
   rostersToWatchlist,
 } from './espn.js';
 import type { EspnRosterPlayer } from './espn.js';
-import { getBoardProjection, getProjection, getRosterProjection } from './projection.js';
+import {
+  getBoardProjection,
+  getGameProjection,
+  getProjection,
+  getRosterProjection,
+} from './projection.js';
 import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1716,6 +1721,51 @@ app.get(
       return;
     }
     res.json(await getBoardProjection(kind, start, end));
+  }),
+);
+
+/**
+ * **One man in one game** — what the game preview draws, and the third question
+ * `projection.ts` is asked.
+ *
+ * A route of its own for the reason `/api/projection/roster` is one: it is a
+ * computation over a fixture the reader pressed, and a dialog nobody opens
+ * should cost nothing. It is **lazy on the press** rather than on a toggle,
+ * which is the only difference — the dialog opens on the park and the split it
+ * already holds, and this lands underneath them.
+ *
+ * **The `gamePk` is the narrowing, not the date.** A doubleheader is two games
+ * on one day and a preview is opened on one of them; the date rides along
+ * because it is what the projection's context is built for, and the two are
+ * checked against each other inside `getGameProjection` — a game that is not the
+ * player's club's on that day comes back empty rather than as somebody else's
+ * line.
+ *
+ * **No ESPN league is needed**, exactly as neither lens needs one: every input
+ * is a board this app already holds, so a reader with a saved watchlist and no
+ * connection gets the same answer.
+ */
+app.get(
+  '/api/projection/game',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const kind = req.query.kind === 'pitcher' ? 'pitcher' : 'batter';
+    const playerId = Number(req.query.playerId);
+    const gamePk = Number(req.query.gamePk);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'playerId must be a positive integer' });
+      return;
+    }
+    if (!Number.isInteger(gamePk) || gamePk <= 0) {
+      res.status(400).json({ error: 'gamePk must be a positive integer' });
+      return;
+    }
+    const date = req.query.date;
+    if (typeof date !== 'string' || !DATE_RE.test(date)) {
+      res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+      return;
+    }
+    res.json(await getGameProjection(kind, playerId, gamePk, date));
   }),
 );
 

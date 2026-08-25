@@ -2046,6 +2046,41 @@ there rather than to a whole number**, and rounded on the *server* so the client
 and rounds to an integer honestly, where a per-player 0.4 home runs over three
 days is a real answer and `0` is not.
 
+#### `getGameProjection` is the fourth entry point, and the narrowest
+
+**One man over one game**, which is what a game preview draws — see **Client —
+the League view**, *The key and the glyph are one component*, for the block
+itself, and `/api/projection/game` in **Server** for the route. It is the same
+arithmetic narrowed rather than a second one: `contextFor(day, day)` and then
+`projectOneBatter` / `projectOnePitcher`, so a figure in a preview and the same
+man's figure under the roster's toggle come off one function over one set of
+boards.
+
+**What it adds to the pair above is a narrowing by `gamePk` rather than by
+date**, and a doubleheader is why. `chancesOf` is now the one filter both halves
+of the engine ask, and it takes either: a set of **days**, which is the lineup
+planner's *the days your fantasy team starts him*, or a single **game**. The
+second is deliberately not a set of one day. Measured on the live schedule,
+**Cody Bellinger on 2026-08-29** — the day NYY play BOS twice — the board's
+one-day lens reads **2 games / 8.1 PA** with `projGame` naming only the first,
+where this reads **1 game / 4.0 PA** for each half and names each half's own
+opposing starter (Jake Bennett for 823501, Ranger Suarez for 823539). `fixtureOn`
+was split for the same reason: `fixtureFor` finds by `gamePk`, and the *reading*
+off the found game is one function (`fixtureOf`), so the board, the grid and a
+preview cannot come apart over who is on the mound.
+
+**A fraction is the answer rather than a rounding of one**, which is why
+`chances` rides on the response beside the line. A batter who sits one start in
+five is `0.8` of a game and eight tenths of a line; a reliever is his share of an
+appearance; a starter on his turn is `1`. Zero is the honest absence and there
+are exactly three ways to reach it — a starter whose turn falls elsewhere, a man
+off the active roster (`playShareOf`'s `offRoster`, the only route to zero for a
+batter), or no fixture at all, which is the game having started under the
+reader's finger — and the client names which. Measured 2026-08-25: Ohtani vs
+Bryce Elder **0.96 G / 4.1 PA / 0.2 HR**, Elder himself **1 start / 18.1 outs /
+2.4 ER / 5.0 K / 0.4 W**, Aaron Judge **0**, which is what the roster lens reads
+for him over the same days.
+
 #### A component is rounded where it is a column, and left alone where it is only an input to a rate
 
 **Every component was rounded, and the projected OPS a short span printed was the

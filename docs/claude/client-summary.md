@@ -664,6 +664,19 @@ same three states `OpponentRead` gives a pitcher's half. Absent means the
 `report` carries the split, which is every roster-side caller and the reason it
 is optional rather than the only path.
 
+**And what both dialogs now open with is his projected line for that game.**
+`ProjectedGameLine` sits under the man on the mound and over the ballpark — the
+starter being what the answer is about, and the park being a reading of its own
+that is deliberately not in it. It is one block in
+`components/Projection.tsx` rather than one in each, for exactly the reason the
+glyph and the key are shared, and it is the projection engine's **fourth** entry
+point: `/api/projection/game`, lazy on the press, narrowed by `gamePk` so a
+doubleheader's nightcap is not drawn the afternoon's work. Its figures are this
+table's own — `StatCells` for a batter, `PitchStatCells` for a pitcher, with
+`projCount`'s tenths — so a row read under the `Projected` toggle and the same
+man's fixture opened from it cannot disagree. The whole of it is in **Client —
+the League view**, *The key and the glyph are one component*.
+
 **The dialog is the table's, not the cell's.** One is open at a time, and the
 state that goes with it — the opposing club's board — is a read this table
 should make once per club rather than once per cell. So `SummaryTable` holds it

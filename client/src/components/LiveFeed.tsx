@@ -40,6 +40,7 @@ import { BaseDiamond, PlaySituation } from './BaseDiamond';
 import { InlineVideoClip, PlateAppearanceCard } from './PlateAppearanceCard';
 import { GamePark, hitterHand } from './ParkFactors';
 import { BatterSplitsTab } from './PlatoonSplits';
+import { ProjectedGameLine } from './Projection';
 import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
 import type { PlayFilterKey } from './FeedFilters';
@@ -1162,6 +1163,16 @@ export function UpcomingPreview({
             club={game.opponent}
             viewerIsPitcher={isPitcher}
             onOpenDetails={onOpenDetails}
+          />
+          {/* **What he is expected to be worth in this one game** — under the
+              man on the mound, over the ground. The same block the Schedule
+              row's `SchedulePreview` draws, and the reading order is argued in
+              `Projection.tsx`. */}
+          <ProjectedGameLine
+            kind={report.kind}
+            playerId={report.id}
+            gamePk={game.gamePk}
+            date={game.date}
           />
           {/* **The ballpark, above whatever the reader pressed for.** It is
               the one fact about a scheduled game that is already knowable in

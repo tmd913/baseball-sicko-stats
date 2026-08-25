@@ -880,6 +880,28 @@ moving it 0px, the pane reading `auto/auto osb=none sh=571 ch=571`. After
 the page **0 → 600** at 1200 and **0 → 500** at 390, and the table still scrolls
 sideways to 127 inside its own box with the page's own overflow at 0.
 
+**And the fix was scoped one pane too narrowly, which the same report caught a
+second time.** Reported as *"on a laptop I'm not able to scroll when I'm over a
+table in the overview page"* — the player page's **Overview**, whose `Next game`
+strip and `Last 5 games` preview are both `.glog-scroll` and neither of which is
+the vertical scroller either. Measured at 1440×900 on `?player=660271`: both
+boxes read `auto/auto osb=none` with **sh 81 = ch 81** and **sh 261 = ch 261**,
+and three 120px wheel steps at (720, 751) left `.details-view.scrollTop` at
+**0 → 0** — where the identical three steps 520px to the left, over no table,
+took it **0 → 267**, the whole of what the overlay had to give.
+
+So the polarity is reversed rather than another exception added: **the base rule
+names the inline axis alone** (`overscroll-behavior-x: none` on `.glog-scroll`,
+`.stats-scroll`, `.opp-scroll`, `.game-box-scroll`, `.league-scroll`), and the
+block axis is named **only beside the `overflow: auto` that makes a box the
+vertical scroller** — `.details-view.gamelog-mode .glog-scroll`, the two expanded
+panes, and the League page's rankings pane. `.game-box-scroll`'s override is gone
+with it, the fault never having been the box score's. After: the same three
+wheel steps over the Overview's table take the overlay **0 → 267**, and a sweep
+of every element on the roster, the player page and the Game Log tab for
+`overflow-y: auto/scroll` with a non-`auto` `overscroll-behavior-y` and
+`scrollHeight === clientHeight` returns **nothing** on any of the three.
+
 **The three doors**, each driven end to end:
 
 - the roster's opponent cell → `?game=824720`, head `SF 4 – 5 BOS · Final · Aug

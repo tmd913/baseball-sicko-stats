@@ -2024,6 +2024,47 @@ export interface RosterProjection {
 }
 
 /**
+ * **What one player is expected to do in one game** — the line a game preview
+ * draws under the ballpark and the split, and the narrowest of the three
+ * questions the projection engine is asked.
+ *
+ * Mirrors `server/src/projection.ts::GameProjection` by hand, like every other
+ * pair here, and it is the *same* engine the roster's toggle and the board's
+ * lens come off — narrowed to one man and one fixture rather than a second
+ * arithmetic. Two engines answering *what is he worth tonight* is the drift the
+ * server's copy of this interface has the argument against.
+ *
+ * **`chances` is a fraction on purpose** and the line beside it is worth that
+ * fraction. A batter who sits one start in five is `0.8` of a game and eight
+ * tenths of a line; a reliever nobody knows will warm up is `0.4` of an
+ * appearance. **Zero is the honest absence** — a day already played, a game
+ * already under way, a man neither board has a row for — and every figure
+ * beside it is null, which the dialog draws as a sentence naming the cause
+ * rather than as a line of noughts.
+ */
+export interface GameProjection {
+  playerId: number;
+  kind: PlayerKind;
+  /** **The game asked about, echoed back** — what a slow read is checked
+   *  against, so an answer for the fixture the reader has left cannot land in
+   *  the box they have moved on to. */
+  gamePk: number;
+  /** Its date, echoed for the same reason. */
+  date: string;
+  chances: number;
+  /** 1 where this is one of his turns, 0 where he would be coming out of the
+   *  bullpen — what the head's chip is written from. */
+  starts: number;
+  batting: BattingLine | null;
+  pitching: PitchingLine | null;
+  /** The fixture as the projection sees it — the opponent, the side, and the
+   *  arm the other club is throwing with the tier that says how firm that is.
+   *  Null where the game is not one his club has left to play. */
+  fixture: ProjectedFixture | null;
+  fetchedAt: number;
+}
+
+/**
  * **The research board, projected** — every row of the league over a span of
  * days nobody has played yet, in place of the season or window the board
  * ordinarily draws.
