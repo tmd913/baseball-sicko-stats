@@ -12,6 +12,7 @@ import { QUALIFIER_WORDS, RankBadge, RanksButton, rankPopulation, rankScales } f
 import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { ProjectedToggle, ProjectionKey } from './Projection';
 import { CalendarGlyph, DateCalendar } from './DateRangePicker';
+import { Modal } from './Modal';
 import { TurnButton, TurnDayStrip } from './TurnPicker';
 import {
   defaultScheduleSpan,
@@ -31,12 +32,10 @@ import { useOpponentBoards } from './OpponentTable';
 import { api } from '../api';
 import {
   PlayerStatusContext,
-  useDismissable,
   useFullPage,
   useGameDoor,
   useHandedness,
   usePlayerStatus,
-  usePopoverFit,
   usePublishedHeight,
 } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
@@ -1637,66 +1636,74 @@ export function ResearchTable({
    */
   const projCustomOpen = ui.panels.projCustom || projCustomInForce;
   /**
-   * **The calendar is a popover off a button now, where it was a month of grid
-   * in the flow of the head.**
+   * **The calendar left the head**, where it was a month of grid in the flow of
+   * six rows of chrome.
    *
    * The accordion was written for a head whose every other panel is one, and
    * the measurement behind it was about *width* — a 260px grid marooned at the
    * left edge of a full-width box reads as a control that failed to lay out, so
    * it took the panel's width and was capped at 640. That is a true answer to
-   * the wrong question. The rest of this app picks a range in **one** shape:
-   * a face that states the days, and the calendar over the page when you press
-   * it (`DateBar`'s `popover`, and *Every reading of a range opens it now*). A
-   * board that opened a month of grid inside its own chrome was the one surface
-   * asking the reader to learn a second one — and it spent 346px of head doing
+   * the wrong question. The rest of this app picks a range in **one** shape: a
+   * face that states the days, and the calendar over the page when you press
+   * it. A board that opened a month inside its own chrome was the one surface
+   * asking the reader to learn a second one, and it spent 346px of head doing
    * it, on a phone, above the table it is chrome for.
    *
    * So `Custom` reveals the app's own field — a calendar glyph, and the days
-   * once there are days — and the field opens the app's own popover. Two
-   * presses to a calendar rather than one, which is the shape asked for and the
-   * shape the field had before it was retired (`DateRangePicker.tsx`'s own note
-   * on `.drp-field`).
+   * once there are days — and the field opens the calendar over the page. Two
+   * presses to a month rather than one, which is the shape the field had before
+   * it was retired (`DateRangePicker.tsx`'s own note on `.drp-field`).
    *
-   * **Local state rather than `ResearchUi.panels`.** A popover is not a panel:
-   * it dismisses on an outside press and on Escape, it never survives leaving
-   * the board, and there is nothing about it worth carrying to the other kind's
-   * board. The three flags beside it are places the reader *is*; this is a box
-   * that is open.
+   * **A `Modal` rather than a popover hung off the field**, which is the one
+   * thing here that is not the date bar's shape, and it is this head that
+   * decides it. `.research-head` clips on both axes and **has to**: it is a
+   * sticky box in a pane that scrolls sideways, and `overflow: hidden` is what
+   * makes it a scroller that never scrolls, which is what gives its
+   * `overscroll-behavior-x` something to hold. Relaxed to `overflow-x: clip` so
+   * a popover could hang out of it, the paint was right and a wheel or a finger
+   * anywhere in those six rows chained straight through and **scrolled the
+   * table sideways under the reader** — reported, and reverted. The other half
+   * is width: the field rides after a run of pills, so with nothing picked it
+   * sits 246px along a 346px row and a 260px calendar ran 138px off a phone.
+   * `ColumnPicker` is the same call made one control earlier and says it in the
+   * same words — *a modal, where Search and Filters beside it are inline
+   * panels*. A box this chrome has no room for leaves the row.
+   *
+   * **Local state rather than `ResearchUi.panels`.** A dialog is not a panel:
+   * it never survives leaving the board and there is nothing about it worth
+   * carrying to the other kind's board. The three flags beside it are places
+   * the reader *is*; this is a box that is open.
    */
   const [calPressed, setCalPressed] = useState(false);
   /** **A door that is closed has no calendar open behind it**, which is read off
    *  the two rather than remembered: `Custom` can stop being the door under the
-   *  reader — a named pill pressed, the lens cleared — and a popover hanging off
-   *  a button that is no longer drawn is a box with no opener. */
+   *  reader — a named pill pressed, the lens cleared — and a dialog left open
+   *  over a button that is no longer drawn is a box with no opener. */
   const projCalOpen = projCustomOpen && calPressed;
-  const projCalRef = useRef<HTMLDivElement>(null);
-  const projPopRef = useRef<HTMLDivElement>(null);
-  /* The whole field is the box the outside press is tested against, not the
-     popover: the button is the opener and its own `onClick` already toggles, so
-     a button inside the test is one press doing one thing rather than a
-     dismissal and a re-open racing each other. `DateBar` states the same rule
-     about its own bar. */
-  useDismissable(projCalOpen, projCalRef, () => setCalPressed(false));
-  usePopoverFit(projCalOpen, projPopRef);
   /**
-   * **What the `Custom` calendar opens on** — the reader's own range where they
-   * have picked one, and **today** where they have not.
+   * **What the `Custom` calendar opens marked on** — the reader's own range
+   * where they have picked one, and **nothing at all** where they have not.
    *
-   * The distinction is the whole of the seed: a reader pressing `Custom` off
-   * `Week 20` is saying the period's fortnight is *not* what they want, so a
-   * grid opening on those fourteen days would mark a range they have just
-   * rejected and make picking a single day two presses of un-marking. Today is
-   * the day every projection starts from and the one a streaming decision is
-   * made on.
+   * A reader pressing `Custom` off `Week 20` is saying the period's fortnight
+   * is *not* what they want, so a grid marking those fourteen days would mark a
+   * range they have just rejected and make picking a single day two presses of
+   * un-marking. **It marked today instead, and that was the same fault one day
+   * wide**: today is not a choice the reader made either, and a filled cell
+   * under it is the calendar claiming a selection where the honest state is
+   * that there is none. So the selection is `null` and the grid opens with no
+   * day marked — see `DateCalendar`'s own `start`.
    *
-   * `today` is App's, threaded down with the spans rather than derived here:
-   * this app has one clock (see App's own `today`, lifted out of five memos for
-   * exactly this reason) and a board that asked the browser again would be a
-   * second answer to *which day is it* across a 3am rollover.
+   * The month is still today's (`month={today}`), which is a different claim
+   * and a true one: it is where the reader's attention is and the day every
+   * projection starts from. `today` is App's, threaded down with the spans
+   * rather than derived here — this app has one clock (see App's own `today`,
+   * lifted out of five memos for exactly this reason) and a board that asked
+   * the browser again would be a second answer to *which day is it* across a
+   * 3am rollover.
    */
   const projCustomRange = useMemo(
-    () => (projCustomInForce ? projSpan : { start: today, end: today }),
-    [projCustomInForce, projSpan, today],
+    () => (projCustomInForce ? projSpan : null),
+    [projCustomInForce, projSpan],
   );
 
   /** Whether the day strip is on screen — the panel's flag *and* a board a turn
@@ -3621,7 +3628,7 @@ export function ResearchTable({
                 the 36 of the run it stands beside. What is left as its own is
                 the anchor the popover hangs from. */}
             {projCustomOpen && (
-              <div className="research-proj-pick" ref={projCalRef}>
+              <div className="research-proj-pick">
                 <button
                   type="button"
                   className={`research-toggle research-proj-cal-btn${projCalOpen ? ' active' : ''}`}
@@ -3644,20 +3651,21 @@ export function ResearchTable({
                   )}
                 </button>
                 {projCalOpen && (
-                  <div
-                    className="drp-popover research-proj-pop"
-                    role="dialog"
-                    aria-label="Pick a range on the calendar"
-                    ref={projPopRef}
+                  <Modal
+                    title="Days to project"
+                    titleId="research-proj-cal"
+                    className="research-cal-box"
+                    onClose={() => setCalPressed(false)}
                   >
                     <DateCalendar
-                      /* **Today where there is no custom range in force**, which
-                         is what a reader pressing `Custom` off `Week 20` means:
-                         the period's own fortnight is not a *starting point* for
-                         picking a day, and a grid opening on it would mark two
-                         weeks the reader has just said they did not want. */
-                      start={projCustomRange.start}
-                      end={projCustomRange.end}
+                      /* **Nothing marked where there is no custom range in
+                         force** — see `projCustomRange`: a reader pressing
+                         `Custom` off `Week 20` has chosen no days yet, and a
+                         calendar is the one control that must not answer for
+                         him. The month is today's all the same. */
+                      start={projCustomRange?.start ?? null}
+                      end={projCustomRange?.end ?? null}
+                      month={today}
                       max={maxDate}
                       onChange={(start, end) => {
                         /* **The pick is the answer, so it puts the whole thing
@@ -3669,7 +3677,7 @@ export function ResearchTable({
                         onProjSpanChange({ start, end });
                       }}
                     />
-                  </div>
+                  </Modal>
                 )}
               </div>
             )}

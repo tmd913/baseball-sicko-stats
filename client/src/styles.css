@@ -8318,32 +8318,28 @@ button.start-line:focus-visible {
    file, whose ground is the pane's same flat value. It is also all but unreachable: the banner is drawn
    behind a failed read, and a read that failed has no rows, so the pane has
    nothing to scroll sideways underneath it. */
+/* **And the head keeps both axes, which a calendar hung inside it briefly cost
+   it.** `overflow-x: clip` was tried here, on the tools row's own reasoning one
+   rule down, so that the projected lens's calendar could hang below the head
+   instead of being cut to it. It works for the paint and it breaks the
+   *gesture*: `clip` is explicitly **not** a scroll container, so the
+   `overscroll-behavior-x` beside it stops applying, and a wheel or a finger
+   anywhere in the head — six rows of chrome — chained straight through to the
+   pane and scrolled the table sideways under it. Reported as exactly that,
+   and it is the fault this declaration exists to prevent rather than a side
+   effect of it: `hidden` makes the box a scroller that never scrolls, which is
+   what gives `overscroll-behavior` something to hold.
+
+   So the head goes on clipping both axes and the calendar left the head — see
+   `.research-proj-pick`, and *The panel reopened blank* in
+   `docs/claude/client-research.md`. The tools row below is a different box: it
+   opens an `InfoKey` panel and carries no rows of chrome for a finger to land
+   on. */
+.research-scroll > .research-head,
 .research-scroll > .error-banner,
 .research-scroll > .empty-state,
 .research-condensed-inner {
   overflow: hidden;
-  overscroll-behavior-x: none;
-}
-/* **And the head clips on one axis only, for the reason the tools row above it
-   does** — it is the second box in this pane that opens a popover.
-
-   It was in the run above and clipped both axes, which was right for as long as
-   everything it holds was in flow: the ⓘ moved into the head *because* of that
-   clip (see `.research-proj-spans`'s own note), and every panel here is an
-   accordion. The projected lens's calendar is not — it is the app's own
-   popover, hung off a field — and `overflow: hidden` cut it to the head's own
-   box: measured at 1400 before this rule, the 260px grid painted **74px** tall
-   against its own 300.
-
-   `clip` is the one value that does not drag its partner: `overflow-x: clip`
-   with `overflow-y: visible` is explicitly allowed to stay as specified, where
-   `hidden` + `visible` computes the second to `auto`. So the head goes on
-   clipping the axis it has to — it is a sticky box in a pane that scrolls
-   sideways, and without it the head slides out of the window with the table —
-   and lets the calendar hang below it. */
-.research-scroll > .research-head {
-  overflow-x: clip;
-  overflow-y: visible;
   overscroll-behavior-x: none;
 }
 /* **The control set clips on one axis and not the other**, where the four
@@ -11887,13 +11883,29 @@ button.start-line:focus-visible {
    The cap is the bar's, for the bar's reason: this is pinned chrome and the
    grid is 300px, so a short window has less room below the field than the
    calendar wants. `usePopoverFit` publishes it. */
-.research-proj-pop {
-  left: 0;
-  right: auto;
-  top: calc(100% + 6px);
-  max-height: var(--popover-max-h, none);
-  overflow-y: auto;
-  overscroll-behavior-y: none;
+/* **The calendar is the app's dialog, because this head cannot host a box that
+   hangs.** It was a popover off the field for one round and the two faults it
+   met are the two the dialog does not have: the head clips on both axes and has
+   to (see the rule above, and the sideways scroll that came of relaxing it), so
+   the grid was cut to the head; and the field rides *after* a run of pills, so
+   on a phone with nothing picked it sits 246px along a 346px row and a 260px
+   calendar ran **138px off the right edge**.
+
+   `ColumnPicker` is the same call made one control earlier and states it in the
+   same words — *a modal, where Search and Filters beside it are inline panels*.
+   A box this chrome has no room for leaves the row.
+
+   The box is the calendar's own width rather than the dialog's 720: a month is
+   seven tracks and a dialog-wide one is a wall of buttons, which is the
+   measurement the accordion made before it (~195px cells at 1400). 292 is the
+   260px grid plus the box's own padding. */
+.research-cal-box {
+  width: min(292px, 100%);
+}
+.research-cal-box .drp-grid {
+  /* The grid is `DateCalendar`'s own, drawn here without the popover that
+     usually gives it its padding — so the dialog's body gives it instead. */
+  width: 100%;
 }
 /* `ScrollRow` bleeds out through its container's gutter and back in by the
    bar's, which is right in `.view-tools` — the row it was written for — and

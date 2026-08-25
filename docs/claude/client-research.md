@@ -1447,9 +1447,9 @@ a month of grid in the head was a true answer to a question nobody had asked.
 - **`Custom` reveals the field; the field opens the calendar.** Two presses to a
   month rather than one, which is the shape `.drp-field` had before it was
   retired and the shape the reopened panel needs: a glyph alone while nothing is
-  picked, **the days themselves once there are days** — `📅 Aug 27 – Aug 30`,
-  `📅 Fri, Aug 28` — in `wideRange`'s one wording, the same the span line under
-  it prints.
+  picked, **the days themselves once there are days** — `Aug 27 – Aug 30`,
+  `Fri, Aug 28` — in `wideRange`'s one wording, the same the span line under it
+  prints.
 - **It is `.research-toggle` outright**, the board's own disclosure shape, so it
   takes the ground, the border, the `--control-h` that lines it up with the span
   run beside it, the lit state and the focus ring with no new rules.
@@ -1460,20 +1460,75 @@ a month of grid in the head was a true answer to a question nobody had asked.
   from the `.drp-field` it went out with. A glyph naming a calendar belongs
   beside the calendar, and the file's own note about the field going with its
   last reader now has a reader again.
-- **The head clips on one axis only**, the rule `.view-tools` above it already
-  keeps and for the identical reason: it is a sticky box in a pane that scrolls
-  sideways, so it must clip *horizontally*, and `overflow: hidden` took the
-  vertical axis with it — measured before the change, the 260px grid painted
-  **74px** tall against its own 300. `overflow-x: clip` with `overflow-y:
-  visible` is the one pairing CSS leaves as specified.
 - **The pick puts the whole thing away** — the calendar it was made on and the
   panel that calendar was opened from — which is what a named pill's own press
   already does.
-- **It dismisses like every other popover in this app.** `useDismissable` on the
-  *field*, not the popover, so the button that opened it is inside the test and
-  one press does one thing; `usePopoverFit` publishes `--popover-max-h` for the
-  same reason the date bar caps its own (measured 490px at 390×850). Checked:
-  Escape closes the calendar and leaves the panel — one press, one thing.
+- **It is a `Modal`, not a popover hung off the field**, and that is the one
+  place this control is not the date bar's shape. It was a popover for one
+  round; both faults it met are faults of the box it was in.
+
+  *The head cannot let anything hang out of it.* `.research-head` is
+  `overflow: hidden` on both axes, and the horizontal half is load-bearing twice
+  over: it is a sticky box in a pane that scrolls sideways, **and** `hidden` is
+  what makes it a scroller that never scrolls, which is what gives the
+  `overscroll-behavior-x: none` beside it something to hold. Relaxed to
+  `overflow-x: clip` — the tools row's own trick one rule down — the paint came
+  right and the *gesture* broke: `clip` is explicitly not a scroll container, so
+  the overscroll rule stopped applying and a wheel or a finger anywhere in six
+  rows of chrome chained through and **scrolled the table sideways under the
+  reader**. Reported, and reverted; the head's rule is byte-identical to what it
+  was.
+
+  *And the anchor moves.* The field rides **after** a run of pills, so where it
+  is depends on whether that run wrapped — which depends on the width of a date
+  label the app does not choose. With nothing picked the field is a 35px glyph
+  and the row does not wrap, so it sat at x=268 on a 390px phone and a 260px
+  calendar hung at `left: 0` ran to **528, 138px past the right edge** — inside
+  a head that clips, so the half of the month the reader needed was not merely
+  off screen but unreachable. Pick a range and the label makes the row wrap, the
+  field drops to the gutter, and the same `left: 0` is suddenly right. There is
+  no constant that answers both.
+
+  `ColumnPicker` is the same call made one control earlier and states it in the
+  same words — *a modal, where Search and Filters beside it are inline panels*.
+  A box this chrome has no room for leaves the row, and it comes with the whole
+  ladder for free: Escape undoes exactly this one thing, the background goes
+  inert, focus goes in and comes back, and the backdrop's press is spent on the
+  dismissal. Checked at three widths: Escape closes the calendar and leaves the
+  panel, with the field still reading its range.
+
+- **`.research-cal-box` is the calendar's width, not the dialog's.**
+  `.app-dialog-box` is `min(720px, 100%)` and a month is seven equal tracks, so
+  a dialog-wide grid is the wall of buttons the accordion already measured
+  (~195px cells at 1400). 292px is the 260px grid plus the box's own padding.
+  Measured fully on screen at every width — **320×568 → 16…304 / 84…485**,
+  **390×844 → 49…341 / 222…623**, **1400×1000 → centered** — against a popover
+  that ran 138px off the first two.
+
+- **Nothing is marked until the reader marks something.** The grid opened on
+  *today*, selected — which is a calendar answering the question it was opened
+  to ask. `Custom` off `Week 20` means *these are not the days I want*, and a
+  filled cell under today is the same wrong claim one day wide rather than
+  fourteen. `DateCalendar` takes `start`/`end` as `string | null` now, with a
+  `month` beside them for which month to open on where there is no selection —
+  a different claim and a true one, today being where the reader's attention is
+  and the day every projection starts from. The foot says what the first press
+  does (`Pick a day, or the first of a range`) rather than naming a day nobody
+  chose. Every other caller passes a range it genuinely has and is unchanged to
+  the pixel — checked on the app's own date bar, which still marks its own
+  selection and whose popover is centered on the bar at 390 (195) and 1400 (700)
+  as before.
+- **Nothing is marked until the reader marks something.** The grid opened on
+  *today*, selected — which is a calendar answering the question it was opened
+  to ask. `Custom` off `Week 20` means *these are not the days I want*, and a
+  filled cell under today is the same wrong claim one day wide rather than
+  fourteen. `DateCalendar` takes `start`/`end` as `string | null` now, with a
+  `month` beside them for which month to open on where there is no selection —
+  a different claim and a true one, today being where the reader's attention is
+  and the day every projection starts from. The foot says what the first press
+  does (`Pick a day, or the first of a range`) rather than naming a day nobody
+  chose. Every other caller passes a range it genuinely has and is unchanged to
+  the pixel.
 
 **Measured, before → after, with the calendar open.** The head does not move at
 all now:
@@ -1484,7 +1539,7 @@ all now:
 | head at 1400, **calendar open** | **419px** | **119px** |
 | head at 390, panel open | 119px | 163px |
 | head at 390, **calendar open** | **419px** | **163px** |
-| the calendar itself | 346 / 640 × 292 in flow | **260 × 318 over the page** |
+| the calendar itself | 346 / 640 × 292 in flow | **292px wide, over the page** |
 
 The 44px the panel costs at 390 is the span run and the field wrapping to two
 lines, which is `flex-wrap` doing its job in a 346px box; what it buys is the
