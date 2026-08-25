@@ -9,7 +9,9 @@ import {
 } from 'react';
 import type { RefObject } from 'react';
 import { LIVE_POLL_MS } from './lib';
+import { STANDARD_5X5 } from './categoryValue';
 import type {
+  EspnCategory,
   ParkFactor,
   PlayerGame,
   PlayerReport,
@@ -183,6 +185,32 @@ export function usePlayerStatus(id: number): PlayerStatus | null {
  * the table asks rather than the row, and a prop is what a table-level concern
  * should be.
  */
+/**
+ * **The categories the reader's league scores**, or the standard 5×5 without
+ * one — what every projected `Value` figure in the app is computed against.
+ *
+ * A context rather than a prop, and it is the one on this list whose readers
+ * settle it: the figure is drawn by `SummaryTable` (which `App` renders on the
+ * Roster and `LeagueTeam` renders inside a matchup page, two trees) and by the
+ * research board's column vocabulary. Threading it reached
+ * `App → LeagueMatchup → LeagueTeam → SummaryTable → PitcherTable` for a fact
+ * none of the boxes in between has any use for, which is the shape
+ * `TeamDoorContext` and `ParkFactorsContext` were both written to avoid.
+ *
+ * **Defaulted to the standard 5×5 rather than to null**, which is the one way
+ * it differs from its neighbours here. The others answer *what is true of this
+ * player* and null is a real answer — nothing is known. This one answers *what
+ * counts as a good day*, and there is no such thing as not knowing: a reader
+ * with no league is scored on the set every standard league has scored since
+ * rotisserie was invented, which is exactly what a missing provider should
+ * mean.
+ */
+export const ScoringCategoriesContext = createContext<EspnCategory[]>(STANDARD_5X5);
+
+export function useScoringCategories(): EspnCategory[] {
+  return useContext(ScoringCategoriesContext);
+}
+
 export const EligibilityContext = createContext<Map<number, string[]> | null>(null);
 
 export function useEligible(id: number): string[] | null {

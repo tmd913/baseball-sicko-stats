@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { dayValue } from '../categoryValue';
 import type { ReactNode } from 'react';
 import { FantasySlotTag, ProjectedSlotTag, readLineup } from './FantasySlot';
 import { ExpandButton } from './ExpandButton';
@@ -22,6 +23,7 @@ import {
   PreviewDoorContext,
   useEligible,
   useFantasyRoster,
+  useScoringCategories,
   useFullPage,
   useGameDoor,
   usePreviewDoor,
@@ -459,6 +461,50 @@ function projectedGames(
   // counts the ones the lineup gives him.
   const ahead = seated ? (proj?.lineup?.chances ?? proj?.chances) : proj?.chances;
   return played + (ahead ?? 0);
+}
+
+/**
+ * **What the row is worth**, in the categories the reader's league scores — the
+ * same arithmetic the Overview ranks its top performers by
+ * (`categoryValue.ts`), over the whole span the row covers.
+ *
+ * **The span undivided.** Six games of a good hitter outscore three of an equal
+ * one, and *who is giving me the most this week* is the question a projected
+ * roster is read to answer. The scales are per-player-day and the terms are
+ * counts, so a line covering six games already produces six games' worth and
+ * there is no divisor to apply. It is not comparable to the Overview's `+1.4`,
+ * which is one day, and the title says so.
+ *
+ * **The whole span, played days included**, which is the arithmetic every other
+ * figure on this row keeps: `lineOf` hands over the combined line — what he has
+ * already done plus what he should still add — and the value is taken off that
+ * one line rather than off the projection alone. A column naming only the
+ * second half would be the one cell on the row measuring a different week.
+ *
+ * Drawn only under the lens: a measured range already has a whole table of what
+ * he did, and a figure whose whole purpose is to rank days nobody has played
+ * would be a summary of the columns beside it.
+ */
+function ProjectedValueHead() {
+  return (
+    <th
+      className="sum-num"
+      scope="col"
+      title="What this line is worth in the categories your league scores, over the days in view — the figure the Overview ranks its top performers by, totalled over the span rather than per day"
+    >
+      Value
+    </th>
+  );
+}
+
+/** A `Value` cell. One decimal and always signed, the way the Overview prints
+ *  it, so the same figure reads the same on both pages; a dash where the league
+ *  scores nothing this can compute on his side of the ball, which is the same
+ *  absence the Overview draws for it. */
+function ProjectedValueCell({ v }: { v: number | null }) {
+  return (
+    <td className="sum-num">{v === null ? '\u2014' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`}</td>
+  );
 }
 
 /**
@@ -1239,6 +1285,7 @@ function BatterTable({
   /** Who sits above the `Total` line — see `splitStarters`. */
   starters: Set<string> | null;
 }) {
+  const scoringCategories = useScoringCategories();
   const lineOf = (r: PlayerReport): BattingLine =>
     projection ? projectedBatting(r, projection.get(playerKey(r))) : combineLines(r.games.map((g) => g.line));
   const slots = useFantasyRoster();
@@ -1287,6 +1334,20 @@ function BatterTable({
                 spot={slots?.get(playerKey(r)) ?? null}
               />
             )}
+            {projection && (
+              <ProjectedValueCell
+                v={dayValue(
+                  'batter',
+                  {
+                    batting: lineOf(r),
+                    pitching: null,
+                    games: projectedGames(r, projection.get(playerKey(r))),
+                    starts: 0,
+                  },
+                  scoringCategories,
+                ).total}
+              />
+            )}
             <ProjectableStatCells line={lineOf(r)} projected={projection != null} />
           </>
         )}
@@ -1323,6 +1384,7 @@ function BatterTable({
                   carry and which belongs in a column — see
                   `ProjectedStartsHead`. */}
               {anyLineup && <ProjectedStartsHead kind="batter" />}
+              {projection && <ProjectedValueHead />}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -1372,6 +1434,29 @@ function BatterTable({
                   )}
                 />
               )}
+              {projection && (
+                /* The foot adds the column up, which is what a reader does with
+                   it: what the whole lineup is worth over the span. It is the
+                   *total* line rather than a sum of the rows' — the same
+                   distinction every other figure in this row keeps, the row
+                   being what a man would give you and the total what the plan
+                   actually starts. */
+                <ProjectedValueCell
+                  v={dayValue(
+                    'batter',
+                    {
+                      batting: total,
+                      pitching: null,
+                      games: top.reduce(
+                        (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
+                        0,
+                      ),
+                      starts: 0,
+                    },
+                    scoringCategories,
+                  ).total}
+                />
+              )}
               <ProjectableStatCells line={total} projected={projection != null} />
             </>
           )}
@@ -1403,6 +1488,7 @@ function PitcherTable({
   /** See `BatterTable`'s own, and `splitStarters`. */
   starters: Set<string> | null;
 }) {
+  const scoringCategories = useScoringCategories();
   const lineOf = (r: PlayerReport): PitchingLine =>
     projection ? projectedPitching(r, projection.get(playerKey(r))) : aggregatePitching(r);
   const slots = useFantasyRoster();
@@ -1446,6 +1532,20 @@ function PitcherTable({
                 spot={slots?.get(playerKey(r)) ?? null}
               />
             )}
+            {projection && (
+              <ProjectedValueCell
+                v={dayValue(
+                  'pitcher',
+                  {
+                    batting: null,
+                    pitching: lineOf(r),
+                    games: projectedGames(r, projection.get(playerKey(r))),
+                    starts: startsOf(r, projection.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
+                  },
+                  scoringCategories,
+                ).total}
+              />
+            )}
             <ProjectablePitchCells line={lineOf(r)} projected={projection != null} />
           </>
         )}
@@ -1482,6 +1582,7 @@ function PitcherTable({
                   carry and which belongs in a column — see
                   `ProjectedStartsHead`. */}
               {anyLineup && <ProjectedStartsHead kind="pitcher" />}
+              {projection && <ProjectedValueHead />}
               {cols.map((c) => (
                 <th key={c} className="sum-num" scope="col">
                   {c}
@@ -1521,6 +1622,31 @@ function PitcherTable({
                       startsOf(r, projection!.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
                     0,
                   )}
+                />
+              )}
+              {projection && (
+                /* See `BatterTable`'s own — the total line rather than a sum of
+                   the rows', which is the distinction every figure in this row
+                   keeps. */
+                <ProjectedValueCell
+                  v={dayValue(
+                    'pitcher',
+                    {
+                      batting: null,
+                      pitching: totalLine,
+                      games: top.reduce(
+                        (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
+                        0,
+                      ),
+                      starts: top.reduce(
+                        (n, r) =>
+                          n +
+                          startsOf(r, projection.get(playerKey(r)), slots?.get(playerKey(r)) ?? null),
+                        0,
+                      ),
+                    },
+                    scoringCategories,
+                  ).total}
                 />
               )}
               <ProjectablePitchCells line={totalLine} projected={projection != null} />

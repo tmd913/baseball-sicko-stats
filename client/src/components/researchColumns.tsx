@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { TREND_WINDOWS } from '../types';
 import type {
+  EspnCategory,
   PlayerKind,
   PlayerStatus,
   ProjectedFixture,
@@ -8,6 +9,7 @@ import type {
   TrendWindow,
 } from '../types';
 import { formatStartTime, handThrows, inningLabel, surname } from '../lib';
+import { projectedRowValue, STANDARD_5X5 } from '../categoryValue';
 
 /**
  * **The research board's stat vocabulary, in one place.**
@@ -780,7 +782,51 @@ export const projectedOpponentColumn = (): Column => ({
  * picked yesterday-to-today is looking at a one-day projection whose own two
  * dates do not say so.
  */
-export function projectedColumns(kind: PlayerKind, oneDay: boolean): Column[] {
+/**
+ * **What the projected line is worth**, in the categories the reader's league
+ * actually scores — the same arithmetic the Overview ranks its top performers
+ * by (`categoryValue.ts`), over the span the projection covers rather than over
+ * one day.
+ *
+ * **The span undivided, which is the reading a projected board is opened for.**
+ * Six games of a good hitter outscore three of an equal one, and *who will give
+ * me the most this week* is the question. It needs no divisor to say so: the
+ * scales are per-player-day and the terms are counts, so a line covering six
+ * games already produces six games' worth. It does mean the number is not
+ * comparable to the Overview's `+1.4` — that one is a single day — and the
+ * title says which it is.
+ *
+ * **Memoized per row**, because a column is asked for its value and its format
+ * separately and the board draws six hundred of them: the arithmetic walks
+ * every category the league scores, twice a cell, times a full board. A
+ * `WeakMap` on the row itself rather than a key, since the rows are stable
+ * objects for as long as the lens holds them and go away with it.
+ */
+function projectedValueColumn(categories: EspnCategory[]): Column {
+  const cache = new WeakMap<ResearchRow, number | null>();
+  const valueOf = (r: ResearchRow): number | null => {
+    const had = cache.get(r);
+    if (had !== undefined) return had;
+    const v = projectedRowValue(r, categories);
+    cache.set(r, v);
+    return v;
+  };
+  return {
+    key: 'projValue',
+    label: 'VAL',
+    title:
+      'What his projected line is worth over these days, in the categories your league scores — the figure the Overview ranks its top performers by, totalled over the span rather than per day',
+    pick: 'Projected value',
+    group: 'Value',
+    format: (r) => {
+      const v = valueOf(r);
+      return v === null ? '\u2014' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
+    },
+    value: valueOf,
+  };
+}
+
+export function projectedColumns(kind: PlayerKind, oneDay: boolean, categories: EspnCategory[] = STANDARD_5X5): Column[] {
   const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
   const byKey = new Map(base.map((c) => [c.key, c]));
   const keys: readonly string[] =
@@ -815,7 +861,35 @@ export function projectedColumns(kind: PlayerKind, oneDay: boolean): Column[] {
           }
         : c,
     );
-  return oneDay ? [projectedOpponentColumn(), ...stats] : stats;
+  // **The value column leads the stat run**, directly after `Games` — it is a
+  // summary of everything to its right, and a summary that has to be scrolled
+  // to on a nineteen-column board is a summary nobody reads. The opponent cell
+  // stays ahead of it on a single day, that one being *which game* rather than
+  // what it is worth.
+  const withValue = [
+    ...stats.slice(0, 1),
+    projectedValueColumn(categories),
+    ...stats.slice(1),
+    // **Roster % and the five trend windows survive the lens**, which they did
+    // not and should have. Every other column here is a *stat*, and the lens's
+    // rule is that it draws only what a projection can fill — which is what
+    // dropped these two runs: a projection has no opinion about how many
+    // leagues have rostered a man.
+    //
+    // But that is the wrong test for them, because they are not projections of
+    // anything. They are facts about *now*, true whichever days the table is
+    // drawn over, and they are the two facts a projected board is most often
+    // opened beside: **who is worth picking up this week** is this column set
+    // read against the one to its left. The measured board carries them for
+    // exactly that reason and the lens was the one reading that lost them.
+    //
+    // They are the board's own columns, not copies — same keys, same formats,
+    // same saved-list entries — so a reader who has turned `Ros%` off keeps it
+    // off across the toggle.
+    ROSTER_PCT_COLUMN,
+    ...TREND_COLUMNS,
+  ];
+  return oneDay ? [projectedOpponentColumn(), ...withValue] : withValue;
 }
 
 /**

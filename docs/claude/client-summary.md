@@ -2304,3 +2304,40 @@ own second press.
 
 **Bundle**: JS 583.27 → 583.41 kB raw, 173.94 → 173.99 kB gzipped; CSS unchanged
 at 156.57 / 28.03 — two effects of four lines each, and their prose.
+
+
+---
+
+## The lens's `Value` column
+
+What the row is worth in the categories the reader's league scores — the same
+arithmetic the Overview ranks its top performers by (`categoryValue.ts`), and
+the same column the research board's own lens prints as `VAL`.
+
+**The whole span, played days included**, which is the arithmetic every other
+figure on the row keeps: `lineOf` hands over the combined line — what he has
+already done plus what he should still add — and the value is taken off that one
+line. A column naming only the second half would be the one cell on the row
+measuring a different week.
+
+**The span undivided.** Six games of a good hitter outscore three of an equal
+one, and *who is giving me the most this week* is what a projected roster is
+read to answer. Not comparable to the Overview's figure, which is one day, and
+the title says so.
+
+**The `Total` row sums the seated line**, not the rows above it — the same
+distinction every other figure in that row keeps: a row is what a man would give
+you and the total is what the plan actually starts.
+
+**Drawn only under the lens.** A measured range already has a whole table of what
+he did, and a figure whose purpose is to rank days nobody has played would be a
+summary of the columns beside it.
+
+**The categories arrive by context, not by prop.** `ScoringCategoriesContext` —
+this table is drawn by `App` on the Roster and by `LeagueTeam` inside a matchup
+page, two trees, and threading reached `App → LeagueMatchup → LeagueTeam →
+SummaryTable → PitcherTable` for a fact none of the boxes in between has any use
+for. It defaults to the standard 5×5 rather than to null, which is the one way
+it differs from its neighbours in `hooks.ts`: those answer *what is true of this
+player* and null is a real answer, where this answers *what counts as a good
+day* and there is no such thing as not knowing.

@@ -3336,6 +3336,17 @@ function battingRow(season: ResearchRow, b: Bucket, games: number): ResearchRow 
     games: round1(games),
     pa: round1(pa),
     ab: round1(ab),
+    // **Two counts nothing on this board prints**, carried because the client's
+    // day-value arithmetic cannot derive them and gets them wrong without them.
+    // Every other term it needs is either on the row already or falls out of
+    // what is (singles from hits less the extra-base hits, total bases from the
+    // four of them); on-base percentage is the one rate in baseball whose
+    // denominator is not the obvious one — `AB + BB + HBP + SF` — so a league
+    // scoring OBP or OPS would be scored against a denominator two terms short.
+    // Unrounded for `battingRow`'s own stated reason: the printed columns round,
+    // the components do not.
+    hbp,
+    sf: b[BAT.sf] ?? 0,
     hits: round1(hits),
     doubles: round1(doubles),
     triples: round1(triples),

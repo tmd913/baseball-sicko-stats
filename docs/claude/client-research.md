@@ -1999,3 +1999,43 @@ the app's widest table, a server route, a column vocabulary, a picker, a span
 control and a key. The stylesheet shrinking is the honest report: the accordion
 the key opened into needed a block of rules, and the popover it became needs one
 CSS value on a row that already had one.
+
+
+---
+
+## The lens's `VAL` column, and the two runs that survive the lens
+
+**`VAL`** — what the projected line is worth in the categories the reader's
+league scores, the same arithmetic the Overview ranks its top performers by
+(`categoryValue.ts`). It leads the stat run, directly after `Games`: it is a
+summary of everything to its right, and a summary that has to be scrolled to on
+a nineteen-column board is a summary nobody reads.
+
+**The span undivided**, which is the reading a projected board is opened for:
+six games of a good hitter outscore three of an equal one, and *who will give me
+the most this week* is the question. No divisor is needed to say so — the scales
+are per-player-day and the terms are counts, so a line covering six games
+already produces six games' worth. It is therefore **not** comparable to the
+Overview's `+1.4`, which is a single day, and the title says which it is.
+
+**Memoized per row** in a `WeakMap`: a column is asked for its value and its
+format separately, the arithmetic walks every category the league scores, and
+the board draws six hundred rows.
+
+**Two counts the server had to start sending.** Every term the scorer needs is
+on the projected row or falls out of what is — singles from hits less the
+extra-base hits, total bases from the four of them — except `hbp` and `sf`,
+on-base percentage being the one rate in baseball whose denominator is not the
+obvious one (`AB + BB + HBP + SF`). They ride on `ResearchRow` as optional
+fields the projected board fills and nothing prints. Two more, intentional walks
+and wild pitches, are simply not projected and score nought for everybody, which
+lowers every row by the same amount and so changes no ranking.
+
+**`Ros%` and the five `Δ` windows are drawn under the lens now**, and were not.
+The lens's rule is that it draws only what a projection can fill, which is the
+wrong test for these two runs: they are not projections of anything. They are
+facts about *now*, true whichever days the table is drawn over, and they are the
+two facts a projected board is most often opened beside — *who is worth picking
+up this week* is that column set read against `VAL`. They are the board's own
+columns, same keys and same saved-list entries, so a reader who has turned
+`Ros%` off keeps it off across the toggle.

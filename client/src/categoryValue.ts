@@ -45,7 +45,7 @@
  * categories that *are* computable and the Overview says how many those were.
  * A join fails to null, never to a guess.
  */
-import type { BattingLine, EspnCategory, PitchingLine, PlayerKind } from './types';
+import type { BattingLine, EspnCategory, PitchingLine, PlayerKind, ResearchRow } from './types';
 
 /**
  * **League baselines, and the scale of a single player-day in each category** —
@@ -320,4 +320,144 @@ export function categoryTotal(cat: EspnCategory, line: DayLine): number | null {
 function obpOf(line: BattingLine): number | null {
   const denom = line.ab + line.bb + line.hbp + line.sf;
   return denom > 0 ? (line.hits + line.bb + line.hbp) / denom : null;
+}
+
+/* ---- Scoring a *projection* --------------------------------------------
+   The Overview ranks a day that has been played, and the two projected
+   surfaces — the roster's lens and the research board's — rank days that have
+   not. It is the same arithmetic over the same categories, so it is
+   `dayValue` with an adapter in front of it rather than a second scorer.
+
+   **What the number means differs, and only in its span.** The Overview's is
+   one day, so its figure is a player-day. A projection covers the days the
+   reader picked, so its figure is **the whole span, undivided** — six games of
+   a good hitter outscore three of an equal one, which is the question a
+   projected board is read to answer. `dayValue` needs no divisor for that: its
+   scales are per-player-day and its terms are counts, so a line covering six
+   games already produces six games' worth.
+   ------------------------------------------------------------------------ */
+
+/**
+ * A projected `ResearchRow` as a line the scorer can read.
+ *
+ * **Three of the counts are derived rather than carried**, because they fall
+ * out of what the row has and a field the server need not send is a field that
+ * cannot go stale: singles are hits less the extra-base hits, and total bases
+ * are the four of them weighted. `hbp` and `sf` are carried, being the two the
+ * OBP denominator needs and the two nothing else implies — see `ResearchRow`.
+ *
+ * **Two counts are zero and it is worth naming them.** Intentional walks and
+ * wild pitches are not projected, so a league scoring either gets nought from
+ * every row — which lowers everybody by the same amount and so changes no
+ * ranking, where a guess at them would change one. The Statcast fields on
+ * `BattingLine` are nulled for the plain reason that the scorer never reads
+ * them.
+ */
+export function projectedRowLine(row: ResearchRow): DayLine {
+  const hits = row.hits ?? 0;
+  const doubles = row.doubles ?? 0;
+  const triples = row.triples ?? 0;
+  const hr = row.hr ?? 0;
+  const walks = row.walks ?? 0;
+  const hbp = row.hbp ?? 0;
+  const outs = row.outs ?? 0;
+  const battersFaced = row.battersFaced ?? 0;
+  const batting: BattingLine | null =
+    row.kind === 'pitcher'
+      ? null
+      : {
+          pa: row.pa ?? 0,
+          ab: row.ab ?? 0,
+          hits,
+          singles: Math.max(0, hits - doubles - triples - hr),
+          doubles,
+          triples,
+          hr,
+          bb: walks,
+          so: row.strikeouts ?? 0,
+          hbp,
+          sf: row.sf ?? 0,
+          runs: row.runs ?? 0,
+          rbi: row.rbi ?? 0,
+          sb: row.sb ?? 0,
+          cs: row.cs ?? 0,
+          totalBases: hits + doubles + 2 * triples + 3 * hr,
+          avgExitVelo: null,
+          maxExitVelo: null,
+          maxDistance: null,
+          hardHits: 0,
+          runValue: null,
+        };
+  const pitching: PitchingLine | null =
+    row.kind === 'pitcher'
+      ? {
+          outs,
+          hits,
+          runs: row.runs ?? 0,
+          earnedRuns: row.earnedRuns ?? 0,
+          walks,
+          strikeouts: row.strikeouts ?? 0,
+          hr,
+          battersFaced,
+          pitchesThrown: row.pitches ?? 0,
+          strikes: row.strikes ?? 0,
+          balls: 0,
+          doubles,
+          triples,
+          hitBatsmen: hbp,
+          // The projection's own derivation, word for word — batters faced less
+          // the two that are not at-bats. It ignores sacrifices, which it does
+          // on the server too, so the two agree.
+          atBats: Math.max(0, battersFaced - walks - hbp),
+          intentionalWalks: 0,
+          wildPitches: 0,
+          inheritedRunners: 0,
+          inheritedRunnersScored: 0,
+          wins: row.wins ?? 0,
+          saves: row.saves ?? 0,
+          holds: row.holds ?? 0,
+        }
+      : null;
+  return { batting, pitching, games: row.games ?? 0, starts: row.gamesStarted ?? 0 };
+}
+
+/**
+ * What a projected row is worth over the span, or null where the league scores
+ * nothing this file can compute on his side of the ball.
+ *
+ * The same figure the Overview ranks its top performers by, over the span the
+ * projection covers rather than over one day — see the section note above.
+ */
+export function projectedRowValue(row: ResearchRow, categories: EspnCategory[]): number | null {
+  return dayValue(row.kind, projectedRowLine(row), categories).total;
+}
+
+/**
+ * …and the roster lens's own rows, which need no adapter worth the name:
+ * `ProjectedPlayerLine` already carries a whole `BattingLine` and
+ * `PitchingLine`, being built by the same engine from the same stat ids this
+ * file's terms are keyed by. Only `chances` has to be read as two fields, the
+ * scorer wanting games and starts where the projection carries one number for
+ * "times he is expected to take the field".
+ */
+export function projectedPlayerValue(
+  kind: PlayerKind,
+  line: { chances: number; batting: BattingLine | null; pitching: PitchingLine | null },
+  categories: EspnCategory[],
+): number | null {
+  return dayValue(
+    kind,
+    {
+      batting: line.batting,
+      pitching: line.pitching,
+      games: line.chances,
+      // **A batter's chances are all games and a pitcher's are not**, and only
+      // the pitching side has a category that counts starts (`GS`). The board's
+      // own projection carries no start/relief split on the line, so a starter's
+      // chances are his turns and a reliever's are appearances — which is what
+      // `GS` means for each of them.
+      starts: kind === 'pitcher' ? line.chances : 0,
+    },
+    categories,
+  ).total;
 }
