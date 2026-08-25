@@ -288,6 +288,43 @@ with the opponent's four requests carrying `teamId=12` against the reader's own
 `teamId=6`, three ranked performers on his card, no console errors and 0
 page-body overflow.
 
+### The `TODAY` card follows the day it is about
+
+**Every other card on this page is settled** — yesterday is played, tomorrow is
+an estimate — **and today is the one that moves.** Left alone it was the figure
+the page happened to open on: a card opened at noon still read noon's line at
+four, and the projection it had opened as never swapped for the result.
+
+**The same twenty seconds the roster's own live poll uses** (`LIVE_POLL_MS`),
+and the same gate: *a real game is under way*, read off the report already in
+hand rather than off a clock. Nothing ticks in the morning before first pitch or
+at midnight after the last out, which is what makes a poll on a page a reader
+leaves open all evening affordable.
+
+**The opponent's card rides the same tick**, for the reason the roster's
+projection rides its own one view over: the two halves of this page are one
+comparison, and a page where your afternoon updated and his did not would be two
+different minutes read as a matchup.
+
+**Quietly** — the loader takes a `quiet` flag the entry read does not pass, so a
+re-read never puts a wait over a card that already has figures on it. And **the
+swap out of the projected reading needs nothing of its own**: `todayStarted` is
+derived from the report, so the first tick carrying a live game turns the
+estimate into the result.
+
+**Driven by flipping today's games to `live` in flight.** On load the card is
+`TODAY` with no dashed border and no `PROJECTED` tag — it has left the estimate
+— and no wait is drawn over it at any point; over the next 24 seconds the page
+makes **three** further today-reads (this card, the opponent's, and the roster
+report's own live poll, which is not this view's and was already there).
+
+**It made a fourth empty state visible**, and the card had been wrong about it.
+Between first pitch and the first plate appearance the games have started and
+nobody has done anything, and `No games played yet.` is flatly untrue of that
+stretch. The two facts are different and the card holds both — `games` counts
+fixtures under way or over, `anyPlay` asks whether anything has happened in them
+— so it now reads **`Games are under way — nothing on the board yet.`**
+
 ### Today is a projection until the day starts
 
 **A card of noughts under `No games played yet.` is a true statement and a
@@ -641,10 +678,45 @@ to be legible with the border out of view. The projected *line* keeps its
 decimals for the same reason — `0.7 H` reads as an expectation where `1 H` would
 read as a hit somebody got.
 
-**A ranking row is not a game line, and the two say different things.** The row
-under a performer's name is there to answer *why is this man first today*, which
-is a narrower question than *what happened in this game* — and two terms were
-answering the wider one:
+**A played row is a line and a projected row is the categories, and neither is a
+phrase of this file's choosing.** That is the rule the four notes below arrive
+at; the first two were a step towards it and are kept because they are still
+what the batter's row does.
+
+**A played pitcher's row is a pitching line, in a pitching line's order** —
+`IP, H, R, ER, BB, K`, then his decision. It was `IP, K, ER, H, BB`: the
+categories first and the line's own order nowhere. A **result** has a form every
+reader of a box score already knows, and a manager reading `6.0 IP, 3 H, 0 R,
+0 ER, 2 BB, 7 K` is not decoding it. **Every term, including the noughts**,
+which reverses the note that stood here about dropping a term at zero: that rule
+is right for a phrase and wrong for a line, `0 R, 0 ER` being the whole story of
+a shutout and a silent omission leaving the reader counting commas. **`R` as
+well as `ER`**, which a phrase had no room for and a line must have — they
+differ exactly where an error has come into it. A **loss** is the one decision
+that cannot be drawn: `PitchingLine` carries wins, saves and holds and no
+losses. Measured on the live league: `5.0 IP, 5 H, 2 R, 2 ER, 2 BB, 5 K, W` and
+`6.0 IP, 3 H, 1 R, 1 ER, 0 BB, 5 K, W`.
+
+**A projected row is the league's own five categories, in the order the block
+above it prints them.** It was a fixed phrase — `4.4 PA, 0.9 H, 0.7 R, 0.6 RBI`
+— chosen for readability and answering a question nobody on this page is asking:
+**plate appearances are not a category**, and neither are hits in a league that
+scores OPS. The block is headed by five columns and the row under it is now
+those five figures for this man, so the eye carries from `HR 1.7` on the team's
+line to the `0.2 HR` that is his share of it. `categoryGroups` gives both the
+set and the order — the same function the header row is drawn from, so the two
+cannot disagree about which five or in what order, and a league scoring
+something else gets its own five for free. **A count keeps one decimal and a
+rate is formatted as itself**: `fmtValue` is right about `.842` and `2.91` and
+wrong about a projected count, where it would print `0.943` off a figure that is
+an expectation to a tenth at best. A category the line cannot produce is a dash,
+not a nought. Measured: `0.7 R, 0.2 HR, 0.6 RBI, 0.2 SB, .842 OPS` on a batter
+and `5.5 K, 0.4 W, 2.91 ERA, 1.10 WHIP, 0.0 SVHD` on a pitcher — each in its own
+block's header order.
+
+**And the row under a *batter's* name is still a phrase, with two terms taken
+out of it.** The row is there to answer *why is this man first today*, which is
+narrower than *what happened in this game*:
 
 - **No strikeouts on a batter's row.** A strikeout is part of what happened and
   is never why anybody led the day, so `3 K` sat in the middle of the best line
@@ -654,12 +726,10 @@ answering the wider one:
   with itself about how a double is spelled. Checked both ways: the default
   reads `2-4, 2 R, 2B, 3 RBI, SB, BB, 3 K, 1.350 OPS` and the Overview's reads
   the same line without the `3 K`.
-- **A pitcher's hits and walks, not the baserunners they add up to.** `5 BR` is
-  the WHIP numerator and nothing a reader thinks in: five hits and no walks is a
-  different outing from one hit and four, and the term was spending a word to
-  hide which. Each is dropped at nought rather than printed as one, the row
-  being a phrase and not a box score — measured on the live league,
-  `5.0 IP, 5 K, 2 ER, 5 H, 2 BB, W` and `6.0 IP, 5 K, 1 ER, 3 H, W`.
+- **And `5 BR` is gone from the pitcher's**, which was the step before that row
+  became a line outright. It is the WHIP numerator and nothing a reader thinks
+  in: five hits and no walks is a different outing from one hit and four, and
+  the term was spending a word to hide which.
 
 **Color is spent on state, not on emphasis.** The value column is monochrome:
 the number is already the reason the row is where it is in the list, and a green
