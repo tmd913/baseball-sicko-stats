@@ -6,7 +6,7 @@ hide-injured filter). The three wide tables' shared behavior — the full-page
 mode, the bleed, the sticky columns — is described here and referred to from the
 other two.
 
-- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; a `Total` row **between the starters and the bench**, summing the men above it — see *The `Total` row is a divider now* below). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked live-first, then scheduled, then most recent — and, **before first pitch only**, the other side's announced starter on a second line (`game.probablePitcher`, **surname only**: this is the column whose width costs a stat column off the right of a phone, so the name takes a line rather than widening the cell). Pre-game the start time moves up beside the matchup, so the cell is two lines in every state instead of three in one of them; once the game is under way the starter drops off, the score and inning being what matters by then (and the batter as likely to be facing a reliever). On the pitcher tab that starter is his counterpart, not someone he faces. **In neither of the table's other two readings is that column drawn at all** — the Schedule view and the projected lens each replace it with `G`, for the same reason stated twice: one representative game says nothing about a span of days ahead (see *What the mode swaps* and *The Opponent column becomes `G`* below). Hides the overall-stats chips, and the search bar too — *except* when the roster is empty, since the view tabs are also hidden until something is on it, so a new user would otherwise have no way to add a first player (`showAdder` in `App.tsx`). The `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls.
+- **summary** (`SummaryTable.tsx`, the default, listed first) — a full-page stat table over the range (one row per player: opponent/score, H/AB, R, HR, RBI, SB, OPS, BB, K; a `Total` row **between the starters and the bench**, summing the men above it — see *The `Total` row is a divider now* below). The opponent column shows the matchup pre-game, the live score + inning while a game is on, and the final score once it's over — for a representative game picked live-first, then scheduled, then most recent — and, **before first pitch only**, the other side's announced starter on a second line (`game.probablePitcher`, **surname only**: this is the column whose width costs a stat column off the right of a phone, so the name takes a line rather than widening the cell). Pre-game the start time moves up beside the matchup, so the cell is two lines in every state instead of three in one of them; once the game is under way the starter drops off, the score and inning being what matters by then (and the batter as likely to be facing a reliever). On the pitcher tab that starter is his counterpart, not someone he faces. **In neither of the table's other two readings is that column drawn at all** — the Schedule view and the projected lens each replace it with `G`, for the same reason stated twice: one representative game says nothing about a span of days ahead (see *What the mode swaps* and *The Opponent column becomes `G`* below). **The lens keeps it on a single day**, which is the same reason read the other way — one day is one fixture, so the representative game is the game the row's figures are projected over, and `G` is drawn beside rather than instead of it (see *…except on a single day, where both are drawn*). Hides the overall-stats chips, and the search bar too — *except* when the roster is empty, since the view tabs are also hidden until something is on it, so a new user would otherwise have no way to add a first player (`showAdder` in `App.tsx`). The `.app.summary-mode` class turns the app into a fixed-height flex column so only the table scrolls.
 
 **And on this view the column gives its vertical margins back too**, the way the three wide tables give back the side gutters (`--table-bleed`, above): the table meets the bar above it and the bottom of the window below. There were two of them and they were both 14px, one from each box — `.app`'s own `padding-bottom` and the chrome's `margin-bottom` — and neither was doing any work here. The pane *is* the page on this view: there is nothing under it to be held off and nothing above it but the bar, so both were a strip of background showing through where a reader expects rows. **The 80px `.app` carries at the bottom is not the culprit it looks like** and never reached this view: the `.app.summary-mode, .app.research-mode` rule has overridden it to 14 since summary mode was written, which is why the fix is a *pair* of 14s and why removing only one of them would have taken the table to one edge and not the other. `padding-bottom` alone rather than the whole padding — the top 14px is already spoken for by the chrome's negative top margin, and the sides are what `--table-bleed` reads to know how far the table may bleed back out through them. Measured before and after at 320, 390, 640, 1200 and 1920 wide and on a 500px-tall window, on both the batter and the pitcher tab: 14px above the header row and 14px below the pinned total row at every one of them, **0 and 0** after, with the total row landing on the window's own bottom edge less the 1px the bottom border takes — the same pixel the sticky-column note above measures.
 
@@ -1756,6 +1756,59 @@ rule to add; measured on the live fantasy roster, the batting table goes
 (`3.9/17.1` against `0/1`), the G column being *narrower* than the Opponent one
 — and **1400 → 1400 at 1400**, with the row 58.00px, the header row 51.00, the
 headshot column pinned at 0 and page-body overflow 0 either way.
+
+#### …except on a single day, where both are drawn
+
+**The argument above is *one fixture out of a week*, and a one-day span has
+one.** Narrow the lens to a date and the representative game stops being a
+sample of a span and becomes the game every figure on the row is projected over
+— which is the thing a manager narrowed to a day to find out. So on a single
+day the opponent cell is drawn and `G` is drawn beside it, and the two answer
+the two halves of that reading: **who he plays**, and **how much of a game he is
+expected to get**. The second is not redundant on a day — a reliever reads `0.4`
+there, which is the whole of what can honestly be said about whether he pitches
+tonight.
+
+**The research board's own lens reached this first** and states it in the same
+words (`projectedOpponentColumn`, and *The one column on the row that a future
+span makes useless* in **The research board**). What was left was that the
+roster and a matchup team page — the same component, `SummaryTable` — went on
+dropping it, so the app gave two answers to one question depending on which
+table you were looking at. It gives one now.
+
+**The cell is the table's own, not a second one.** `pickGame` finds the day's
+game and `OpponentCell` draws it in whichever of its three states that game is
+in, which on a single future day is the matchup, the first pitch and the other
+club's announced starter — and the press opens the preview, exactly as it does
+off the lens. Nothing was written for this; the cell was simply stopped being
+withheld. On *today* it is a live score, and on a day already played a final,
+both of which are the honest reading of a row whose figures are then measured
+rather than projected.
+
+**The test is the projection's own two dates, not the reader's.** `start` is
+clamped forward to today, so a reader who picked yesterday-to-today has a
+one-day projection whose picked dates do not say so — `projOneDay` is
+`projection.start === projection.end` off the wire. It is the same fact the
+board's lens carries as `BoardProjection.oneDay`; this one derives it because a
+`RosterProjection` already puts the clamped span on the wire and a second field
+saying what two fields say is a second thing to keep in step.
+
+**Measured on the live fantasy roster, one day (2026-08-25), before → after.**
+The table gains the Opponent column's own width and nothing else:
+
+| | before | after |
+| --- | --- | --- |
+| batting / pitching table at 390 | 843.83px | **975.83px** |
+| the same at 1400 | 1458.95px | **1604.30px** |
+| columns, batting / pitching | 12 / 16 | **13 / 17** |
+| row height · header row | 58.00 · 51.00 | 58.00 · 51.00 |
+| headshot pin · page-body overflow | 0 · 0 | 0 · 0 |
+
+The width is the column, which is what it was always going to be: this table
+overflows a phone in every reading, so the cost is horizontal scroll rather than
+a stat pushed off a screen that fitted. **The stylesheet is byte-identical** —
+`.sum-opp` and `.sum-opp-col` were already there for the reading that never
+stopped drawing them.
 
 #### Both halves, or it is not the row's count
 

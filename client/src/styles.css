@@ -8318,6 +8318,23 @@ button.start-line:focus-visible {
    file, whose ground is the pane's same flat value. It is also all but unreachable: the banner is drawn
    behind a failed read, and a read that failed has no rows, so the pane has
    nothing to scroll sideways underneath it. */
+/* **And the head keeps both axes, which a calendar hung inside it briefly cost
+   it.** `overflow-x: clip` was tried here, on the tools row's own reasoning one
+   rule down, so that the projected lens's calendar could hang below the head
+   instead of being cut to it. It works for the paint and it breaks the
+   *gesture*: `clip` is explicitly **not** a scroll container, so the
+   `overscroll-behavior-x` beside it stops applying, and a wheel or a finger
+   anywhere in the head — six rows of chrome — chained straight through to the
+   pane and scrolled the table sideways under it. Reported as exactly that,
+   and it is the fault this declaration exists to prevent rather than a side
+   effect of it: `hidden` makes the box a scroller that never scrolls, which is
+   what gives `overscroll-behavior` something to hold.
+
+   So the head goes on clipping both axes and the calendar left the head — see
+   `.research-proj-pick`, and *The panel reopened blank* in
+   `docs/claude/client-research.md`. The tools row below is a different box: it
+   opens an `InfoKey` panel and carries no rows of chrome for a finger to land
+   on. */
 .research-scroll > .research-head,
 .research-scroll > .error-banner,
 .research-scroll > .empty-state,
@@ -11809,32 +11826,86 @@ button.start-line:focus-visible {
    It reads at the panel's own width and in the app's quieter ink, which is what
    `.info-key-panel` gives the same sentences on every other surface; the type
    scale is that panel's own so the four callers say one thing at one size. */
-/* The calendar takes the panel's width rather than the 260px it is inside a
-   popover: this is a box in the flow of a head that is the full content width,
-   so a 260px grid marooned at its left edge would read as a control that failed
-   to lay out. Capped so it does not become a wall on a desktop — the same
-   `320px` the app's own popover caps it at, which is the width every reader of
-   this app already picks dates in. */
-/* **The calendar takes the panel's width**, where every other calendar in the
-   app takes the 260px its popover can afford. The box is different: this one is
-   in the flow of a head that is the full content width at every size, and a
-   260px grid marooned at its left edge read as a control that had failed to lay
-   out rather than as the picker it is.
+/* **The calendar is a popover off a field, and the two paragraphs that used to
+   stand here are the record of why it is not an accordion any more.**
 
-   **Capped at 640, which is where a day stops being a day.** The grid is seven
-   equal tracks, so width goes straight into the cells: at 1400 uncapped they
-   come out ~195px each and the month reads as a wall of buttons rather than as
-   a calendar. 640 puts a cell at about 90px — comfortably bigger than the
-   popover's 37 and still square enough to scan a month in — and below 640 the
-   picker really is the full width of the panel, which is the width that
-   matters, a phone being where 260px of grid in a 346px box looked worst.
+   They argued width: a `DateCalendar` in the flow of a head that is the full
+   content width would be 260px of grid marooned at the left edge, so the box
+   took the panel's width and was capped at 640, "which is where a day stops
+   being a day". Both true, and both answers to the wrong question. Every other
+   range in this app is picked in **one** shape — a face that states the days
+   and a calendar over the page when you press it — so the board was the one
+   surface asking a reader to learn a second, and it spent the head's own height
+   doing it: measured at 390, the panel with the month open was **346px** of
+   pinned chrome above the table it is chrome for, against **36** with it shut.
 
-   A wrapper of its own because `DateCalendar` renders a **fragment**: its head,
-   its grid and its foot are three siblings with no box round them, which is
-   what lets the popover give them its own padding. */
-.research-proj-cal {
+   What is left is the anchor. `DateCalendar` renders a **fragment** — head,
+   grid and foot as three siblings with no box round them — which is what lets
+   the popover give them its own padding, and is why the field and the popover
+   need a positioned wrapper of their own rather than hanging off the button. */
+.research-proj-pick {
+  position: relative;
+  /* Enough of a line box that the popover hangs from the field's own bottom
+     edge rather than from the run's. */
+  display: flex;
+  align-items: center;
+}
+/* The field: the app's calendar glyph, and the days beside it once there are
+   days. `research-toggle` in the JSX carries the whole of its shape — the
+   ground, the border, the `--control-h` that lines it up with the span run
+   beside it, the lit state and the focus ring — including `display: inline-flex`
+   and the 6px gap an icon and a label already sit either side of on every other
+   control in that run. There is nothing left for this rule to declare, so the
+   only thing it says is what a glyph-only field is: a square. */
+.research-proj-cal-btn {
+  /* Without a label the padding is symmetrical and the box is the glyph's own,
+     which is the shape every icon-only button in this app takes (the date bar's
+     steps, the expand corner). With one it goes back to the run's padding. */
+  padding-inline: 9px;
+}
+.research-proj-cal-btn:has(.research-proj-cal-range) {
+  padding-inline: 12px;
+}
+/* The days, in the same weight the rest of the run's labels take. `nowrap`
+   because this is one fact — `Aug 27 – Aug 30` broken across two lines inside a
+   pill is two dates and a hyphen. */
+.research-proj-cal-range {
+  white-space: nowrap;
+}
+/* **Hung from the field's left edge**, where the app's own bar hangs its
+   calendar from the *center* of a bar that is centered. The two anchorings are
+   the same rule read on two boxes: a popover lines up with the control that
+   opened it, and this control is a pill at the left of a run rather than a face
+   in the middle of a bar. `right: auto` undoes `.drp-popover`'s own, which the
+   JSX folds onto for the box itself — the same 260px panel, border, radius and
+   lift every other calendar in the app opens.
+
+   The cap is the bar's, for the bar's reason: this is pinned chrome and the
+   grid is 300px, so a short window has less room below the field than the
+   calendar wants. `usePopoverFit` publishes it. */
+/* **The calendar is the app's dialog, because this head cannot host a box that
+   hangs.** It was a popover off the field for one round and the two faults it
+   met are the two the dialog does not have: the head clips on both axes and has
+   to (see the rule above, and the sideways scroll that came of relaxing it), so
+   the grid was cut to the head; and the field rides *after* a run of pills, so
+   on a phone with nothing picked it sits 246px along a 346px row and a 260px
+   calendar ran **138px off the right edge**.
+
+   `ColumnPicker` is the same call made one control earlier and states it in the
+   same words — *a modal, where Search and Filters beside it are inline panels*.
+   A box this chrome has no room for leaves the row.
+
+   The box is the calendar's own width rather than the dialog's 720: a month is
+   seven tracks and a dialog-wide one is a wall of buttons, which is the
+   measurement the accordion made before it (~195px cells at 1400). 292 is the
+   260px grid plus the box's own padding. */
+.research-cal-box {
+  width: min(292px, 100%);
+}
+.research-cal-box .drp-grid {
+  /* The grid is `DateCalendar`'s own, drawn here without the popover that
+     usually gives it its padding — so the dialog's body gives it instead. */
   width: 100%;
-  max-width: 640px;
 }
 /* `ScrollRow` bleeds out through its container's gutter and back in by the
    bar's, which is right in `.view-tools` — the row it was written for — and

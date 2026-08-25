@@ -1400,6 +1400,152 @@ until a span is picked.
   month reads as a wall of buttons. 640 puts a cell at about 90px, and below 640
   the picker really is the panel's full width, which is where it matters.
 
+*(The last bullet is superseded: the calendar is a popover off a field now and
+takes the app's own 260px. The width reasoning was a true answer to the wrong
+question — see* The panel reopened blank, and the calendar left the head *below.
+The bullet is left as written, this file's rule for its own superseded
+reasoning.)*
+
+#### The panel reopened blank, and the calendar left the head
+
+**Two faults in one control, reported together**, and the second is what the
+first turned out to be a symptom of.
+
+**A custom span left the panel with nothing in it.** `ui.panels.projCustom` is
+cleared whenever the projected panel closes (`setPanel`'s own rule, written for
+`Projected → Custom → Filters → Projected` coming back on a calendar the reader
+had abandoned three presses earlier) — and *picking on the calendar closes the
+panel*. So a reader who picked `Aug 27 – Aug 30` and pressed `Projected` again
+got the panel back with **no pill lit** (the span is custom and matches none of
+them) and **no calendar** (the flag was cleared by their own press). Three unlit
+pills, and the one place on the page that could have said which days were being
+projected said nothing.
+
+**So the door the panel opens on is the door the span in force came through**,
+which is what the flag should have meant all along: `projCustomOpen` is the
+reader's *question* (`Custom` pressed, nothing picked yet) **or** the reader's
+*answer* (a custom span is what the board is drawing). The bug the clearing rule
+was written for is untouched — with nothing picked there is no custom span in
+force, so an abandoned question still comes back on the pills. Checked, both
+paths: `Projected → Custom → pick → Projected` returns on the calendar marked on
+those days; `Projected → Custom → Filters → Projected` returns on `Week 21`.
+
+**And a lit `Custom` closes the panel, as a lit period does.** Once a pill can
+be lit by the *span* rather than by the press, the press has to mean what the
+two beside it mean — the span is already the answer, so the press puts the panel
+away. Pressing it while it is merely *open* still closes the calendar and leaves
+the pills, that press being the reader abandoning the question.
+
+**The calendar is a popover off a field now, which is the fix the first fault
+was pointing at.** What the reopened panel had to show was *which days* — and
+the app already has one shape for that, on every other surface: a face that
+states the days, and the calendar over the page when you press it (`DateBar`'s
+`popover`, and *Every reading of a range opens it now*). The board was the one
+place asking a reader to learn a second shape, and the width reasoning that put
+a month of grid in the head was a true answer to a question nobody had asked.
+
+- **`Custom` reveals the field; the field opens the calendar.** Two presses to a
+  month rather than one, which is the shape `.drp-field` had before it was
+  retired and the shape the reopened panel needs: a glyph alone while nothing is
+  picked, **the days themselves once there are days** — `Aug 27 – Aug 30`,
+  `Fri, Aug 28` — in `wideRange`'s one wording, the same the span line under it
+  prints.
+- **It is `.research-toggle` outright**, the board's own disclosure shape, so it
+  takes the ground, the border, the `--control-h` that lines it up with the span
+  run beside it, the lit state and the focus ring with no new rules.
+  `.view-tab` is what it is **not**: that class is a *segment of a switch*
+  (`border: none; background: none`) and outside one it draws as bare text —
+  measured, 25px tall against the run's 36.
+- **`CalendarGlyph` came back to `DateRangePicker.tsx`**, the markup unchanged
+  from the `.drp-field` it went out with. A glyph naming a calendar belongs
+  beside the calendar, and the file's own note about the field going with its
+  last reader now has a reader again.
+- **The pick puts the whole thing away** — the calendar it was made on and the
+  panel that calendar was opened from — which is what a named pill's own press
+  already does.
+- **It is a `Modal`, not a popover hung off the field**, and that is the one
+  place this control is not the date bar's shape. It was a popover for one
+  round; both faults it met are faults of the box it was in.
+
+  *The head cannot let anything hang out of it.* `.research-head` is
+  `overflow: hidden` on both axes, and the horizontal half is load-bearing twice
+  over: it is a sticky box in a pane that scrolls sideways, **and** `hidden` is
+  what makes it a scroller that never scrolls, which is what gives the
+  `overscroll-behavior-x: none` beside it something to hold. Relaxed to
+  `overflow-x: clip` — the tools row's own trick one rule down — the paint came
+  right and the *gesture* broke: `clip` is explicitly not a scroll container, so
+  the overscroll rule stopped applying and a wheel or a finger anywhere in six
+  rows of chrome chained through and **scrolled the table sideways under the
+  reader**. Reported, and reverted; the head's rule is byte-identical to what it
+  was.
+
+  *And the anchor moves.* The field rides **after** a run of pills, so where it
+  is depends on whether that run wrapped — which depends on the width of a date
+  label the app does not choose. With nothing picked the field is a 35px glyph
+  and the row does not wrap, so it sat at x=268 on a 390px phone and a 260px
+  calendar hung at `left: 0` ran to **528, 138px past the right edge** — inside
+  a head that clips, so the half of the month the reader needed was not merely
+  off screen but unreachable. Pick a range and the label makes the row wrap, the
+  field drops to the gutter, and the same `left: 0` is suddenly right. There is
+  no constant that answers both.
+
+  `ColumnPicker` is the same call made one control earlier and states it in the
+  same words — *a modal, where Search and Filters beside it are inline panels*.
+  A box this chrome has no room for leaves the row, and it comes with the whole
+  ladder for free: Escape undoes exactly this one thing, the background goes
+  inert, focus goes in and comes back, and the backdrop's press is spent on the
+  dismissal. Checked at three widths: Escape closes the calendar and leaves the
+  panel, with the field still reading its range.
+
+- **`.research-cal-box` is the calendar's width, not the dialog's.**
+  `.app-dialog-box` is `min(720px, 100%)` and a month is seven equal tracks, so
+  a dialog-wide grid is the wall of buttons the accordion already measured
+  (~195px cells at 1400). 292px is the 260px grid plus the box's own padding.
+  Measured fully on screen at every width — **320×568 → 16…304 / 84…485**,
+  **390×844 → 49…341 / 222…623**, **1400×1000 → centered** — against a popover
+  that ran 138px off the first two.
+
+- **Nothing is marked until the reader marks something.** The grid opened on
+  *today*, selected — which is a calendar answering the question it was opened
+  to ask. `Custom` off `Week 20` means *these are not the days I want*, and a
+  filled cell under today is the same wrong claim one day wide rather than
+  fourteen. `DateCalendar` takes `start`/`end` as `string | null` now, with a
+  `month` beside them for which month to open on where there is no selection —
+  a different claim and a true one, today being where the reader's attention is
+  and the day every projection starts from. The foot says what the first press
+  does (`Pick a day, or the first of a range`) rather than naming a day nobody
+  chose. Every other caller passes a range it genuinely has and is unchanged to
+  the pixel — checked on the app's own date bar, which still marks its own
+  selection and whose popover is centered on the bar at 390 (195) and 1400 (700)
+  as before.
+- **Nothing is marked until the reader marks something.** The grid opened on
+  *today*, selected — which is a calendar answering the question it was opened
+  to ask. `Custom` off `Week 20` means *these are not the days I want*, and a
+  filled cell under today is the same wrong claim one day wide rather than
+  fourteen. `DateCalendar` takes `start`/`end` as `string | null` now, with a
+  `month` beside them for which month to open on where there is no selection —
+  a different claim and a true one, today being where the reader's attention is
+  and the day every projection starts from. The foot says what the first press
+  does (`Pick a day, or the first of a range`) rather than naming a day nobody
+  chose. Every other caller passes a range it genuinely has and is unchanged to
+  the pixel.
+
+**Measured, before → after, with the calendar open.** The head does not move at
+all now:
+
+| | before | after |
+| --- | --- | --- |
+| head at 1400, panel open | 119px | 119px |
+| head at 1400, **calendar open** | **419px** | **119px** |
+| head at 390, panel open | 119px | 163px |
+| head at 390, **calendar open** | **419px** | **163px** |
+| the calendar itself | 346 / 640 × 292 in flow | **292px wide, over the page** |
+
+The 44px the panel costs at 390 is the span run and the field wrapping to two
+lines, which is `flex-wrap` doing its job in a 346px box; what it buys is the
+300px the head used to grow by under the finger that opened the month. Page-body
+overflow is 0 at both widths, open and shut.
+
 **`Clear` is always drawn while the lens is on.** It was drawn only where no pill
 was lit, on the reasoning that a lit pill is its own way off — press `Week 20`
 again and the lens goes, the rule the turn filter's day strip keeps for its own
@@ -1508,6 +1654,32 @@ columns with `SB` among them.
   (`toProjectedColumnKeys`), so a list stored under an older build — or one that
   carries the opponent column into a span that has stopped being a single day —
   comes back as the columns that still exist rather than as gaps.
+- **…and `Opp` is put back on a single day, because a range could never have
+  been asked about it.** That is the mirror of the line above and it was the
+  half that was missing. A list saved over a *range* is saved out of a
+  vocabulary the opponent is not in — the picker never offered it — so the key
+  is absent for the same reason `xwOBA` is: nobody was asked. Narrowing to a
+  single day read that absence as a decision, and the board drew `G` where the
+  one column a single day is read for should be. **Measured on the live
+  install**: the pitching board's stored list (14 keys) drew no `Opp` on a
+  one-day span while the batting board, which had no stored list at all and so
+  fell through to the defaults, drew it — one reader, two boards, two answers.
+  `toProjectedColumnKeys` now leads the kept list with `OPPONENT_KEY` on a
+  one-day span.
+- **So it is not in the picker under the lens** (`pickerColumns`), and that is
+  the half that keeps the rule above honest rather than bullying. A tick for it
+  would be dead in both directions — off, `toProjectedColumnKeys` would put it
+  straight back; on, it is already there — and a checkbox that cannot change
+  anything is a control lying about its reach. `Opp` on a single day is what
+  that reading *is*: the reader narrowed a projection to one date to find out
+  who each man plays. **The key still rides in `orderedKeys`**, which is what
+  draws and sorts it, and `ColumnPicker`'s `commit` carries a key it cannot
+  resolve through its own reorder untouched — which is the same machinery that
+  already lets a saved `Ros%` survive a session with no league. Checked:
+  unticking `BAA` under the lens on a one-day span leaves `Opp` leading both the
+  header row and `cols=`. The **measured** board is untouched — there `Opp` is
+  one column among 44, drawn from today's status map whatever span the reader
+  picked, and turning it off is a perfectly good thing to want.
 - **A selection that is just the defaults is stored as nothing at all**
   (`isDefaultProjectedColumns`), so a reset goes on following the defaults as
   they change rather than pinning today's copy. Checked: `Reset to defaults`

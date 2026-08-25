@@ -472,6 +472,15 @@ function projectedGames(
  * *is* read against is how many games it is made of, which is the same question
  * the Schedule view's leading column answers — hence the same header.
  *
+ * **On a single day both are drawn**, and that is the same argument rather than
+ * an exception to it. The objection above is *one fixture out of a week*; a
+ * one-day span has exactly one, so the cell names the very game the figures
+ * beside it are projected over and the two columns answer the two halves of the
+ * reading — `Opp` who he plays, `G` how much of a game he is expected to get
+ * (a fraction, on a reliever's row, which is the reader's whole question about
+ * a bullpen arm tonight). The research board's own lens reached this first and
+ * states it in the same words (`projectedOpponentColumn`).
+ *
  * *(The header is the word now, not the letter: `G` beside a `Starts` column
  * has two readings on a pitcher's row and one of them is the other column —
  * `G` is appearances and `GS` is games started in every baseball table ever
@@ -935,7 +944,11 @@ interface RowHandlers {
  *  thirteenth of the same fact — that column is one representative game's
  *  matchup and the whole table beside it is every game of the span; under the
  *  projected lens it would name one fixture of a week the reader has just been
- *  moved into the future of. See `ProjectedGamesHead`. */
+ *  moved into the future of. See `ProjectedGamesHead`.
+ *
+ *  **Except on a single day, where the lens draws it beside the `G`** — one day
+ *  is one fixture, so the representative game *is* the game every figure on the
+ *  row is projected over. See `projOneDay` in `SummaryTable`. */
 function LeadCells({
   r,
   game,
@@ -1207,6 +1220,7 @@ function BatterTable({
   expand,
   schedule,
   projection,
+  projOneDay,
   starters,
 }: {
   batters: PlayerReport[];
@@ -1218,6 +1232,10 @@ function BatterTable({
    *  `schedule` already follows and what makes "projected with no projection"
    *  impossible to draw. */
   projection: ProjectedLines | null;
+  /** The span the lens is drawing is a **single day**, which is the one case in
+   *  which it keeps the opponent cell — see `SummaryTable`'s own `projOneDay`,
+   *  which is where the map above loses the rest of the answer. */
+  projOneDay: boolean;
   /** Who sits above the `Total` line — see `splitStarters`. */
   starters: Set<string> | null;
 }) {
@@ -1251,7 +1269,7 @@ function BatterTable({
           game={game}
           role={role}
           corner={game ? lineupCorner(game) : null}
-          showOpponent={!schedule && !projection}
+          showOpponent={!schedule && (!projection || projOneDay)}
           lineup={projection?.get(playerKey(r))?.lineup}
           {...handlers}
         />
@@ -1290,13 +1308,17 @@ function BatterTable({
             <ScheduleHeadCells index={schedule} kind="batter" />
           ) : (
             <>
-              {projection ? (
-                <ProjectedGamesHead kind="batter" />
-              ) : (
+              {/* **The opponent, then the `G`** — the same order the research
+                  board's own lens draws them in, and the order the row is read
+                  in: who he plays, then how much of a game he gets. Over a
+                  range there is no opponent cell to lead with; off the lens
+                  there is no `G`. See `ProjectedGamesHead`. */}
+              {(!projection || projOneDay) && (
                 <th className="sum-opp-col" scope="col">
                   Opponent
                 </th>
               )}
+              {projection && <ProjectedGamesHead kind="batter" />}
               {/* **How often the plan starts him**, which the slot chip used to
                   carry and which belongs in a column — see
                   `ProjectedStartsHead`. */}
@@ -1326,7 +1348,10 @@ function BatterTable({
             <ScheduleTotalCells index={schedule} players={top} kind="batter" />
           ) : (
             <>
-              {projection ? (
+              {/* The opponent column has no total — it never had one — so the
+                  foot spends a blank cell on it wherever the head draws it. */}
+              {(!projection || projOneDay) && <td className="sum-opp" aria-hidden="true" />}
+              {projection && (
                 /* The same sum the schedule mode's own `G` total is: every
                    row's count added up, so a reader can add the column and get
                    the figure at the foot of it. */
@@ -1336,8 +1361,6 @@ function BatterTable({
                     0,
                   )}
                 />
-              ) : (
-                <td className="sum-opp" aria-hidden="true" />
               )}
               {anyLineup && (
                 <ProjectedStartsTotal
@@ -1366,6 +1389,7 @@ function PitcherTable({
   expand,
   schedule,
   projection,
+  projOneDay,
   starters,
 }: {
   pitchers: PlayerReport[];
@@ -1374,6 +1398,8 @@ function PitcherTable({
   schedule: ScheduleIndex | null;
   /** See `BatterTable`'s own. */
   projection: ProjectedLines | null;
+  /** See `BatterTable`'s own. */
+  projOneDay: boolean;
   /** See `BatterTable`'s own, and `splitStarters`. */
   starters: Set<string> | null;
 }) {
@@ -1402,7 +1428,7 @@ function PitcherTable({
           game={game}
           role={role}
           corner={game ? pitchingCorner(game) : null}
-          showOpponent={!schedule && !projection}
+          showOpponent={!schedule && (!projection || projOneDay)}
           lineup={projection?.get(playerKey(r))?.lineup}
           {...handlers}
         />
@@ -1441,13 +1467,17 @@ function PitcherTable({
             <ScheduleHeadCells index={schedule} kind="pitcher" />
           ) : (
             <>
-              {projection ? (
-                <ProjectedGamesHead kind="pitcher" />
-              ) : (
+              {/* **The opponent, then the `G`** — the same order the research
+                  board's own lens draws them in, and the order the row is read
+                  in: who he plays, then how much of a game he gets. Over a
+                  range there is no opponent cell to lead with; off the lens
+                  there is no `G`. See `ProjectedGamesHead`. */}
+              {(!projection || projOneDay) && (
                 <th className="sum-opp-col" scope="col">
                   Opponent
                 </th>
               )}
+              {projection && <ProjectedGamesHead kind="pitcher" />}
               {/* **How often the plan starts him**, which the slot chip used to
                   carry and which belongs in a column — see
                   `ProjectedStartsHead`. */}
@@ -1473,15 +1503,15 @@ function PitcherTable({
             <ScheduleTotalCells index={schedule} players={top} kind="pitcher" />
           ) : (
             <>
-              {projection ? (
+              {/* See `BatterTable`'s own. */}
+              {(!projection || projOneDay) && <td className="sum-opp" aria-hidden="true" />}
+              {projection && (
                 <ProjectedGamesCell
                   n={top.reduce(
                     (n, r) => n + projectedGames(r, projection.get(playerKey(r)), true),
                     0,
                   )}
                 />
-              ) : (
-                <td className="sum-opp" aria-hidden="true" />
               )}
               {anyLineup && (
                 <ProjectedStartsTotal
@@ -1659,6 +1689,20 @@ export function SummaryTable({
     () => (projection ? new Map(projection.players.map((p) => [p.key, p])) : null),
     [projection],
   );
+  /**
+   * **The lens is drawing a single day**, which is the one span it keeps the
+   * opponent cell over — see `LeadCells` and `ProjectedGamesHead`.
+   *
+   * **Off the projection's own two dates rather than the reader's**, and that
+   * is the whole of the test: `start` is clamped forward to today, so a reader
+   * who picked yesterday-to-today is looking at a one-day projection whose
+   * picked dates do not say so. It is the same fact the research board's lens
+   * carries as `BoardProjection.oneDay` and for the same stated reason; this
+   * one derives it because a `RosterProjection` already puts the clamped span
+   * on the wire and a second field saying what two fields already say is a
+   * second thing to keep in step.
+   */
+  const projOneDay = projection != null && projection.start === projection.end;
   const batters = reports.filter((r) => r.kind !== 'pitcher');
   const pitchers = reports.filter((r) => r.kind === 'pitcher');
   const { isFull, toggle, ref: fullRef } = useFullPage<HTMLDivElement>();
@@ -1772,6 +1816,7 @@ export function SummaryTable({
               expand={expand}
               schedule={schedule ?? null}
               projection={schedule ? null : projLines}
+              projOneDay={projOneDay}
               starters={starters ?? null}
             />
           )}
@@ -1782,6 +1827,7 @@ export function SummaryTable({
               expand={expand}
               schedule={schedule ?? null}
               projection={schedule ? null : projLines}
+              projOneDay={projOneDay}
               starters={starters ?? null}
             />
           )}
