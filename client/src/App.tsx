@@ -28,7 +28,6 @@ import type {
   SeasonPlayer,
   ParkFactor,
   SplitCut,
-  StandingsSpan,
   TeamInfo,
   TrendWindow,
   WatchPlayer,
@@ -2388,14 +2387,18 @@ export default function App() {
    *  - `mlb=` which of the three tabs (`scoreboard` is the default and is
    *    omitted, the app's convention that the first tab is the one you land on);
    *  - `mday=` which day the Scoreboard is on;
-   *  - `mspan=` how much of the season the Standings count;
    *  - `mgrp=` how the Standings are grouped.
+   *
+   * **There was a fourth, `mspan=`, and it is gone with the control it named.**
+   * The Standings offered the board over five spans; three columns beside `L10`
+   * replaced that, so there is one board and nothing about how much of the
+   * season it counts for a link to carry.
    *
    * **The `m` prefix is deliberate and it is not `mp`/`mup`/`mt`/`mr`.** Those
    * four are the fantasy matchup's, and the standing rule here is that two
    * params must never mean two things — a link is read before anything on
    * screen can say which view wrote it. The four names above are free: the
-   * app's params are `preset`, `start`, `end`, `player`, `expanded`, `view`,
+   * app's other params are `preset`, `start`, `end`, `player`, `expanded`, `view`,
    * `kind`, `sim`, `hideil`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`,
    * `watch`, `win`, `help`, `mp`, `league`, `plays`, `newplays`, `oldest`,
    * `noldest`, `proj`, `rproj`, `rsum`, `rankproj`, `cut`, `lt`, `mup`, `mt`,
@@ -2428,12 +2431,6 @@ export default function App() {
     return raw && ISO_DATE.test(raw)
       ? { date: raw, preset: null }
       : { date: today, preset: 'Today' };
-  });
-  const [standingsSpan, setStandingsSpan] = useState<StandingsSpan>(() => {
-    const raw = Number(initialParams.get('mspan'));
-    // The research board's own five, which is the whole point of them — see
-    // `MlbStandings.tsx`. Unrecognized is the season, the rule `win=` follows.
-    return RESEARCH_WINDOWS.includes(raw as ResearchWindow) ? (raw as StandingsSpan) : 'season';
   });
   const [standingsGroup, setStandingsGroup] = useState<StandingsGroup>(() => {
     const raw = initialParams.get('mgrp');
@@ -3348,8 +3345,8 @@ export default function App() {
 
       - the **Scoreboard** re-reads when the day changes, and polls while it
         holds a game that is being played;
-      - the **Standings** re-read when the span changes — the grouping is a
-        re-grouping of rows already in hand and costs no fetch at all;
+      - the **Standings** are read once — one board, and the grouping is a
+        re-grouping of rows already in hand rather than a fetch;
       - the **News** is read once. It is a thirty-minute sweep on the server, so
         a poll would be the same answer at a cost.
 
@@ -3453,28 +3450,25 @@ export default function App() {
   }, [view, mlbTab, mlbBoardLive, loadMlbBoard]);
 
   /**
-   * The standings, per span.
+   * The standings — once, on the first open of the tab.
    *
-   * **The grouping is not in this list**, and that is the point of the wire
-   * shape: every club comes back once with the wild-card order beside it, so
-   * Division → Wild Card → League is a re-grouping of rows already in hand.
-   * Only the span is a different question of the server.
+   * **One board and no span**, so the grouping is the only control and it is a
+   * re-grouping of rows already in hand: the server sends every club once with
+   * the wild-card order beside it. There is nothing here that a press can make
+   * stale, which is why this reads like the news below it rather than like the
+   * scoreboard above it — and why `standings` is in the *test* rather than the
+   * dependency list, the shape this file uses wherever a read must happen
+   * exactly once.
    */
-  const standingsSpanRef = useRef<StandingsSpan>(standingsSpan);
   useEffect(() => {
-    standingsSpanRef.current = standingsSpan;
-  }, [standingsSpan]);
-  useEffect(() => {
-    if (view !== 'mlb' || mlbTab !== 'standings') return;
+    if (view !== 'mlb' || mlbTab !== 'standings' || standings !== null) return;
     let canceled = false;
     setStandingsLoading(true);
     setStandingsError(null);
     api
-      .mlbStandings(standingsSpan)
+      .mlbStandings()
       .then((b) => {
-        // Rule 1 again, and the same sequence test the board above makes: only
-        // the span the reader is on may write.
-        if (!canceled && b.span === standingsSpanRef.current) setStandings(b);
+        if (!canceled) setStandings(b);
       })
       .catch((e: Error) => {
         if (!canceled) setStandingsError(e.message);
@@ -3485,7 +3479,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [view, mlbTab, standingsSpan]);
+  }, [view, mlbTab, standings]);
 
   /**
    * The league's news — once, on the first open of the tab.
@@ -4481,12 +4475,9 @@ export default function App() {
     if (view === 'mlb' && mlbDay.preset !== 'Today') {
       p.set('mday', mlbDay.preset ?? mlbDay.date);
     }
-    // Scoped to the tab that draws them rather than to the view: a span and a
-    // grouping with no standings to be about would name readings that are not
-    // in force, which is the rule `cut=`, `mt=` and `mr=` all follow.
-    if (view === 'mlb' && mlbTab === 'standings' && standingsSpan !== 'season') {
-      p.set('mspan', String(standingsSpan));
-    }
+    // Scoped to the tab that draws it rather than to the view: a grouping with
+    // no standings to be about would name a reading that is not in force, which
+    // is the rule `cut=`, `mt=` and `mr=` all follow.
     if (view === 'mlb' && mlbTab === 'standings' && standingsGroup !== 'division') {
       p.set('mgrp', standingsGroup);
     }
@@ -4564,7 +4555,6 @@ export default function App() {
     leagueTab,
     mlbTab,
     mlbDay,
-    standingsSpan,
     standingsGroup,
     matchupId,
     matchupTeam,
@@ -8836,8 +8826,6 @@ export default function App() {
              same one door. */
           onOpenGame={openGame}
           standings={standings}
-          span={standingsSpan}
-          onSpan={setStandingsSpan}
           group={standingsGroup}
           onGroup={setStandingsGroup}
           standingsLoading={showStandingsWait}

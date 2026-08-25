@@ -1,41 +1,42 @@
-import type {
-  MlbStandings,
-  StandingsRecord,
-  StandingsSpan,
-  StandingsTeam,
-} from './types.js';
-import { addDays, baseballToday } from './etDate.js';
+import type { MlbStandings, StandingsRecord, StandingsTeam } from './types.js';
 import { getTeamList } from './mlbStats.js';
 import { SEASON } from './research.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
 /**
- * # Where the thirty clubs stand — over the season, or over the last N days
+ * # Where the thirty clubs stand
  *
- * The MLB view's Standings tab. One board, five spans, and **two arithmetics
- * behind it**, which is the whole of what there is to understand here.
+ * The MLB view's Standings tab. **One board, and it is the season** — MLB's own
+ * standings, which is the only authority on a club's record and the only place
+ * several of these columns exist at all: games behind, the wild-card race, the
+ * magic number, a Pythagorean record, and the split records (home, away,
+ * one-run, last ten, and **vs .500 or better**, which MLB calls `winners`).
  *
- * ## The season is MLB's answer; a window is ours
+ * ## Three splits MLB does not publish, computed here
  *
- * The season board is `/api/v1/standings` — MLB's own totals, and the only
- * authority on them. It is also the only place several of these columns exist
- * at all: games behind, the wild-card race, the magic number, a Pythagorean
- * record, and the split records (home, away, one-run, last ten, and **vs .500
- * or better**, which MLB calls `winners`).
+ * `lastThirty`, `firstHalf` and `secondHalf`. None of them is on
+ * `/api/v1/standings` — its `splitRecords` run to sixteen types and stop at
+ * `lastTen` — and `date=` on that endpoint gives the standings **as of** a day
+ * rather than the record **since** one, so there is no way to ask for them.
+ * They come out of the season's own schedule instead, walked once.
  *
- * A window has no such upstream. `/api/v1/standings` takes a `date=` — which
- * gives the standings *as of* that day, not the record *since* it — so a
- * seven-day board is computed here, from the season's own schedule, plus one
- * lookup into the season board for the division each club is in.
+ * **This replaced a span control.** The tab offered the board over five spans —
+ * season, 60, 30, 15, 7 — with the whole board recomputed for a window. Three
+ * columns beside `L10` say more of what that control was reached for and say it
+ * *at the same time as everything else*: how a club has been going lately, and
+ * either side of the break, without leaving the row its record is on. The
+ * machinery is the same walk; what changed is that its answer is now three cells
+ * rather than a second board.
  *
- * ## The two agree exactly, which was measured before anything was built on it
+ * ## The walk agrees with MLB exactly, which was measured before anything was
+ * built on it
  *
  * Every club's wins, losses, runs scored and runs allowed, computed from
  * `/api/v1/schedule`'s final games and compared against `/api/v1/standings` on
- * 2026-08-25: **all thirty clubs match on all four figures**. So a window is
- * the same arithmetic MLB does, run over fewer days, rather than a second
- * opinion about a club's record.
+ * 2026-08-25: **all thirty clubs match on all four figures**. So the three split
+ * columns are the same arithmetic MLB does, run over fewer games, rather than a
+ * second opinion about a club's record.
  *
  * **That match depends on one line and it is worth stating why.** MLB's season
  * schedule lists a rescheduled game **under both dates**, the same `gamePk`
@@ -45,17 +46,12 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  * actually played, and **22 of 30 clubs came out wrong**. The rule is
  * `keepPlayed` below: a final entry always displaces a non-final one.
  *
- * ## The window ends **today**, where every other window in this app ends
- * yesterday
+ * ## The halves are the All-Star break, and its date is asked for
  *
- * `statcastWindow.ts::windowDates` stops at yesterday, and the reason it gives
- * is Savant's one-day lag plus a partial day polluting a *rate*. Neither
- * applies here: this reads MLB's own schedule, which has today's games the
- * moment they end, and a won-lost record is made of finished games — a game
- * either counts or is not there, so there is nothing partial to pollute.
- * Ending yesterday would instead mean a standings board that does not know
- * about the fifteen games a reader has just watched, which is the one thing a
- * standings board must not be.
+ * Not hardcoded and not "mid-July": `/api/v1/schedule?gameType=A` answers with
+ * the one All-Star game and its date (2026-07-14, measured — **276 bytes**).
+ * `gameType=R` excludes that game from the walk, so every regular-season game
+ * falls cleanly on one side of it.
  */
 
 /**
@@ -96,7 +92,6 @@ interface TeamRecord {
   runsScored?: number;
   runsAllowed?: number;
   runDifferential?: number;
-  gamesPlayed?: number;
   divisionRank?: string;
   leagueRank?: string;
   divisionLeader?: boolean;
@@ -224,6 +219,11 @@ async function fetchSeasonBoard(): Promise<MlbStandings> {
         // two spans mean the same thing by this column.
         vsOver500: split(splits, 'winners'),
         lastTen: split(splits, 'lastTen'),
+        // Filled by the walk below, or left as dashes where it could not be
+        // made — see `buildBoard`.
+        lastThirty: null,
+        firstHalf: null,
+        secondHalf: null,
         oneRun: split(splits, 'oneRun'),
         expected: split(t.records?.expectedRecords, 'xWinLoss'),
         streak: t.streak?.streakCode ?? null,
@@ -231,19 +231,12 @@ async function fetchSeasonBoard(): Promise<MlbStandings> {
         clinched: t.clinched === true,
         magicNumber: orNull(t.magicNumber),
         eliminationNumber: orNull(t.eliminationNumber),
-        gamesPlayed: t.gamesPlayed ?? (t.wins ?? 0) + (t.losses ?? 0),
         divisionRank: Number(t.divisionRank) || 0,
         leagueRank: Number(t.leagueRank) || 0,
       });
     }
   }
   return {
-    span: 'season',
-    // The season's own ends as this app already means them: 1 March is the
-    // boundary `teamHitting.ts` and `teamResearch.ts` use, regular-season rows
-    // being all anybody asks for, and the end is the day being played.
-    start: `${SEASON}-03-01`,
-    end: baseballToday(),
     teams: rows,
     wildcard,
     divisions,
@@ -251,7 +244,15 @@ async function fetchSeasonBoard(): Promise<MlbStandings> {
   };
 }
 
-// ---- A window, computed from the season's schedule ---------------------
+/** `.595`, as MLB spells it — three places, no leading zero, and `.000` for a
+ *  club that has not played, which is the same shape a dash would occupy. Only
+ *  ever reached where MLB omitted its own `winningPercentage`. */
+function pct(w: number, l: number): string {
+  const n = w + l;
+  return n === 0 ? '.000' : (w / n).toFixed(3).replace(/^0/, '');
+}
+
+// ---- The three splits, computed from the season's schedule --------------
 
 interface SeasonGame {
   gamePk: number;
@@ -296,8 +297,8 @@ async function fetchSeasonGames(): Promise<SeasonGame[]> {
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${SEASON}&gameType=R` +
     // The narrowest cut that answers: who played, on what day, who won and by
     // how much. Measured over the whole 2026 season — 2,458 entries — at
-    // **30,287 bytes on the wire**, which is one read for every window span
-    // and every reader.
+    // **30,287 bytes on the wire**, which is one read for the whole board and
+    // every reader of it.
     `&fields=dates,games,gamePk,officialDate,status,codedGameState,teams,away,home,team,id,score,isWinner`;
   const res = await fetch(url, { headers: UA });
   if (!res.ok) throw new Error(`MLB schedule returned ${res.status} for ${SEASON}`);
@@ -346,230 +347,106 @@ async function getSeasonGames(): Promise<SeasonGame[]> {
   return p;
 }
 
-/** `.595`, as MLB spells it — three places, no leading zero, and `.000` for a
- *  club that has not played, which is the same shape a dash would occupy. */
-function pct(w: number, l: number): string {
-  const n = w + l;
-  return n === 0 ? '.000' : (w / n).toFixed(3).replace(/^0/, '');
+/**
+ * **The All-Star game's date**, which is what the two half columns are split
+ * on.
+ *
+ * Asked for rather than hardcoded or approximated: the break moves by a week or
+ * more between seasons, and a mid-July constant would put a fortnight of games
+ * on the wrong side of it in some years and be silently wrong in all of them.
+ * `gameType=A` returns exactly one game — **276 bytes**, measured — and the
+ * walk's own `gameType=R` means that game is never in the games being split.
+ *
+ * A whole season, because it is one: cached for a day, which is as often as it
+ * could conceivably matter.
+ */
+let allStarCache: { date: string | null; at: number } | null = null;
+
+async function getAllStarDate(): Promise<string | null> {
+  if (allStarCache && Date.now() - allStarCache.at < DIVISIONS_TTL) return allStarCache.date;
+  const url =
+    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${SEASON}&gameType=A` +
+    `&fields=dates,games,officialDate`;
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) throw new Error(`MLB All-Star schedule returned ${res.status}`);
+  const data = (await res.json()) as ScheduleResponse;
+  const date = data.dates?.[0]?.games?.[0]?.officialDate ?? null;
+  allStarCache = { date, at: Date.now() };
+  return date;
 }
 
-/** Games behind, in MLB's own form: `-` for whoever leads, and one decimal
- *  otherwise. The arithmetic is MLB's too — half the sum of the win gap and the
- *  loss gap — so the two spans cannot come to mean different things by it. */
-function gamesBack(w: number, l: number, leadW: number, leadL: number): string {
-  const gb = (leadW - w + (l - leadL)) / 2;
-  return gb <= 0 ? '-' : gb.toFixed(1);
-}
-
-interface Tally {
-  wins: number;
-  losses: number;
-  runsScored: number;
-  runsAllowed: number;
-  home: StandingsRecord;
-  away: StandingsRecord;
-  /** The club's results in date order, for the streak. */
-  results: boolean[];
-  /** Opponent id per result, in the same order, so the .500 cut can be taken
-   *  after the season records are known rather than during the walk. */
-  opponents: number[];
-}
-
-function emptyTally(): Tally {
-  return {
-    wins: 0,
-    losses: 0,
-    runsScored: 0,
-    runsAllowed: 0,
-    home: { wins: 0, losses: 0 },
-    away: { wins: 0, losses: 0 },
-    results: [],
-    opponents: [],
-  };
-}
-
-/** Every club's line over a range of days, inclusive. Final games only — see
- *  `fetchSeasonGames`. */
-function tally(games: SeasonGame[], start: string, end: string): Map<number, Tally> {
-  const out = new Map<number, Tally>();
-  const get = (id: number): Tally => {
-    let t = out.get(id);
-    if (!t) out.set(id, (t = emptyTally()));
-    return t;
-  };
+/** A club's games in date order, final only — the one list all three splits are
+ *  cut from, so they cannot come to disagree about which games a club played. */
+function gamesOf(games: SeasonGame[], teamId: number): { won: boolean; date: string }[] {
+  const out: { won: boolean; date: string }[] = [];
   for (const g of games) {
-    if (!g.final || g.date < start || g.date > end) continue;
-    for (const [me, them, atHome] of [
-      [g.away, g.home, false],
-      [g.home, g.away, true],
-    ] as const) {
-      const t = get(me.id);
-      if (me.won) t.wins++;
-      else t.losses++;
-      t.runsScored += me.score;
-      t.runsAllowed += them.score;
-      const venue = atHome ? t.home : t.away;
-      if (me.won) venue.wins++;
-      else venue.losses++;
-      t.results.push(me.won);
-      t.opponents.push(them.id);
-    }
+    if (!g.final) continue;
+    const me = g.away.id === teamId ? g.away : g.home.id === teamId ? g.home : null;
+    if (!me) continue;
+    out.push({ won: me.won, date: g.date });
   }
   return out;
 }
 
-/** `W2`, `L4` — the trailing run of one result. Null where the club played
- *  nothing over the span, which on a seven-day window is an ordinary answer for
- *  a club on a break. */
-function streakOf(results: boolean[]): string | null {
-  if (results.length === 0) return null;
-  const last = results[results.length - 1];
-  let n = 1;
-  for (let i = results.length - 2; i >= 0 && results[i] === last; i--) n++;
-  return `${last ? 'W' : 'L'}${n}`;
+/** Won-lost over a slice, or null where the slice is empty — the join-to-null
+ *  rule one cell wide, so a club with no games either side of a boundary draws a
+ *  dash rather than `0-0`, which reads as a record. */
+function record(rows: { won: boolean }[]): StandingsRecord | null {
+  if (rows.length === 0) return null;
+  let wins = 0;
+  for (const r of rows) if (r.won) wins++;
+  return { wins, losses: rows.length - wins };
 }
 
-async function buildWindow(span: number): Promise<MlbStandings> {
-  const [games, teams, divisions] = await Promise.all([
-    getSeasonGames(),
-    getTeamList(),
-    getDivisions(),
-  ]);
-  const end = baseballToday();
-  const start = addDays(end, -(span - 1));
-  const window = tally(games, start, end);
-  // **The `.500 or better` set is the club's record *now*, not on the day of
-  // the game** — MLB's own definition of the split this column mirrors, and the
-  // one that makes a seven-day board mean the same thing the season board
-  // means. Off the same game list rather than a second read of the standings:
-  // measured, the two agree on all thirty clubs.
-  const season = tally(games, `${SEASON}-01-01`, end);
-  const over500 = new Set(
-    [...season].filter(([, t]) => t.wins >= t.losses).map(([id]) => id),
-  );
-  const byDivision = new Map<number, StandingsTeam[]>();
-  const byLeague = new Map<number, StandingsTeam[]>();
-  const rows: StandingsTeam[] = [];
-  // **A club's division is not on the schedule payload**, so it comes off the
-  // season board — which is the one place this server is told which of the six
-  // a club is in, and is the second upstream read a window costs. It is shared
-  // rather than spent: the Standings tab opens on the season, so by the time a
-  // reader picks a window it is already in hand, and the two boards can never
-  // come to disagree about which division a club is in.
-  const seasonBoard = await getSeasonBoard();
-  const placeOf = new Map(seasonBoard.teams.map((t) => [t.id, t]));
-  for (const info of teams) {
-    const place = placeOf.get(info.id);
-    // A club the season board has no row for cannot be placed in a division,
-    // and a standings row with no group is a row with nowhere to be drawn.
-    if (!place) continue;
-    const t = window.get(info.id) ?? emptyTally();
-    let vsWins = 0;
-    let vsLosses = 0;
-    for (let i = 0; i < t.results.length; i++) {
-      if (!over500.has(t.opponents[i])) continue;
-      if (t.results[i]) vsWins++;
-      else vsLosses++;
-    }
-    const row: StandingsTeam = {
-      id: info.id,
-      name: info.name,
-      abbreviation: info.abbreviation,
-      leagueId: place.leagueId,
-      divisionId: place.divisionId,
-      wins: t.wins,
-      losses: t.losses,
-      pct: pct(t.wins, t.losses),
-      // Filled below, once the group each row sits in is known.
-      gamesBack: '-',
-      // **Null rather than the season's number.** A wild-card race is a fact
-      // about the season, and carrying it onto a seven-day row would be two
-      // arithmetics on one line — `BoardProjection`'s rule.
-      wildCardGamesBack: null,
-      runsScored: t.runsScored,
-      runsAllowed: t.runsAllowed,
-      runDiff: t.runsScored - t.runsAllowed,
-      home: t.home,
-      away: t.away,
-      vsOver500: { wins: vsWins, losses: vsLosses },
-      // The three MLB's own board has and a window cannot: ten games is a
-      // window of its own, and the other two are MLB's figures rather than
-      // ours.
-      lastTen: null,
-      oneRun: null,
-      expected: null,
-      streak: streakOf(t.results),
-      // A lens is not a standing — nothing about the last week clinches
-      // anything, and a leader mark drawn off seven days would read as one.
-      divisionLeader: false,
-      clinched: false,
-      magicNumber: null,
-      eliminationNumber: null,
-      gamesPlayed: t.wins + t.losses,
-      divisionRank: 0,
-      leagueRank: 0,
-    };
-    rows.push(row);
-    push(byDivision, row.divisionId, row);
-    push(byLeague, row.leagueId, row);
-  }
-  // Rank and games-back, per group, by the same rule in both: pct, then run
-  // differential. MLB's tiebreakers are head-to-head records this board has no
-  // business reimplementing over seven days, and run differential is the one
-  // tiebreak that is a fact about the span rather than about the season.
-  for (const group of byDivision.values()) {
-    group.sort(byRecord);
-    const lead = group[0];
-    group.forEach((row, i) => {
-      row.divisionRank = i + 1;
-      row.gamesBack = gamesBack(row.wins, row.losses, lead.wins, lead.losses);
-    });
-  }
-  for (const group of byLeague.values()) {
-    group.sort(byRecord);
-    group.forEach((row, i) => {
-      row.leagueRank = i + 1;
-    });
-  }
-  // Leaders out, then by record — the rule MLB applies to its own wild-card
-  // board, applied here because MLB has no opinion about a window.
-  const wildcard: MlbStandings['wildcard'] = [];
-  for (const [leagueId, group] of byLeague) {
-    wildcard.push({
-      leagueId,
-      teamIds: group.filter((r) => r.divisionRank !== 1).map((r) => r.id),
-    });
-  }
+/**
+ * The three columns MLB does not publish, for one club.
+ *
+ * **`L30` is thirty *games*, not thirty days**, because it stands beside `L10`
+ * and that one is games. Two columns an inch apart, one counting games and one
+ * counting days, is the kind of thing this codebase spends its length
+ * preventing — and a club that has had four days off would otherwise read as
+ * having gone cold.
+ */
+function splitsFor(
+  games: SeasonGame[],
+  teamId: number,
+  allStar: string | null,
+): Pick<StandingsTeam, 'lastThirty' | 'firstHalf' | 'secondHalf'> {
+  const played = gamesOf(games, teamId);
   return {
-    span: span as StandingsSpan,
-    start,
-    end,
-    teams: rows,
-    wildcard,
-    divisions,
-    fetchedAt: Date.now(),
+    lastThirty: record(played.slice(-30)),
+    // **Null, not an empty record, where the break has no date.** A failed
+    // All-Star read costs these two columns a dash on every row, which is the
+    // honest reading of "we could not ask" — where `0-0` on all thirty rows
+    // would be a claim that nobody has played since July.
+    firstHalf: allStar === null ? null : record(played.filter((g) => g.date < allStar)),
+    secondHalf: allStar === null ? null : record(played.filter((g) => g.date > allStar)),
   };
 }
 
-function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
-  const had = map.get(key);
-  if (had) had.push(value);
-  else map.set(key, [value]);
-}
-
-function byRecord(a: StandingsTeam, b: StandingsTeam): number {
-  return b.pct.localeCompare(a.pct) || b.runDiff - a.runDiff;
-}
-
-// ---- The two caches ---------------------------------------------------
+// ---- The board ---------------------------------------------------------
 
 let seasonCache: { board: MlbStandings; at: number } | null = null;
 let seasonInFlight: Promise<MlbStandings> | null = null;
 
-async function getSeasonBoard(): Promise<MlbStandings> {
+/**
+ * The board.
+ *
+ * **This route 502s honestly** where every enrichment in this server costs its
+ * own column and nothing more. It is the `/api/schedule` exception and the same
+ * test: the answer *is* the table, and a standings board drawn with dashes down
+ * it says "these clubs have no record" rather than "we could not ask".
+ *
+ * The three computed columns are the one part that does **not** follow that:
+ * they are an enrichment on a board that stands without them, so the schedule
+ * and the All-Star reads are each in their own `try` and a failure costs its own
+ * columns. That is the rule the rest of this server runs on, applied to the half
+ * of this file that is ours rather than MLB's.
+ */
+export async function getMlbStandings(): Promise<MlbStandings> {
   if (seasonCache && Date.now() - seasonCache.at < TTL) return seasonCache.board;
   if (seasonInFlight) return seasonInFlight;
-  const p = fetchSeasonBoard()
+  const p = buildBoard()
     .then((board) => {
       seasonCache = { board, at: Date.now() };
       return board;
@@ -581,31 +458,23 @@ async function getSeasonBoard(): Promise<MlbStandings> {
   return p;
 }
 
-const windowCache = new Map<number, { board: MlbStandings; at: number }>();
-const windowInFlight = new Map<number, Promise<MlbStandings>>();
-
-/**
- * The board for one span.
- *
- * **This route 502s honestly** where every enrichment in this server costs its
- * own column and nothing more. It is the `/api/schedule` exception and the same
- * test: the answer *is* the table, and a standings board drawn with dashes down
- * it says "these clubs have no record" rather than "we could not ask".
- */
-export async function getMlbStandings(span: StandingsSpan): Promise<MlbStandings> {
-  if (span === 'season') return getSeasonBoard();
-  const hit = windowCache.get(span);
-  if (hit && Date.now() - hit.at < TTL) return hit.board;
-  const running = windowInFlight.get(span);
-  if (running) return running;
-  const p = buildWindow(span)
-    .then((board) => {
-      windowCache.set(span, { board, at: Date.now() });
-      return board;
-    })
-    .finally(() => {
-      windowInFlight.delete(span);
-    });
-  windowInFlight.set(span, p);
-  return p;
+async function buildBoard(): Promise<MlbStandings> {
+  const board = await fetchSeasonBoard();
+  // Each in its own `try`: a dead schedule leaves MLB's own board standing with
+  // three columns of dashes, and a dead All-Star read costs two of them.
+  const [games, allStar] = await Promise.all([
+    getSeasonGames().catch((err: unknown) => {
+      console.error('standings splits unavailable:', (err as Error).message);
+      return [] as SeasonGame[];
+    }),
+    getAllStarDate().catch((err: unknown) => {
+      console.error('All-Star date unavailable:', (err as Error).message);
+      return null;
+    }),
+  ]);
+  if (games.length === 0) return board;
+  return {
+    ...board,
+    teams: board.teams.map((t) => ({ ...t, ...splitsFor(games, t.id, allStar) })),
+  };
 }

@@ -307,21 +307,38 @@ quarters whatever their words are (`Research` is 62px of text against `League`'s
 46, and basis-auto would make the strip a set of proportions rather than a set
 of columns).
 
-**With five tabs that rule has a floor, and it is 430px.** A fifth tab costs the
-strip no height at all — measured at 320 / 375 / 390 / 640 / 900 / 1200 / 1920,
-the row is 36–37px and the pinned chrome 99–102 with three tabs, with four and
-with five — but it costs width per tab, and below 430 five equal fifths no
-longer hold five words: at 320 each is 64px and `Research` wants 70, so
-`Overview` and `Research` both ellipsized, and so did they at 360 and 390, which
-are *above* the old 350 breakpoint and had slack with four tabs. A fourth tab
-was a narrow-phone problem; a fifth is an every-phone one.
+**With five tabs that rule was overturned, and the tabs are the width of their
+own words now.** An equal column is an equal *target*, and that was the whole
+argument for `flex: 1 1 0` — but the mark a tab carries is a **border on the
+box**, so with five words of unequal length `MLB` wore a **279px underline under
+a 30px word** at 1440 while `Overview` wore the same 279 under 65. The strip is
+`justify-content: space-between` with `flex: 0 1 auto` tabs now: the boxes hug
+their words (`.details-tab`'s own shape, which this strip's note already claims
+to be one tier up), and the row's slack goes to the gaps, which are then equal
+by construction rather than by the words happening to be similar lengths.
 
-**So below 430 the equal columns give way to content columns** — `flex: 1 1
-auto`, letting `MLB` and `Roster` hand their slack to the two long words,
-because what has to fit is the total rather than each fifth of it. Re-measured:
-**0px over on all five at 360, 390, 430 and above**, and 2–3px at 320–350 which
-the halved side padding below 340 takes to zero. The block is at the end of the
-stylesheet, a media query adding no specificity.
+Measured across widths, gap between adjacent tabs and overflow per tab: **1920
+369px, 1440 249, 900 114, 640 64, 430 22, 390 12, 360 4, 320 1 — one value at
+every width, zero overflow on all five, and the strip's outer edges flush with
+the row at both ends.** The row is 36–37px throughout, which is what it was with
+three tabs and with four.
+
+The padding gives way twice on the way down and the type once (14px → 8px
+padding at 640, 13px type and 5px at 430, 2px at 340), because with
+`space-between` the row's own slack is the first thing spent: five words come to
+~244px at 14px type and five boxes of 14px padding either side add 140, against
+the 276 the app's gutters leave at 320.
+
+**One thing the change quietly fixed and one it quietly broke.** The dot on the
+Fantasy tab is positioned 9px off its label, in the tab's right padding — free
+while that was 14 and clipped by `overflow: hidden` once the narrow blocks took
+it to 8, 5 and 2: measured 1px over at 640, 4 at 430 and 390, 7 at 320, with all
+five words fitting cleanly. A mark that disappears on a phone is worse than no
+mark, so `.main-tab:has(.lg-tab-dot)` floors that tab's right padding at 11px.
+The cost — the tab shrinking back when the moves are read — is the objection the
+original corner-versus-label note weighed and rejected at 13px in a strip of
+equal quarters; `space-between` spreads 9px across four gaps, so each moves 2px,
+and the press that clears it is the press that leaves the row.
 
 **It keeps its own selector rather than folding onto `.view-switch`**, which is
 this repo's fold-don't-restyle rule read the other way round: two things that

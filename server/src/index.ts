@@ -34,7 +34,6 @@ import type {
   PlayerKind,
   ResearchIncludeKey,
   ResearchWindow,
-  StandingsSpan,
   SeasonArsenalPitch,
   TeamHittingWindow,
   TeamSplitSide,
@@ -2258,33 +2257,31 @@ app.get(
 );
 
 /**
- * **Where the thirty clubs stand**, over the season or over the last N days —
- * the Standings tab.
+ * **Where the thirty clubs stand** — the Standings tab.
  *
- * `span=` takes the research board's own five values, and that is deliberate
- * rather than incidental: `RESEARCH_WINDOWS` is what *the last 15 days* means
- * everywhere else in this app, and a sixth vocabulary here would be a reader
- * asking two boards the same question and getting two answers. Unrecognized
- * falls back to the season, the rule `/api/research` states.
+ * One board and it is the season: MLB's own standings, which is the only
+ * authority on a club's record and the only place games behind, the wild-card
+ * race, the magic number and the split records exist at all.
  *
- * The two spans are two arithmetics — MLB's own standings for the season, the
- * season's schedule walked for a window — and `mlbStandings.ts` carries the
- * measurement that says they agree: **all thirty clubs match on wins, losses,
- * runs scored and runs allowed**, and the one line of deduplication that match
- * depends on.
+ * **It took a `span=` and does not.** The tab offered five spans with the whole
+ * board recomputed for a window; three columns beside `L10` — the last thirty
+ * games and the two halves of the season — say more of what that control was
+ * reached for and say it on the row the record is already on. Those three are
+ * not on `/api/v1/standings` at any span, so `mlbStandings.ts` walks the
+ * season's own schedule for them, and the measurement that says the walk agrees
+ * with MLB on all thirty clubs is beside it, along with the one line of
+ * deduplication it rests on.
  *
- * **This route 502s honestly** for the same reason the one above does.
+ * **This route 502s honestly** — the `/api/schedule` exception, the answer being
+ * the table itself. The three computed columns are the exception to *that*: they
+ * are an enrichment on a board that stands without them, so each read is in its
+ * own `try` and a failure costs its own columns and nothing more.
  */
 app.get(
   '/api/mlb/standings',
   requireUser,
-  asyncRoute(async (req, res) => {
-    const asked = req.query.span;
-    const days = Number(asked);
-    const span: StandingsSpan = RESEARCH_WINDOWS.includes(days as ResearchWindow)
-      ? (days as StandingsSpan)
-      : 'season';
-    res.json(await getMlbStandings(span));
+  asyncRoute(async (_req, res) => {
+    res.json(await getMlbStandings());
   }),
 );
 
