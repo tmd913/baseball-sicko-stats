@@ -341,10 +341,131 @@ const ABSENCE_GAMES: Record<PlayerKind, number> = { batter: 6, pitcher: 12 };
  * the measured distribution rather than an everyday share: it is what a man
  * nobody can say anything about plays, and moving it between 0.4 and 0.7 moves
  * the season's mean error by four ten-thousandths.
+ *
+ * *(Both of those sentences are a **batter's**, which is the population they
+ * were measured on, and both constants are per kind now — see `RETURN_PRIOR`.
+ * A pitcher's pair is 0.16 / 16 against the batter's 0.55 / 3, and the
+ * "moving it between 0.4 and 0.7 changes nothing" reading is what a sweep over
+ * pitchers alone contradicts: on that population the same move is worth a
+ * third of a share of bias. The batter's numbers stand untouched.)*
  */
 const RETURN_FULL = 12;
-const RETURN_PRIOR = 0.55;
-const RETURN_PRIOR_GAMES = 3;
+/**
+ * **What a man is assumed to be worth while nobody knows yet** — the share of
+ * his club's games he plays, and how many games of pseudo-evidence that
+ * assumption is worth, for the case where there is no record *before* his
+ * absence to read (a call-up, a debut, a man traded in this month).
+ *
+ * **Per kind, and it was one number for both.** 0.55 is a batter's: a regular
+ * coming back off the injured list plays most days, and that is what it was
+ * measured for. Applied to a **pitcher** it says he appears in 55% of his
+ * club's games, which no reliever in baseball does — the league's own figure
+ * this season is **0.182** over men with five or more appearances and 0.256
+ * over the established ones (20+), against a mean of 160.5 club games.
+ *
+ * What it did on the board is worth writing down, because it is what was
+ * reported. A pitcher whose entire record is one appearance goes down the
+ * `before.length === 0` branch, where the answer is
+ * `(1 + 3 × 0.55) / (1 + 3)` = **0.6625** — and because his board ratio and his
+ * plain rate over the window are the same one appearance, the factor
+ * `shareOfFlags / plain` cancels and 0.6625 *is* his projected appearance rate.
+ * Measured on the live board, three men came out at exactly that number:
+ * Andrew Sears (1 appearance all season), Khristian Curtis (2) and Kai-Wei Teng
+ * (1 in thirty days). Sears was projected for **4 appearances out of his club's
+ * 6 remaining games**, which with the workload fault below came to 15.9 innings
+ * and 15.5 strikeouts — the top of the projected pitching board, from a man who
+ * has thrown four innings all year.
+ *
+ * **Both numbers are swept rather than picked**, in appearance space and
+ * against what actually happened: every pitcher and every club-day of the last
+ * thirty, asking the rule for his share off the record up to that day and
+ * scoring it against the share of his club's next six games he really did
+ * appear in — **6,724 cases, 283 of them in this branch**, whose mean actual
+ * share is **0.1873**.
+ *
+ * | prior / pseudo-games | branch RMSE | branch bias |
+ * | --- | --- | --- |
+ * | **0.55 / 3** (as it was) | 0.36644 | **+0.3025** |
+ * | 0.26 / 8 | 0.20891 | +0.1181 |
+ * | 0.19 / 12 | 0.17767 | +0.0517 |
+ * | **0.16 / 16** | **0.17068** | **+0.0171** |
+ * | 0.13 / 12 | 0.16949 | +0.0053 |
+ * | 0.10 / 30 | 0.17930 | −0.0547 |
+ *
+ * The basin is broad and flat — every pair between `0.13/12` and `0.16/22` is
+ * inside 0.8% of the best RMSE — so what decides it is **calibration** and
+ * **provenance**: `0.16` is within a whisker of the league's own reliever
+ * appearance rate, which is what a prior about relievers ought to be, and the
+ * pair leaves the branch essentially unbiased where the shipped one ran a third
+ * of a share high. Whole-population MAE over the same 6,724 cases goes
+ * **0.13031 → 0.12302**.
+ *
+ * **Sixteen pseudo-games rather than three**, and that is the half that matters
+ * as much as the rate: a reliever's usage is far noisier than a batter's, and
+ * *he pitched on the day he was activated* is close to no evidence at all about
+ * the next six. At three it moved the answer by a quarter of a share on one
+ * outing.
+ *
+ * **The batter's pair is untouched at 0.55 / 3.** Nothing here says it is
+ * wrong; it was measured for that population and this sweep is a pitcher's.
+ */
+const RETURN_PRIOR: Record<PlayerKind, number> = { batter: 0.55, pitcher: 0.16 };
+const RETURN_PRIOR_GAMES: Record<PlayerKind, number> = { batter: 3, pitcher: 16 };
+
+/**
+ * **How many outings it takes before a man's own outing length is worth
+ * trusting** — the relief branch's regression, in appearances.
+ *
+ * `outsPer` was the one figure in `projectPitcher` left unregressed, on the
+ * stated grounds that how long he goes is *a fact about his job rather than
+ * about how well he has thrown*. That is true of a man with a record and false
+ * of a man with one: Andrew Sears threw a single four-inning outing all season,
+ * and the engine read it as *four innings every time he appears* — 15.9 innings
+ * over four projected appearances, against a league relief outing of **3.18
+ * outs (1.06 innings)**.
+ *
+ * **Swept against a genuine holdout**: the 7-day board is a subset of the
+ * season board, so `season − 7d` is his record strictly *before* the week being
+ * predicted. Scored over the **252 pitcher-weeks** that were all relief,
+ * weighted by the appearances actually made, since that is the space the
+ * projection spends the figure in:
+ *
+ * | k (appearances) | MAE | RMSE | bias |
+ * | --- | --- | --- | --- |
+ * | **0** (as it was) | 0.9016 | 1.5989 | **+0.2621** |
+ * | 4 | 0.7997 | 1.3790 | +0.1053 |
+ * | 8 | 0.7655 | 1.3374 | +0.0340 |
+ * | **10** | **0.7571** | **1.3315** | **+0.0083** |
+ * | 14 | 0.7510 | 1.3340 | −0.0318 |
+ * | 20 | 0.7522 | 1.3544 | −0.0745 |
+ *
+ * 10 is the RMSE minimum and the bias zero together; 14 takes another 0.8% of
+ * MAE and pays for it by running the whole population short. **MAE −16%, RMSE
+ * −17%, and the bias essentially gone.**
+ *
+ * **Only the relief branch takes it**, and that is the measurement's own answer
+ * rather than caution. The same sweep over the 134 pitcher-weeks that were all
+ * *starts* improves MAE by 3% at k=30 and makes the bias **worse at every k** —
+ * +0.804 unregressed against +1.011 at 30 — because that side already runs long
+ * and the league's 16.6 outs a start is above the typical actual. The original
+ * objection is right where it was written; it was only ever wrong about relief.
+ */
+const OUTING_REGRESS_APPS = 10;
+
+/**
+ * **And the start-adjusted alternative was measured and rejected**, which is
+ * worth recording because it is the obvious fix and it is worse.
+ *
+ * A swingman's `outs / games` mixes his starts into a relief workload — Kai-Wei
+ * Teng is 26 appearances, 10 of them starts, 210 outs, so the plain figure says
+ * 2.7 innings an outing. Subtracting his starts at the league's own rate
+ * (`outs − starts × 16.59`, over his relief appearances alone) looks like the
+ * answer and back-tests **worse on every metric**: MAE 0.8064 against 0.7655 at
+ * the same k, and a bias of **−0.279** against +0.034. A swingman's starts are
+ * openers and bulk games far shorter than a rotation start, so the league SP
+ * figure strips too much. The regression above gets him to a believable number
+ * without inventing a split the row does not carry.
+ */
 
 /** The fewest club games of appearance record worth reading. Under it — the
  *  opening week of a season, a club whose days the day exports have missed —
@@ -707,6 +828,10 @@ function projectPitcher(
   appearanceShare = 1,
   /** His role's rates, for the short-record regression — see `REGRESS_OUTS`. */
   bases: Baselines = new Map(),
+  /** The league's own relief outing in outs, which a thin **relief** record is
+   *  pulled toward — see `OUTING_REGRESS_APPS`. Three outs is an inning, the
+   *  fallback for a caller with no pool to read it off. */
+  reliefOuts = 3,
 ): void {
   const outs = num(row.outs);
   const games = num(row.games);
@@ -770,11 +895,26 @@ function projectPitcher(
   // pulling it up toward the role would project innings nobody is going to give
   // him. It is also the denominator every rate above rides on, so moving it
   // would move all of them a second time.
-  const outsPer = blend(
+  const outsPerOwn = blend(
     outs / denom,
     recent && recentDenom > 0 ? num(recent.outs) / recentDenom : null,
     w,
   );
+  /**
+   * **And on the relief side it is pulled toward the league's own outing**,
+   * which is the one place the paragraph above was wrong.
+   *
+   * *How long he goes is a fact about his job* holds for a man with a record.
+   * It says nothing about a man with **one**: Andrew Sears threw a single
+   * four-inning outing all season, and unregressed the engine read that as four
+   * innings every time he appears — 15.9 projected innings and the top of the
+   * board's strikeout column. The sample here is **appearances**, not outs, the
+   * quantity being outs-per-appearance; `OUTING_REGRESS_APPS` carries the sweep,
+   * and the reason the starter branch is deliberately left alone.
+   */
+  const outsPer = starterView
+    ? outsPerOwn
+    : regress(outsPerOwn, reliefOuts, denom, OUTING_REGRESS_APPS);
   const hRate = per('hits', row.hits, recent?.hits);
   const bbRate = per('walks', row.walks, recent?.walks);
   const kRate = per('strikeouts', row.strikeouts, recent?.strikeouts);
@@ -821,6 +961,18 @@ function projectPitcher(
 // ---- The engine ------------------------------------------------------------
 
 interface Pools {
+  /**
+   * **How long a relief outing is, across the league** — total outs over total
+   * appearances for the men who have never started, which is the population the
+   * figure is about. Measured this season: **3.18 outs**, an inning and a
+   * fraction.
+   *
+   * It is what a thin relief record is pulled toward (`OUTING_REGRESS_APPS`),
+   * and it is here rather than in `pitBase` because that structure holds rates
+   * **per out** — it can say how many strikeouts an out is worth and cannot say
+   * how many outs an appearance is.
+   */
+  rpOutsPerApp: number;
   batSeason: Map<number, ResearchRow>;
   batRecent: Map<number, ResearchRow>;
   pitSeason: Map<number, ResearchRow>;
@@ -860,6 +1012,30 @@ const baselineRole = (r: ResearchRow): string =>
 
 const byId = (rows: ResearchRow[]): Map<number, ResearchRow> =>
   new Map(rows.map((r) => [r.id, r]));
+
+/**
+ * **The league's own relief outing, in outs** — summed rather than averaged,
+ * the rule every baseline in this file follows: a man with one appearance
+ * should not weigh as much as one with sixty in the figure he is pulled toward.
+ *
+ * **Men who have never started**, which is the population this is a fact about.
+ * A swingman's outs are part start and part relief and the row carries no split,
+ * so including him would put a starter's innings into a reliever's baseline —
+ * and the baseline is precisely what corrects for that.
+ *
+ * A season with no relief in it at all falls back to three outs, an inning,
+ * which is the only sensible thing to say about a bullpen nobody has used.
+ */
+function reliefOuting(rows: ResearchRow[]): number {
+  let outs = 0;
+  let apps = 0;
+  for (const r of rows) {
+    if (num(r.gamesStarted) !== 0 || num(r.games) <= 0 || num(r.outs) <= 0) continue;
+    outs += num(r.outs);
+    apps += num(r.games);
+  }
+  return apps > 0 ? outs / apps : 3;
+}
 
 /**
  * **Is this game still ahead of the clock?** — the test `remainingGames` asks of
@@ -1218,10 +1394,10 @@ function shareOfFlags(flags: boolean[], kind: PlayerKind): number {
       Math.min(1, since.length / RETURN_FULL),
     );
   }
-  return (
-    (since.filter(Boolean).length + RETURN_PRIOR_GAMES * RETURN_PRIOR) /
-    (since.length + RETURN_PRIOR_GAMES)
-  );
+  // **Per kind** — a batter's prior is a regular's and a pitcher's is a
+  // reliever's, and they are nowhere near each other. See `RETURN_PRIOR`.
+  const k = RETURN_PRIOR_GAMES[kind];
+  return (since.filter(Boolean).length + k * RETURN_PRIOR[kind]) / (since.length + k);
 }
 
 /**
@@ -1511,7 +1687,17 @@ function projectOnePitcher(
   // longer one besides. See `projectPitcher`'s `appearanceShare`.
   const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, pools.pitRecent.get(id) ?? null);
   const mults = games.map((g) => pitcherGameMult(pools, id, oppOf(g)));
-  projectPitcher(row, pools.pitRecent.get(id) ?? null, mults, false, into, false, rate, pools.pitBase);
+  projectPitcher(
+    row,
+    pools.pitRecent.get(id) ?? null,
+    mults,
+    false,
+    into,
+    false,
+    rate,
+    pools.pitBase,
+    pools.rpOutsPerApp,
+  );
   return { starts: 0, reliefGames: mults.length * rate, placed: true };
 }
 
@@ -2173,6 +2359,7 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
       BAT_FIELDS,
     ),
     pitBase: buildBaselines(pitSeason.rows, baselineRole, (r) => num(r.outs), PIT_FIELDS),
+    rpOutsPerApp: reliefOuting(pitSeason.rows),
   };
 
   // How many days of the span still have a game to be played — the same test

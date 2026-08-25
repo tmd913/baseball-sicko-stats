@@ -1545,7 +1545,17 @@ on every one of them, which is what gzip is for. Warm, the route answers in unde
 a second; the context is memoized on the span and everything under it is cached
 for hours already.
 
-#### A pre-existing engine bug this board made impossible to miss
+#### Three pre-existing engine bugs this board made impossible to miss
+
+A board that sorts six hundred pitchers by a projected figure puts the engine's
+worst case at the top of the first page, which is how all three of these were
+found. **None of them is new** — every one was live in the Roster's own lens and
+in the matchup card too — and all three are on the **pitching** side. A clean
+A/B against the same day with only these constants moved: **710 of 710 batters
+identical** on PA, HR and games; 503 of 821 pitchers identical, 318 moved, and
+every one of them **downward**.
+
+##### 1. A starter's recent month, read as if it were all starts
 
 **Adrian Houser led the entire projected pitching board in strikeouts**, on 43
 projected innings over two starts. He is not that pitcher.
@@ -1569,9 +1579,113 @@ turns, 21.6 a turn, his season figure to the tenth**, and he is off the first pa
 of the board. The relief view needs no such guard: games are games whatever role
 they were.
 
-**It was live in all three callers**, the Roster's lens and the matchup card
-included; this board is simply the one that sorts six hundred men by the figure
-and puts the worst case at the top.
+##### 2. A man with one appearance, read as pitching most days
+
+**Andrew Sears was projected for 15.9 innings and 15.5 strikeouts over a week**
+— the top of the board — off a career of **one four-inning outing**.
+
+`shareOfFlags` answers *how often does he pitch* off the lineup record, and where
+there is no stretch **before** his absence to read — a call-up, a debut, a man
+traded in this month — it shrinks his thin record toward `RETURN_PRIOR` with the
+weight of `RETURN_PRIOR_GAMES` club games. Both were **one number for batters and
+pitchers**, and 0.55 is a batter's: a regular back off the injured list plays most
+days. For a reliever it is more than double anything real — the league's own
+figure this season is **0.182** over men with five or more appearances and 0.256
+over the established ones.
+
+A man whose whole record is one appearance therefore came out at
+`(1 + 3 × 0.55) / (1 + 3)` = **0.6625**, and because his board ratio and his plain
+rate over the window are the same one appearance, the factor `shareOfFlags /
+plain` cancels and 0.6625 *is* his projected appearance rate. Three men on the
+live board came out at exactly that number: Sears (1 appearance all season),
+Khristian Curtis (2) and Kai-Wei Teng (1 in thirty days).
+
+**Both constants are now per kind and both were swept**, in appearance space
+against what actually happened: every pitcher and every club-day of the last
+thirty, asking the rule for his share off the record up to that day and scoring
+it against the share of his club's next six games he really did appear in —
+**6,724 cases, 283 of them in this branch**, mean actual share **0.1873**.
+
+| prior / pseudo-games | branch RMSE | branch bias |
+| --- | --- | --- |
+| **0.55 / 3** (as it was) | 0.36644 | **+0.3025** |
+| 0.26 / 8 | 0.20891 | +0.1181 |
+| 0.19 / 12 | 0.17767 | +0.0517 |
+| **0.16 / 16** (shipped) | **0.17068** | **+0.0171** |
+| 0.13 / 12 | 0.16949 | +0.0053 |
+| 0.10 / 30 | 0.17930 | −0.0547 |
+
+The basin is broad — every pair between `0.13/12` and `0.16/22` is inside 0.8% of
+the best RMSE — so what decides it is **calibration** and **provenance**: 0.16 is
+within a whisker of the league's own reliever appearance rate, which is what a
+prior about relievers ought to be. Whole-population MAE over the same 6,724 cases
+goes **0.13031 → 0.12302**. **Sixteen pseudo-games rather than three** matters as
+much as the rate: *he pitched on the day he was activated* is close to no evidence
+at all about the next six.
+
+**The batter's pair is untouched at 0.55 / 3.** Nothing here says it is wrong; it
+was measured on that population and this sweep is a pitcher's.
+
+##### 3. One long outing, read as how long he always goes
+
+Sears again, and the other half of his 15.9 innings: he threw **four innings** in
+his one appearance, and `outsPer` was the single figure in `projectPitcher` left
+unregressed — so the engine read that as four innings *every time he appears*,
+against a league relief outing of **3.18 outs (1.06 innings)**.
+
+The comment defending it says how long he goes is *a fact about his job rather
+than about how well he has thrown*. That is true of a man with a record and says
+nothing about a man with one.
+
+**Swept against a genuine holdout**: the 7-day board is a subset of the season
+board, so `season − 7d` is his record strictly *before* the week being predicted.
+Scored over the **252 pitcher-weeks that were all relief**, weighted by the
+appearances actually made:
+
+| k (appearances) | MAE | RMSE | bias |
+| --- | --- | --- | --- |
+| **0** (as it was) | 0.9016 | 1.5989 | **+0.2621** |
+| 4 | 0.7997 | 1.3790 | +0.1053 |
+| 8 | 0.7655 | 1.3374 | +0.0340 |
+| **10** (shipped) | **0.7571** | **1.3315** | **+0.0083** |
+| 14 | 0.7510 | 1.3340 | −0.0318 |
+| 20 | 0.7522 | 1.3544 | −0.0745 |
+
+**MAE −16%, RMSE −17%, and the bias essentially gone.** 10 is the RMSE minimum
+and the bias zero together.
+
+**Only the relief branch takes it**, and that is the measurement's answer rather
+than caution: the same sweep over the 134 pitcher-weeks that were all *starts*
+improves MAE by 3% at k=30 and makes the bias **worse at every k** — +0.804
+unregressed against +1.011 at 30 — because that side already runs long and the
+league's 16.6 outs a start is above the typical actual. The original objection is
+right where it was written; it was only ever wrong about relief.
+
+**And the obvious fix was measured and rejected**, which is worth recording. A
+swingman's `outs / games` mixes his starts into a relief workload — Kai-Wei Teng
+is 26 appearances, 10 of them starts, 210 outs, so the plain figure says 2.7
+innings an outing. Subtracting his starts at the league's own rate
+(`outs − starts × 16.59`, over his relief appearances alone) looks like the answer
+and back-tests **worse on every metric**: MAE 0.8064 against 0.7655 at the same k,
+and a bias of **−0.279** against +0.034. A swingman's starts are openers and bulk
+games far shorter than a rotation start, so the league SP figure strips too much.
+
+##### What the three came to, on the board
+
+| | before | after |
+| --- | --- | --- |
+| Andrew Sears | `G 4 · IP 15.9 · K 15.5` | **`1.3 · 1.7 · 1.6`** |
+| Khristian Curtis | `3.3 · 13.1 · 11.9` | **`1 · 1.6 · 1.5`** |
+| Kai-Wei Teng | `4.6 · 12.4 · 13` | **`1.5 · 3.3 · 3.4`** |
+| Adrian Houser | `IP 26.3` over 2 starts | **`14.4`** |
+| Payton Tolle, Gerrit Cole, deGrom, Nola… | — | **identical to the digit** |
+
+The first page of the projected pitching board is now men with two turns in it,
+and the deepest relief line on it is 6.0 innings over 4.4 appearances — a
+50-appearance long man at 1.36 innings an outing. Every `IP / appearance` figure
+among the men with no projected start now falls between **1.00 and 3.72**, which
+is a relief workload; the top of that range is the genuine swingmen (Fedde,
+Littell, Civale), which is right.
 
 #### Measured
 

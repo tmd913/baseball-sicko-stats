@@ -1281,15 +1281,29 @@ it and that board has no bar at all. `ProjectionKey`'s sentences were split into
 `ProjectionNote` for it, a fourth caller which cannot use a popover at all. The
 whole of it is in **The research board**, *The projected reading*.
 
-**One thing that changed under this table with it, and it is a correction rather
-than an addition.** `projectPitcher` blended a starter's season outs-per-turn with
-his last thirty days' and applied `startsAreHisRecord`'s majority test to the
-season side only, so a starter whose recent month was mostly relief was read at
-his *relief* workload per start — Adrian Houser, 6 recent appearances and one
-start for 75 outs, projected at 25 innings a turn. The recent term now takes the
-same guard. Every caller moves: this table's rows, the matchup card and the board
-alike. See **The research board**, *A pre-existing engine bug this board made
-impossible to miss*.
+**Three things changed under this table with it, and all of them are corrections
+rather than additions.** A board that sorts six hundred pitchers by a projected
+figure puts the engine's worst case on its first page, which is how each was
+found; every one was live here and on the matchup card too, and all three are on
+the pitching side.
+
+1. `projectPitcher` applied `startsAreHisRecord`'s majority test to the **season**
+   side of its outs-per-start blend and left the recent window unguarded, so a
+   starter whose last month was mostly relief was read at his relief workload per
+   *start* — Adrian Houser, 6 recent appearances and one start for 75 outs,
+   projected at 25 innings a turn.
+2. `RETURN_PRIOR` and `RETURN_PRIOR_GAMES` were one pair for both kinds, and 0.55
+   is a **batter's**: a pitcher whose whole record is one appearance came out
+   projected to pitch in **two thirds** of his club's games. They are per kind
+   now — 0.16 / 16 for pitchers, swept; **the batter's 0.55 / 3 is untouched**,
+   and a clean A/B has 710 of 710 batters identical.
+3. `outsPer` was the one figure in that function left unregressed, so a man with
+   a single four-inning outing was projected for four innings every time he
+   appears. The **relief** branch now regresses toward the league's own outing;
+   the starter branch is deliberately left alone, the measurement saying so.
+
+All three are set out with their sweeps in **The research board**, *Three
+pre-existing engine bugs this board made impossible to miss*.
 
 #### It is a mode of this table, not a fourth page
 
