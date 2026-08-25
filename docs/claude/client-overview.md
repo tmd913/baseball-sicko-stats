@@ -14,11 +14,14 @@ assemble by hand: cross to the League page for the matchup, come back, set the
 date to today, read the table, set it to yesterday, read it again, turn on
 `Projected` and set it to tomorrow.
 
-Four blocks and no controls:
+Two blocks and no controls:
 
 1. **Your matchup** — this week's scoreboard card.
-2. **Today**, 3. **Yesterday**, 4. **Tomorrow** — a day block each, in the order
-   a manager asks after them rather than in calendar order.
+2. **Your days** — **Yesterday · Today · Tomorrow**, a card each, as a carousel
+   that opens on Today.
+
+**It is a reader-with-a-league's default page**, and the first tab either way —
+see *The tab is the league's, and so is the default* below.
 
 ### It is a composition, not a data source
 
@@ -31,7 +34,9 @@ Four blocks and no controls:
   where each day's **lineup** comes from: that response carries `lineups` keyed
   by date whenever it is reading a fantasy team.
 - Tomorrow is `/api/projection/roster` over one day, whose `lineup.days` is the
-  plan the projected block cuts by.
+  plan the projected block cuts by — **and so is Today**, for the hours before
+  it starts (below). Two dates, two requests: the engine hands back a span total
+  and no per-day breakdown, so a two-day read could not be split back apart.
 
 What is new is the arithmetic that makes a page out of them, and it is all in
 `client/src/categoryValue.ts`.
@@ -43,6 +48,14 @@ projection leaves Today and Yesterday standing, and each block says what it has
 rather than the view becoming a message. **Sequence-numbered per block rather
 than per view**, because the three land independently and a slow projection must
 not discard a fresh Today.
+
+**Four reads now, and the fourth is a judgment about mornings.** Today's
+projection is fired alongside the other three rather than after the report has
+said whether it is wanted. A dependent read is cheaper — it would cost nothing
+in the evening, when the day has started and the projection will not be drawn —
+and it would put a **second wait in front of the one card a reader opens this
+page for**, which is the wrong side to save on. It is one more answer off an
+engine this page is already asking, behind the server's own cache.
 
 **The clock is in the deps**, which is the one dependency worth naming: `today`
 moves on resume (see **Client**, *Reopening the app shows what a reload would
@@ -134,6 +147,156 @@ which is why this is recorded here as a property of the upstream rather than
 fixed. Anything that starts reading this page's arithmetic over an older span
 should re-measure first.
 
+### The three days are a carousel
+
+**One mechanism at every width, and there is no carousel *mode*.** `.ov-days` is
+a scroll-snap flex row always; what the 900px breakpoint changes is the cards'
+flex basis — `0 0 100%` of the row below it, `1 1 0` above. So above 900 the row
+does not overflow, nothing scrolls, nothing snaps and the dots are not drawn.
+**The desktop layout is what a carousel that fits looks like**, which is why
+there is no second set of rules for it and nothing for a reader to be in.
+
+**Chronological, where the blocks used to read `Today · Yesterday · Tomorrow`.**
+That was the order a manager *asks* after them and it is wrong for a row you
+swipe, whose whole grammar is that left is back and right is forward. It costs
+nothing: the row opens on Today, so what leads is unchanged and what moved is
+where the other two are — and it reads better on a desk too, three columns
+left-to-right being a timeline rather than a ranking. `DAYS` is the one place
+the order is stated and `OPENS_ON` is derived from it, so re-ordering the array
+cannot leave the opening card behind.
+
+**The bleed is the peek.** The row gives back `--table-bleed` — the app's own
+22px gutter, declared by the container as that token always is — so the cards
+stay at **exactly the width they had when they stacked** and 22px of the
+neighboring day shows at each edge. That is not a nicety: at 320 a card is 276px
+and its category line wants 248 inside 12px of padding a side, so a peek carved
+out of the *card* would have put that line back to scrolling inside itself,
+which is the fault the 900px breakpoint exists to prevent, arrived at from the
+other direction. `scroll-padding-inline` matches it, which is what lets the
+first and last cards reach the middle at all — without it `scrollLeft` cannot go
+below 0 and Yesterday could never be centered.
+
+**`useOverflowArrows` does the measuring**, folded rather than copied: that hook
+is `TabStrip.tsx`'s general answer to *does this row overflow*, it already
+measures on every render (a day block gains rows when its read lands, and a
+`ResizeObserver` on the box hears nothing when the content is what moved) and it
+already owns the one observer. What this file adds is the two things that are a
+carousel's rather than a scrolling row's — which card is centered, and putting
+one there.
+
+**Opening on Today is a layout effect keyed on `over`**, which is what makes it
+fire at the two moments it has to and no other: on mount, when the hook's own
+layout effect flips `over` false → true and this runs on the flush that follows,
+still before paint so nobody sees Yesterday for a frame; and on a window
+crossing 900px downward, where a row that could not scroll now can and would
+otherwise sit at `scrollLeft: 0`. It deliberately re-centers on nothing else — a
+reader who has swiped to Tomorrow must not be carried back because a projection
+landed, which is *never over data* one axis over.
+
+**The scroll is written as a `scrollTo` on the row**, never `scrollIntoView` —
+the rule the League page's week list already records, that one walking every
+scrollable ancestor and carrying the whole page with it. And the offset is
+measured off the two rects rather than computed from a card width and a gap:
+those are a percentage and a token, and the arithmetic would be a third opinion
+about a number the browser already has.
+
+**No `touch-action`, deliberately.** The two gestures differ in *axis* — the row
+scrolls sideways, the page down — which is the one case the browser already
+arbitrates correctly. The app's rule is to declare it only where an element
+genuinely consumes a gesture, and this one consumes nothing the page wanted.
+`overscroll-behavior-x: none` is declared, in the one axis this box scrolls, so
+a flick that runs out of days does not carry the page.
+
+**Three dots, drawn only while the row overflows** — the measurement deciding
+rather than the breakpoint. They are buttons as well as a position: a pointer
+user has no swipe, and the peek is the only other thing saying there is more.
+The active one is **larger as well as brighter**, a color alone being a whole
+statement resting on a hue.
+
+Driven at 390, with the row scrolled programmatically and by its own dots:
+
+| | scrollLeft | showing | snapped | dot |
+| --- | --- | --- | --- | --- |
+| open | 358 | `TODAY` | yes | 2 of 3 |
+| `scrollBy(+100)` | 716 | `TOMORROW` | yes | 3 of 3 |
+| `scrollBy(-400)` | 358 | `TODAY` | yes | 2 of 3 |
+| press dot 1 | 0 | `YESTERDAY` | yes | 1 of 3 |
+
+`window.scrollY` is **0** at every one of them, which is the `scrollIntoView`
+rule holding. (A finger could not be synthesized here — neither
+`Input.dispatchTouchEvent` nor `Input.synthesizeScrollGesture` moved this row in
+headless, measured at 0px over six attempts — so what is verified is the snap,
+the dots, the centering and the page staying put; the touch-drag itself is the
+browser's own `scroll-snap-type: x mandatory`.)
+
+### Today is a projection until the day starts
+
+**A card of noughts under `No games played yet.` is a true statement and a
+useless one.** At nine in the morning the thing a manager wants off this page is
+*what is my day worth* — which is the question the Tomorrow block already
+answers, with an engine this page is already asking. So until the first game on
+this roster is under way, `TODAY` draws the projection, dashed and muted and
+tagged `PROJECTED` exactly as Tomorrow is, and swaps to the measured reading the
+moment a game starts.
+
+**The test is a game of *this roster's* that is live or final**, which is what
+`DayLine.games` already counts — `lineOf` puts a scheduled fixture in neither.
+Not MLB's first pitch of the day, which is a fact about somebody else's
+afternoon; and not *has anybody had a plate appearance*, which would leave the
+card projected through the top of the first.
+
+**Two reads behind one card, and one wait.** Until both have answered, a block
+drawn off either is a block the other may be about to replace — the flicker the
+loading discipline exists to prevent, and the only case on this page where a
+card waits on more than its own read. **A failed or absent projection falls back
+to the measured block**, which is the rule that a failure costs its own column
+and never the request: the noughts are honest, and they are what the card showed
+before this.
+
+### The tab is the league's, and so is the default
+
+**Drawn for a connected league and for nobody else, and it is that reader's
+default page.**
+
+Three of the four blocks would stand on a saved watchlist — a watchlist has days
+and top performers like any roster, and `STANDARD_5X5` exists so the ranking has
+a meaning without a league. What it would lose is the block that makes this a
+*front* page: the matchup. Without one it is three cards a reader can already
+reach by setting a date, so the tab is not offered and `summary` stays the
+default it has always been.
+
+**A bare URL is not a link anybody wrote.** The seed's own note used to argue the
+opposite — *an omitted param is the default, so moving a default changes what
+somebody else's link says* — and the half of that which is still true is why the
+change is shaped as it is: every link naming a view still opens that view,
+`?view=summary` included, and `view=` is written out in full the moment anything
+but the Overview is on screen. What the argument missed is *which* link. `?` on
+its own is the app being **opened**, and the page a manager wants when they open
+it is the one that says how it is going.
+
+**It cannot be decided in the seed**, `/api/espn` not having answered on that
+render, so it is a **want resolved once** — `wantOverview`, the shape
+`wantMyMatchup` uses one param over. It fires on the first render at which
+`espnStatusSettled` is true and clears the flag **whichever way the answer
+goes**, so a reader with no league stays where a bare URL has always put them
+and no poll can re-open the page under them. Nothing can have moved under it
+either: the tab strip is gated on `initialLoadSettled`, which includes this very
+status, so there is no render on which a reader could have pressed a tab first —
+which is why it needs no *unless they have already navigated* test, and why that
+test is what to add if the gate ever moves.
+
+**A `?view=overview` link is honored either way**, which is the courtesy
+`view=league` already extends: the page works without a league — the standard
+5×5 and no matchup block — and dropping somebody who was handed a link onto a
+different page is the direction this app declines to fail in.
+
+Driven from a bare URL with the status stubbed both ways:
+
+| | lands on | tab lit | tabs drawn |
+| --- | --- | --- | --- |
+| league connected | `?view=overview` | Overview | Overview · Roster · Research · League |
+| no league | `?` (unchanged) | Roster | Roster · Research |
+
 ### Top performers, and what "top" means
 
 **A categories league is won category by category, so *who had the best day* has
@@ -172,6 +335,18 @@ summed over two. `GP` falls out through the same door by a different route: its
 scale is measured at exactly **0**, a pitcher-day being one appearance 1,252
 times out of 1,252, and a scale of zero means *not a differentiator* rather than
 a division to guard.
+
+**The list is of men who *played*, which is a filter the totals do not take.** A
+man in the lineup whose club was idle contributes 0 to every counting category
+and nothing at all to the rates, so counting him in the day's *figures* is right
+and costs nothing — and ranking him is not: a score of exactly `+0.0` for having
+done nothing sorts **above** a man who went 0-for-4, whose OPS contribution is
+genuinely negative. Found at 4am ET the morning after this shipped, which is the
+hour that makes it visible: the baseball day had rolled to a card with no games
+played on it, and `TODAY` listed three men at `0-0` and `+0.0` under a category
+line of noughts — where the block has a sentence for exactly that state and was
+one empty list away from saying it. A **projected** block takes no such filter:
+every line in it is a fraction of a game nobody has played.
 
 **Scarcity is value, and that is the reading rather than a bug.** One stolen
 base is worth 3.84 per-day standard deviations against a home run's 2.89,
@@ -216,13 +391,16 @@ declared in `EspnCategory`'s own shape so that **one function scores both**,
 which is the whole reason it is spelled out rather than special-cased inside
 `dayValue`.
 
-**The caption says which set, not which league.** It printed `board.leagueName`
-for a while and read as a non-sequitur under a list of players — `THETA CHI. WHY
-NOT?` says nothing about how anybody was ranked. What the line is for is the one
-thing a reader cannot infer: whether the ordering was his league's or a default,
-which is a question only somebody *without* a league can get wrong. So it reads
-`10 league categories` or `standard 5×5`, with the categories themselves in its
-`title`.
+**The caption that said so is gone, and the fact is in a `title`.** It printed
+`board.leagueName` first and read as a non-sequitur under a list of players —
+`THETA CHI. WHY NOT?` says nothing about how anybody was ranked — and then
+`10 league categories`, which is true, is the same on all three cards, and is
+the same on every card any reader will ever see, a league's categories not
+changing. **A mark that would be on every row marks nothing**, and this one was
+on nine of them. What it was for survives where a fact of that kind belongs: as
+the `title` of the control it shares its row with (`Ranked over your league's 10
+categories — R · HR · RBI · …`), and in this file, whose `STANDARD_5X5` note
+covers the one reader who could get the answer wrong.
 
 **And the matchup block is absent rather than empty without a league**, the
 app's own rule for a mark with nothing behind it: a heading reading `Your
@@ -236,6 +414,50 @@ the label is what says *which* of ten cards is yours; here there is exactly one
 card and it is yours by construction. `MatchupCard` grew a `mineTag` prop for
 it — the accent border stays either way, costing no space and carrying the
 statement into a screenshot.
+
+### The foot is one control, and it is drawn as one
+
+`See the day →` was accent text at the right end of a row whose left end held
+that caption, and both halves were wrong for the box. A bare accent phrase in
+the corner of a card reads as a footnote rather than as the one thing in the
+block you can press — and on a phone it was an 11px target in a card 320px wide.
+The foot is now a single **outlined pill at the width of the card**, taking the
+app's own `--control-radius` and border, measured **320 × 33** at 390. The arrow
+went with the text styling: a bordered control does not need a glyph to say it
+is pressable.
+
+### A performer row takes no `:active` paint, which is a deliberate exception
+
+The standing rule is that **`:active` and `:focus-visible` are never scoped** —
+that rule is about *hover*, and it holds wherever a press and a scroll can be
+told apart. Inside this carousel they cannot: the rows sit in a **horizontally
+scrolling** row on a page that scrolls vertically, so a finger landing on a
+player is the first frame of a swipe as often as it is a press. `:active`
+matches for the whole of that swipe, and the row a reader is dragging past
+lights up as though they had chosen it. Reported off the shipped page, in those
+words.
+
+Nothing the app promises is lost: `:focus-visible` still rings the row for a
+keyboard, hover still tints it for a pointer (scoped to `(hover: hover)`, the
+standing rule for a full-width row in a list), and what a touch press gets as
+feedback is the player page opening. The app's own press discipline says the
+same thing from the other side — *a press arms on `pointerdown` and decides on
+release*, because a scroll begins with a `pointerdown` on whatever is under the
+finger.
+
+### The section has a heading of its own
+
+The block had none: the three cards each name their day, so the section looked
+like it was already saying what it was. As a **carousel** it is not — one card is
+on screen and the other two are 22px of edge, so the page went from a labeled
+block to an unlabeled one that happened to begin with the word `TODAY`. `Your
+days` is the section's name where the card heads are the items', which is the
+same split `Your matchup` makes above it.
+
+**Its note is the span** (`Aug 24 – Aug 26`), which is the one fact a carousel
+takes away: with only the middle card in view, nothing on screen says the row
+reaches back to yesterday and on to tomorrow. Same shape as the matchup
+heading's `through Aug 25` an inch above.
 
 ### Three doors, and each opens the page that owns the subject
 
@@ -271,19 +493,26 @@ statement into a screenshot.
 
 ### Measured
 
-**Layout, driven at seven widths on the live league's ten categories.**
-Page-body overflow is **0** at 320 / 390 / 640 / 768 / 1024 / 1200 / 1920, and
-the category lines never scroll inside themselves at any of them.
+**Layout, driven at eight widths on the live league's ten categories.** Page-body
+overflow is **0** at every one, the category lines never scroll inside
+themselves at any of them, and the row opens centered on `TODAY` at every width
+that scrolls.
 
-| window | view | matchup card | day block |
-| --- | --- | --- | --- |
-| 320 | 276 | 276 | 276 |
-| 390 | 346 | 346 | 346 |
-| 640 | 596 | 596 | 596 |
-| 768 | 724 | 724 | 724 |
-| 1024 | 980 | 800 | 319 × 3 |
-| 1200 | 1120 | 800 | 365 × 3 |
-| 1920 | 1120 | 800 | 365 × 3 |
+| window | scrollport | card | scrollable | dots | row runs |
+| --- | --- | --- | --- | --- | --- |
+| 320 | 320 | 276 × 3 | yes | 3 | 0 → 320 |
+| 390 | 390 | 346 × 3 | yes | 3 | 0 → 390 |
+| 640 | 640 | 596 × 3 | yes | 3 | 0 → 640 |
+| 768 | 768 | 724 × 3 | yes | 3 | 0 → 768 |
+| 899 | 899 | 855 × 3 | yes | 3 | 0 → 899 |
+| 900 | 856 | 277 × 3 | no | — | 22 → 878 |
+| 1200 | 1120 | 365 × 3 | no | — | 40 → 1160 |
+| 1920 | 1120 | 365 × 3 | no | — | 400 → 1520 |
+
+The `row runs` column is the bleed doing its work: below 900 the scrollport is
+the **window**, edge to edge, so the peek lands in the app's own gutters; above
+it the row is back inside them. The cards are the same width they were when they
+stacked at every one of the five scrolling widths.
 
 **Three across from 900, and 900 is measured.** It was declared at 860 and the
 measurement moved it: a block's category line is a grid with a 58px leading
@@ -318,11 +547,11 @@ figures are estimates and the one least worth a whole row of its own.
 
 | | raw | gzip |
 | --- | --- | --- |
-| CSS | 178,368 → 181,797 | 31,919 → **32,449** |
-| JS | 693,662 → 707,238 | 202,673 → **206,827** |
+| CSS | 178,368 → 182,662 | 31,919 → **32,688** |
+| JS | 693,662 → 708,457 | 202,673 → **207,362** |
 
-+530 bytes of CSS and +4.1KB of JS gzipped, for a view, a scoring module, a
-measured constant table and the narrow-screen tab rule above.
++769 bytes of CSS and +4.6KB of JS gzipped, for a view, a scoring module, a
+measured constant table, the narrow-screen tab rule above, and the carousel.
 
 ### Presentation, and the two rules it leans on hardest
 

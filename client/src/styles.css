@@ -20879,17 +20879,74 @@ html[data-theme='light'] .league-table thead th {
   color: var(--faint);
 }
 
-/* **One column, and three only where three fit.** Mobile-first, so the media
-   query below adds the columns rather than a narrow one taking them away —
-   which is the same rule the section header states, arrived at from the other
-   side. Two columns is deliberately not a step: three blocks in two columns is
-   a row of two and an orphan, and the orphan is `TOMORROW`, the one of the
-   three whose figures are estimates and the one least worth a whole row. */
+/* ---- The three days, as one row that scrolls only when it has to --------
+   **A carousel on a phone and three columns on a desk, and it is one
+   mechanism.** `.ov-days` is a scroll-snap row at every width; what the
+   breakpoint at the foot of this section changes is the cards' flex basis — a
+   whole scrollport apiece below it, an equal share above. Above 900 the row
+   therefore does not overflow, so nothing scrolls, nothing snaps, and the dots
+   are not drawn. **The desktop layout is what a carousel that fits looks
+   like**, which is why there is no second set of rules for it and no mode for
+   anything to be in.
+
+   It replaced a `grid` whose one column stacked the three days down the page.
+   The argument that stood here — *two columns is deliberately not a step, three
+   blocks in two columns being a row of two and an orphan, and the orphan is
+   `TOMORROW`* — is still the argument for going straight from one to three, and
+   the one is a swipe now rather than a scroll. */
+.ov-carousel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+/* The section's own heading sits above the carousel rather than inside it, so
+   the row it labels can bleed out through the app's gutters underneath it while
+   the words stay on the page's own left edge — the same relationship
+   `.ov-matchup`'s heading has to the card under it. */
+.overview-view > .ov-heading {
+  margin-bottom: 0;
+}
 .ov-days {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
   gap: 12px;
-  align-items: start;
+  /* **Stretch, so the three cards are one height.** With the neighbors peeking
+     into the gutters, three different bottom edges an inch apart read as three
+     boxes that failed to line up rather than as three days of different
+     lengths. Above the breakpoint it goes back to `start`, where all three are
+     fully in view and each being its own height is the honest drawing. */
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Declared in the axis this box genuinely scrolls, and only that one — the
+     app's rule. Without it a flick that runs out of days carries the page. */
+  overscroll-behavior-x: none;
+  scroll-snap-type: x mandatory;
+  /* **No `touch-action` here, deliberately.** The two gestures in play differ
+     in *axis* — this row scrolls sideways and the page scrolls down — which is
+     the one case the browser already arbitrates correctly on its own. The rule
+     is to declare it only where an element genuinely consumes a gesture, and
+     this one consumes nothing the page wanted. */
+  scrollbar-width: none;
+  /* **It bleeds out through the app's gutters, and the bleed *is* the peek.**
+     `--table-bleed` is the container's own padding declared by the container —
+     22px in `.app` — so giving it back as this row's padding leaves the cards
+     at exactly the width they had when they stacked, and puts 22px of the next
+     day at each edge. That matters at 320: a card there is 276px and its
+     category line wants 248 inside 12px of padding a side, so a peek carved out
+     of the card rather than out of the gutter would have put the line back to
+     scrolling inside itself — which is the fault the 900px breakpoint below
+     exists to prevent, arrived at from the other direction. */
+  margin-inline: calc(-1 * var(--table-bleed, 0px));
+  padding-inline: var(--table-bleed, 0px);
+  /* A snapped card is a *card*, so it stops in the middle rather than at an
+     edge. The row's own padding is what lets the first and last reach the
+     middle at all — without it `scrollLeft` cannot go below 0 and Yesterday
+     could never be centered. */
+  scroll-padding-inline: var(--table-bleed, 0px);
+}
+.ov-days::-webkit-scrollbar {
+  display: none;
 }
 .ov-day {
   border: 1px solid var(--border);
@@ -20899,6 +20956,12 @@ html[data-theme='light'] .league-table thead th {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* A whole scrollport apiece — `100%` of the row's *content* box, which the
+     bleed above has already made the window less its two gutters. `0 0` and not
+     `1 1`: a card that could shrink would let three of them share the row and
+     there would be nothing to swipe between. */
+  flex: 0 0 100%;
+  scroll-snap-align: center;
 }
 /* **A projected block is drawn as a projection** — the app's standing rule that
    an estimate never wears the same clothes as a measurement, at the size of a
@@ -20962,6 +21025,57 @@ html[data-theme='light'] .league-table thead th {
   color: var(--muted);
 }
 
+/* ---- Which day the row is showing --------------------------------------
+   **Drawn only while the row overflows**, which is the measurement deciding
+   rather than the breakpoint (`useOverflowArrows`): three dots over a row
+   already showing all three days would be a control for a scroll that cannot
+   happen. They are buttons as well as a position, because a pointer user has no
+   swipe and the peek at the card edges is the only other thing saying there is
+   more of the row than this. */
+.ov-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  /* A row of 8px dots is a 30px target in a 12px box, which is nobody's thumb.
+     The padding is the target and the dot is the mark — the same split the
+     app's icon squares make between a `--control-h` box and a 17px glyph. */
+  padding: 4px 0;
+}
+.ov-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--faint);
+  /* The target, drawn nowhere: 12px of transparent outline either side of the
+     dot, so the press is 32px wide without the mark being. `outline` rather
+     than a box, since it takes no space in the row's own layout. */
+  outline: 12px solid transparent;
+  cursor: pointer;
+  transition: background 0.14s ease, transform 0.14s ease;
+}
+.ov-dot.is-on {
+  background: var(--accent);
+  /* Bigger as well as brighter: a color alone is the whole statement resting on
+     a hue, and this app's own rule is that a mark should survive being looked at
+     by somebody who cannot tell two of them apart. */
+  transform: scale(1.25);
+}
+@media (hover: hover) {
+  .ov-dot:hover {
+    background: var(--muted);
+  }
+  .ov-dot.is-on:hover {
+    background: var(--accent);
+  }
+}
+.ov-dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 /* ---- The top performers ------------------------------------------------- */
 .ov-perfs {
   list-style: none;
@@ -20992,16 +21106,29 @@ html[data-theme='light'] .league-table thead th {
 }
 /* **Hover on a full-width row in a list is scoped**, the app's own rule: a
    touch device has no pointer to move away, so the tint sticks to the last row
-   a finger crossed and reads as a selection the app then declines to act on.
-   `:active` and `:focus-visible` are never scoped. */
+   a finger crossed and reads as a selection the app then declines to act on. */
 @media (hover: hover) {
   .ov-perf:hover {
     background: var(--panel-2);
   }
 }
-.ov-perf:active {
-  background: var(--panel-2);
-}
+/* **And this row takes no `:active` paint at all, which is a deliberate
+   exception to "`:active` is never scoped".**
+
+   That rule is about *hover*, and it holds wherever a press and a scroll can be
+   told apart. Here they cannot: these rows sit inside a **horizontally
+   scrolling** carousel, on a page that scrolls vertically, so a finger landing
+   on a player is the first frame of a swipe as often as it is a press —
+   `:active` matches for the whole of that swipe, and the row a reader is
+   dragging past lights up as though they had chosen it. Reported off the shipped
+   page, in exactly those words.
+
+   Nothing is lost that the app promises: `:focus-visible` still rings the row
+   for a keyboard, hover still tints it for a pointer, and what a touch press
+   actually gets as feedback is the player page opening. The app's own press
+   discipline says the same thing from the other side — *a press arms on
+   `pointerdown` and decides on release*, because a scroll begins with a
+   `pointerdown` on whatever is under the finger. */
 .ov-perf:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -21071,49 +21198,65 @@ html[data-theme='light'] .league-table thead th {
   margin: 10px 2px;
 }
 .ov-day-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
+  display: block;
+  /* **`auto` above the 8px, which is what the carousel's stretch made
+     necessary.** The three cards are one height there (`align-items: stretch`),
+     so a day with nothing to report — `No games played yet.` at 4am, one line
+     where the others have three player rows — left its foot floating in the
+     middle of the box with the rest of the card empty under it. Pushed to the
+     bottom, a short card is a card with room in it rather than one that stopped
+     early. It is a no-op above the breakpoint, where each card is its own
+     height and there is no spare space for `auto` to take. */
+  margin-top: auto;
+  padding-top: 10px;
 }
-/* Which categories the ranking was made over — the league's own name where
-   there is a league, `standard 5×5` where there is not. It is a caption rather
-   than a control: a reader with no league must not be left to assume the
-   ordering was his league's. */
-.ov-day-scale {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* **The 8px the rule above gave up goes on the thing *before* the foot, not on
+   the foot.** `margin-top: auto` and `margin-top: 8px` are the same property:
+   written as a sibling rule they would cancel the push on exactly the cards
+   that need it, which is every card that has anything in it. Put on the list
+   and the message instead, the two compose — 8px minimum, and `auto` takes
+   whatever is left over. */
+.ov-perfs {
+  margin-bottom: 8px;
 }
-/* The door to the whole day: the Roster view over that one date. A small aimed
-   target, so it keeps its hover unscoped — the rule above applies to full-width
-   rows and cards in a scrolling list, not to buttons. */
+/* **The door to the whole day, and it is drawn as a door.**
+
+   It was `See the day →` in accent text at the right end of a row whose left
+   end held a caption. Both halves of that were wrong for the box they were in:
+   the caption said the same thing on all three cards and on every card any
+   reader will ever see (it is in the list's own `title` now), and a bare accent
+   phrase in the corner of a card reads as a footnote rather than as the one
+   thing in the block you can press. On a phone it was also an 11px target in a
+   row 320px wide.
+
+   So the foot is one control at the width of the card — the app's own outlined
+   pill, the same `--control-radius` and border its icon squares and its toggles
+   take, at a comfortable height for a thumb. The arrow goes with the text
+   styling: a filled control does not need a glyph to say it is pressable. */
 .ov-day-more {
-  border: 0;
-  background: none;
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
   cursor: pointer;
-  padding: 2px 0;
+  padding: 8px 10px;
   white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
-.ov-day-more:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .ov-day-more:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 }
 .ov-day-more:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* **Three across once three fit, and 900 is measured.** It was declared at 860
@@ -21140,7 +21283,20 @@ html[data-theme='light'] .league-table thead th {
    being a scroller inside a card rather than a page that has burst. */
 @media (min-width: 900px) {
   .ov-days {
-    grid-template-columns: repeat(3, 1fr);
+    /* The row stops scrolling by not overflowing, which is the whole of the
+       change: the cards share the row instead of taking one each. Everything
+       else about the box is unset back to what a row that fits should be — the
+       snapping, the bleed and the padding all say *there is more of me off the
+       edge*, and above this width there is not. */
+    overflow: visible;
+    scroll-snap-type: none;
+    align-items: start;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+  .ov-day {
+    flex: 1 1 0;
+    scroll-snap-align: none;
   }
 }
 
