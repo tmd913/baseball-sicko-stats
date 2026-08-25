@@ -51,10 +51,16 @@ import type {
  *  expired token (401) apart from a genuine server error. */
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** **The answer never arrived**, as opposed to arriving and being wrong: a
+   *  200 whose body is empty, which is a connection closed mid-answer rather
+   *  than anything the server meant to say. `request` retries on this and on
+   *  nothing else. */
+  truncated: boolean;
+  constructor(message: string, status: number, truncated = false) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.truncated = truncated;
   }
 }
 
@@ -123,6 +129,10 @@ async function json<T>(res: Response): Promise<T> {
         ? 'The server closed the connection before answering — is it still running?'
         : 'The server answered with something other than JSON — is the API running?',
       res.status,
+      // The half of it that is worth acting on rather than reading: an empty
+      // body on a GET is the *transport* failing, not the server answering, and
+      // `request` below retries exactly that.
+      body.trim() === '',
     );
   }
 }
@@ -133,6 +143,36 @@ async function json<T>(res: Response): Promise<T> {
  * token. A 401 is retried once against a freshly-minted token, since an ID token
  * expiring mid-session is routine rather than exceptional.
  */
+/**
+ * **A truncated answer is retried; a bad one is not.**
+ *
+ * An empty body on a 200 is the connection going away mid-answer — a server
+ * restarting under `tsx watch`, a deploy swapping out under an open tab. That
+ * is the *transport* failing rather than the server replying, and the honest
+ * response to it is to ask again rather than to hand the view an error it has
+ * to render.
+ *
+ * **Two attempts, 300ms then 900**, which is measured against the thing that
+ * causes it: a `tsx watch` restart is back inside a second, so a retry that
+ * gives up sooner would fail on the case it exists for, and one that waited
+ * longer would hold the boot for a server that is genuinely gone.
+ *
+ * **GET only.** A retried `PUT` is a second write, and this cannot tell a
+ * request that never arrived from one that arrived and answered into a socket
+ * that had closed. Reads are safe to repeat and writes are not, so the safe
+ * half is the only half that repeats.
+ *
+ * **Why it is worth having at all**, rather than leaving each caller to cope: a
+ * boot fires half a dozen of these at once and one of them is `/api/espn`,
+ * whose failure is read as *there is no league*. That answer then stands for
+ * the whole session — no Overview tab, no League tab, the fantasy button
+ * leading to onboarding, and the roster views quietly reading the saved
+ * watchlist. Reported exactly that way. A one-second blip should not cost a
+ * session its fantasy league, and the layer that can tell a blip from an answer
+ * is this one.
+ */
+const RETRY_MS = [300, 900];
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const send = (token: string | null) =>
     fetch(path, {
@@ -143,12 +183,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
     });
 
-  const res = await send(authToken);
-  if (res.status === 401 && reauth) {
-    const fresh = await reauth();
-    if (fresh) return json<T>(await send(fresh));
+  const once = async (): Promise<T> => {
+    const res = await send(authToken);
+    if (res.status === 401 && reauth) {
+      const fresh = await reauth();
+      if (fresh) return json<T>(await send(fresh));
+    }
+    return json<T>(res);
+  };
+
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const repeatable = method === 'GET' || method === 'HEAD';
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await once();
+    } catch (e) {
+      const truncated = e instanceof ApiError && e.truncated;
+      if (!truncated || !repeatable || attempt >= RETRY_MS.length) throw e;
+      await new Promise((r) => setTimeout(r, RETRY_MS[attempt]));
+    }
   }
-  return json<T>(res);
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
