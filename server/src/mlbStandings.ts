@@ -94,6 +94,7 @@ interface TeamRecord {
   runDifferential?: number;
   divisionRank?: string;
   leagueRank?: string;
+  sportRank?: string;
   divisionLeader?: boolean;
   clinched?: boolean;
   magicNumber?: string;
@@ -233,6 +234,11 @@ async function fetchSeasonBoard(): Promise<MlbStandings> {
         eliminationNumber: orNull(t.eliminationNumber),
         divisionRank: Number(t.divisionRank) || 0,
         leagueRank: Number(t.leagueRank) || 0,
+        // **MLB's own rank across all thirty**, which is what the Overall board
+        // is ordered by. It is on the same payload as the other two and needed
+        // asking for no more than they did — `sportRank`, MLB's word for the
+        // whole of the major leagues.
+        overallRank: Number(t.sportRank) || 0,
       });
     }
   }

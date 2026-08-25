@@ -15,7 +15,11 @@ import { LoadingBlock } from './Loading';
  *     *Who is winning the division.*
  *  2. **Wild Card** — the clubs not leading one, per league, with the cut line
  *     drawn after the third. *Who is getting in anyway.*
- *  3. **League** — all fifteen at once. *Who is actually good.*
+ *  3. **Overall** — all thirty in one table, best record first. *Who is
+ *     actually good.* It was two tables of fifteen and is one of thirty: the
+ *     other two groupings are races and are league-shaped by construction, so
+ *     the question this one is left with is simply who is any good, and
+ *     splitting that into American and National answers it twice.
  *
  * They are a grouping rather than three pages because the **rows are the same
  * rows**: one read answers all three, the server sending every club once with
@@ -44,7 +48,11 @@ export type StandingsGroup = 'division' | 'wildcard' | 'league';
 export const STANDINGS_GROUPS: { key: StandingsGroup; label: string; title: string }[] = [
   { key: 'division', label: 'Division', title: 'Six divisions, the way a standings page is read' },
   { key: 'wildcard', label: 'Wild Card', title: 'The clubs not leading a division, and the cut line' },
-  { key: 'league', label: 'League', title: 'All fifteen clubs in each league at once' },
+  {
+    key: 'league',
+    label: 'Overall',
+    title: 'All thirty clubs in one table, best record first',
+  },
 ];
 
 /** MLB's own two, by id. Written out because the standings payload carries the
@@ -112,7 +120,7 @@ function columnsFor(group: StandingsGroup): Column[] {
     cols.push({
       key: 'gb',
       label: 'GB',
-      title: group === 'league' ? 'Games behind the league leader' : 'Games behind the leader',
+      title: group === 'league' ? 'Games behind the best record in baseball' : 'Games behind the leader',
       value: (t) => t.gamesBack,
     });
   }
@@ -217,13 +225,43 @@ function groupsFor(data: MlbStandings, group: StandingsGroup): Group[] {
         cutAfter: WILD_CARDS - 1,
       }));
   }
-  const leagues = [...new Set(data.teams.map((t) => t.leagueId))].sort((a, b) => a - b);
-  return leagues.map((id) => ({
-    key: `l${id}`,
-    title: LEAGUE_NAMES[id] ?? 'League',
-    rows: data.teams.filter((t) => t.leagueId === id).sort((a, b) => a.leagueRank - b.leagueRank),
-    cutAfter: null,
-  }));
+  // **One table of thirty, not two of fifteen.** This grouping is the one that
+  // is *not* about a race — Division is who wins a division and Wild Card is
+  // who gets in behind them, both of which are league-shaped by construction.
+  // The question left over is simply *who is any good*, and splitting that into
+  // American and National answers it twice with two clubs that never meet at
+  // the top of each. MLB's own `sportRank` is the order.
+  const all = [...data.teams].sort((a, b) => a.overallRank - b.overallRank);
+  const lead = all[0];
+  return [
+    {
+      key: 'all',
+      title: 'All clubs',
+      // **Games behind is recomputed here and nowhere else.** `gamesBack` on
+      // the wire is MLB's own and is a club's distance from *its division
+      // leader* — the right number on two of the three boards and a wrong one
+      // here, where the row above is not in the same division. (It was wrong on
+      // the old two-tables-of-fifteen reading too, and quietly: a Yankees row
+      // said 3.5 against Tampa Bay while sitting under a Milwaukee it was
+      // nowhere near.) The arithmetic is MLB's — half the sum of the win gap
+      // and the loss gap — so the column means the same thing on all three.
+      rows: lead
+        ? all.map((t) =>
+            t === lead ? t : { ...t, gamesBack: gamesBack(t, lead) },
+          )
+        : all,
+      cutAfter: null,
+    },
+  ];
+}
+
+/** Games behind, in MLB's own form: `-` for whoever leads, one decimal
+ *  otherwise, and half the sum of the win gap and the loss gap — which is MLB's
+ *  arithmetic, so the recomputed column and the two that come off the wire
+ *  cannot come to mean different things. */
+function gamesBack(t: StandingsTeam, lead: StandingsTeam): string {
+  const gb = (lead.wins - t.wins + (t.losses - lead.losses)) / 2;
+  return gb <= 0 ? '-' : gb.toFixed(1);
 }
 
 /** East, Central, West — MLB's own ids in the order a standings page reads

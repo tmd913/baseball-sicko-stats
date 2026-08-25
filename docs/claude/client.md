@@ -295,6 +295,45 @@ projection, and this one moves the days as hard as that one does. Not drawn at
 all where `matchupDays` is null, which is one test for three cases: no league, no
 window yet, and a period whose first day is still ahead.
 
+### The boot gate: nothing is drawn until the app knows what it is drawing
+
+`App` returns the auth module's `Splash` — the same card `main.tsx` and the auth
+gate already show, so the three steps of starting up read as one screen that
+keeps saying what it is doing — until `initialLoadSettled`.
+
+**It gates the whole frame, and it used to gate only the tab strip.** Measured on
+a cold load of `?view=mlb` at 1280: at **258ms** the window held the view's own
+sub-tabs, its date bar and fifteen game cards **with no main tab row above
+them**; at **762ms** the row appeared and shoved the page down. Two paints, the
+second of them moving content a reader had already started on.
+
+The old arrangement was defending something real — *never over data*, which says
+a pane with rows must not be blanked — but that rule is about a **re-read**,
+where there is an answer on screen worth protecting. This is the first read:
+there is nothing to protect, and three quarters of a page is not a page.
+
+**The flag is `reportSettled && espnStatusSettled && rosterLoaded &&
+!reportLoading`, latched.** The first three are the reads that decide what the
+strip contains; the fourth is the half that was missing and is worth stating,
+because `reportSettled` does not mean what it looks like on boot. The report
+effect fires on mount **against an empty roster**, answers with nothing and sets
+the flag; the roster then lands, the effect re-runs, and the rows arrive on a
+later render. With the splash in place but without that fourth term, the page
+appeared at **471ms with four tabs** and gained `Roster` at **513** — the same
+flicker one request further in. Waiting for no report read to be in flight
+closes exactly that window, and `reportLoading` clears in a `finally`, so a
+failed read still opens the gate.
+
+Latched in state rather than recomputed, which is not optional once
+`reportLoading` is in the test: recomputed every render it would put the splash
+back up on the first date change. It is a boot flag — true once and thereafter
+always.
+
+**Each view's own data is not in it.** The splash covers the app frame; a view's
+rows arrive behind that view's own in-pane wait, which is where the `WAIT_DELAY`
+discipline lives. Putting a view's read in the boot gate would make the splash's
+length depend on which page a link happened to open.
+
 ### The tabs are the width of the window, and the chrome is two rows shorter
 
 **The strip is `.main-tabs`/`.main-tab`, full width with the active tab

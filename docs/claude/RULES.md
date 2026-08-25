@@ -208,6 +208,12 @@ that box genuinely scrolls.
 2. **A block wait only when there is nothing to show yet**, and only after
    `WAIT_DELAY` (250ms) — `useDelayedFlag`. Gate the *content* on the real flag,
    not the delayed one, or a fast read shows a blank pane instead of a wait.
+   **Rule 1 is about a re-read**, where there is an answer on screen worth
+   protecting; the *first* read has nothing to protect, and three quarters of a
+   page is not a page. `App` holds the whole frame behind the boot `Splash`
+   until the roster, the report and the league status have all answered —
+   measured, the alternative was the page painting at 258ms and the tab row
+   dropping in on top of it at 762.
 3. **A press-triggered mark holds `MIN_SPIN` (450ms)** so a press leaves a
    trace. The two numbers answer different questions and are deliberately
    different.

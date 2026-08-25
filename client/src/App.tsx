@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
-import { SignOutButton } from './auth';
+import { SignOutButton, Splash } from './auth';
 import { playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
 import type {
   BoardProjection,
@@ -5970,7 +5970,34 @@ export default function App() {
      `showLoading`/`reportLoading` and `isRosterView(view)`, not on this, so a
      slow read still shows its own "Reading your roster's games" regardless of
      where the pills stand. */
-  const initialLoadSettled = reportSettled && espnStatusSettled;
+/* **And `rosterLoaded` and `!reportLoading`, which is the second half of the
+     same sentence and was missing.** `reportSettled` says *a report read has
+     answered*, and on boot the first one answers **before the roster list
+     does** — the report effect fires on mount against an empty roster, comes
+     back with nothing, and sets the flag. The roster then lands, the effect
+     re-runs, and the rows arrive on a later render.
+
+     Measured on a cold load at 1280, with the splash below already in place:
+     the page appeared at **471ms with four tabs** and gained `Roster` at
+     **513** — a second shove 42ms after the first, which is exactly the
+     flicker this gate exists to prevent, one request further in than the
+     original note reached.
+
+     So the gate also waits for the roster read to have answered *and* for no
+     report read to be in flight, which is what closes the window between "the
+     roster landed" and "the report it triggered came back". `reportLoading`
+     clears in a `finally`, so a failed read still opens the gate.
+
+     **Latched**, and that is not optional once `reportLoading` is in the test:
+     recomputed every render it would put the splash back up on the first date
+     change. It is a boot flag — true once and thereafter always. */
+  const [initialLoadSettled, setInitialLoadSettled] = useState(false);
+  useEffect(() => {
+    if (initialLoadSettled) return;
+    if (reportSettled && espnStatusSettled && rosterLoaded && !reportLoading) {
+      setInitialLoadSettled(true);
+    }
+  }, [initialLoadSettled, reportSettled, espnStatusSettled, rosterLoaded, reportLoading]);
   /**
    * **The projection rides the same tick**, because a projection of a day being
    * played is a figure that moves: the server projects only the games that have
@@ -7764,6 +7791,37 @@ export default function App() {
       />
     </div>
   );
+
+  /**
+   * **Nothing is drawn until the app knows what it is drawing**, and that is a
+   * boot gate rather than a loading state.
+   *
+   * The tab strip alone waited on `initialLoadSettled` and the page under it did
+   * not, which produced the flicker this replaces. Measured on a cold load of
+   * `?view=mlb` at 1280: at **258ms** the window held the MLB sub-tabs, the date
+   * bar and fifteen game cards **with no main tab row above them**; at **762ms**
+   * the row appeared and shoved the whole page down. Two paints, the second of
+   * them moving content a reader had already started on.
+   *
+   * The old arrangement was arguing for something real — *never over data*, rule
+   * 1 of this app's loading discipline, which says a pane with rows must not be
+   * blanked. But that rule is about a **re-read**, where there is an answer on
+   * screen worth protecting. This is the first read: there is nothing to
+   * protect, and showing three quarters of a page is not showing the page.
+   *
+   * **It is `Splash`, the same card `main.tsx` and the auth gate already
+   * show**, so the three steps of starting up read as one screen that keeps
+   * saying what it is doing rather than as three different waits — the app's own
+   * fold-don't-restyle rule applied to a boot sequence. `initialLoadSettled`
+   * latches and never goes false, so this is a one-time gate and no later read
+   * can ever put it back up.
+   *
+   * **After every hook**, which is what makes an early return legal here: every
+   * piece of state above is already seeded from `initialParams` and every effect
+   * is already running, so a deep link is resolving behind the splash exactly as
+   * it would behind a half-drawn page.
+   */
+  if (!initialLoadSettled) return <Splash>Reading your roster</Splash>;
 
   return (
     /* One provider over the whole app: every clip plays through `ClipVideo`,

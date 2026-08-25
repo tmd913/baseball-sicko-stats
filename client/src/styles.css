@@ -552,8 +552,15 @@ body {
    on both for the reason it is above — a bar inside a pane that has already
    bled through these gutters must not take a second helping — and
    `.league-scroll` is that pane, so it is deliberately **not** in this list. */
+/* **And the MLB Scoreboard's, which is the fifth box and the same answer.** It
+   was left out and the bar stopped 22px short of each edge of the window while
+   the cards under it ran the full width — the one row on that page that did not
+   reach, which reads as a control floating in a margin rather than as the band
+   the page hangs from. `.mlb-board >` for the reason the two above take a child
+   combinator: nothing else in that tree has bled through these gutters. */
 .app > .date-bar,
-.league-view > .date-bar {
+.league-view > .date-bar,
+.mlb-board > .date-bar {
   --bar-bleed: var(--app-gutter);
 }
 
