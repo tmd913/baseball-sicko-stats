@@ -16783,13 +16783,13 @@ button.start-line:focus-visible {
      `--mup-track-h` is here for the same reason the two widths are: the track,
      its radius and the fill's two half-round ends all have to agree about one
      number, and the narrow tier below changes it. */
-  --mup-val-w: 70px;
-  --mup-cat-w: 56px;
-  --mup-track-h: 11px;
+  --mup-val-w: 64px;
+  --mup-cat-w: 52px;
+  --mup-track-h: 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
-  padding: 18px;
+  padding: 16px;
   max-width: var(--mup-card-w);
   margin: 0 auto;
 }
@@ -16883,9 +16883,9 @@ button.start-line:focus-visible {
      head — is inside the **pinned chrome** rather than on this card, and its
      badge, name and record are chrome over a roster table rather than part of
      the page being scaled. */
-  --lg-logo-w: 48px;
-  --lg-logo-h: 38px;
-  --lg-logo-glyph: 21px;
+  --lg-logo-w: 44px;
+  --lg-logo-h: 34px;
+  --lg-logo-glyph: 19px;
 }
 .mup-heads-bye {
   grid-template-columns: 1fr auto;
@@ -16943,10 +16943,10 @@ button.start-line:focus-visible {
    had at 14/15 — on a duel the numbers are the subject and the names are who
    they belong to. */
 .mup-heads .mup-side-name {
-  font-size: 18px;
+  font-size: 17px;
 }
 .mup-heads .mup-side-rec {
-  font-size: 14px;
+  font-size: 13px;
 }
 /* The headline triple, in the accent for the side ahead and muted for the other
    — the scoreboard's own rule, which marks a winner rather than shouting a
@@ -16959,7 +16959,7 @@ button.start-line:focus-visible {
      headline. **26 against the row's 18** is half as big again, which is the
      ratio a headline wants, and it is still under the `<h1>` of any page in
      the app. */
-  font-size: 29px;
+  font-size: 26px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -17027,7 +17027,7 @@ button.start-line:focus-visible {
      alone: `BATTERS` is wider than `SVHD` and would spill over the tracks. */
   grid-column: 2 / 5;
   text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -17038,7 +17038,7 @@ button.start-line:focus-visible {
    losing the arms. Quieter than a category figure and quieter than the
    headline triple it is a part of, being a subtotal of both. */
 .mup-group-tally {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--faint);
@@ -17088,8 +17088,8 @@ button.start-line:focus-visible {
     var(--mup-val-w) minmax(0, 1fr) var(--mup-cat-w)
     minmax(0, 1fr) var(--mup-val-w);
   align-items: center;
-  gap: 11px;
-  padding: 10px 0;
+  gap: 10px;
+  padding: 9px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   border-radius: 4px;
 }
@@ -17156,7 +17156,7 @@ button.start-line:focus-visible {
   border-bottom: none;
 }
 .mup-cat {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -17168,7 +17168,7 @@ button.start-line:focus-visible {
   white-space: nowrap;
 }
 .mup-val {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -17243,7 +17243,7 @@ button.start-line:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.35;
 }
 .mup-moves-right .mup-move {
@@ -17338,7 +17338,7 @@ span.mup-move-name:hover {
   /* 14 against the row's 9px track: this is the *whole* matchup where those are
      one category each, so it is the one bar on the card that should be read
      first, and at 10 it was thinner than the type beside it. */
-  height: 16px;
+  height: 14px;
   border-radius: 999px;
   /* The track shows through the gaps, so the runs read as counted segments
      rather than as one continuous fill — and clips them to the pill. */
@@ -17471,32 +17471,15 @@ span.mup-move-name:hover {
     order: 2;
     flex-basis: 100%;
   }
-  /* **The badge and the name keep the sizes they had before the second
-     scale-up, and both are held back for the same reason: this is the stacked
-     head, where a name has half a card rather than half a page.**
-
-     Measured at 481 on the live league: `THE BRONX FLOATERS` inks **217px at
-     20px/700** against a **199px** column and ellipsized — a name that fitted at
-     every width before. At 17px it is **188** and fits with 11px in hand, and
-     holding the badge at 44 is part of what pays for the hand.
-
-     So the two sizes turn where the head does. Above 640 the wide head has the
-     card's own cap behind it (`--mup-card-w`, re-derived to 1060 for exactly
-     this) and takes the full step; below it the figures, the tracks, the meter
-     and the headline all still grow and the name is the one thing that does
-     not. That is the rule the 480 block one section down already states for the
-     phone, applied at the width where it starts to be true. */
-  .mup-heads {
-    --lg-logo-w: 44px;
-    --lg-logo-h: 34px;
-    --lg-logo-glyph: 19px;
-  }
-  .mup-heads .mup-side-name {
-    font-size: 17px;
-  }
-  .mup-heads .mup-side-rec {
-    font-size: 13px;
-  }
+  /* **The badge and the name were pinned here and are not any more**, because
+     the wide tier came back to the sizes they were pinned to. The pins were the
+     second scale-up's — at a 20px name the stacked head ellipsized
+     `THE BRONX FLOATERS` (217px inked against a 199px column at 481), which the
+     wide head's own cap never let happen — and at 17 over 13 with a 44px badge
+     they restated the base rules exactly. Two rules that agree today are two
+     rules that will one day disagree, so they are gone rather than kept as
+     insurance; the ≤480 block below still holds the name at 14, which is the
+     one place the name genuinely does not follow the card. */
 }
 
 /* **480 is what is left of the old breakpoint, and it is the half that was
@@ -17602,7 +17585,7 @@ span.mup-move-name:hover {
      Declared on the page rather than on the card because `.mup-note` under it
      has to line up with the card's edges, and two literals that must agree is
      what `--mup-val-w` above already exists to avoid. */
-  --mup-card-w: 970px;
+  --mup-card-w: 896px;
 }
 /* **A team page's roster reading is a fixed-height column**, so the table's own
    header row and total row stick — which is `.app.summary-mode`'s answer to

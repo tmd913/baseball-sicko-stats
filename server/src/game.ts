@@ -11,7 +11,7 @@ import type {
   GameTeamLine,
 } from './types.js';
 import type { PlayerReport } from './types.js';
-import { isFinalStatus, isPostponedStatus, type GameStatusFields } from './mlbStats.js';
+import { hasStarted, isFinalStatus, isPostponedStatus, type GameStatusFields } from './mlbStats.js';
 import { getDay } from './savant.js';
 import { readBlob, writeBlob } from './storage.js';
 
@@ -307,16 +307,20 @@ function buildStatus(feed: Feed): GameStatus {
       : s?.abstractGameState === 'Live'
         ? 'live'
         : 'scheduled';
-  const live = state === 'live';
+  // `hasStarted` for the same reason `buildGameStatus` has it: MLB calls a game
+  // Live at Warmup and hands out a `Top 1` linescore with it, so this page's
+  // head read a half-inning that nobody had played. See `mlbStats.ts`.
+  const started = hasStarted(s);
+  const live = state === 'live' && started;
   return {
     state,
     detailedState: s?.detailedState ?? '',
     startTime: feed.gameData?.datetime?.dateTime ?? null,
     homeScore: numOrNull(ls?.teams?.home?.runs),
     awayScore: numOrNull(ls?.teams?.away?.runs),
-    currentInning: numOrNull(ls?.currentInning),
-    inningState: ls?.inningState ?? null,
-    isTopInning: ls?.isTopInning ?? null,
+    currentInning: started ? numOrNull(ls?.currentInning) : null,
+    inningState: started ? ls?.inningState ?? null : null,
+    isTopInning: started ? ls?.isTopInning ?? null : null,
     // The four that are only ever true of a live game, and which this page does
     // not draw at all: a `GameStatus` is one shape across the whole app, and a
     // second one differing in four nulls would be a second thing every reader

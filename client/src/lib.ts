@@ -1266,19 +1266,29 @@ export function liveRole(report: PlayerReport): LiveRole | null {
  * Short label for a live role — the live tag on a feed row and a player card,
  * and the four entries in the summary table's legend.
  *
- * **`pitching` reads `On mound` and used to read `Pitching`.** The four are one
- * vocabulary and were three prepositional phrases and a verb: at bat, on deck,
- * on base, and then *Pitching*, which is the only one that says what he is
- * doing rather than where he is. That was invisible while nothing put the four
- * in a row — the tag is drawn one at a time, and the batter and pitcher tabs
- * never share a table — and it stopped being invisible the moment the legend
- * gave them a shared home.
+ * **`pitching` reads `In game`, and has read `Pitching` and then `On mound`
+ * before it.** The four are one vocabulary, and the first move fixed its
+ * *grammar*: at bat, on deck, on base and then *Pitching*, the only one of them
+ * that said what a man was doing rather than where he was — invisible while the
+ * tag was drawn one at a time, and impossible to miss once the legend put the
+ * four in a row.
  *
- * It costs the live tag **8.09px** (measured on a real feed row: the pill goes
- * 78.05 → 86.14), which is the one place the string is drawn inside a laid-out
- * row rather than in a legend that wraps; the tag sits in a feed item's header
- * beside a name and a matchup with room to spare, and no width in the app moved
- * as a result (checked at 390 and 1200, page overflow 0 at both).
+ * `On mound` was the wrong **fact**, which is the worse of the two, and it was
+ * wrong for a reason written down one function below: `liveRoleGame` reads
+ * `inGamePitcherIds` rather than `pitchingId`, deliberately, so that a starter
+ * does not drop off the page every time his own side comes up to bat. What that
+ * makes the role mean is *still in the game* — and half of every game, the man
+ * wearing the tag is sitting in the dugout with a jacket on. `In game` is what
+ * the field it is computed from actually says. The claim about the mound
+ * survives where it is true: `pitchingId` keeps its meaning and its one reader,
+ * the `.inning-block.active` accent, which is a statement about the half being
+ * thrown now.
+ *
+ * It is also the shortest of the three. Measured on a real feed row under
+ * `sim=1`, the same pill the 78.05 → 86.14 above was read off: `Pitching`
+ * **78.05**, `On mound` **86.14**, `In game` **70.03** — so the tag gives back
+ * the 8.09 that rename cost it and 8.02 more, and no width in the app depended
+ * on either.
  */
 export function liveRoleLabel(role: LiveRole): string {
   return role === 'at-bat'
@@ -1287,7 +1297,7 @@ export function liveRoleLabel(role: LiveRole): string {
       ? 'On deck'
       : role === 'on-base'
         ? 'On base'
-        : 'On mound';
+        : 'In game';
 }
 
 /**
