@@ -86,6 +86,14 @@ So the bar carries `start === end`, and:
 - `stepRange` and `stepTitle` are the roster bar's own, so the arrows step one
   day and call themselves `Previous day` for free.
 
+**The bar runs the full width of the window**, through the app's own 22px
+gutters — `--bar-bleed`, folded onto `.app > .date-bar`'s list, which is where
+every other bar in the app takes it. It was left out and stopped 22px short of
+each edge while the cards under it ran the full width: the one row on the page
+that did not reach, which reads as a control floating in a margin rather than as
+the band the page hangs from. The cards keep the gutters, which is the
+convention — the bar bleeds, the content does not.
+
 **The bar is sticky**, at `top: var(--chrome-h)` under the pinned chrome —
 folded onto `.league-view > .date-bar`'s own rule rather than given one that
 agrees today, the two being the same band in the same arrangement one box
@@ -138,7 +146,8 @@ One board, one control over it, and nineteen columns of the season.
 ### The three groupings are three questions
 
 **Division** (six tables), **Wild Card** (the clubs not leading one, per league,
-with the cut line after the third) and **League** (all fifteen). They are a
+with the cut line after the third) and **Overall** (one table of all thirty).
+They are a
 *grouping* rather than three pages because the rows are the same rows: the
 server sends every club once with the wild-card order beside it, so crossing
 between them is a re-grouping and not a fetch — the same economy the research
@@ -149,6 +158,21 @@ that board excludes division leaders and is ranked by a tiebreaker order MLB
 owns. `WILD_CARDS` is 3 and is a constant rather than a count of who is above
 `+0.0`, or the line would move with the standings instead of being the thing
 they are read against.
+
+**Overall is one table of thirty and was two of fifteen.** The other two
+groupings are *races*, and a race is league-shaped by construction — you win a
+division, and you get a wild card in your own league. The question this one is
+left with is simply *who is any good*, and splitting that into American and
+National answers it twice, with two clubs that never meet sitting at the top of
+each. MLB's own `sportRank` is the order, which is on the same payload the other
+two ranks are and needed asking for no more than they did.
+
+**Games behind is recomputed on that board and nowhere else.** `gamesBack` on the
+wire is a club's distance from *its division leader* — right on two of the three
+boards and wrong here, where the row above is not in the same division. It was
+wrong on the old two-tables reading too, and quietly. The arithmetic is MLB's
+own (half the sum of the win gap and the loss gap), so the column means the same
+thing on all three.
 
 ### There was a span control, and three columns replaced it
 

@@ -2830,6 +2830,11 @@ export interface StandingsTeam {
    */
   divisionRank: number;
   leagueRank: number;
+  /** …and across all thirty clubs, which is what the Overall board is ordered
+   *  by. MLB's own `sportRank`; `leagueRank` is kept beside it because the
+   *  wild-card order is a per-league standing and the two are different
+   *  questions. */
+  overallRank: number;
 }
 
 /** The whole board, as `/api/mlb/standings` answers it. */
