@@ -8,6 +8,7 @@ import type { OppRead } from './OpponentTable';
 import { GamePark, hitterHand } from './ParkFactors';
 import { StarterLine } from './LiveFeed';
 import { BatterSplitsTab } from './PlatoonSplits';
+import { ProjectedGameLine } from './Projection';
 import {
   buildScheduleIndex,
   gamesOn,
@@ -504,6 +505,28 @@ export function SchedulePreview({
                length and this line has a name and a hand on it already. The
                paragraph below carries the whole caveat. */
             note={vs && vs.tier !== 'announced' ? 'projected' : undefined}
+          />
+          {/* **What he is expected to be worth in this one game**, under the
+              man on the mound and over the ground. The reader pressed this cell
+              to decide whether to start him and this is the answer, but the
+              *starter* is what the answer is about — the engine moves with the
+              arm he faces, and a line drawn above his name would be a figure
+              with nothing yet attached to it. Below it is the working: the
+              park, and the half of his split that applies.
+
+              **Above the park deliberately, and the card's key says why**: the
+              ballpark is a reading of its own and is *not* in these figures, so
+              it sits under them rather than being read as one of their inputs.
+
+              The **same block the feed's `UpcomingPreview` draws**, rather than
+              a second one shaped like it: two dialogs explaining one engine in
+              two sets of figures is the drift this file already refuses for the
+              starter line and the park. */}
+          <ProjectedGameLine
+            kind={isPitcher ? 'pitcher' : 'batter'}
+            playerId={report.id}
+            gamePk={game.gamePk}
+            date={game.date}
           />
           {/* The ballpark — the one fact about a scheduled game that is
               settled the moment the fixture is, above the split or the

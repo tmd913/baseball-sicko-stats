@@ -2,6 +2,7 @@ import type {
   BatterGameLog,
   BoardProjection,
   GameLogGap,
+  GameProjection,
   EspnOwnership,
   MatchupWindow,
   EspnRoster,
@@ -598,6 +599,25 @@ export const api = {
    */
   async boardProjection(kind: PlayerKind, start: string, end: string): Promise<BoardProjection> {
     return request(`/api/research/projected?type=${kind}&start=${start}&end=${end}`);
+  },
+  /**
+   * **One man in one game** — the line a game preview draws, off the same
+   * engine as the two lenses above and narrowed to a single fixture.
+   *
+   * **The `gamePk` is the narrowing and the date rides along**: a doubleheader
+   * is two games on one day, and a dialog opened on the nightcap must be told
+   * about the nightcap. Lazy on the *press* rather than on a toggle — the
+   * dialog opens on the park and the split it already holds and this lands
+   * underneath them — so a reader who never opens a preview never pays for it.
+   */
+  async gameProjection(
+    kind: PlayerKind,
+    playerId: number,
+    gamePk: number,
+    date: string,
+  ): Promise<GameProjection> {
+    const q = new URLSearchParams({ kind, playerId: String(playerId), gamePk: String(gamePk), date });
+    return request(`/api/projection/game?${q.toString()}`);
   },
   /**
    * Every player the league has something to say about today — his roster

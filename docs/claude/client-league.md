@@ -461,7 +461,9 @@ shared — see below.
 **There are two projections in the app now and neither owns the idea.** The
 League page projects a **matchup** — a team's total added to what ESPN has
 already scored — and the Roster view projects a **player** over a span of days
-(see **Client — the Roster view**, *The Projected reading*). Both are the same
+(see **Client — the Roster view**, *The Projected reading*). (Two was the count
+when this was written and it is four now; the two added are below, and the
+argument is the one this paragraph makes.) Both are the same
 engine (`server/src/projection.ts`) asked a different question, so the mark on
 the toggle and the account of the method are shared rather than copied: two
 glyphs would be two marks for one concept, and two keys would be two accounts of
@@ -477,6 +479,60 @@ would be a sentence about nothing, and the first paragraph says *what he has
 already done plus what he should add* instead. `ProjectedTools` — the button and
 the key as one row, with `.lg-proj-tools`' own layout — stays in `LeagueView`,
 being the matchup page's control rather than a shared one.
+
+**And there are four projections now, not two.** The research board's `Projected`
+lens is the third (see **Client — the research board**, *The projected
+reading*), and the fourth is a **game preview's own line** — one man in one
+fixture, the block a `SchedulePreview` or an `UpcomingPreview` draws at the top
+of its box. It is `ProjectedGameLine`, and it lives in this file for exactly the
+reason the glyph and the key do: that dialog has **two callers** — the Schedule
+row's, off a fixture nobody has been named for, and the feed's, off a game with a
+probable on it — and a copy in each would be two accounts of one engine, free to
+drift.
+
+`ProjectionNote` grew a **`game`** branch with it, which is the one reading of the
+four with *no span in it at all*. The other three open by saying how many days
+are left; this is asked about a single fixture, so `over` would be a sentence
+about nothing, and what takes its place is the sentence about the **fraction** —
+the thing a reader of one game is likeliest to misread as a rounding error. Its
+three remaining paragraphs are the shared ones, unchanged, which is the whole
+point of the split.
+
+**What it draws is the wide tables' own figures, in their own order**: a batter's
+`H/AB · R · HR · RBI · SB · OPS · BB · K` is `SummaryTable::StatCells` and a
+pitcher's twelve are `PitchStatCells`, with `projCount`'s tenths, `projIp`'s
+decimal innings (`17.3` outs is `5.8`, never `formatIp`'s `5.2`) and
+`CreditCell`'s dash at nought. A shorter list picked for the dialog was the other
+option and is worse: it would make this the one surface where a reader has to
+work out which columns went missing. **`.pgl-card` is deliberately not folded
+onto `.pf-strip`**, which it resembles — that strip holds four or six figures in
+a row that never wraps and paints each as a heat chip, and this holds eight or
+twelve in a grid that wraps to four across under 560px, in plain ink because a
+projected count is not a scale.
+
+**It sits under the man on the mound and over the ballpark**, and both halves of
+that are argued. *Under the starter*, because the starter is what the answer is
+about — the engine moves with the arm he faces, so a line drawn above that name
+would be a figure with nothing yet attached to it, and the dialog's head has
+always opened with him. *Over the park*, because the park is a reading of its
+own and is **not** in these figures: under them it reads as one of their inputs,
+over them as what it is, a second fact about the night. The key says so in words
+for the same reason — what a headline reading owes the readings beneath it is a
+word about what it does not contain.
+
+**And its head is the height of its own text, not of the ⓘ.** Reported as
+*"projected line in game preview has too much space at the top within it"*, and
+the cause was `.info-key-btn`: the app's 30px icon button, in a row whose only
+other content is a 13px label, so 8.5px of dead space sat above the title and
+another 8.5 below it. The button is not shrinking — those 30px are a touch
+target — so it stops setting the row instead, trimmed out of the flow with a
+negative `margin-block` and left to overhang into the card's padding. That is
+the block-axis twin of the `margin-inline` trim `.spl-card-head .spl-key`
+already takes for the same button. **Measured at 1440, before**: the card
+**86px**, its top edge **18.5px** above the title's ink against **10px** below
+the figures'. **After**: **74px**, and **12 / 10 / 10** — the space above the
+title, between the title and the labels, and below the figures — identical at
+390 and on both kinds.
 
 **`prettyDate` moved to `lib.ts` in the same breath**, for the same reason one
 level down: four surfaces print a span of days now (this view's period header,

@@ -5712,35 +5712,41 @@ button.start-line:focus-visible {
 .game-box-scroll,
 .league-scroll {
   overflow-x: auto;
-  /* Both axes: this pane scrolls sideways always and vertically in
-     `.details-view.gamelog-mode`, and what sits behind it there is the player
-     page's own scroller — so an unbounded flick down the log carried straight
-     on into the overlay behind it. `none` rather than `contain` for the reason
+  /* **The sideways axis alone, because that is the axis these boxes are
+     declared to scroll in.** `overscroll-behavior-x: none` is what the rule was
+     ever for: a flick that runs off the end of a wide table must not spring the
+     page behind it.
+
+     **The block axis is the trap, and it has now been reported twice.** A box
+     with `overflow-x: auto` computes `overflow-y: auto` too, so it *is* a
+     vertical scroll container — with `scrollHeight === clientHeight` it is at
+     its boundary the instant a wheel arrives, and a `none` on that axis then
+     declines to pass the scroll on. The pointer sits over a table and the page
+     stops moving.
+
+     Reported first as **"box score page isn't scrollable"**, which bought
+     `.game-box-scroll` an override of its own; that override is gone because
+     the fault was never the box score's. Reported again as **"on a laptop I'm
+     not able to scroll when I'm over a table in the overview page"**, and
+     reproduced on the player page's Overview at 1440×900: both `.glog-scroll`
+     boxes reading `auto/auto osb=none` with **sh 81 = ch 81** and **sh 261 = ch
+     261**, and three 120px wheel steps at (720, 751) leaving
+     `.details-view.scrollTop` at **0 → 0** — where the same three steps 520px
+     to the left, over no table, took it **0 → 267**, the whole of what the
+     overlay had to give.
+
+     So the block axis is named **only where a box genuinely scrolls in it** —
+     `.details-view.gamelog-mode .glog-scroll`, the two expanded panes and the
+     League page's rankings pane, each beside the `overflow: auto` that makes it
+     the scroller — which is the rule `.details-tabs`, `.research-positions` and
+     `.feed-filter-kinds` already follow, written out at `.feed-filters`.
+     `none` rather than `contain` in those places for the reason
      `.summary-scroll` gives: `contain` keeps the element's own iOS bounce, and
      a log that springs back off its last game reads as one still scrolling. */
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-}
-/* **…in the sideways axis alone, on the one pane that scrolls in one axis.**
-   `overscroll-behavior: none` above is `none` in *both*, which is right for the
-   four panes that are themselves the vertical scroller — the Game Log tab
-   reshapes the overlay so that `.glog-scroll` is one — and wrong for a box
-   score, which sits in an ordinary scrolling page and scrolls sideways only.
-
-   The trap is that a box with `overflow-x: auto` computes `overflow-y: auto`
-   too, so it *is* a vertical scroll container with `scrollHeight ===
-   clientHeight`: it is at its boundary the instant a wheel arrives, and `none`
-   then declines to pass the scroll on. Reported as **"box score page isn't
-   scrollable"** and reproduced on the rendered page — `.details-view` at
-   2862/900 with a wheel over the table doing nothing, `.glog-scroll` reading
-   `auto/auto osb=none sh=571 ch=571`. The x axis is still `none`, which is what
-   the rule was for: a flick that runs off the end of a wide table must not
-   spring the page behind it. */
-.game-box-scroll {
-  overscroll-behavior: auto;
-  overscroll-behavior-x: none;
 }
 .glog-table,
 .stats-table,
@@ -6274,6 +6280,11 @@ button.start-line:focus-visible {
   flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
+  /* The block axis, here where the box actually has one — this pane *is* the
+     Game Log tab's vertical scroller, and behind it is the overlay's own, so an
+     unbounded flick down the log carried straight on into the page. The base
+     rule deliberately names only the inline axis; see it for why. */
+  overscroll-behavior-y: none;
 }
 /* The `Load more · 125 earlier games` button that used to sit here is gone: the
    log grows as the reader reaches the foot of the pane now, on the research
@@ -9126,6 +9137,11 @@ button.start-line:focus-visible {
 .details-gamelog.is-expanded > .glog-scroll {
   flex: 0 1 auto;
   min-height: 0;
+  /* Expanded, these two *are* the vertical scroller — the first two already say
+     so in their own base rules, and the log and the rankings pane are told here,
+     where the shape that makes them one is set. See the base rule at
+     `.glog-scroll` for why the block axis is named nowhere else. */
+  overscroll-behavior-y: none;
 }
 /* Expanding is a request for the table, so everything in the box that isn't the
    table goes. **They are all inside the pane now** — the whole page is, which
@@ -13345,6 +13361,148 @@ button.start-line:focus-visible {
 .start-detail .pct-card {
   width: 100%;
 }
+/* ---------------------------------------------------------------------------
+   The projected line on a game preview — `Projection.tsx::ProjectedGameLine`
+   ---------------------------------------------------------------------------
+
+   The card itself is `.pf-strip`'s shape — a bordered panel on `--panel-2` with
+   a head over a grid of labelled figures — and it is deliberately **not** folded
+   onto that selector list. The rule is *two things that are the same object
+   share a rule; two that merely resemble each other are two things that will one
+   day differ*, and these two already differ in the two places that decide the
+   layout:
+
+   - **The count.** The park strip carries four figures on a batter's dialog and
+     six on a pitcher's, in one row that never wraps, capped at `count × 105px`.
+     This carries **eight** and **twelve** — the wide tables' own columns, in
+     their own order — and twelve `1fr` tracks in the dialog body do not survive
+     any width this app is read at. So this one wraps and that one does not.
+   - **The value.** `.pf-fig-val` is a heat chip, a park factor's distance from
+     100 being exactly the case `RULES.md` allows color for. A projected count is
+     not a scale, and this app spends color on state rather than on emphasis, so
+     these are plain ink on the card's own ground.
+
+   What *is* shared is the vocabulary — the 10px uppercase-free label over a
+   13px tabular figure — because those are the same object and are read the same
+   way one block apart. */
+/* **The head's height is its own text's, not the ⓘ's**, which is where 8.5px of
+   dead space at the top of this card came from — reported as *"projected line in
+   game preview has too much space at the top within it"*. `.info-key-btn` is the
+   app's 30px icon button and it is not shrinking (a touch target is what those
+   30px are), so what changes is that it stops setting the row: `margin-block` on
+   the key below trims it out of the flow and lets it overhang into this padding,
+   the block-axis twin of the `margin-inline` trim `.spl-card-head .spl-key`
+   already takes.
+
+   Measured at 1440, before: card **86px**, its top edge **18.5px** above the
+   title's ink against **10px** below the figures'. After: **71px**, and
+   **10.5 / 10** — so the padding a reader sees is the padding declared. The 10px
+   top rather than 9 is what leaves the trimmed button 2px inside the border
+   instead of 1, and the 9px gap rather than 7 is what keeps its overhanging
+   bottom edge 1px clear of the labels under it. */
+.pgl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 11px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+}
+/* `position: relative` is load-bearing: the key below is `static`, so this row
+   is what its panel is measured from. */
+.pgl-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pgl-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+/* What the line was drawn over, said in the head rather than as a thirteenth
+   figure — `0.8 G`, `0.4 app` or the word `Start`. Muted, because it is the
+   *size* of the reading and not one of its numbers. */
+.pgl-chance {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+  white-space: nowrap;
+}
+/* The key sits at the right end of the head and its panel opens leftward from
+   the **card's** edge — `.spl-card-head .spl-key`'s own arrangement, and for the
+   same reason it gives: a 320px panel anchored to a 30px button part-way along a
+   358px dialog runs off the screen opening either way, where the card's right
+   edge puts it inside the window at both ends. Written two classes deep so it
+   beats a single-class rule a later `InfoKey` caller adds to the shared family.
+
+   The negative margin is the button's own 30px box giving back the card's
+   padding, so the ⓘ sits on the card's right edge rather than 11px inside it —
+   the same trim `.spl-card-head .spl-key` takes. */
+.pgl-head .pgl-key {
+  position: static;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: -7px;
+  /* (30 − 13) / 2 = 8.5 either side of a 13px title; 8 rather than 8.5 so the
+     button keeps a hair inside the card. See the card's own rule. */
+  margin-block: -8px;
+}
+.pgl-head .info-key-panel {
+  left: auto;
+  right: 0;
+}
+/* An even grid rather than a flex row, for `.pf-figs`' own reason: the figures
+   keep their rows this way where a flex row breaks ragged. **The count is
+   written inline** as `--pgl-figs`, because it genuinely differs — eight on a
+   batter's card, twelve on a pitcher's, who gets runs, home runs allowed and
+   three credits as well.
+
+   Uncapped, where the park strip caps at `count × 105px`: that strip's four
+   figures stretched across a wide dialog read as four separate readings, and
+   these eight-to-twelve are a *line* — the same row the summary table draws —
+   which reads as one thing across whatever width it is given. */
+.pgl-figs {
+  display: grid;
+  grid-template-columns: repeat(var(--pgl-figs, 8), minmax(0, 1fr));
+  gap: 8px 4px;
+}
+.pgl-fig {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+/* No `text-transform: uppercase`, for `.pf-fig-label`'s reason — these are stat
+   names and the app spells them as the tables spell them. `H/AB` and `WHIP` are
+   already what they are. */
+.pgl-fig-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+/* `tabular-nums` so a column of these lines up with the one under it when the
+   grid wraps to a second row. */
+.pgl-fig-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* Narrow: four across, whatever the count. A media query adds no specificity, so
+   this sits after the rule it overrides. */
+@media (max-width: 560px) {
+  .pgl-figs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
 /* "Load more" under the Recent section — the stream shows a page at a time, so
    a long day doesn't mount hundreds of at-bat cards at once. The count is
    what's still below it. */
@@ -15977,6 +16135,9 @@ button.start-line:focus-visible {
   min-height: 0;
   max-height: 100%;
   overflow: auto;
+  /* Beside the `overflow: auto` that makes this the scroller — see the base rule
+     at `.glog-scroll`, which names the inline axis and nothing else. */
+  overscroll-behavior-y: none;
 }
 /* The caption's `flex: none` used to live here, back when it was a child of
    `.lg-rankings` on this view. It is a date bar inside the pane now (see
