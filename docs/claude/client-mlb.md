@@ -86,6 +86,16 @@ So the bar carries `start === end`, and:
 - `stepRange` and `stepTitle` are the roster bar's own, so the arrows step one
   day and call themselves `Previous day` for free.
 
+**The bar is sticky**, at `top: var(--chrome-h)` under the pinned chrome —
+folded onto `.league-view > .date-bar`'s own rule rather than given one that
+agrees today, the two being the same band in the same arrangement one box
+further down the tree. It is the League tab's argument at a different scale: the
+day is the one statement of *which games these are*, and a reader scrolling a
+grid of fifteen cards on a phone had it off the top of the screen by the third
+row with no way to tell yesterday's board from today's without going back up.
+Measured at 390: the bar sits at 159px unscrolled and holds at **99px** — the
+chrome's own measured bottom — after scrolling 900px down.
+
 `mday=` carries the rule's **label** where there is one and the date otherwise,
 which is the same two-halves split `preset=`/`start=`/`end=` makes for the
 roster's range: a link made on `Today` opens on the recipient's today.
@@ -123,7 +133,7 @@ score on one line — collapsing to one column below 430.
 
 ## Standings
 
-One board, two controls, three groupings and five spans.
+One board, one control over it, and nineteen columns of the season.
 
 ### The three groupings are three questions
 
@@ -140,70 +150,69 @@ owns. `WILD_CARDS` is 3 and is a constant rather than a count of who is above
 `+0.0`, or the line would move with the standings instead of being the thing
 they are read against.
 
-### The spans are the research board's own five
+### There was a span control, and three columns replaced it
 
-`season`, 7, 15, 30, 60 — `RESEARCH_WINDOWS`, deliberately, because that is what
-*the last 15 days* already means in this app. A vocabulary of its own here would
-be a reader asking two boards the same question and getting two answers.
+The tab offered the whole board over five spans — `season`, 60, 30, 15, 7 — as a
+run of pills that became a `<select>` on a phone, with a windowed board computed
+server-side for each. **`L30`, `1st Half` and `2nd Half` beside `L10` say more
+of what that control was reached for**, and say it at the same time as
+everything else: how a club has been going lately, and either side of the break,
+without leaving the row its season record is on. A span control answers one of
+those at a time and makes the reader hold the others in their head.
 
-**What a window cannot have, it does not draw.** Games behind and the streak are
-computed over the window and mean what they say; the wild-card race, the last ten
-games, one-run games, the Pythagorean record and the magic number are facts
-about a *season*, so on a window those columns are not in the table at all
-rather than drawn as dashes or carried over. That is `BoardProjection`'s rule: a
-season figure and a seven-day figure on one line would be two arithmetics on one
-row. A window adds `GP`, which is the one column that says whether a `.667` off
-three games means anything.
+It also takes a whole vocabulary out of the app — a span type, a URL param
+(`mspan`), a board that had to state in words which days it was drawn over, and
+the rule that a window may not carry a season's columns. What is left is one
+board that is always the season, which is what a standings page is.
 
-On a window the wild-card grouping keeps its rows and loses its line, with a
-sentence saying why — a line across seven days would claim three clubs are in,
-off seven days of baseball.
+**None of the three is on `/api/v1/standings`** — its `splitRecords` run to
+sixteen types and stop at `lastTen`, and `date=` gives the standings *as of* a
+day rather than the record *since* one. They come out of the season's own
+schedule, walked once, by the machinery the windowed board used to use.
 
-### The controls live in the tab, and collapse to dropdowns
+**`L30` is thirty games, not thirty days**, because it stands beside `L10` and
+that one is games. Two columns an inch apart, one counting games and one
+counting days, is the kind of thing this codebase spends its length preventing —
+and a club that has had four days off would otherwise read as having gone cold.
+
+**The halves split on the All-Star game's own date**, asked for rather than
+approximated (the break moves by a week between seasons): `gameType=A` returns
+exactly one game, 276 bytes, and the walk's own `gameType=R` means that game is
+never among the games being split. A failed read leaves both columns null on
+every row, which is the honest reading of "we could not ask" where `0-0` would
+claim nobody has played since July.
+
+Sanity check on the arithmetic: on 2026-08-25 Tampa Bay reads `56-38` and
+`22-15`, which sums to the `78-53` on the same row.
+
+### The board says nothing about itself in words
+
+Two captions stood here — one naming the days the rows were drawn over, one
+saying the line was the third wild card — and a third under the news list. All
+three were the page explaining a table that already reads. The days went with
+the span control; the line needs no caption, a rule drawn after the third row of
+a board titled `American League Wild Card` being the one thing on it a reader is
+looking for. Prose that restates the drawing is prose a reader learns to skip,
+and then skips over the sentence that would have mattered.
+
+### The control
 
 Not in the app's tools row, which is the Fantasy page's own decision read one
-view over: a control above the strip is a control over the *page*, and these two
-govern one third of it.
-
-**Below 700 each run becomes a `<select>`**, which is the app's answer for every
-strip of pills that outgrows a narrow screen — the research board's window tabs
-and position row, the Schedule span, the Rankings spans, the matchup picker —
-and `.mlb-standings-select` is folded onto `.research-window-select` so all of
-them are one control by construction. Both are rendered and the stylesheet
-chooses, rather than a JS media test that could drift from the CSS.
-
-**700 is measured rather than borrowed, and this is the one row in the app that
-cannot take its 640.** It holds *two* runs on one line — the grouping at 243px
-and the spans at 358 with 12px between, **613px** — so with the app's 22px
-gutters it needs a **657px** window, and at 640 the two would break to two lines
-for the seventeen pixels before the dropdowns arrived. A row that is briefly two
-lines on the way to being one control is the fault the swap exists to prevent.
-700 leaves room for a sixth span without this being re-measured.
-
-Measured after: the row is **36px at 320, 390, 640, 700, 701, 760, 900 and
-1280**, one line at every one of them, and the page body never scrolls sideways.
-Before any of it, at 390 the row was **96px** — the span run broke to a second
-line and `Last 60` then wrapped inside its own pill, taking every span pill from
-25px to 40. The pills keep `nowrap` so that second half cannot come back at a
-width where the runs are still drawn.
-
-**It was a `ScrollRow` for a day, and that was the wrong shape.** A scroller is
-right where the run is long and its members are peers a reader browses — the
-roster's five readings, a player page's nine tabs. These two are short, closed
-sets where the reader is picking one value, which is what a `<select>` is; and
-side-scrolling hides a filter behind a gesture on the one device where the
-reader cannot see there is more of it without trying.
+view over: a control above the strip is a control over the *page*, and this one
+governs one third of it. It is three pills and nothing else — 243px against the
+276 the app's gutters leave at 320, so there is no width at which it wraps,
+scrolls or collapses to a dropdown. It held two runs and a pair of `<select>`
+fallbacks while there was a span to pick.
 
 ### The table
 
 `.glog-table`'s selector lists with one more name in each — a wide stat table
 with a sticky first column, read across rather than picked, is an object this
-stylesheet already has. Three things are its own, and each is a measurement:
+stylesheet already has. What is its own, and each of these is a measurement or a
+bug report:
 
 - **A narrower `--row-gutter`** (`clamp(4px, 1vw, 13px)` against the log's
-  `clamp(5px, 1.9vw, 28px)`). Sixteen columns, five of them a `43-23` pair: at
-  1280 the table is 1396px in a 1280 scrollport with the inherited clamp and
-  **1280 with this one**.
+  `clamp(5px, 1.9vw, 28px)`). Nineteen columns, seven of them a `43-23` pair.
 - **A `min-width` on the club cell.** `.glog-date` is `width: 1%` and a flex
   child with `overflow: hidden` has a minimum content width of zero, so the two
   together collapsed the column onto the crest and drew thirty rows with **no
@@ -214,25 +223,37 @@ stylesheet already has. Three things are its own, and each is a measurement:
   stylesheet. Measured by taking each club's rendered prefix across widths: at
   900 and up no two collide; at 800 both Los Angeleses read `Los Angele…`; at
   700 three pairs collide. A row that cannot say which of two clubs it is about
-  is worse than one that says `NYY`. The column's floor drops to 74px with it,
-  which is stat columns that no longer have to be scrolled to.
+  is worse than one that says `NYY`. The column's floor drops to 74px with it.
 
-**The pinned edge is measured, not declared.** `--pin-edge` says *the table goes
-on under this column*, and this is the first board that sometimes fits — drawn
-unconditionally it was a vertical bar down the middle of six tables marking an
-edge nothing was moving past. Whether a table fits depends on how wide
-`Arizona Diamondbacks` renders in a font this app does not choose, so
-`StandingsTable` measures its own scroller with `useOverflowArrows` (the app's
-one implementation of that measurement) and puts `is-pinned` on the table. Off
-by default, which is the safe direction.
+### The sticky column, and the two things that were wrong with it
+
+**The flex box is a `<span>` inside the cell, not the cell itself.** The `<td>`
+carried `.mlb-club`'s `display: flex` directly, which takes it out of
+`display: table-cell` — and `position: sticky` on a table cell that is no longer
+one is exactly the case Safari declines to honor. Chrome held it (measured: both
+the header and the body cells sit at `left: 0` through a 250px scroll), which is
+why it shipped; the report was *"the column header sticks but not the actual
+teams below it"*, and the header is the one cell in that column that never had
+the flex on it. One `<span>` puts the cell back to `table-cell`.
+
+**And there is no pinned edge, at any width.** `--pin-edge` is an 8px blurred
+shadow that says *the table goes on under this column*, and on the tables it is
+borrowed from it reads as depth against a narrow date column. Here it read as a
+soft vertical bar down the middle of six tables, and was reported twice: once
+when it was drawn on tables that did not scroll at all, and again when nineteen
+columns meant every table scrolled and it was therefore always on. The first
+report was answered by measuring each scroller and drawing the edge only when it
+overflowed — correct about *when* and wrong about *what*. On a board whose
+sticky column is a crest and a club name, that is what separates it from the
+numbers; the rows carry their own ground, so content passing beneath is hidden
+cleanly with no edge needed to say so. The measurement went with it, having no
+reader left.
 
 **The cut line is a border on the row above it**, not a row of its own: a `<tr>`
 with a `<td colspan>` would be a row in the accessibility tree saying nothing,
 and it would take the zebra stripe.
 
 Every row is a door into the club's page.
-
----
 
 ## News
 
@@ -263,6 +284,13 @@ The list is centered at the reading column with `width: 100%` beside the auto
 margin — the recorded trap that an auto margin on the cross axis suppresses a
 flex item's stretch.
 
+**No foot.** A paragraph said which ten of how many these were, where they came
+from and what was left out — true, and the page explaining itself to a reader
+who is reading headlines. What it was protecting against is a reader wondering
+whether ten is all there is, and the tab's own name answers that better than a
+sentence under the fold. The empty state still names its cause, which is the one
+case where words are all there is.
+
 ---
 
 ## State
@@ -273,12 +301,13 @@ Four params, all in the URL because all four decide what data is on screen:
 | --- | --- | --- |
 | `mlb` | which tab | `scoreboard` |
 | `mday` | the Scoreboard's day, as a rule or a date | `Today` |
-| `mspan` | the Standings' span | `season` |
 | `mgrp` | the Standings' grouping | `division` |
 
-The last two are scoped to the Standings tab rather than to the view: a span
-with no standings to be about would name a reading that is not in force, the
-rule `cut=`, `mt=` and `mr=` all follow.
+There was a fourth, `mspan=`, and it went with the span control it named.
+
+`mgrp` is scoped to the Standings tab rather than to the view: a grouping with
+no standings to be about would name a reading that is not in force, the rule
+`cut=`, `mt=` and `mr=` all follow.
 
 **The `m` prefix is not `mp`/`mup`/`mt`/`mr`**, which are the fantasy matchup's.
 Two params must never mean two things — a link is read before anything on screen
@@ -294,14 +323,15 @@ afterwards, and only one of the three can:
   while the board holds a game being played or still to start. Gated on the tab
   as well as the view, unlike the league poll: nothing off this page draws a
   mark from this board;
-- the **Standings** re-read when the span changes — the grouping costs no fetch;
+- the **Standings** are read once — one board, and the grouping is a re-grouping
+  of rows already in hand rather than a fetch;
 - the **News** is read once. It is a thirty-minute sweep on the server, so a
   poll would be the same answer at a cost.
 
-Both the board and the standings **sequence-check their own answers**: the board
-against the day the reader is on (a ref, so the loader is not rebuilt every time
-the date moves) and the standings against the span. Two presses of an arrow are
-two reads in flight.
+The board **sequence-checks its own answers** against the day the reader is on —
+a ref, so the loader is not rebuilt every time the date moves. Two presses of an
+arrow are two reads in flight. The other two need no such check: neither has a
+control that can supersede a read.
 
 ## Related
 

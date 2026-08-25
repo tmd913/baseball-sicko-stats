@@ -43,7 +43,6 @@ import type {
   LeagueNews,
   MlbScoreboard,
   MlbStandings,
-  StandingsSpan,
   TeamGameResult,
   GameReport,
   ParkFactors,
@@ -996,11 +995,11 @@ export const api = {
   async mlbScoreboard(date: string): Promise<MlbScoreboard> {
     return request(`/api/mlb/scoreboard?date=${date}`);
   },
-  /** Where the thirty clubs stand, over one of the research board's own five
-   *  spans — the same vocabulary, so *the last 15 days* means one thing in this
-   *  app rather than two. */
-  async mlbStandings(span: StandingsSpan): Promise<MlbStandings> {
-    return request(`/api/mlb/standings?span=${span}`);
+  /** Where the thirty clubs stand — the season, which is the one span a
+   *  standings page has. It took a `span=` while the tab offered five; the
+   *  three columns that replaced that control are on the board itself. */
+  async mlbStandings(): Promise<MlbStandings> {
+    return request('/api/mlb/standings');
   },
   /** The league's news, newest first — off the sweep the research board's news
    *  marks already pay for, so this costs no upstream of its own. */

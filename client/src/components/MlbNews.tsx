@@ -100,13 +100,14 @@ export default function MlbNewsTab({
   }
   return (
     <div className="mlb-news">
+      {/* **No foot.** A paragraph stood here saying which ten of how many these
+          were, where they came from and what was left out — true, and the page
+          explaining itself to a reader who is reading headlines. What it was
+          protecting against is a reader wondering whether ten is all there is,
+          and the tab's own name answers that better than a sentence under the
+          fold does. The empty state still names its cause, which is the case
+          where words are the only thing there is. */}
       <NewsList items={news.items} summaries owner={owner} />
-      <p className="mlb-news-foot">
-        The biggest {news.items.length} of {news.considered} notes over the last {news.days} days,
-        ranked by what kind of thing happened and how recently &mdash; trades, injuries, signings
-        and role changes over a box-score line. From RotoWire&rsquo;s club desks and MLB&rsquo;s own
-        transaction log; minor-league moves are not in it.
-      </p>
     </div>
   );
 }

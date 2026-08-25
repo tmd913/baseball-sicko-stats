@@ -1,4 +1,4 @@
-import type { LeagueNews, MlbScoreboard, MlbStandings, StandingsSpan } from '../types';
+import type { LeagueNews, MlbScoreboard, MlbStandings } from '../types';
 import type { DatePreset } from './DateControls';
 import MlbScoreboardTab from './MlbScoreboard';
 import MlbStandingsTab from './MlbStandings';
@@ -14,7 +14,7 @@ import MlbNewsTab from './MlbNews';
  *
  *  1. **Scoreboard** — every game on one day, each a door into its own page.
  *     *What happened.*
- *  2. **Standings** — where the thirty clubs are, over a span the reader picks.
+ *  2. **Standings** — where the thirty clubs are, and how they have been going.
  *     *Who is any good.*
  *  3. **News** — every note and every move across the league, newest first.
  *     *What is going on.*
@@ -68,8 +68,6 @@ export default function MlbView({
   boardError,
   onOpenGame,
   standings,
-  span,
-  onSpan,
   group,
   onGroup,
   standingsLoading,
@@ -95,8 +93,6 @@ export default function MlbView({
   boardError: string | null;
   onOpenGame: (gamePk: number) => void;
   standings: MlbStandings | null;
-  span: StandingsSpan;
-  onSpan: (span: StandingsSpan) => void;
   group: StandingsGroup;
   onGroup: (group: StandingsGroup) => void;
   standingsLoading: boolean;
@@ -115,8 +111,6 @@ export default function MlbView({
       {tab === 'standings' ? (
         <MlbStandingsTab
           data={standings}
-          span={span}
-          onSpan={onSpan}
           group={group}
           onGroup={onGroup}
           loading={standingsLoading}

@@ -1,15 +1,13 @@
-import { useMemo, useRef } from 'react';
-import type { MlbStandings, StandingsRecord, StandingsSpan, StandingsTeam } from '../types';
+import { useMemo } from 'react';
+import type { MlbStandings, StandingsRecord, StandingsTeam } from '../types';
 import { teamLogoUrl } from '../lib';
 import { LoadingBlock } from './Loading';
-import { useOverflowArrows } from './TabStrip';
 
 /**
  * # Where the thirty clubs stand
  *
- * The MLB view's second tab. **One board with two controls over it** — how the
- * clubs are grouped, and how much of the season is being counted — and every
- * column in it is over the span the second control names.
+ * The MLB view's second tab. **One board, one control over it** — how the clubs
+ * are grouped — and nineteen columns of the season.
  *
  * ## The three groupings are three questions
  *
@@ -25,28 +23,20 @@ import { useOverflowArrows } from './TabStrip';
  * not a fetch. That is the same economy the research board's position pills
  * make.
  *
- * ## The spans are the research board's own five
+ * ## There was a span control, and three columns replaced it
  *
- * `season`, 7, 15, 30, 60 — `RESEARCH_WINDOWS`, deliberately, because that is
- * what *the last 15 days* already means in this app. A vocabulary of its own
- * here would be a reader asking two boards the same question and getting two
- * answers.
+ * The tab offered the whole board over five spans — season, 60, 30, 15, 7 — as
+ * a run of pills that became a `<select>` on a phone. **`L30`, `1st Half` and
+ * `2nd Half` beside `L10` say more of what that control was reached for**, and
+ * say it *at the same time as everything else*: how a club has been going
+ * lately, and either side of the break, without leaving the row its season
+ * record is on. A span control answers one of those at a time and makes the
+ * reader hold the others in their head.
  *
- * **What a window cannot have, it does not draw.** Games behind and the streak
- * are computed over the window and mean what they say; the wild-card race, the
- * last ten games, one-run games, the Pythagorean record and the magic number
- * are facts about a *season*, so on a window those columns are not in the table
- * at all rather than being drawn as dashes or, worse, carried over. That is
- * `BoardProjection`'s rule: a season figure and a seven-day figure on one line
- * would be two arithmetics on one row.
- *
- * ## The numbers are MLB's on the season and ours on a window
- *
- * Which sounds like a caveat and is very nearly not one: the server's own
- * document records that the two agree on **all thirty clubs' wins, losses, runs
- * scored and runs allowed**, measured before any of this was built. What a
- * window really changes is which games are counted, and the caption says which
- * days those are.
+ * It also takes a whole vocabulary out of the app — a span, a URL param, a
+ * board that had to say in words which days it was drawn over, and the rule
+ * that a window may not carry a season's columns. What is left is one board
+ * that is always the season, which is what a standings page is.
  */
 
 export type StandingsGroup = 'division' | 'wildcard' | 'league';
@@ -56,32 +46,6 @@ export const STANDINGS_GROUPS: { key: StandingsGroup; label: string; title: stri
   { key: 'wildcard', label: 'Wild Card', title: 'The clubs not leading a division, and the cut line' },
   { key: 'league', label: 'League', title: 'All fifteen clubs in each league at once' },
 ];
-
-export const STANDINGS_SPANS: { span: StandingsSpan; label: string }[] = [
-  { span: 'season', label: 'Season' },
-  { span: 60, label: 'Last 60' },
-  { span: 30, label: 'Last 30' },
-  { span: 15, label: 'Last 15' },
-  { span: 7, label: 'Last 7' },
-];
-
-/** What a span calls itself in a tooltip and in a `<select>`'s own — written
- *  once because the pill run and the dropdown are the same control drawn twice,
- *  and two copies of a sentence are two sentences that will one day differ. */
-function spanTitle(span: StandingsSpan): string {
-  return span === 'season'
-    ? "The whole season, in MLB's own numbers"
-    : `Every club's record over the last ${span} days`;
-}
-
-/** A `<select>` hands back a string; this is the one place it becomes a span
- *  again. An unrecognized value falls back to the season rather than emptying
- *  the view — the rule the URL reader one file over already follows. */
-function toSpan(raw: string): StandingsSpan {
-  if (raw === 'season') return 'season';
-  const n = Number(raw);
-  return STANDINGS_SPANS.some((s) => s.span === n) ? (n as StandingsSpan) : 'season';
-}
 
 /** MLB's own two, by id. Written out because the standings payload carries the
  *  id and not the name, and because these two strings are the one part of this
@@ -123,12 +87,11 @@ interface Column {
 }
 
 /**
- * Which columns this board draws, which is a function of both controls: the
- * span decides what exists, and the grouping decides which of two ways of being
- * behind is the relevant one.
+ * Which columns this board draws — a function of the grouping alone now that
+ * there are no spans, and of the grouping only in one place: **which way of
+ * being behind the row is being read against.**
  */
-function columnsFor(span: StandingsSpan, group: StandingsGroup): Column[] {
-  const season = span === 'season';
+function columnsFor(group: StandingsGroup): Column[] {
   const cols: Column[] = [
     { key: 'w', label: 'W', title: 'Wins', value: (t) => String(t.wins) },
     { key: 'l', label: 'L', title: 'Losses', value: (t) => String(t.losses) },
@@ -138,7 +101,7 @@ function columnsFor(span: StandingsSpan, group: StandingsGroup): Column[] {
   // relevant gap is to the third wild card, not to a division leader the row is
   // no longer being read against — and drawing both would be one row answering
   // two questions.
-  if (group === 'wildcard' && season) {
+  if (group === 'wildcard') {
     cols.push({
       key: 'wcgb',
       label: 'WCGB',
@@ -153,17 +116,26 @@ function columnsFor(span: StandingsSpan, group: StandingsGroup): Column[] {
       value: (t) => t.gamesBack,
     });
   }
-  // Only on a window: on the season board `W` and `L` already add up to it,
-  // where over seven days a club's game count is the thing that says whether
-  // the row means anything at all.
-  if (!season) {
-    cols.push({ key: 'gp', label: 'GP', title: 'Games played in this span', value: (t) => String(t.gamesPlayed) });
-  }
-  cols.push({ key: 'strk', label: 'STRK', title: 'Current run of wins or losses', value: (t) => t.streak ?? '—' });
-  if (season) {
-    cols.push({ key: 'l10', label: 'L10', title: 'Record in the last ten games', value: (t) => rec(t.lastTen) });
-  }
   cols.push(
+    { key: 'strk', label: 'STRK', title: 'Current run of wins or losses', value: (t) => t.streak ?? '—' },
+    // **The four run-of-games cuts together**, coarsest last: the last ten, the
+    // last thirty, and then the season's two halves. They are one reading — *how
+    // has this club been going* — and a reader comparing them wants them
+    // adjacent rather than separated by six columns of runs and splits.
+    { key: 'l10', label: 'L10', title: 'Record in the last ten games', value: (t) => rec(t.lastTen) },
+    { key: 'l30', label: 'L30', title: 'Record in the last thirty games', value: (t) => rec(t.lastThirty) },
+    {
+      key: 'h1',
+      label: '1st Half',
+      title: 'Record before the All-Star break',
+      value: (t) => rec(t.firstHalf),
+    },
+    {
+      key: 'h2',
+      label: '2nd Half',
+      title: 'Record since the All-Star break',
+      value: (t) => rec(t.secondHalf),
+    },
     { key: 'rs', label: 'RS', title: 'Runs scored', value: (t) => String(t.runsScored) },
     { key: 'ra', label: 'RA', title: 'Runs allowed', value: (t) => String(t.runsAllowed) },
     {
@@ -181,21 +153,17 @@ function columnsFor(span: StandingsSpan, group: StandingsGroup): Column[] {
       title: 'Record against clubs at .500 or better',
       value: (t) => rec(t.vsOver500),
     },
+    { key: 'onerun', label: '1-RUN', title: 'Record in one-run games', value: (t) => rec(t.oneRun) },
+    {
+      key: 'xwl',
+      label: 'xW-L',
+      title: "MLB's Pythagorean record — what the runs say the record should be",
+      value: (t) => rec(t.expected),
+    },
   );
-  if (season) {
-    cols.push(
-      { key: 'onerun', label: '1-RUN', title: 'Record in one-run games', value: (t) => rec(t.oneRun) },
-      {
-        key: 'xwl',
-        label: 'xW-L',
-        title: "MLB's Pythagorean record — what the runs say the record should be",
-        value: (t) => rec(t.expected),
-      },
-    );
-  }
   // The magic number is a fact about winning a **division**, so it is drawn on
   // the board that is about winning one and nowhere else.
-  if (season && group === 'division') {
+  if (group === 'division') {
     cols.push({
       key: 'mag',
       label: 'MAG',
@@ -246,10 +214,7 @@ function groupsFor(data: MlbStandings, group: StandingsGroup): Group[] {
         // MLB's own, tiebreakers and all. A club it names that this board has
         // no row for is dropped rather than drawn empty.
         rows: w.teamIds.map((id) => byId.get(id)).filter((t): t is StandingsTeam => t !== undefined),
-        // **Season only.** A wild-card race is a fact about the season; a line
-        // across a seven-day board would say three clubs are in, off seven days
-        // of baseball. The tables say so in a note instead.
-        cutAfter: data.span === 'season' ? WILD_CARDS - 1 : null,
+        cutAfter: WILD_CARDS - 1,
       }));
   }
   const leagues = [...new Set(data.teams.map((t) => t.leagueId))].sort((a, b) => a - b);
@@ -267,8 +232,6 @@ const DIVISION_ORDER = [201, 202, 200, 204, 205, 203];
 
 export default function MlbStandingsTab({
   data,
-  span,
-  onSpan,
   group,
   onGroup,
   loading,
@@ -276,8 +239,6 @@ export default function MlbStandingsTab({
   onOpenTeam,
 }: {
   data: MlbStandings | null;
-  span: StandingsSpan;
-  onSpan: (span: StandingsSpan) => void;
   group: StandingsGroup;
   onGroup: (group: StandingsGroup) => void;
   loading: boolean;
@@ -285,27 +246,17 @@ export default function MlbStandingsTab({
   onOpenTeam: (teamId: number) => void;
 }) {
   const groups = useMemo(() => (data ? groupsFor(data, group) : []), [data, group]);
-  const columns = useMemo(() => columnsFor(span, group), [span, group]);
+  const columns = useMemo(() => columnsFor(group), [group]);
   return (
     <div className="mlb-standings">
-      {/* **Two controls, each drawn twice — a run of pills and a `<select>`,
-          with a media query picking.** That is the app's own answer for every
-          strip of pills that outgrows a narrow screen (the research board's
-          window tabs and position row, the Schedule span, the Rankings spans,
-          the matchup picker), and `.mlb-standings-select` is folded onto
-          `.research-window-select` so all of them are one control by
-          construction. Both are rendered and the stylesheet chooses, rather
-          than a JS media test that could drift from the CSS.
-
-          It was a `ScrollRow` for a day and that was the wrong shape here. A
-          scroller is right where the run is *long* and its members are peers a
-          reader browses — the roster's five readings, a player page's nine
-          tabs. These two are short, closed sets where the reader is picking one
-          value, which is what a `<select>` is; and side-scrolling hid a filter
-          behind a gesture on the one device where the reader cannot see there
-          is more of it without trying. */}
+      {/* **One control, and it is three pills.** It was two, and the second —
+          the span — is gone with the board it changed; three columns beside
+          `L10` say what it was reached for and say it on the row. What is left
+          fits everywhere: the run measures 243px against the 276 the app's
+          gutters leave at 320, so there is no `<select>` fallback and no width
+          at which this row is anything but one line. */}
       <div className="mlb-standings-tools">
-        <div className="view-switch mlb-standings-run" role="tablist" aria-label="Standings grouping">
+        <div className="view-switch" role="tablist" aria-label="Standings grouping">
           {STANDINGS_GROUPS.map((g) => (
             <button
               key={g.key}
@@ -320,51 +271,11 @@ export default function MlbStandingsTab({
             </button>
           ))}
         </div>
-        <select
-          className="mlb-standings-select"
-          aria-label="Standings grouping"
-          value={group}
-          onChange={(e) => onGroup(e.target.value as StandingsGroup)}
-        >
-          {STANDINGS_GROUPS.map((g) => (
-            <option key={g.key} value={g.key} title={g.title}>
-              {g.label}
-            </option>
-          ))}
-        </select>
-        <div className="view-switch mlb-standings-run" role="tablist" aria-label="Standings span">
-          {STANDINGS_SPANS.map((s) => (
-            <button
-              key={String(s.span)}
-              type="button"
-              role="tab"
-              aria-selected={s.span === span}
-              className={`view-tab${s.span === span ? ' active' : ''}`}
-              onClick={() => onSpan(s.span)}
-              title={spanTitle(s.span)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <select
-          className="mlb-standings-select"
-          aria-label="Standings span"
-          value={String(span)}
-          onChange={(e) => onSpan(toSpan(e.target.value))}
-        >
-          {STANDINGS_SPANS.map((s) => (
-            <option key={String(s.span)} value={String(s.span)} title={spanTitle(s.span)}>
-              {s.label}
-            </option>
-          ))}
-        </select>
       </div>
       <Body
         data={data}
         groups={groups}
         columns={columns}
-        group={group}
         loading={loading}
         error={error}
         onOpenTeam={onOpenTeam}
@@ -377,7 +288,6 @@ function Body({
   data,
   groups,
   columns,
-  group,
   loading,
   error,
   onOpenTeam,
@@ -385,14 +295,12 @@ function Body({
   data: MlbStandings | null;
   groups: Group[];
   columns: Column[];
-  group: StandingsGroup;
   loading: boolean;
   error: string | null;
   onOpenTeam: (teamId: number) => void;
 }) {
-  // Never over data — rule 1. A span change leaves the last board standing
-  // while the next is in flight, and the block wait is only for a pane with
-  // nothing in it yet.
+  // Never over data — rule 1. The block wait is only for a pane with nothing
+  // in it yet.
   if (!data) {
     if (error) {
       return (
@@ -404,25 +312,17 @@ function Body({
     }
     return loading ? <LoadingBlock>Reading the standings</LoadingBlock> : null;
   }
+  /* **The board says nothing about itself in words, and that is deliberate.**
+     Two captions stood here — one naming the days the rows were drawn over and
+     one saying the line was the third wild card — and both were the page
+     explaining a table that already reads. The days went with the span control
+     (there is one span now, the season, which is what a standings page *is*),
+     and the line needs no caption: a rule drawn after the third row of a board
+     titled `American League Wild Card` is the one thing on it a reader is
+     looking for. Prose that restates the drawing is prose a reader learns to
+     skip, and then skips over the sentence that would have mattered. */
   return (
     <>
-      <p className="mlb-standings-note">
-        {data.span === 'season' ? (
-          <>Every club&rsquo;s season, in MLB&rsquo;s own numbers.</>
-        ) : (
-          <>
-            Every club over the <strong>last {data.span} days</strong> &mdash; {prettyDay(data.start)} to{' '}
-            {prettyDay(data.end)}, counting games that have finished.
-          </>
-        )}
-        {group === 'wildcard' && data.span !== 'season' && (
-          <>
-            {' '}
-            These are the clubs not leading a division, ranked by their record over these days; the
-            wild-card race itself is a fact about the season.
-          </>
-        )}
-      </p>
       {groups.map((g) => (
         <StandingsTable key={g.key} group={g} columns={columns} onOpenTeam={onOpenTeam} />
       ))}
@@ -433,22 +333,17 @@ function Body({
 /**
  * One group's table.
  *
- * **A component of its own so that each one can measure its own scroller**, and
- * that is the whole reason it was split out: the pinned club column carries
- * `--pin-edge`, a shadow whose job is to say *there is more table under this*,
- * and a shadow drawn on a table that fits is a vertical bar down the middle of
- * the page saying nothing. Six division tables on one screen drew six of them.
+ * **It measured its own scroller once and no longer does.** The sticky club
+ * column carried `--pin-edge`, and whether to draw that edge depended on
+ * whether the table overflowed — which no media query can know, since it turns
+ * on how wide `Arizona Diamondbacks` renders in a font this app does not
+ * choose. So this component ran `useOverflowArrows` and put `is-pinned` on the
+ * table.
  *
- * It is measured rather than declared, which is the app's standing rule for a
- * value that is a function of the window and of a font this app does not
- * choose: the season board fits at 1280 and scrolls at 900, and no media query
- * can know that because it depends on how wide `Arizona Diamondbacks` renders.
- * `useOverflowArrows` is the app's one implementation of that measurement —
- * every-render plus a `ResizeObserver`, with a pixel of slack so a table that
- * fits exactly does not draw an edge for the 0.4px it is over by — so it is
- * borrowed whole rather than written again. Only `over` is read here; the two
- * arrows it also answers for belong to a row of controls, not to a table with a
- * scrollbar of its own.
+ * The edge is gone at every width (see `.mlb-standings-table .glog-date` in the
+ * stylesheet for why), so the measurement has no reader and went with it. What
+ * is left is a plain component, kept as one because a nineteen-column table
+ * drawn six times is worth a name.
  */
 function StandingsTable({
   group,
@@ -459,13 +354,11 @@ function StandingsTable({
   columns: Column[];
   onOpenTeam: (teamId: number) => void;
 }) {
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  const { state } = useOverflowArrows(boxRef, boxRef);
   return (
     <section className="mlb-standings-block">
       <h3 className="mlb-standings-title">{group.title}</h3>
-      <div className="mlb-standings-scroll" ref={boxRef}>
-        <table className={`mlb-standings-table${state.over ? ' is-pinned' : ''}`}>
+      <div className="mlb-standings-scroll">
+        <table className="mlb-standings-table">
           <caption className="sr-only">{group.title}</caption>
           <thead>
             <tr>
@@ -499,28 +392,43 @@ function StandingsTable({
                 tabIndex={0}
                 aria-label={`${t.name}, ${t.wins}-${t.losses}. Open the club's page.`}
               >
-                <td className="glog-date mlb-club">
-                  <img className="mlb-crest" src={teamLogoUrl(t.id)} alt="" aria-hidden="true" />
-                  {/* **Both rendered, one chosen by the stylesheet** — the swap
-                      this app already makes for every pill row that becomes a
-                      `<select>`, and for the reason that one is made in CSS
-                      rather than in JS: a component that measured its own
-                      container would have to re-measure on every resize to say
-                      the same thing a media query says once. Which one is drawn,
-                      and the measurement behind the width it changes at, are at
-                      `.mlb-club-abbr`. */}
-                  <span className="mlb-club-name">{t.name}</span>
-                  <span className="mlb-club-abbr">{t.abbreviation || t.name}</span>
-                  {/* Clinched is a **state**, so it takes the app's one colored
-                      mark on this board; a division leader who has not clinched
-                      gets nothing, a mark on six of thirty rows every day of the
-                      season saying only what the row it sits at the top of
-                      already says. */}
-                  {t.clinched && (
-                    <span className="mlb-clinch" title="Clinched a playoff place">
-                      x
-                    </span>
-                  )}
+                {/* **The flex box is a `<span>` inside the cell, not the cell
+                    itself**, and that is the fix for a reported fault rather
+                    than a nesting preference. The `<td>` carried
+                    `.mlb-club`'s `display: flex` directly, which takes it out
+                    of `display: table-cell` — and `position: sticky` on a table
+                    cell that is no longer a table cell is exactly the case
+                    Safari declines to honor. Chrome held it (measured: both the
+                    header and the body cells sit at `left: 0` through a 250px
+                    scroll), which is why it shipped; the report was **"the
+                    column header sticks but not the actual teams below it"**,
+                    and the header is the one cell in this column that never had
+                    the flex on it. One `<span>` puts the cell back to
+                    `table-cell` and leaves the layout identical. */}
+                <td className="glog-date">
+                  <span className="mlb-club">
+                    <img className="mlb-crest" src={teamLogoUrl(t.id)} alt="" aria-hidden="true" />
+                    {/* **Both rendered, one chosen by the stylesheet** — the
+                        swap this app already makes for every pill row that
+                        becomes a `<select>`, and for the reason that one is
+                        made in CSS rather than in JS: a component that measured
+                        its own container would have to re-measure on every
+                        resize to say the same thing a media query says once.
+                        Which one is drawn, and the measurement behind the width
+                        it changes at, are at `.mlb-club-abbr`. */}
+                    <span className="mlb-club-name">{t.name}</span>
+                    <span className="mlb-club-abbr">{t.abbreviation || t.name}</span>
+                    {/* Clinched is a **state**, so it takes the app's one
+                        colored mark on this board; a division leader who has not
+                        clinched gets nothing, a mark on six of thirty rows every
+                        day of the season saying only what the row it sits at the
+                        top of already says. */}
+                    {t.clinched && (
+                      <span className="mlb-clinch" title="Clinched a playoff place">
+                        x
+                      </span>
+                    )}
+                  </span>
                 </td>
                 {columns.map((c) => (
                   <td key={c.key} className={`glog-num ${c.className?.(t) ?? ''}`}>
@@ -532,16 +440,7 @@ function StandingsTable({
           </tbody>
         </table>
       </div>
-      {group.cutAfter !== null && <p className="mlb-cut-note">The line is the third wild card.</p>}
     </section>
   );
 }
 
-/** `Aug 11` — the same shape `lib.ts::prettyDate` gives, pinned to noon so a
- *  bare ISO date is not read as UTC midnight and drawn as the day before. */
-function prettyDay(date: string): string {
-  const d = new Date(`${date}T12:00:00`);
-  return Number.isNaN(d.getTime())
-    ? date
-    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}

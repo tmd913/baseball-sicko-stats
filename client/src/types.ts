@@ -2741,16 +2741,6 @@ export interface MlbScoreboard {
   fetchedAt: number;
 }
 
-/**
- * **How much of the season a standings board is drawn over.**
- *
- * Deliberately `ResearchWindow`'s own five values rather than a vocabulary of
- * its own: the research board, a player's windows and a club's windows all
- * already mean *the last N days* by these numbers, and a sixth span here would
- * be a reader asking the same question of two boards and getting two answers.
- */
-export type StandingsSpan = ResearchWindow;
-
 /** A won-lost pair, as a board draws it — `43-23`. Null where the club has not
  *  played a game the cut selects, which on a seven-day window is an ordinary
  *  answer and not a failure. */
@@ -2779,13 +2769,10 @@ export interface StandingsTeam {
   losses: number;
   /** `.595`, as MLB spells it, computed the same way on a window. */
   pct: string;
-  /** Games behind the leader **of the group this row is in**, and `-` for the
-   *  leader — MLB's own string on the season board, the same arithmetic on a
-   *  window. */
+  /** Games behind the division leader, and `-` for the leader — MLB's own
+   *  string. */
   gamesBack: string;
-  /** Games behind the third wild card, `+9.0` for a club holding one. **Null on
-   *  a window**, where a wild-card race is a fact about the season and not
-   *  about the last fortnight. */
+  /** Games behind the third wild card, `+9.0` for a club holding one. */
   wildCardGamesBack: string | null;
   runsScored: number;
   runsAllowed: number;
@@ -2797,9 +2784,25 @@ export interface StandingsTeam {
    *  MLB's own definition of its `winners` split, verified against it — see
    *  `mlbStandings.ts`. */
   vsOver500: StandingsRecord | null;
-  /** The last ten *games*, which is a window of its own and so **season
-   *  only** — on a seven-day board it would be a fortnight inside a week. */
+  /** The last ten games, MLB's own `lastTen` split. */
   lastTen: StandingsRecord | null;
+  /**
+   * **The last thirty games, and the two halves of the season** — three cuts
+   * MLB does not publish, computed from the season's schedule.
+   *
+   * They stand beside `lastTen` and are counted the way it is: **games, not
+   * days**. Two columns an inch apart, one counting games and one counting
+   * days, is the kind of thing this codebase spends its length preventing — and
+   * a club that has had four days off would otherwise read as having gone cold.
+   *
+   * The halves are split on the **All-Star game's own date**, asked for rather
+   * than approximated (the break moves by a week between seasons). Null on both
+   * where that read failed, which is the honest reading of "we could not ask"
+   * where `0-0` on thirty rows would claim nobody has played since July.
+   */
+  lastThirty: StandingsRecord | null;
+  firstHalf: StandingsRecord | null;
+  secondHalf: StandingsRecord | null;
   /** One-run games, and the Pythagorean record MLB publishes as `xWinLoss`.
    *  **Season only**, both being MLB's own figures rather than ours. */
   oneRun: StandingsRecord | null;
@@ -2814,9 +2817,6 @@ export interface StandingsTeam {
   /** MLB's own strings, `-` meaning none. Season only. */
   magicNumber: string | null;
   eliminationNumber: string | null;
-  /** How many games the club has played over the span, so a window's row can
-   *  say what it is drawn from — three games and a `.667` is not a standing. */
-  gamesPlayed: number;
   /**
    * Where the club stands **in its division** and **in its league**, 1-based.
    *
@@ -2834,11 +2834,6 @@ export interface StandingsTeam {
 
 /** The whole board, as `/api/mlb/standings` answers it. */
 export interface MlbStandings {
-  span: StandingsSpan;
-  /** The days the rows are drawn over, inclusive. On the season board these are
-   *  the season's own ends as the schedule gives them. */
-  start: string;
-  end: string;
   /** Every club, in no particular order — the client groups and ranks, there
    *  being three groupings on one board and one order per group. */
   teams: StandingsTeam[];

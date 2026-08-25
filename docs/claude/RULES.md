@@ -257,7 +257,7 @@ paint over the box covering it.
 - **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`,
   `hideil`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
   `win`, `board`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `lwk`, `proj`,
-  `rproj`, `rsum`, `rankproj`, `cut`, `mlb`, `mday`, `mspan`, `mgrp`. A link
+  `rproj`, `rsum`, `rankproj`, `cut`, `mlb`, `mday`, `mgrp`. A link
   that leaves one out describes a
   different page.
 

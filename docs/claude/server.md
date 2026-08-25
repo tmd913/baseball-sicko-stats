@@ -268,21 +268,21 @@ server's own: the tab has arrows and a calendar, so most reads are not of today.
 An unparseable one falls back to today rather than 400ing — `/api/research`'s
 rule for a param carried in a shareable URL.
 
-**`GET /api/mlb/standings?span=`** — every club's row as `MlbStandings`, plus the
+**`GET /api/mlb/standings`** — every club's row as `MlbStandings`, plus the
 wild-card order per league and MLB's own six division names.
 
-`span=` takes `RESEARCH_WINDOWS`' five values, deliberately: that is what *the
-last 15 days* already means everywhere else in this app. Unrecognized falls back
-to the season.
+**It took a `span=` and does not.** The tab offered the board over five spans
+with a *whole board* recomputed for a window; three columns beside `L10` — the
+last thirty games and the two halves of the season — say more of what that
+control was reached for and say it on the row the record is already on.
 
-**Two arithmetics, and they agree exactly.** The season board is
-`/api/v1/standings` with `standingsTypes=regularSeason,wildCard` in one request
-(144,489 bytes measured) — MLB's own totals, and the only place games behind, the
-wild-card race, the magic number, the Pythagorean record and the split records
-exist at all. A *window* has no such upstream (`date=` gives the standings **as
-of** a day, not the record **since** it), so it is computed from the season's own
-schedule — 2,458 entries, **30,287 bytes on the wire** — plus one lookup into the
-season board for each club's division.
+So the board is MLB's own standings, one request with
+`standingsTypes=regularSeason,wildCard` (144,489 bytes measured), and the three
+columns MLB does not publish are computed here. They are not on that endpoint at
+any span — its `splitRecords` run to sixteen types and stop at `lastTen`, and
+`date=` gives the standings **as of** a day rather than the record **since** one
+— so `mlbStandings.ts` walks the season's own schedule for them (2,458 entries,
+**30,287 bytes on the wire**), which is the same walk the windowed board used.
 
 Before any of it was built: computed wins, losses, runs scored and runs allowed
 were compared against `/api/v1/standings` on 2026-08-25 and **all thirty clubs
@@ -293,22 +293,22 @@ postponed game is the `Postponed` one: dropping the second drops the game that
 was played, and **22 of 30 clubs came out wrong**. `keepPlayed` lets a final
 entry displace a non-final one.
 
-Two more things worth knowing about that file. The `.500 or better` column is
-MLB's `winners` split, and the definition was **verified rather than assumed**:
-against three clubs it matches "vs clubs at .500 or better *now*" exactly and
-does not match "above .500". And the window ends **today**, where
-`statcastWindow.ts::windowDates` ends yesterday — that rule is Savant's one-day
-lag plus a partial day polluting a *rate*, and neither applies to a record made
-of finished games.
+The halves split on the **All-Star game's own date**, fetched rather than
+approximated (`gameType=A`, one game, 276 bytes, cached a day); the walk's
+`gameType=R` means that game is never among the games being split. And the
+`.500 or better` column is MLB's `winners` split, whose definition was
+**verified rather than assumed**: against three clubs it matches "vs clubs at
+.500 or better *now*" exactly and does not match "above .500".
 
-Both boards are cached five minutes, which is one span rather than a live one
-and a settled one: a standings board changes only when a game **ends**, where the
-scoreboard beside it changes by the pitch.
+**This route 502s honestly**, the `/api/schedule` exception and the same test:
+the answer *is* the table. The three computed columns are the exception to
+*that* — they are an enrichment on a board that stands without them, so the
+schedule and the All-Star reads are each in their own `try` and a failure costs
+its own columns and nothing more.
 
-**Both routes 502 honestly**, the `/api/schedule` exception and the same test:
-the answer *is* the table. A day drawn empty because MLB was down is
-indistinguishable from an All-Star break, and a standings board of dashes says
-"these clubs have no record" rather than "we could not ask".
+Cached five minutes, which is one span rather than a live one and a settled one:
+a standings board changes only when a game **ends**, where the scoreboard beside
+it changes by the pitch.
 
 **`GET /api/mlb/news`** — the league's ten biggest stories as `LeagueNews`.
 
