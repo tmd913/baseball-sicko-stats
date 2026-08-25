@@ -1,0 +1,152 @@
+import type { LeagueNews, MlbScoreboard, MlbStandings, StandingsSpan } from '../types';
+import type { DatePreset } from './DateControls';
+import MlbScoreboardTab from './MlbScoreboard';
+import MlbStandingsTab from './MlbStandings';
+import type { StandingsGroup } from './MlbStandings';
+import MlbNewsTab from './MlbNews';
+
+/**
+ * The MLB view — the one page in this app that is about **baseball** rather
+ * than about a roster or a fantasy league.
+ *
+ * **Three tabs, because they are three questions**, which is `LeagueView`'s own
+ * shape one tier over and is deliberately the same shape:
+ *
+ *  1. **Scoreboard** — every game on one day, each a door into its own page.
+ *     *What happened.*
+ *  2. **Standings** — where the thirty clubs are, over a span the reader picks.
+ *     *Who is any good.*
+ *  3. **News** — every note and every move across the league, newest first.
+ *     *What is going on.*
+ *
+ * **It is last in the main tab row and it is drawn for everybody.** Last
+ * because the order of that row is how close a page is to the reader — his
+ * matchup, his players, the players he might want, his league, and then the
+ * league everybody is in. Drawn always because, alone among the five, it needs
+ * nothing of the reader: no watchlist, no fantasy league, no connection. A
+ * reader who has just signed up and watched nobody has a page that works, which
+ * is the one thing this app did not have before.
+ *
+ * **Which tab is open is in the URL** (`mlb=`), because it decides what data is
+ * on screen — the rule `view=`, `lt=` and `win=` all follow. The Scoreboard is
+ * the default and is omitted, so a bare `?view=mlb` opens where the page
+ * opens.
+ *
+ * **Each tab's data is read on its first open and kept**, the way the League
+ * page's three are and the player page's nine are; the Scoreboard re-reads when
+ * the day changes and while it holds a game that is being played, which is the
+ * only thing on this page that moves by the minute. See `App.tsx`.
+ */
+
+export type MlbTab = 'scoreboard' | 'standings' | 'news';
+
+/** The three pages of the MLB view.
+ *
+ * **Exported, because the strip that draws them is not this component's** —
+ * the app already has a row for exactly this statement (`.view-tools`, which
+ * holds the League page's own three), and a second strip of tabs an inch under
+ * the first reads as a different kind of control rather than as one tier down
+ * of the same one. `App` draws it there and this file keeps the vocabulary. */
+export const MLB_TABS: { tab: MlbTab; label: string; title: string }[] = [
+  { tab: 'scoreboard', label: 'Scoreboard', title: "One day's games, and a door into each" },
+  { tab: 'standings', label: 'Standings', title: 'Where the thirty clubs stand' },
+  { tab: 'news', label: 'News', title: 'Every note and every move across the league' },
+];
+
+export default function MlbView({
+  tab,
+  board,
+  boardDate,
+  boardPreset,
+  onBoardDate,
+  boardPresets,
+  maxDate,
+  calendarOpen,
+  onToggleCalendar,
+  onCloseCalendar,
+  boardLoading,
+  boardError,
+  onOpenGame,
+  standings,
+  span,
+  onSpan,
+  group,
+  onGroup,
+  standingsLoading,
+  standingsError,
+  onOpenTeam,
+  news,
+  newsLoading,
+  newsError,
+  knownIds,
+  onOpenPlayer,
+}: {
+  tab: MlbTab;
+  board: MlbScoreboard | null;
+  boardDate: string;
+  boardPreset: string | null;
+  onBoardDate: (date: string, preset: string | null) => void;
+  boardPresets: DatePreset[];
+  maxDate: string;
+  calendarOpen: boolean;
+  onToggleCalendar: () => void;
+  onCloseCalendar: () => void;
+  boardLoading: boolean;
+  boardError: string | null;
+  onOpenGame: (gamePk: number) => void;
+  standings: MlbStandings | null;
+  span: StandingsSpan;
+  onSpan: (span: StandingsSpan) => void;
+  group: StandingsGroup;
+  onGroup: (group: StandingsGroup) => void;
+  standingsLoading: boolean;
+  standingsError: string | null;
+  onOpenTeam: (teamId: number) => void;
+  news: LeagueNews | null;
+  newsLoading: boolean;
+  newsError: string | null;
+  /** The MLB ids the season roster can place — what decides whether a news
+   *  row's name is a door. See `MlbNews.tsx`. */
+  knownIds: Set<number>;
+  onOpenPlayer: (mlbId: number) => void;
+}) {
+  return (
+    <div className="mlb-view">
+      {tab === 'standings' ? (
+        <MlbStandingsTab
+          data={standings}
+          span={span}
+          onSpan={onSpan}
+          group={group}
+          onGroup={onGroup}
+          loading={standingsLoading}
+          error={standingsError}
+          onOpenTeam={onOpenTeam}
+        />
+      ) : tab === 'news' ? (
+        <MlbNewsTab
+          news={news}
+          loading={newsLoading}
+          error={newsError}
+          known={knownIds}
+          onOpenPlayer={onOpenPlayer}
+        />
+      ) : (
+        <MlbScoreboardTab
+          board={board}
+          date={boardDate}
+          preset={boardPreset}
+          onDate={onBoardDate}
+          presets={boardPresets}
+          maxDate={maxDate}
+          open={calendarOpen}
+          onToggleCalendar={onToggleCalendar}
+          onCloseCalendar={onCloseCalendar}
+          loading={boardLoading}
+          error={boardError}
+          onOpenGame={onOpenGame}
+        />
+      )}
+    </div>
+  );
+}

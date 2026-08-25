@@ -82,6 +82,14 @@ say he had.
 
 ### Four tabs, and the Feed became a reading of the Roster
 
+*(Superseded on the count alone — the row is **five** now: Overview · Roster ·
+Research · Fantasy · MLB, the `Matchup` tab having become a button on the
+Roster's own tools row and an `MLB` tab having been added last. Kept as written,
+this file's rule for its own reasoning, because the argument below is about what
+a tab **is** and that argument is what both later changes were decided by. The
+fifth tab is in `client-mlb.md`, along with why `League` is labeled `Fantasy`
+now and why `view=league` is not.)*
+
 **The row above is the record of how this got to three pages and one row, and
 the row is four tabs now: Roster · Matchup · Research · League.** Nothing in
 that argument was wrong about the two readings; it was answering the wrong
@@ -298,6 +306,22 @@ Each tab is `flex: 1 1 0` — basis zero rather than auto, so four tabs are four
 quarters whatever their words are (`Research` is 62px of text against `League`'s
 46, and basis-auto would make the strip a set of proportions rather than a set
 of columns).
+
+**With five tabs that rule has a floor, and it is 430px.** A fifth tab costs the
+strip no height at all — measured at 320 / 375 / 390 / 640 / 900 / 1200 / 1920,
+the row is 36–37px and the pinned chrome 99–102 with three tabs, with four and
+with five — but it costs width per tab, and below 430 five equal fifths no
+longer hold five words: at 320 each is 64px and `Research` wants 70, so
+`Overview` and `Research` both ellipsized, and so did they at 360 and 390, which
+are *above* the old 350 breakpoint and had slack with four tabs. A fourth tab
+was a narrow-phone problem; a fifth is an every-phone one.
+
+**So below 430 the equal columns give way to content columns** — `flex: 1 1
+auto`, letting `MLB` and `Roster` hand their slack to the two long words,
+because what has to fit is the total rather than each fifth of it. Re-measured:
+**0px over on all five at 360, 390, 430 and above**, and 2–3px at 320–350 which
+the halved side padding below 340 takes to zero. The block is at the end of the
+stylesheet, a media query adding no specificity.
 
 **It keeps its own selector rather than folding onto `.view-switch`**, which is
 this repo's fold-don't-restyle rule read the other way round: two things that

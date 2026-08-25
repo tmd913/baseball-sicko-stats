@@ -6,6 +6,11 @@ description: The League view — the fantasy league's own page, its three tabs (
 # The League view
 
 The one page in the app about the **fantasy league** rather than about players.
+**Its tab is labeled `Fantasy`** — it said `League` until the MLB view arrived
+and two pills a thumb apart both meaning "league" stopped being a row that
+worked — but the view is `view=league` and every name in this file and its four
+documents is unchanged, a label being what a reader sees and a URL a contract
+with every link already shared. See `sicko-mlb`.
 It earns a pill rather than a menu entry because it is a fourth question, and it
 is gated on a connected ESPN league. Four references, split by surface.
 
@@ -37,5 +42,6 @@ is gated on a connected ESPN league. Four references, split by surface.
 
 ## Related
 
-`sicko-espn` for every read behind this page and for `STAT_META`.
+`sicko-espn` for every read behind this page and for `STAT_META`. `sicko-mlb`
+for the tab beside it, which is the *actual* league.
 `sicko-roster` and `sicko-feed`, which a team page draws.

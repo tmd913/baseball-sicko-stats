@@ -13,7 +13,9 @@ import { getBatterLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
 import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
-import { getRecentNews } from './recentNews.js';
+import { getLeagueNews, getRecentNews } from './recentNews.js';
+import { getMlbScoreboard } from './mlbScoreboard.js';
+import { getMlbStandings } from './mlbStandings.js';
 import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js';
 import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
@@ -32,6 +34,7 @@ import type {
   PlayerKind,
   ResearchIncludeKey,
   ResearchWindow,
+  StandingsSpan,
   SeasonArsenalPitch,
   TeamHittingWindow,
   TeamSplitSide,
@@ -2210,6 +2213,100 @@ app.get(
   requireUser,
   asyncRoute(async (_req, res) => {
     res.json({ players: Object.fromEntries(await getRecentNews()) });
+  }),
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * The MLB view's three routes
+ *
+ * The league itself, rather than a roster or a fantasy league: the day's games,
+ * where the thirty clubs stand, and what has been said about them. All three
+ * are **league-wide and user-independent**, the class `getPlayerPool` is in, so
+ * each is one upstream read shared by every reader — which is why all three are
+ * behind `requireUser` like everything else and none of them takes a user id.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * **One ET day's games** — the Scoreboard tab, and the doors into each game's
+ * own page it is made of.
+ *
+ * A third schedule read beside `/api/schedule` (the forward window, thin, no
+ * scores) and `/api/teams/:id/games` (one club's season backwards, fixtures
+ * dropped), because it asks a third question: one day, both directions, every
+ * club. `mlbScoreboard.ts` carries the measurements — 11,425 bytes for a
+ * finished day of ten games with the linescore, both probables and the three
+ * decisions hydrated onto it.
+ *
+ * **The date is the caller's**, unlike `/api/news/recent` whose day is the
+ * server's own: the tab has arrows and a calendar, so most reads are not of
+ * today. An unparseable one falls back to today rather than 400ing, which is
+ * `/api/research`'s rule for a param carried in a shareable URL — a link naming
+ * a day this build cannot read should still open the board.
+ *
+ * **This route 502s honestly**, the `/api/schedule` exception: the answer *is*
+ * the board, and a day drawn empty because MLB was down is indistinguishable
+ * from an All-Star break.
+ */
+app.get(
+  '/api/mlb/scoreboard',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const asked = req.query.date;
+    const date = typeof asked === 'string' && DATE_RE.test(asked) ? asked : baseballToday();
+    res.json(await getMlbScoreboard(date));
+  }),
+);
+
+/**
+ * **Where the thirty clubs stand**, over the season or over the last N days —
+ * the Standings tab.
+ *
+ * `span=` takes the research board's own five values, and that is deliberate
+ * rather than incidental: `RESEARCH_WINDOWS` is what *the last 15 days* means
+ * everywhere else in this app, and a sixth vocabulary here would be a reader
+ * asking two boards the same question and getting two answers. Unrecognized
+ * falls back to the season, the rule `/api/research` states.
+ *
+ * The two spans are two arithmetics — MLB's own standings for the season, the
+ * season's schedule walked for a window — and `mlbStandings.ts` carries the
+ * measurement that says they agree: **all thirty clubs match on wins, losses,
+ * runs scored and runs allowed**, and the one line of deduplication that match
+ * depends on.
+ *
+ * **This route 502s honestly** for the same reason the one above does.
+ */
+app.get(
+  '/api/mlb/standings',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const asked = req.query.span;
+    const days = Number(asked);
+    const span: StandingsSpan = RESEARCH_WINDOWS.includes(days as ResearchWindow)
+      ? (days as StandingsSpan)
+      : 'season';
+    res.json(await getMlbStandings(span));
+  }),
+);
+
+/**
+ * **The league's news, newest first** — the News tab.
+ *
+ * **No sweep of its own.** It is the second reader of the one `/api/statuses`'
+ * news mark already pays for: thirty RotoWire club pages and MLB's whole
+ * transaction log, ~2MB, once per thirty minutes for the entire user base. A
+ * feed with its own upstream would have been the same pages read twice for the
+ * same items. See `recentNews.ts::getLeagueNews`.
+ *
+ * **Minor-league moves are not in it**, which is the one narrowing this route
+ * makes that the mark does not — 73 of 216 transactions over three days name a
+ * major-league club, and a feed of the whole organization is not what the tab
+ * says it is.
+ */
+app.get(
+  '/api/mlb/news',
+  requireUser,
+  asyncRoute(async (_req, res) => {
+    res.json(await getLeagueNews());
   }),
 );
 

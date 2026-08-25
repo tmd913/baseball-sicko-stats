@@ -12,6 +12,9 @@ import type {
   EspnProjection,
   EspnScoreboard,
   EspnStatus,
+  LeagueNews,
+  MlbScoreboard,
+  MlbStandings,
   PlayerKind,
   PlayerReport,
   PlayerStatus,
@@ -25,6 +28,7 @@ import type {
   SeasonPlayer,
   ParkFactor,
   SplitCut,
+  StandingsSpan,
   TeamInfo,
   TrendWindow,
   WatchPlayer,
@@ -155,6 +159,9 @@ import LeagueMatchupView, { MatchupButton, SummaryToggle } from './components/Le
 import OverviewView from './components/OverviewView';
 import type { MatchupReading } from './components/LeagueMatchup';
 import type { LeagueTab } from './components/LeagueView';
+import MlbView, { MLB_TABS } from './components/MlbView';
+import type { MlbTab } from './components/MlbView';
+import type { StandingsGroup } from './components/MlbStandings';
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
 // popover's `Refresh from ESPN`, and the league page's own Refresh through it.
@@ -186,7 +193,7 @@ const MIN_SPIN = 450;
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
  */
-type View = 'overview' | 'summary' | 'feed' | 'research' | 'league';
+type View = 'overview' | 'summary' | 'feed' | 'research' | 'league' | 'mlb';
 
 /** The two *readings* of the Roster page — the stat table and the stream. They
  *  are one tab now (`Roster`) and were two, and the pair survives as the value
@@ -199,18 +206,23 @@ function isRosterView(v: View): boolean {
   return v === 'summary' || v === 'feed';
 }
 
-/** The three tabs, and which `view` values each of them owns. The Roster tab
- *  covers two, so the strip cannot test equality — a `Roster` pill unlit while
- *  the Feed reading is on screen would be the row lying about where you are.
+/** The tabs, and which `view` values each of them owns. The Roster tab covers
+ *  two, so the strip cannot test equality — a `Roster` pill unlit while the
+ *  Feed reading is on screen would be the row lying about where you are.
  *
- *  **`Matchup` was a fourth and is a button on the Roster page now**, opening
+ *  **`Matchup` was one of them and is a button on the Roster page now**, opening
  *  the same page the Scoreboard's cards open — over the view, with a Back row —
- *  rather than a tab of its own. A tab says *which page of the app you are on*
- *  and there are three of those; this week's opponent is a page you open off
- *  your own roster and come back from, which is what every other page over a
- *  view in here already is (`player=`, `team=`, `game=`, `mup=`). See
- *  `matchupButton`. */
-function mainTab(v: View): 'overview' | 'roster' | 'research' | 'league' {
+ *  rather than a tab of its own. A tab says *which page of the app you are on*;
+ *  this week's opponent is a page you open off your own roster and come back
+ *  from, which is what every other page over a view in here already is
+ *  (`player=`, `team=`, `game=`, `mup=`). See `matchupButton`.
+ *
+ *  **`MLB` is the newest and is last**, which is the row's own order made
+ *  explicit: the tabs run from the page closest to the reader to the page
+ *  furthest from him — his week, his players, the players he might want, his
+ *  fantasy league, and then the league everybody is in. It is also the only one
+ *  of the five that needs nothing of him, which is why it is never hidden. */
+function mainTab(v: View): 'overview' | 'roster' | 'research' | 'league' | 'mlb' {
   return v === 'summary' || v === 'feed' ? 'roster' : v;
 }
 
@@ -810,6 +822,10 @@ export default function App() {
     // alternative, silently dropping to Roster, would leave a reader who was
     // handed a link with nothing on screen to explain where it went.
     if (v === 'league') return 'league';
+    // The one view that needs nothing of the reader — no watchlist, no league,
+    // no connection — so unlike the two above it there is no state it could be
+    // opened before and no reason to resolve it later.
+    if (v === 'mlb') return 'mlb';
     // **`view=matchup` was the Matchup tab and is a page over the Roster now.**
     // The link still lands where it meant to: it names the reader's *own*
     // matchup — that being the whole of what the tab was — so it opens the
@@ -2363,6 +2379,71 @@ export default function App() {
    * meaning two things in two views is exactly the trap `cols=` avoids by
    * being scoped to the board `pos=` names.
    */
+  /**
+   * **The MLB view's four pieces of state, and every one of them is in the
+   * URL** — the rule this file applies to the League page's own four directly
+   * below, and for the same reason: each decides what data is on screen, so a
+   * link that leaves one out describes a different page.
+   *
+   *  - `mlb=` which of the three tabs (`scoreboard` is the default and is
+   *    omitted, the app's convention that the first tab is the one you land on);
+   *  - `mday=` which day the Scoreboard is on;
+   *  - `mspan=` how much of the season the Standings count;
+   *  - `mgrp=` how the Standings are grouped.
+   *
+   * **The `m` prefix is deliberate and it is not `mp`/`mup`/`mt`/`mr`.** Those
+   * four are the fantasy matchup's, and the standing rule here is that two
+   * params must never mean two things — a link is read before anything on
+   * screen can say which view wrote it. The four names above are free: the
+   * app's params are `preset`, `start`, `end`, `player`, `expanded`, `view`,
+   * `kind`, `sim`, `hideil`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`,
+   * `watch`, `win`, `help`, `mp`, `league`, `plays`, `newplays`, `oldest`,
+   * `noldest`, `proj`, `rproj`, `rsum`, `rankproj`, `cut`, `lt`, `mup`, `mt`,
+   * `mr`, `lspan`, `lwk`, `team`, `tside` and `game`.
+   *
+   * **`mday=` is a day and `preset=` is not consulted for it.** The Scoreboard
+   * carries its own day for the reason the Roster and the Feed carry their own
+   * ranges (`DateScope`): they are different readings and the days move
+   * independently, and a reader who steps the scoreboard back to Saturday has
+   * not asked for his roster's stat table to move. What it *does* share is the
+   * app's three single-day **rules**, so a link made on `Today` re-derives on
+   * the recipient's own today — which is why the label rides in `mday=` as a
+   * word where there is one.
+   */
+  const [mlbTab, setMlbTab] = useState<MlbTab>(() => {
+    const raw = initialParams.get('mlb');
+    return raw === 'standings' || raw === 'news' ? raw : 'scoreboard';
+  });
+  /** The Scoreboard's day, as a rule where it came from one and as a date
+   *  otherwise — the two halves `initialPreset`/`initialRange` split the
+   *  roster's range into, at one day's width. */
+  const [mlbDay, setMlbDay] = useState<{ date: string; preset: string | null }>(() => {
+    const raw = initialParams.get('mday');
+    const rule = presets.find((p) => p.label === raw && p.start === p.end);
+    // A label is re-derived rather than read back as dates — a link shared from
+    // `Yesterday` means the recipient's yesterday.
+    if (rule) return { date: rule.start, preset: rule.label };
+    // An unrecognized value **falls back rather than emptying the view**, and
+    // today is the day the tab opens on.
+    return raw && ISO_DATE.test(raw)
+      ? { date: raw, preset: null }
+      : { date: today, preset: 'Today' };
+  });
+  const [standingsSpan, setStandingsSpan] = useState<StandingsSpan>(() => {
+    const raw = Number(initialParams.get('mspan'));
+    // The research board's own five, which is the whole point of them — see
+    // `MlbStandings.tsx`. Unrecognized is the season, the rule `win=` follows.
+    return RESEARCH_WINDOWS.includes(raw as ResearchWindow) ? (raw as StandingsSpan) : 'season';
+  });
+  const [standingsGroup, setStandingsGroup] = useState<StandingsGroup>(() => {
+    const raw = initialParams.get('mgrp');
+    return raw === 'wildcard' || raw === 'league' ? raw : 'division';
+  });
+  /** Whether the Scoreboard's calendar is open. Its own flag rather than the
+   *  app bar's `dateOpen`: the two bars are never on screen together, but one
+   *  left open behind a view change would open the other. */
+  const [mlbCalOpen, setMlbCalOpen] = useState(false);
+
   const [leagueTab, setLeagueTab] = useState<LeagueTab>(() => {
     const raw = initialParams.get('lt');
     // `matchup` was a fourth tab for a while and is a **page over this view**
@@ -3255,6 +3336,202 @@ export default function App() {
       console.error('marking transactions read failed:', e.message),
     );
   }, [view, leagueTab, espnLeagueId, latestTxTs, seenTx, queueUserWrite]);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     The MLB view's three reads
+     ─────────────────────────────────────────────────────────────────────────
+
+     One per tab, and **each is read on its first open and kept**, which is the
+     rule the League page's three and the player page's nine both follow: a
+     reader who never opens the Standings never pays for them. What differs
+     between them is what can change afterwards, and only one of the three can:
+
+      - the **Scoreboard** re-reads when the day changes, and polls while it
+        holds a game that is being played;
+      - the **Standings** re-read when the span changes — the grouping is a
+        re-grouping of rows already in hand and costs no fetch at all;
+      - the **News** is read once. It is a thirty-minute sweep on the server, so
+        a poll would be the same answer at a cost.
+
+     None of the three depends on the reader — no watchlist, no league, no
+     connection — which is why none of them is gated on anything but the tab.
+     ───────────────────────────────────────────────────────────────────────── */
+
+  const [mlbBoard, setMlbBoard] = useState<MlbScoreboard | null>(null);
+  const [mlbBoardLoading, setMlbBoardLoading] = useState(false);
+  const [mlbBoardError, setMlbBoardError] = useState<string | null>(null);
+  const [standings, setStandings] = useState<MlbStandings | null>(null);
+  const [standingsLoading, setStandingsLoading] = useState(false);
+  const [standingsError, setStandingsError] = useState<string | null>(null);
+  const [mlbNews, setMlbNews] = useState<LeagueNews | null>(null);
+  const [mlbNewsLoading, setMlbNewsLoading] = useState(false);
+  const [mlbNewsError, setMlbNewsError] = useState<string | null>(null);
+
+  /**
+   * The day's games.
+   *
+   * **The previous board is left standing while the next is in flight** — rule
+   * 1 — so stepping the date leaves yesterday's cards on screen until today's
+   * land rather than blanking the pane a press at a time. The view's block wait
+   * is gated on there being nothing to show at all.
+   *
+   * `refresh` is the poll below: it is the same read and must not raise the
+   * pane's `loading`, which would put an `Updating` state on a board nobody
+   * asked to re-read.
+   */
+  /** The day the reader is actually on, for the sequence test below — a ref
+   *  because the loader must not be rebuilt every time the date moves, and the
+   *  poll's interval must not be torn down and rebuilt with it. */
+  const mlbDayRef = useRef(mlbDay.date);
+  useEffect(() => {
+    mlbDayRef.current = mlbDay.date;
+  }, [mlbDay.date]);
+
+  const loadMlbBoard = useCallback(
+    (date: string, refresh = false) => {
+      if (!refresh) setMlbBoardLoading(true);
+      setMlbBoardError(null);
+      return api
+        .mlbScoreboard(date)
+        .then((b) => {
+          // **The answer is checked against the day the reader is on**, which
+          // is this read's sequence number in the only currency it has: two
+          // presses of the arrow are two reads in flight, and without the test
+          // the slower one lands last and leaves the cards describing a day
+          // nobody is on.
+          setMlbBoard((prev) => (b.date === mlbDayRef.current ? b : prev));
+        })
+        .catch((e: Error) => {
+          if (date === mlbDayRef.current) setMlbBoardError(e.message);
+        })
+        .finally(() => {
+          if (!refresh) setMlbBoardLoading(false);
+        });
+    },
+    [],
+  );
+  useEffect(() => {
+    if (view !== 'mlb' || mlbTab !== 'scoreboard') return;
+    void loadMlbBoard(mlbDay.date);
+  }, [view, mlbTab, mlbDay.date, loadMlbBoard]);
+
+  /**
+   * **Whether the board on screen can still change**, which is the whole gate on
+   * the poll below: a day of finished games is a day of finished games, and a
+   * timer over one would be fifteen cards re-fetched every twenty seconds to
+   * redraw the same fifteen cards.
+   */
+  const mlbBoardLive =
+    mlbBoard !== null &&
+    mlbBoard.date === mlbDay.date &&
+    mlbBoard.games.some((g) => g.state === 'live' || g.state === 'scheduled');
+
+  /**
+   * The scoreboard's own minute, for as long as a game on it is being played or
+   * is still to start.
+   *
+   * `LIVE_POLL_MS` rather than the league's own span, because this is the same
+   * question the roster's live poll asks — *what is the score* — and the server
+   * holds a moving day for a minute. A hidden tab is skipped and becoming
+   * visible fires one immediately, the rule the league poll already states.
+   *
+   * **Gated on the tab as well as the view**, unlike the league's: nothing off
+   * this page draws a mark from this board, so a timer that outlived the page
+   * would be a request a minute for nothing on screen.
+   */
+  useEffect(() => {
+    if (view !== 'mlb' || mlbTab !== 'scoreboard' || !mlbBoardLive) return;
+    const tick = () => {
+      if (!document.hidden) void loadMlbBoard(mlbDayRef.current, true);
+    };
+    const timer = setInterval(tick, LIVE_POLL_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [view, mlbTab, mlbBoardLive, loadMlbBoard]);
+
+  /**
+   * The standings, per span.
+   *
+   * **The grouping is not in this list**, and that is the point of the wire
+   * shape: every club comes back once with the wild-card order beside it, so
+   * Division → Wild Card → League is a re-grouping of rows already in hand.
+   * Only the span is a different question of the server.
+   */
+  const standingsSpanRef = useRef<StandingsSpan>(standingsSpan);
+  useEffect(() => {
+    standingsSpanRef.current = standingsSpan;
+  }, [standingsSpan]);
+  useEffect(() => {
+    if (view !== 'mlb' || mlbTab !== 'standings') return;
+    let canceled = false;
+    setStandingsLoading(true);
+    setStandingsError(null);
+    api
+      .mlbStandings(standingsSpan)
+      .then((b) => {
+        // Rule 1 again, and the same sequence test the board above makes: only
+        // the span the reader is on may write.
+        if (!canceled && b.span === standingsSpanRef.current) setStandings(b);
+      })
+      .catch((e: Error) => {
+        if (!canceled) setStandingsError(e.message);
+      })
+      .finally(() => {
+        if (!canceled) setStandingsLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [view, mlbTab, standingsSpan]);
+
+  /**
+   * The league's news — once, on the first open of the tab.
+   *
+   * **`mlbNews` is in the test rather than in the dependency list**, which is
+   * the shape this file uses wherever a read must happen exactly once: a
+   * dependency on the thing the effect sets would re-run it on its own answer,
+   * and a `ref` marking it "asked" would be the StrictMode trap this app has
+   * found four times — pass one sets the mark, its teardown discards the
+   * answer, pass two sees the mark and returns, and the wait never comes down.
+   * Testing the state we already hold cannot do that.
+   */
+  useEffect(() => {
+    if (view !== 'mlb' || mlbTab !== 'news' || mlbNews !== null) return;
+    let canceled = false;
+    setMlbNewsLoading(true);
+    setMlbNewsError(null);
+    api
+      .mlbNews()
+      .then((n) => {
+        if (!canceled) setMlbNews(n);
+      })
+      .catch((e: Error) => {
+        if (!canceled) setMlbNewsError(e.message);
+      })
+      .finally(() => {
+        if (!canceled) setMlbNewsLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [view, mlbTab, mlbNews]);
+
+  /**
+   * **The app's three single-day rules**, for the Scoreboard's bar — filtered
+   * out of `datePresets` rather than written again, a second list of the same
+   * three days being two lists that will one day disagree about which day
+   * `Yesterday` is. The two ranges in that list (`This week`, `Last 15 days`)
+   * are spans a board of one day's games cannot draw, and a preset the bar's
+   * arrows could land on but the page could not honor would be a control
+   * offering something the view has no answer for.
+   */
+  const singleDayPresets = useMemo(() => presets.filter((p) => p.start === p.end), [presets]);
+  const showMlbBoardWait = useDelayedFlag(mlbBoardLoading);
+  const showStandingsWait = useDelayedFlag(standingsLoading);
+  const showMlbNewsWait = useDelayedFlag(mlbNewsLoading);
 
   const ownedIds = useMemo(
     () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
@@ -4194,6 +4471,25 @@ export default function App() {
     ) {
       p.set('rankproj', '1');
     }
+    /* The MLB view's four, each written only on that view and only off its own
+       default — the rule every param above follows. `mday=` carries the day's
+       **rule** where it came from one, so a link made on `Today` opens on the
+       recipient's today; a day the reader picked himself is written as a date,
+       which is the same two-halves split `preset=`/`start=`/`end=` makes for
+       the roster's range. Today is the default and is omitted either way. */
+    if (view === 'mlb' && mlbTab !== 'scoreboard') p.set('mlb', mlbTab);
+    if (view === 'mlb' && mlbDay.preset !== 'Today') {
+      p.set('mday', mlbDay.preset ?? mlbDay.date);
+    }
+    // Scoped to the tab that draws them rather than to the view: a span and a
+    // grouping with no standings to be about would name readings that are not
+    // in force, which is the rule `cut=`, `mt=` and `mr=` all follow.
+    if (view === 'mlb' && mlbTab === 'standings' && standingsSpan !== 'season') {
+      p.set('mspan', String(standingsSpan));
+    }
+    if (view === 'mlb' && mlbTab === 'standings' && standingsGroup !== 'division') {
+      p.set('mgrp', standingsGroup);
+    }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     // The feed's own lens — one key, the row above being single-select.
@@ -4266,6 +4562,10 @@ export default function App() {
     researchKind,
     matchupPeriod,
     leagueTab,
+    mlbTab,
+    mlbDay,
+    standingsSpan,
+    standingsGroup,
     matchupId,
     matchupTeam,
     matchupReading,
@@ -5554,6 +5854,12 @@ export default function App() {
    * `detailsPlayer`'s own standing behavior rather than a rule invented here:
    * it renders the page only for a key one of its two sources can resolve.
    */
+  /** Every player the season roster can place — what decides whether a league
+   *  news row's name is a door, `openLeaguePlayer` below being the door itself
+   *  and needing the very same list to pick his kind. A `Set` because the feed
+   *  asks it ~970 times per draw. See `MlbNews.tsx`. */
+  const knownIds = useMemo(() => new Set(knownPlayers.map((p) => p.id)), [knownPlayers]);
+
   const openLeaguePlayer = useCallback(
     (mlbId: number) => {
       const hit = knownPlayers.find((p) => p.id === mlbId);
@@ -6533,6 +6839,37 @@ export default function App() {
         })}
       </div>
     ) : null;
+  /* The MLB view's own three tabs, in the app's tab row for the reason the
+     League page's three are: they are the same kind of statement as every other
+     group in this row — which page, then which reading of it — and a strip on
+     the page below would read as a different kind of control rather than as one
+     tier down of the same one. Drawn only on this view, so no other page
+     carries an empty slot for it.
+
+     No `ScrollRow` and no overflow arrows, unlike the League strip's own
+     `leagueTabsRef` scroll-into-view: three short words fit on a 320px phone
+     (`Scoreboard · Standings · News`, measured against the League row's own
+     `Scoreboard · Rankings · Transactions`, which is wider and does not), so
+     there is nothing to scroll and nothing to bring into view. */
+  const mlbTabs =
+    view === 'mlb' ? (
+      <div className="lg-tabs" role="tablist" aria-label="MLB">
+        {MLB_TABS.map((t) => (
+          <button
+            key={t.tab}
+            type="button"
+            role="tab"
+            aria-selected={t.tab === mlbTab}
+            className={`lg-tab${t.tab === mlbTab ? ' active' : ''}`}
+            onClick={() => setMlbTab(t.tab)}
+            title={t.title}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
   /* **The Rankings span strip is gone, and its five cuts are the bar's own
      list.** It was a group in this row — pills above 640px, a `<select>` below,
      both rendered and swapped by one media query — naming `Current matchup`,
@@ -7026,8 +7363,24 @@ export default function App() {
      rather than inside one. The order is the order the questions come in:
      which reading, then what it is drawn from. */
   const rosterTools = isRosterView(view) && showRosterViews && !editMode;
+  /**
+   * **Whether the scrolling run has anything in it**, and so whether it is
+   * drawn at all.
+   *
+   * It always was, and on two surfaces it was empty: the League page's
+   * Transactions tab, which has no lens and no readings, and now the MLB view,
+   * whose only chrome is the strip of three tabs on the line above. An empty
+   * `ScrollRow` measures 0px of its own and still costs the row a **24px gap**
+   * (measured on the MLB view at 320, 390 and 1280: `.view-tools` 60px against
+   * a 36px strip) — a band of nothing under the tabs on every screen of a page
+   * that has no tools.
+   *
+   * The three things that can be in it, in the order the run draws them: the
+   * board's lens, the Rankings table's lens, and the roster's five readings.
+   */
+  const viewToolsRun = Boolean(leagueBoardProjected || leagueRankProjected || rosterTools);
   const viewTools =
-    rosterTools || (view === 'league' && espnConnected) ? (
+    rosterTools || (view === 'league' && espnConnected) || view === 'mlb' ? (
       <div className="view-tools">
         {/* **Scoreboard / Rankings / Transactions, on a centered line of their
             own**, with everything else in the row breaking to the line under
@@ -7048,6 +7401,11 @@ export default function App() {
             is the full-width box and the strip inside it is centered at its own
             content width. */}
         {leagueTabs && <div className="lg-tabs-line">{leagueTabs}</div>}
+        {/* And the MLB view's three, on the same centered line and under the
+            same argument — `.lg-tabs-line` is folded on rather than copied,
+            these two strips being the same object: which page of the view you
+            are on, one tier under the main tabs. */}
+        {mlbTabs && <div className="lg-tabs-line">{mlbTabs}</div>}
         {/* **The readings scroll rather than shedding their words.** This run
             used to be laid out straight into the wrapping row, and below 640px
             the stylesheet visually hid `Feed`, `Schedule` and `Projected` so
@@ -7059,6 +7417,7 @@ export default function App() {
             The League tabs stay *outside* it, on their own line: they are which
             page of the league, and a line that scrolls away is the wrong shape
             for the control a reader looks for first. */}
+        {viewToolsRun && (
         <ScrollRow label="the view controls" className="view-tools-scroll">
           {/* And whether it is drawn to the end of the week — the board's lens
               and the Rankings table's, never both at once, the two being one
@@ -7084,6 +7443,7 @@ export default function App() {
             </>
           )}
         </ScrollRow>
+        )}
       </div>
     ) : null;
   /* **The research board draws this row itself**, which is why the view is not
@@ -8022,7 +8382,16 @@ export default function App() {
                   strip, which is on screen on every view. So the mark belongs
                   here, and a sixth icon square in the header spending 36px to
                   carry it does not — the pill it would have led to is four
-                  inches away and already says the word `League`.
+                  inches away and already says the word `Fantasy`.
+
+                  **The pill says `Fantasy` and said `League` for a long
+                  time.** It was unambiguous while there was one league in the
+                  app; it stopped being so the moment a tab appeared that is
+                  about *the* league — thirty clubs, a scoreboard, a standings
+                  table — and two pills a thumb apart both meaning "league"
+                  is the row failing at the one job it has. `view=league` is
+                  untouched: a label is what a reader sees and a URL is a
+                  contract with every link already shared.
 
                   **And it is not drawn on the League view itself**, which is
                   the same argument read one page in: with the view open its own
@@ -8061,11 +8430,11 @@ export default function App() {
                   title={
                     unseenTransactions && view !== 'league'
                       ? 'Your fantasy league — new moves since you last looked'
-                      : undefined
+                      : 'Your fantasy league'
                   }
                 >
                   <span className="main-tab-label">
-                    League
+                    Fantasy
                     {unseenTransactions && view !== 'league' && (
                       <>
                         {/* The fact goes to a screen reader as words: a colored
@@ -8077,6 +8446,34 @@ export default function App() {
                   </span>
                 </button>
               )}
+              {/* **Last, and drawn for everybody.** Last because the row runs
+                  from the page closest to the reader to the page furthest from
+                  him — his week, his players, the players he might want, his
+                  fantasy league, and then the league everybody is in. For
+                  everybody because, alone among the five, this one needs
+                  nothing of him: no watchlist, no fantasy league, no
+                  connection. A reader who has signed up and watched nobody now
+                  has a page that works, which is a state this app previously
+                  answered with an empty roster and a research board.
+
+                  No mark of any kind: there is nothing here that could be
+                  *unread*. The scoreboard is a day, the standings are a
+                  standing, and a dot on the news would be a dot every day of
+                  the season — which is the app's own rule that a mark that
+                  would be on every row marks nothing. */}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'mlb'}
+                className={`main-tab${view === 'mlb' ? ' is-active' : ''}`}
+                onClick={() => {
+                  setEditMode(false);
+                  setView('mlb');
+                }}
+                title="Scores, standings and news from around the league"
+              >
+                MLB
+              </button>
             </div>
           )}
         </div>
@@ -8403,6 +8800,59 @@ export default function App() {
              `leagueTakesChrome`, which is also the test that keeps it out of
              the page above. */
           rankPaneChrome={leagueTakesChrome ? viewTools : null}
+        />
+      ) : view === 'mlb' ? (
+        <MlbView
+          tab={mlbTab}
+          board={mlbBoard}
+          boardDate={mlbDay.date}
+          boardPreset={mlbDay.preset}
+          onBoardDate={(date, preset) => {
+            setMlbDay({ date, preset });
+            // A step is a new day, so the calendar goes with it only if it was
+            // opened — the bar's arrows and its grid are one control over one
+            // day, and `DateCalendar` re-centers on the day it is handed rather
+            // than closing. This is the *calendar's* own press, which has
+            // already closed it; a step leaves it where it was.
+          }}
+          /* **The app's own three single-day rules, filtered rather than
+             rewritten** — `Today`, `Tomorrow`, `Yesterday` out of
+             `datePresets`, the two ranges in it being spans a board of one
+             day's games cannot draw. A second list of the same three days is
+             two lists that will one day disagree about which day `Yesterday`
+             is. */
+          boardPresets={singleDayPresets}
+          maxDate={maxDate}
+          calendarOpen={mlbCalOpen}
+          onToggleCalendar={() => {
+            setSearchOpen(false);
+            setMlbCalOpen((v) => !v);
+          }}
+          onCloseCalendar={() => setMlbCalOpen(false)}
+          boardLoading={showMlbBoardWait}
+          boardError={mlbBoardError}
+          /* A card is a door into the game's own page — the same page the
+             roster's opponent cell and a club's fixture rows open, through the
+             same one door. */
+          onOpenGame={openGame}
+          standings={standings}
+          span={standingsSpan}
+          onSpan={setStandingsSpan}
+          group={standingsGroup}
+          onGroup={setStandingsGroup}
+          standingsLoading={showStandingsWait}
+          standingsError={standingsError}
+          /* And a standings row is a door into the club's, likewise. */
+          onOpenTeam={(id) => openTeam(id, undefined)}
+          news={mlbNews}
+          newsLoading={showMlbNewsWait}
+          newsError={mlbNewsError}
+          /* Which names on the feed are doors — see `MlbNews.tsx`. The player
+             page needs a kind to open on and the season roster is where this
+             app is told one, so a man it cannot place is a name and not a
+             press. */
+          knownIds={knownIds}
+          onOpenPlayer={openLeaguePlayer}
         />
       ) : view === 'research' ? (
         <ResearchTable

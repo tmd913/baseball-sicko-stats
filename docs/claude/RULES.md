@@ -257,7 +257,8 @@ paint over the box covering it.
 - **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`,
   `hideil`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
   `win`, `board`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `lwk`, `proj`,
-  `rproj`, `rsum`, `rankproj`, `cut`. A link that leaves one out describes a
+  `rproj`, `rsum`, `rankproj`, `cut`, `mlb`, `mday`, `mspan`, `mgrp`. A link
+  that leaves one out describes a
   different page.
 
 - **A fact about the person → a saved preference** on the user's own record

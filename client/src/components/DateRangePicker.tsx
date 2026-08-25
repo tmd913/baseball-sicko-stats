@@ -74,6 +74,7 @@ export function DateCalendar({
   end,
   max,
   month,
+  single = false,
   onChange,
 }: {
   /**
@@ -101,8 +102,25 @@ export function DateCalendar({
    *  Falls back to `max`, which is the only other day this component is
    *  given. */
   month?: string;
-  /** A whole range was picked — the second of the two presses. The caller
-   *  closes whatever this is drawn in; the calendar has no opinion about it. */
+  /**
+   * **One press picks one day**, and the range it reports is that day twice.
+   *
+   * A mode rather than a second calendar, which is this stylesheet's own *fold,
+   * don't restyle* rule applied to a component: the grid, the month head, the
+   * ceiling, the re-centering and the foot are the same control, and the only
+   * thing that differs is whether the first press is an anchor or the answer.
+   * A copy of this file with one line changed is two controls that will one day
+   * disagree about what a disabled day looks like.
+   *
+   * It exists for the MLB view's Scoreboard, which is **one day** by
+   * construction — a board of games played on a date — so a two-press range
+   * there would be a control offering something the page cannot draw. See
+   * `MlbScoreboard.tsx`.
+   */
+  single?: boolean;
+  /** A whole range was picked — the second of the two presses, or the only one
+   *  in `single`. The caller closes whatever this is drawn in; the calendar has
+   *  no opinion about it. */
   onChange: (start: string, end: string) => void;
 }) {
   // First click of a new range; null means the next click starts a fresh range.
@@ -138,6 +156,13 @@ export function DateCalendar({
 
   const pick = (day: string) => {
     if (day > max) return;
+    // One press is the whole answer — see `single`. Ahead of the anchor
+    // arithmetic rather than inside it, so no half-made selection can exist in
+    // this mode for a later press to complete.
+    if (single) {
+      onChange(day, day);
+      return;
+    }
     if (!anchor) {
       setAnchor(day);
       setHover(day);

@@ -40,6 +40,10 @@ import type {
   TeamHitting,
   TeamHittingWindow,
   TeamInfo,
+  LeagueNews,
+  MlbScoreboard,
+  MlbStandings,
+  StandingsSpan,
   TeamGameResult,
   GameReport,
   ParkFactors,
@@ -982,6 +986,28 @@ export const api = {
   async xwoba(playerId: number, kind: 'batter' | 'pitcher' = 'batter'): Promise<XwobaSeries> {
     return request(`/api/players/${playerId}/xwoba?type=${kind}`);
   },
+  /* ── The MLB view's three reads ──────────────────────────────────────────
+     The league itself rather than a roster or a fantasy league. All three are
+     league-wide and identical for every reader, which is what lets the server
+     answer each of them from one shared upstream read — see the routes. */
+
+  /** One ET day's games, for the Scoreboard tab. The date is ours to send: the
+   *  tab has arrows and a calendar, so most reads are not of today. */
+  async mlbScoreboard(date: string): Promise<MlbScoreboard> {
+    return request(`/api/mlb/scoreboard?date=${date}`);
+  },
+  /** Where the thirty clubs stand, over one of the research board's own five
+   *  spans — the same vocabulary, so *the last 15 days* means one thing in this
+   *  app rather than two. */
+  async mlbStandings(span: StandingsSpan): Promise<MlbStandings> {
+    return request(`/api/mlb/standings?span=${span}`);
+  },
+  /** The league's news, newest first — off the sweep the research board's news
+   *  marks already pay for, so this costs no upstream of its own. */
+  async mlbNews(): Promise<LeagueNews> {
+    return request('/api/mlb/news');
+  },
+
   async video(playId: string, gamePk: number): Promise<string> {
     const r = await request<{ url: string }>(`/api/video/${playId}?gamePk=${gamePk}`);
     return r.url;
