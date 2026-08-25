@@ -54,24 +54,67 @@ export function ProjectedGlyph({ size = 17 }: { size?: number }) {
  * the figures are a player's line rather than a side's score in the league's own
  * categories, so a sentence about them would be a sentence about nothing.
  */
-export function ProjectionKey({
-  days,
-  categories,
-  className,
-  drop,
-}: {
+export function ProjectionKey(props: {
   days: number;
   categories?: number;
+  /**
+   * **The research board's reading, which is the one of the three that is
+   * *only* a projection.** See `ProjectionNote`, which carries the argument.
+   */
+  board?: boolean;
   className?: string;
   /** Which way the panel opens — `up` where the caller has put the control near
    *  the foot of a long page, and the caller's own CSS anchors it to match. */
   drop?: 'up' | 'down';
 }) {
+  return (
+    <InfoKey label="How the projection works" className={props.className} drop={props.drop}>
+      <ProjectionNote {...props} />
+    </InfoKey>
+  );
+}
+
+/**
+ * **The sentences themselves, without the ⓘ around them.**
+ *
+ * Split out because a fourth caller cannot use the popover at all: the research
+ * board's panels are drawn in `.research-head`, which is `overflow: hidden` —
+ * a sticky box in a pane that scrolls sideways must not slide with it — so an
+ * absolutely-positioned panel opened from inside it is clipped to the head.
+ * Measured there: a 320px key painting as a 46px sliver. That board renders
+ * this in flow instead, as an accordion inside the lens's own span panel, which
+ * is what every other panel that head holds already is.
+ *
+ * Split rather than copied, the rule this codebase keeps everywhere: four
+ * surfaces explaining one engine in four sets of words is four sets that will
+ * one day disagree about what the engine does.
+ */
+export function ProjectionNote({
+  days,
+  categories,
+  board,
+}: {
+  days: number;
+  categories?: number;
+  board?: boolean;
+}) {
   const over =
     days > 0 ? `over the ${days} ${days === 1 ? 'day' : 'days'} left` : 'over the days left';
   return (
-    <InfoKey label="How the projection works" className={className} drop={drop}>
-      {categories != null ? (
+    <>
+      {board ? (
+        <p>
+          <b>Every figure here is an estimate</b> — what he is expected to do {over} to play,
+          and nothing he has already done. Days that have been played are not projected at all,
+          which is why the season and window tabs are off while this is on: the measured board
+          is one press of this button away. <b>Games</b> is how many he appears in over those
+          days — the ones he bats in, or for a pitcher his outings, a start and a relief
+          appearance alike. <b>A reliever&rsquo;s Games is a fraction on purpose.</b> Nobody
+          knows which nights he warms up, so every game his club has left carries the share of
+          an outing he is usually good for. Pick a single day and the board names each
+          man&rsquo;s opponent for it, and the arm the other club is throwing.
+        </p>
+      ) : categories != null ? (
         <p>
           <b>Every figure is what the team has already scored</b> plus what its players should
           add {over} in the week. All {categories} categories are worked out separately, and the
@@ -111,7 +154,7 @@ export function ProjectionKey({
         rather than a probability, so a figure it puts within a run or two of another is not one
         to count on.
       </p>
-    </InfoKey>
+    </>
   );
 }
 
@@ -127,11 +170,23 @@ export function ProjectionKey({
  */
 export function ProjectedToggle({
   on,
+  active,
   loading,
   onToggle,
   title,
 }: {
   on: boolean;
+  /**
+   * **This control's panel is open** — the research board alone, where the lens
+   * has to bring a span with it and so has a disclosure to open.
+   *
+   * The class pair is the app's own and the two halves mean different things:
+   * `.on` is *this control is doing something* and `.active` is *its panel is
+   * showing*. The Roster's copy has no panel and so never passes this, which is
+   * why it is optional rather than a second component — one button, two callers,
+   * and the caller that has a panel says so.
+   */
+  active?: boolean;
   /** The projection is being read. **Nothing blanks while it is** — the table
    *  goes on drawing what it has until the answer lands, which is rule 1 of the
    *  app's loading system, so the only mark a press leaves is here inside the
@@ -143,7 +198,11 @@ export function ProjectedToggle({
   return (
     <button
       type="button"
-      className={`projected-toggle${on ? ' on' : ''}`}
+      className={`projected-toggle${active ? ' active' : ''}${on ? ' on' : ''}`}
+      /* A disclosure says `aria-expanded`; a plain switch says `aria-pressed`.
+         The board's copy is both — it holds a span *and* opens a panel — so it
+         says both, and the caller with no panel says only the second. */
+      aria-expanded={active === undefined ? undefined : active}
       aria-pressed={on}
       onClick={onToggle}
       title={title}

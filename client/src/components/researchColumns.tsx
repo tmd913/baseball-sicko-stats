@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import { TREND_WINDOWS } from '../types';
-import type { PlayerKind, PlayerStatus, ResearchRow, TrendWindow } from '../types';
+import type {
+  PlayerKind,
+  PlayerStatus,
+  ProjectedFixture,
+  ResearchRow,
+  TrendWindow,
+} from '../types';
 import { formatStartTime, handThrows, inningLabel, surname } from '../lib';
 
 /**
@@ -590,6 +596,265 @@ export const PITCHER_COLUMNS: Column[] = [
 
   ...statcastColumns('pitcher'),
 ];
+
+// ---- The projected vocabulary ----------------------------------------------
+
+/**
+ * **What the board's `Projected` lens draws, and why it is a list of its own
+ * rather than the whole vocabulary with dashes in it.**
+ *
+ * A projection can answer for a **count** and for a **rate built out of
+ * counts**, and for nothing else. It cannot answer for xwOBA, exit velocity, a
+ * barrel rate, a ground-ball share, a chase rate or a bat speed — those are
+ * readings of contact that has not happened — nor for roster %, which is a fact
+ * about a fantasy league rather than about a week of baseball. Left in the
+ * vocabulary they would be two thirds of the columns on the app's widest table
+ * drawing em dashes, which is a board that looks broken rather than one that is
+ * being honest.
+ *
+ * So the lens swaps the *columns* as well as the figures, which is exactly what
+ * the Schedule view one section over already does: that mode replaces the stat
+ * columns with days, and this replaces them with the stats the projection can
+ * actually fill. Both are readings of the same rows and neither is a fourth
+ * page.
+ *
+ * **The definitions are the board's own, pulled by key.** Nothing here restates
+ * a formatter, a `value`, an `ascFirst` or a title — `projectedColumns` looks
+ * each key up in the kind's own array — so a column whose arithmetic is fixed
+ * on the measured board is fixed here in the same breath. Two of them are
+ * genuinely different questions under the lens and are the only two written out
+ * below: the opponent, which is a *future* fixture rather than this afternoon's
+ * game, and `IP`, which cannot be written in thirds.
+ *
+ * **`FIP` and `xFIP` are deliberately out**, although the projection produces
+ * every component either of them needs. They are estimators, and an estimator
+ * of an estimate is a number nobody can act on — the reader already has the
+ * projected ERA those components were built from, and putting a second
+ * ERA-scale figure beside it that differs only by the modeling would invite a
+ * comparison neither number can survive. `BABIP` is out on the same ground: it
+ * is a *luck* metric, and there is no luck in an expected value.
+ */
+// **In the board's own canonical order**, not an order of their own, and that
+// is load-bearing rather than tidy: `ColumnPicker`'s `insertAt` puts a
+// newly-ticked column back *at its canonical place* — ahead of the first column
+// that follows it in `allColumns(kind)` — and that function reads the measured
+// board's array whichever picker raised it. A projected list in a different
+// order would have `CS` ticked on and land somewhere the run does not read, and
+// the two orders would disagree about where a column belongs. Measured: with
+// `sb`/`cs` ahead of `walks`/`strikeouts` here, ticking `CS` on dropped it after
+// `K` rather than after `SB`.
+const PROJECTED_BATTER_KEYS = [
+  'games', 'pa', 'ab', 'hAb', 'runs', 'hr', 'rbi', 'walks', 'strikeouts', 'sb', 'cs',
+  'avg', 'obp', 'slg', 'ops', 'iso',
+  'bbRate', 'kRate',
+] as const;
+
+const PROJECTED_PITCHER_KEYS = [
+  'games', 'gamesStarted', 'ip', 'battersFaced',
+  'wins', 'losses', 'saves', 'holds', 'svhd',
+  'hits', 'runs', 'earnedRuns', 'hr', 'walks', 'hitBatsmen', 'strikeouts',
+  'era', 'whip', 'avgAgainst',
+  'strikeoutsPer9', 'walksPer9', 'homeRunsPer9', 'kRate', 'bbRate', 'kMinusBb', 'kPerBb',
+] as const;
+
+/**
+ * **`IP` under the lens is a decimal, and the column says so.**
+ *
+ * `inningsPitched` is *thirds* everywhere else in this app — `6.2` is six and
+ * two thirds of an inning — and it takes a whole out count, which a projection
+ * has not got: 18.7 projected outs is 6.23 innings, and printed in the ordinary
+ * form it would read as 6⅔ and be a third of an inning out with nothing on
+ * screen to say so. The server therefore leaves `inningsPitched` **null** on a
+ * projected row and this column divides `outs` itself, which is the same answer
+ * the roster's own projected reading reached (*Innings are `5.8`, not `5.2`* —
+ * it passes its own formatter, and the two forms never meet).
+ *
+ * It keeps `ip`'s key so a reader's sort survives the press of the toggle, and
+ * it keeps the out count as its `value` so the order is the same order.
+ */
+const PROJECTED_IP_COLUMN: Column = {
+  key: 'ip',
+  label: 'IP',
+  title:
+    'Innings he is projected to throw — a decimal, not thirds: 6.5 is six and a half innings, where a measured 6.2 would be six and two thirds',
+  format: (r) => (r.outs === undefined ? '—' : (r.outs / 3).toFixed(1)),
+  value: (r) => r.outs ?? null,
+  // A threshold typed here is typed in innings, which is what the cell prints —
+  // where the measured column has to convert from thirds. The units differ and
+  // so does the conversion, which is the plainest statement that these are two
+  // columns rather than one.
+  toValue: (input: number) => input * 3,
+};
+
+/** What one row's cell reads under the lens, on the one day it is drawn. */
+function ProjectedOpponentCell({ game }: { game: ProjectedFixture | null | undefined }) {
+  if (!game) return <>{'—'}</>;
+  const sp = game.starter;
+  return (
+    <>
+      <span className="research-opp-main">
+        {game.isHome ? 'vs' : '@'} {game.opponent}
+        {game.startTime && (
+          <span className="research-opp-time">{formatStartTime(game.startTime)}</span>
+        )}
+      </span>
+      {sp && (
+        <span
+          /* **The two unannounced tiers wear the grid's own modifiers**, which
+             travel by design — see `.sched-vs-projected` in the stylesheet,
+             where the same two classes are already lent to the player page's
+             Schedule tab. Italic where it is our reading of his own rotation
+             slot, italic under a dashed line where it is his club's standing in
+             for him; nothing at all where his club has named him, an
+             announcement needing no caveat. Zero new CSS. */
+          className={`research-opp-sp${
+            sp.tier === 'announced' ? '' : ` sched-vs-${sp.tier}`
+          }`}
+          title={`Starting pitcher: ${sp.name} — ${PROJ_TIER_TITLE[sp.tier]}`}
+        >
+          {handThrows(sp.hand)} {surname(sp.name)}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** The sentence each tier carries, the same three the Schedule view's cell
+ *  says in `TIER_TITLE`. Restated here rather than imported because
+ *  `schedule.tsx` imports `Column` from this file and the other direction would
+ *  be a cycle — three strings against a circular import. */
+const PROJ_TIER_TITLE: Record<'announced' | 'projected' | 'estimated', string> = {
+  announced: 'his club has announced him to start',
+  projected: 'projected to start — his own rotation slot, which nobody has announced yet',
+  estimated: "estimated to start — his club's rotation, his own record being too thin to read one off",
+};
+
+/**
+ * **The one column on the row that a future span makes useless is the one
+ * naming a game**, and under the lens it is answered two different ways
+ * depending on how many days the reader picked.
+ *
+ * **On a single day it is that day's fixture** — `@ SEA`, the first pitch, and
+ * the man the other club is throwing in the app's own three tiers. That is what
+ * the reader asked for by narrowing to a day, and it is a *different fact* from
+ * the measured board's `Opp`, which draws today's status map: a projection of
+ * Thursday under a cell naming this afternoon's game would be the one thing on
+ * the row describing another span.
+ *
+ * **Over a range there is no column at all**, and `Games` beside it is what a
+ * row is read against instead. A week is a week of fixtures and naming one of
+ * them would be a summary of nothing; the roster's projected reading reached
+ * the same answer and states it in the same words (*The Opponent column becomes
+ * `G`*).
+ */
+export const projectedOpponentColumn = (): Column => ({
+  key: OPPONENT_KEY,
+  label: 'Opp',
+  group: 'Today',
+  title:
+    'His club’s game on the day these figures are projected over — “@” away, “vs” at home, with the man the other club is throwing: upright where they have announced him, italic where it is his own rotation slot, italic and underlined where it is his club’s. Sorts alphabetically, which groups the board by that day’s games',
+  format: (r) => <ProjectedOpponentCell game={r.projGame} />,
+  text: (r) => r.projGame?.opponent ?? null,
+  value: () => null,
+  cellClass: (r) => (r.projGame ? 'research-opp research-opp-scheduled' : 'research-opp'),
+});
+
+/**
+ * **The columns the lens draws**, in the board's own canonical order.
+ *
+ * `oneDay` is the span the projection was actually built over rather than the
+ * dates the reader picked — see `BoardProjection.oneDay`, which carries it for
+ * exactly this reason: `start` is clamped forward to today, so a reader who
+ * picked yesterday-to-today is looking at a one-day projection whose own two
+ * dates do not say so.
+ */
+export function projectedColumns(kind: PlayerKind, oneDay: boolean): Column[] {
+  const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
+  const byKey = new Map(base.map((c) => [c.key, c]));
+  const keys: readonly string[] =
+    kind === 'pitcher' ? PROJECTED_PITCHER_KEYS : PROJECTED_BATTER_KEYS;
+  const stats = keys
+    .map((k) => (k === 'ip' ? PROJECTED_IP_COLUMN : byKey.get(k)))
+    .filter((c): c is Column => c !== undefined)
+    .map((c) =>
+      // **`Games` says what it counts, per kind**, which is where the roster's
+      // reading of this column landed after a reader read `G 1` against a
+      // reliever as *one game, of which four were started*. The board has no
+      // `Starts` column to be confused with, so the letter stays and the
+      // sentence goes on the title.
+      c.key === 'games'
+        ? {
+            ...c,
+            // **A dash at nothing, where the measured board prints the
+            // number.** `0` is never an honest answer on a leaderboard — a row
+            // is there because he played — but it is the commonest answer here:
+            // a club with no game left in the span, a starter whose turn falls
+            // outside it, a man on the IL or in the minors. The rest of his row
+            // is already dashes for exactly that reason (the server sends
+            // nulls), and a lone `0` among them would be the one cell claiming
+            // a measurement — *he appears in no games* — where the truth is
+            // *there is nothing here to project*. The roster's own projected
+            // reading states the same rule in the same words.
+            format: (r: ResearchRow) => (r.games ? String(r.games) : '\u2014'),
+            title:
+              kind === 'pitcher'
+                ? 'Appearances he is projected to make over these days — a start and a relief outing alike. A reliever’s is a share of every game his club has left, since nobody knows which nights he warms up'
+                : 'Games he is projected to come to the plate in over these days — a share of his club’s, since a catcher plays five of six and a platoon bat four',
+          }
+        : c,
+    );
+  return oneDay ? [projectedOpponentColumn(), ...stats] : stats;
+}
+
+/**
+ * **Which of the lens's columns show, before the reader has said** — its own
+ * vocabulary less `DEFAULT_OFF`.
+ *
+ * **The board's own off-list, not a second one.** Every key the lens draws is a
+ * key the measured board draws, so a column the reader would not want among 44
+ * is a column he would not want among 19 either — `H` and `AB` are what `H/AB`
+ * prints on both, `SVHD` is the read and the `SV`/`HLD` split is the follow-up
+ * question on both. A second table would be the same call written twice and one
+ * of them would drift.
+ *
+ * It leaves **15 of 18** columns on the batting board and **17 of 26** on the
+ * pitching one, plus the opponent on a single day — which is the point of the
+ * lens having a picker at all: what is off is a tick away rather than gone.
+ */
+export function projectedColumnKeys(kind: PlayerKind, oneDay: boolean): string[] {
+  return projectedColumns(kind, oneDay)
+    .filter((c) => !DEFAULT_OFF[kind].has(c.key))
+    .map((c) => c.key);
+}
+
+/** Whether a saved list is just this reading's defaults — the test that decides
+ *  a selection is stored as **nothing at all**, so a reset goes on following the
+ *  defaults as they change rather than pinning today's copy of them. It is
+ *  `isDefaultColumns` one vocabulary over, and it takes `oneDay` because the
+ *  opponent column comes and goes with the span. */
+export function isDefaultProjectedColumns(
+  kind: PlayerKind,
+  oneDay: boolean,
+  keys: string[],
+): boolean {
+  const def = projectedColumnKeys(kind, oneDay);
+  return keys.length === def.length && def.every((k, i) => keys[i] === k);
+}
+
+/** Narrows a saved or `cols=` list to this reading's vocabulary — a list from
+ *  the measured board, or from an older build, or from the other kind. Anything
+ *  left empty falls back to the defaults rather than an empty table, the rule
+ *  `toColumnKeys` follows one vocabulary over. */
+export function toProjectedColumnKeys(
+  kind: PlayerKind,
+  oneDay: boolean,
+  keys: string[] | null,
+): string[] | null {
+  if (!keys) return null;
+  const known = new Set(projectedColumns(kind, oneDay).map((c) => c.key));
+  const kept = keys.filter((k) => known.has(k));
+  return kept.length > 0 ? kept : null;
+}
 
 // ---- Which columns show ---------------------------------------------------
 //

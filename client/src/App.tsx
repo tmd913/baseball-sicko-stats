@@ -3,6 +3,7 @@ import { api } from './api';
 import { SignOutButton } from './auth';
 import { playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
 import type {
+  BoardProjection,
   EspnOwnership,
   EspnRankings,
   EspnRankSpan,
@@ -39,6 +40,7 @@ import {
   rangeDatesOf,
   seatKinds,
   startedOn,
+  wideRange,
 } from './lib';
 import { takeInvite } from './invite';
 import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, toThemeId } from './theme';
@@ -57,11 +59,13 @@ import {
   includeParam,
   isDefaultColumns,
   isDefaultInclude,
+  isDefaultProjectedColumns,
   fromIncludeKeys,
   researchKindFor,
   toColumnKeys,
   toResearchInclude,
   toResearchPos,
+  toProjectedColumnKeys,
   toResearchWindow,
 } from './components/ResearchTable';
 import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
@@ -1608,14 +1612,56 @@ export default function App() {
   // A `cols=` on the opening URL names one board — the one `pos=` selects.
   // Remembered so the saved preferences that arrive a moment later don't
   // overwrite it: a link someone was handed should show what it says.
+  /** Whether the opening link says the **projected** reading is the one on
+   *  screen, which is what decides which vocabulary its `cols=` is read
+   *  against. Read straight off the params rather than off `researchProjected`,
+   *  which is declared a long way below this. */
+  const urlIsProjected = useMemo(
+    () => initialParams.get('bproj') === '1' && initialParams.get('view') === 'research',
+    [initialParams],
+  );
   const urlColumns = useMemo(() => {
     const kind = researchKindFor(toResearchPos(initialParams.get('pos')));
     const keys = toColumnKeys(kind, initialParams.get('cols'));
     return keys ? { kind, keys } : null;
   }, [initialParams]);
   const [researchCols, setResearchCols] = useState<Partial<Record<PlayerKind, string[]>>>(
-    () => (urlColumns ? { [urlColumns.kind]: urlColumns.keys } : {}),
+    () => (urlColumns && !urlIsProjected ? { [urlColumns.kind]: urlColumns.keys } : {}),
   );
+  /** …and the same `cols=` read against the **lens's** vocabulary where the
+   *  link says the lens is the reading (`bproj=1`). One param, one reading, and
+   *  the flag beside it is what says which — see `projCols`. */
+  const urlProjColumns = useMemo(() => {
+    if (!urlIsProjected) return null;
+    const kind = researchKindFor(toResearchPos(initialParams.get('pos')));
+    const raw = initialParams.get('cols');
+    // The span is not known at boot — the answer decides `oneDay` — so the list
+    // is narrowed against the wider of the two vocabularies (a single day's,
+    // which is the range's plus the opponent) and `toProjectedColumnKeys` in the
+    // table narrows it again against the span actually drawn.
+    const keys = toProjectedColumnKeys(kind, true, raw ? raw.split(',') : null);
+    return keys ? { kind, keys } : null;
+  }, [initialParams, urlIsProjected]);
+  /**
+   * The **projected reading's** columns, per kind — a third entry beside the
+   * board's and the Stats tab's, and its own for the identical reason that one
+   * is: the lens offers a *strict subset* of the board's vocabulary, so a write
+   * from its picker would hand the board a list with every Statcast and
+   * roster-% key missing and silently drop them from a set the reader never
+   * touched.
+   *
+   * **In the URL as `cols=`, and that is not a second meaning on one param.**
+   * `cols=` has always named *the column set of the reading on screen*, which
+   * `pos=` said which board it was; `bproj=1` beside it now says which
+   * **reading**, exactly as it does for `start`/`end`. A link carries one set
+   * because a link describes one page. The Stats tab is out of the URL for the
+   * different reason it always was: that tab is a page over this one and its
+   * open state is in no URL either.
+   */
+  const [projCols, setProjCols] = useState<Partial<Record<PlayerKind, string[]>>>(
+    () => (urlProjColumns ? { [urlProjColumns.kind]: urlProjColumns.keys } : {}),
+  );
+
   /**
    * The **player page's Stats tab** columns, per kind, and its own entry rather
    * than a share of the board's above.
@@ -1850,6 +1896,21 @@ export default function App() {
           }
           return next;
         });
+        // The lens's own set, defended against its own `cols=` exactly as the
+        // board's is above: a link that names the projected reading carries the
+        // projected columns, and the saved list arriving a moment later must not
+        // overwrite what the link said. Narrowed against a single day's
+        // vocabulary — the wider of the two — with the table narrowing it again
+        // against the span actually drawn.
+        setProjCols((prev) => {
+          const next = { ...prev };
+          for (const kind of ['batter', 'pitcher'] as const) {
+            if (next[kind] || urlProjColumns?.kind === kind) continue;
+            const saved = toProjectedColumnKeys(kind, true, prefs.projectedColumns?.[kind] ?? null);
+            if (saved) next[kind] = saved;
+          }
+          return next;
+        });
         // The Stats tab's own set. No URL to defend it against — see the state
         // above — so it is a plain "fill in what hasn't been touched", and it is
         // narrowed to that table's vocabulary on the way in exactly as the
@@ -1899,6 +1960,32 @@ export default function App() {
         api
           .saveResearchColumns(researchKind, keys)
           .catch((e: Error) => console.error('saving columns failed:', e.message));
+      }, 600);
+    },
+    [researchKind],
+  );
+
+  /** The projected reading's write — its own entry, its own timer, and the same
+   *  600ms debounce and the same reasoning as the two beside it: a shared timer
+   *  would let a measured edit swallow a projected one made half a second
+   *  later. */
+  const saveProjColsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (saveProjColsTimer.current) clearTimeout(saveProjColsTimer.current);
+  }, []);
+  const setProjectedColumns = useCallback(
+    (keys: string[] | null) => {
+      setProjCols((prev) => {
+        const next = { ...prev };
+        if (keys) next[researchKind] = keys;
+        else delete next[researchKind];
+        return next;
+      });
+      if (saveProjColsTimer.current) clearTimeout(saveProjColsTimer.current);
+      saveProjColsTimer.current = setTimeout(() => {
+        api
+          .saveProjectedColumns(researchKind, keys)
+          .catch((e: Error) => console.error('saving projected columns failed:', e.message));
       }, 600);
     },
     [researchKind],
@@ -1986,6 +2073,64 @@ export default function App() {
    * comes back exactly as it was left.
    */
   const [researchUi, setResearchUi] = useState<ResearchUi>(freshResearchUi);
+
+  /**
+   * **The board's projected reading** — what the whole league is expected to do
+   * over a span of days nobody has played yet, in place of the season or window
+   * the board otherwise draws.
+   *
+   * **`bproj=1` rather than `rproj=1`**, which is the Roster's, and rather than
+   * `proj=1`, which is a matchup's. Three lenses, three params, by the rule
+   * `lspan=` follows in not being `win=`: a link is read before anything on
+   * screen can say which view it was written on, and one param meaning three
+   * things in three views is the trap that rule exists for. It is in the URL at
+   * all for the reason both its siblings are — it changes *what the numbers
+   * are*, so a link carrying it describes a different table.
+   *
+   * **Not a saved preference**, the line every lens in this app sits the far
+   * side of: which figures a reader wants in front of them is a lens for an
+   * afternoon, and a saved copy would mean a board quietly showing next week's
+   * estimates a fortnight later.
+   *
+   * The read is **lazy on the toggle** — it projects six hundred men against
+   * four league-wide boards and the league's schedule — and it needs **no
+   * fantasy league at all**: every input is a board this app already holds.
+   * What a connected league adds is the span the toggle opens on.
+   */
+  const [researchProjected, setResearchProjected] = useState<boolean>(
+    () => initialParams.get('bproj') === '1',
+  );
+  const [boardProjection, setBoardProjection] = useState<BoardProjection | null>(null);
+  /**
+   * **The days the board's lens is over, and they are its own.**
+   *
+   * Plain state rather than a fifth `DateScope` entry, and the reason is a
+   * measurement this file already records: `dateScopeRef` is what `start` and
+   * `end` come off, and `start`/`end` are what `/api/report` is read on. That
+   * ref is **deliberately sticky across Research and League** — "crossing one
+   * of them must not swap the range out from under the report" — because moving
+   * it would spend the app's most expensive request on the way out of the board
+   * and another on the way back in, for a range nobody is looking at in
+   * between. A projected board that moved the scope would do exactly that, so
+   * it keeps days of its own and the roster's four readings never hear about
+   * them.
+   *
+   * **Re-derived on every press**, which is the rule the Roster's lens states
+   * in full: a remembered projected range is an answer to a question that has
+   * already been retracted, and a *stale* one — "the rest of this period"
+   * derived on Tuesday is three played days by Friday, which is precisely the
+   * reading the lens is not for. So there is nothing here to put back when it
+   * goes off, and nothing to restore.
+   *
+   * Seeded from the URL, which is what makes a `?bproj=1&start=…&end=…` link
+   * open on the days it names rather than on the days this reader's league
+   * happens to be in.
+   */
+  const [boardRange, setBoardRange] = useState<DateRange>(() => ({
+    start: initialRange.start,
+    end: initialRange.end,
+    preset: null,
+  }));
 
   /**
    * **Which days the research board's `Starting` filter is set to** — the one
@@ -3569,10 +3714,24 @@ export default function App() {
    * this number is only shown to someone with a league connected — folding it
    * into that blob would make a shared cache carry a per-user concern.
    */
-  const researchRows = useMemo(() => {
-    const rows = research[researchCacheKey] ?? [];
-    if (!rosterPct && !eligibility) return rows;
-    return rows.map((r) => {
+  /**
+   * **The per-user half of a board row, merged onto whichever board is on
+   * screen** — the measured one below, and the *projected* one beside it.
+   *
+   * It is a function rather than the body of one memo because there are two
+   * boards now and both need it. The projected board is built server-side from
+   * the same season leaderboard the measured one comes off, so it arrives with
+   * the same ids and none of these three fields — and without them the position
+   * pills would silently fall back to MLB's listed position on the lens and to
+   * ESPN's eligibility off it, which is two different populations behind one
+   * `SS` pill. (`rosterPct` and the trend columns are not in the projected
+   * vocabulary and so are never drawn there; they are merged anyway, because
+   * the alternative is a helper that has to know which board it is decorating.)
+   */
+  const decorateRows = useCallback(
+    (rows: ResearchRow[]): ResearchRow[] => {
+      if (!rosterPct && !eligibility) return rows;
+      return rows.map((r) => {
       // Absent from a delta map means "hasn't moved", not "unknown": the server
       // drops zeroes to keep the blob small, so a player with a roster % and no
       // entry really is flat. A player with no roster % at all gets a null,
@@ -3599,8 +3758,35 @@ export default function App() {
         // so the board falls back to MLB's listed position for him.
         eligible: eligibility?.get(r.id) ?? null,
       };
-    });
-  }, [research, researchCacheKey, rosterPct, rosterTrend, eligibility]);
+      });
+    },
+    [rosterPct, rosterTrend, eligibility],
+  );
+
+  /** The measured board, decorated. */
+  const researchRows = useMemo(
+    () => decorateRows(research[researchCacheKey] ?? []),
+    [decorateRows, research, researchCacheKey],
+  );
+  /**
+   * The projected board, decorated the same way and **only for the kind on
+   * screen**.
+   *
+   * A projection is fetched per kind, so a reader who presses `Projected` on
+   * the batters and crosses to `SP` holds an answer about the wrong six hundred
+   * men for as long as the second read is out. Handing it down would swap the
+   * pitching board for a batting projection for that quarter of a second, which
+   * is the stale-answer-landing-on-a-fresh-one fault stated as a render rather
+   * than as a race. So the kind is tested here and the board goes on drawing
+   * its measured figures until the answer that is *about it* arrives.
+   */
+  const boardProjectionRows = useMemo(
+    () =>
+      boardProjection && boardProjection.kind === researchKind
+        ? { ...boardProjection, rows: decorateRows(boardProjection.rows) }
+        : null,
+    [boardProjection, researchKind, decorateRows],
+  );
 
   const openEspnSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -3813,7 +3999,23 @@ export default function App() {
     // derived span and writing them out would freeze a rule into a pair of dates
     // — the exact bug the preset rule above exists to prevent, one lens along.
     // `rsum=1` says the lens is on and the recipient's own week fills it in.
-    if (activePreset) {
+    /* **And on the board's projected lens the days written are the *lens's*,
+       not the roster's.** The board keeps its own range for the reason
+       `boardRange` gives — moving `dateScopeRef` would spend a full
+       `/api/report` read on the way in and another on the way out — so the one
+       `start`/`end` this query string carries has to describe the reading on
+       screen, which on that page is the lens. `bproj=1` beside it is what says
+       which reading that is, the same bargain `sched=` and `rproj=1` already
+       make; and on the way *in* the one range seeds every entry, this one
+       among them, so a link means the same days whichever reading it opens on.
+
+       A preset is never written here: the lens's own range is re-derived on
+       every press and the calendar hands back a hand-picked pair, so there is
+       no rule for a label to stand for. */
+    if (view === 'research' && researchProjected) {
+      p.set('start', boardRange.start);
+      p.set('end', boardRange.end);
+    } else if (activePreset) {
       p.set('preset', activePreset);
     } else {
       p.set('start', heldStart);
@@ -3867,9 +4069,20 @@ export default function App() {
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
-    const cols = researchCols[researchKind];
-    if (view === 'research' && cols && !isDefaultColumns(researchKind, cols)) {
-      p.set('cols', cols.join(','));
+    // **…and under the lens it is the lens's set**, which is the same sentence
+    // one reading over: `cols=` names the columns of the reading on screen, and
+    // `bproj=1` beside it says which reading that is. `oneDay` is taken off the
+    // answer where there is one, so a link written over a single day carries the
+    // opponent column and one written over a range does not claim it.
+    if (view === 'research' && researchProjected) {
+      const pc = projCols[researchKind];
+      const one = boardProjection?.oneDay ?? boardRange.start === boardRange.end;
+      if (pc && !isDefaultProjectedColumns(researchKind, one, pc)) p.set('cols', pc.join(','));
+    } else {
+      const cols = researchCols[researchKind];
+      if (view === 'research' && cols && !isDefaultColumns(researchKind, cols)) {
+        p.set('cols', cols.join(','));
+      }
     }
     // Only once the reader has navigated off the period being played. Absent
     // means "current", which is a rule and not a value — so a link shared this
@@ -3972,6 +4185,12 @@ export default function App() {
     // mode — see `scheduleSpan`. Absent is off, which is the only thing the
     // absence can mean.
     if (scheduleSpan !== null) p.set('sched', String(scheduleSpan));
+    // The board's projected reading — `bproj`, a third param for a third lens.
+    // See `researchProjected` for why one param could not have served all
+    // three. Scoped to the view that draws it, the rule `pos=` and `win=`
+    // follow: a lens with no board to be a lens *of* would name a reading that
+    // is not in force.
+    if (view === 'research' && researchProjected) p.set('bproj', '1');
     // The roster's projected reading — `rproj` rather than `proj`, which is the
     // League page's own and means a matchup. See `rosterProjected`.
     if (rosterProjected) p.set('rproj', '1');
@@ -3998,6 +4217,7 @@ export default function App() {
     researchInclude,
     researchWatchlist,
     researchCols,
+    projCols,
     researchKind,
     matchupPeriod,
     leagueTab,
@@ -4011,6 +4231,8 @@ export default function App() {
     hideInjured,
     scheduleSpan,
     turnDays,
+    researchProjected,
+    boardRange,
     rosterProjected,
     rosterSummary,
     rosterSource,
@@ -4425,6 +4647,188 @@ export default function App() {
     }
     loadRosterProjection();
   }, [rosterProjected, loadRosterProjection, roster]);
+
+  /**
+   * **The board's projection, read on the toggle and on every change of the
+   * days or the kind.**
+   *
+   * Sequence-numbered, like the roster's: the reader can change the span twice
+   * in a second and cross to the pitchers while both are out, and only the
+   * newest read may write. **Never over data** — the board goes on drawing
+   * whatever it has while a read is in flight, so the only mark a press leaves
+   * is the ball inside the toggle that started it, and a failed read costs the
+   * lens its figures rather than turning the page into a message.
+   *
+   * `researchTeams` is in the guard rather than the deps for a reason worth
+   * naming: the team reading has no projection to ask for, and a read fired
+   * against thirty clubs would be six hundred players' worth of work for a
+   * board that cannot draw one of them.
+   */
+  const boardProjRead = useRef(0);
+  const loadBoardProjection = useCallback(() => {
+    const seq = ++boardProjRead.current;
+    return api
+      .boardProjection(researchKind, boardRange.start, boardRange.end)
+      .then((p) => {
+        if (seq === boardProjRead.current) setBoardProjection(p);
+      })
+      .catch((e: Error) => {
+        if (seq === boardProjRead.current) {
+          console.error('reading the board projection failed:', e.message);
+        }
+      });
+  }, [researchKind, boardRange.start, boardRange.end]);
+
+  useEffect(() => {
+    if (!researchProjected || researchTeams) {
+      // Turning the lens off while a read is out discards its answer — and
+      // clears the one it was holding, so a second press cannot flash last
+      // week's estimates for the length of the next read. The ball inside the
+      // toggle is drawn off `projection === null`, so this is also what stops
+      // it spinning for ever inside a control that is no longer doing anything.
+      boardProjRead.current += 1;
+      setBoardProjection(null);
+      return;
+    }
+    void loadBoardProjection();
+  }, [researchProjected, researchTeams, loadBoardProjection]);
+
+  /**
+   * **Turning the lens on moves the reader to the days it is about**, the rule
+   * the Roster's own toggle states in full one function down: a projection over
+   * yesterday is a projection of nothing, so the press opens on the days there
+   * are still games in — the rest of this matchup period where a league says
+   * what that is, and the week ahead where none does.
+   *
+   * **Re-derived on every press**, deliberately, and the Roster's copy carries
+   * the argument: a remembered projected range is an answer to a question that
+   * has already been retracted, and a stale one besides — *the rest of this
+   * period* derived on Tuesday is three played days by Friday. What the reader
+   * picks after the press is theirs and stands until the lens goes off.
+   *
+   * **The Schedule view goes off with it**, which is exclusivity rather than
+   * tidiness: that mode replaces the stat *columns* with days and this replaces
+   * the *figures* in them, so they are two readings of one set of cells and
+   * cannot both be in force. The board's own copy of that toggle is the same
+   * state the Roster's is (`scheduleSpan`), so this is the same press on both.
+   */
+  const setBoardProjSpan = useCallback((span: { start: string; end: string } | null) => {
+    if (span === null) {
+      setResearchProjected(false);
+      return;
+    }
+    setBoardRange({ ...span, preset: null });
+    setResearchProjected(true);
+    setScheduleSpan(null);
+  }, []);
+
+  /**
+   * **The named spans the lens's panel offers.**
+   *
+   * **This matchup period and the next**, which is what a fantasy manager plans
+   * in and the one thing no calendar can express: a period's dates are the
+   * league's own arithmetic and they move as the week is played. With no league
+   * the pair falls back to `Next 7` and `Next 14` — `scheduleSpans`' own
+   * fallback one control over, in the same words, so the two runs cannot come
+   * to call one span two things.
+   *
+   * **`Today` was a third pill here and has gone.** It is a single day, which
+   * is what the `Custom` calendar beside these is *for* — one press on a date —
+   * and a named pill for one of the 130 days that calendar can reach was a pill
+   * arguing that today is a kind of span rather than a date. What is left is
+   * the two things no calendar can express and a door to the calendar, which is
+   * the split the control actually has.
+   *
+   * **Every span starts today**, the matchup periods included: days already
+   * played are not days anybody projects, and `getBoardProjection` clamps
+   * forward regardless — a pill whose dates the answer then contradicted would
+   * be the control lying about what it did. The *period's* own dates are on the
+   * title, which is how a reader tells `Week 20` from `Week 21` when both of
+   * them start this morning.
+   *
+   * **`Week 20`, not `This matchup`**, which is the wording `spanLabel` argues
+   * at length for one file over: it says *which* fantasy week rather than that
+   * it is the current one, it is the vocabulary the League page already speaks,
+   * and `This week` would collide with the calendar week the date presets mean.
+   */
+  const boardProjSpans = useMemo(() => {
+    const out: { label: string; start: string; end: string; title: string }[] = [];
+    /**
+     * **A period's own days, clamped forward to today and no further.**
+     *
+     * The *current* period has days behind it and nobody projects those, so it
+     * starts this morning — and `getBoardProjection` clamps forward regardless,
+     * so a pill claiming the 10th would be contradicted by its own answer.
+     *
+     * The **next** period has none behind it, and this got that wrong for one
+     * commit: every span started today, so `Week 21` came out as *Aug 24 – Sep
+     * 20* — the rest of week 20 **and** all of week 21, which is not the span
+     * anybody pressing it is asking for. `max(start, today)` is the one rule
+     * that is right for both, and it is a no-op on a period that has not begun.
+     */
+    const period = (p: { period: number; start: string; end: string }, lead: string) => ({
+      label: `Week ${p.period}`,
+      start: p.start < today ? today : p.start,
+      end: p.end < today ? today : p.end,
+      title: `${lead} — ${wideRange(p.start, p.end)}, of which the days still to be played are projected`,
+    });
+    if (matchupWindow) {
+      out.push(period(matchupWindow, 'This matchup period'));
+      if (matchupWindow.next) out.push(period(matchupWindow.next, 'The next matchup period'));
+    } else {
+      out.push({ label: 'Next 7', start: today, end: addDays(today, 6), title: 'The next 7 days' });
+      out.push({ label: 'Next 14', start: today, end: addDays(today, 13), title: 'The next 14 days' });
+    }
+    return out;
+  }, [today, matchupWindow]);
+
+  /**
+   * **The board's Schedule toggle turns the lens off, which is the other half
+   * of an exclusivity that shipped one-way.**
+   *
+   * `toggleBoardProjected` already clears the span; this is the same press read
+   * from the other side, and without it the board could be handed both. Driven
+   * before this existed, on `?view=research&bproj=1`: pressing `Schedule` left
+   * **both buttons lit**, the columns became the fourteen days (the `schedule`
+   * branch of `columns` is tested first, so that mode does win the table), and
+   * the date bar and the `Projected · 1 day still to play` line stayed on
+   * screen above a table with no projected figure anywhere in it — two controls
+   * claiming one set of cells, which is exactly what the Roster's own pair is
+   * written to prevent.
+   *
+   * A wrapper on the callback rather than a second flag: the span is App's and
+   * shared with the Roster's copy of the toggle, so this is the board's press
+   * saying what it means and nothing else changes hands. Turning the mode
+   * **off** clears a lens that is already off, which is a no-op.
+   */
+  const setBoardScheduleSpan = useCallback((sp: ScheduleSpan | null) => {
+    if (sp !== null) setResearchProjected(false);
+    setScheduleSpan(sp);
+  }, []);
+
+  /**
+   * **Leaving the board puts the lens away**, exactly as pressing the toggle a
+   * second time would — the rule the Roster's lens already keeps, read on the
+   * other page.
+   *
+   * "Not a saved preference" keeps next week's estimates out of tomorrow's
+   * session and says nothing about *this* one, and a lens is about the page it
+   * was pressed on. It also takes `bproj=1` out of the URL of every page that
+   * is not the board, which it had no business being in: a link copied off the
+   * Roster would otherwise claim a reading the Roster has not got.
+   *
+   * **A player's page is not a leaving**, and neither is a club's or a game's:
+   * they are overlays over this view, the URL still names the board, and
+   * closing one returns to the same table at the same scroll. `view` is what
+   * this watches, and a `player=` opens without changing it.
+   *
+   * **The team reading is**, and it is folded in here rather than given a
+   * branch of its own: a projection is a line per man, so a board of thirty
+   * clubs is exactly as far from the lens's subject as the Feed is.
+   */
+  useEffect(() => {
+    if (view !== 'research' || researchTeams) setResearchProjected(false);
+  }, [view, researchTeams]);
 
   /**
    * **Turning the lens on moves the reader to the days it is about**, which is
@@ -7427,6 +7831,19 @@ export default function App() {
           rows={researchRows}
           kind={researchKind}
           teams={researchTeams}
+          /* The lens, its answer and its days — three props for the reason the
+             Schedule view takes two: the state, the answer once it has landed,
+             and the control that picks the span. `boardProjectionRows` is null
+             while the read is out *and* while the answer in hand is about the
+             other kind, so the board never draws a batting projection over the
+             pitchers. */
+          projected={researchProjected}
+          projection={boardProjectionRows}
+          projSpan={boardRange}
+          onProjSpanChange={setBoardProjSpan}
+          projSpans={boardProjSpans}
+          today={today}
+          maxDate={maxDate}
           onTeamsChange={setResearchTeams}
           loading={researchLoading && !research[researchCacheKey]}
           error={researchError}
@@ -7434,11 +7851,16 @@ export default function App() {
           onPosChange={setResearchPos}
           columnKeys={researchCols[researchKind] ?? null}
           onColumnsChange={setResearchColumns}
+          projColumnKeys={projCols[researchKind] ?? null}
+          onProjColumnsChange={setProjectedColumns}
           window={researchWindow}
           onWindowChange={setResearchWindow}
           /* One flag and one span for both wide tables — see `scheduleSpan`. */
           scheduleSpan={scheduleSpan}
-          onScheduleSpanChange={setScheduleSpan}
+          /* The board's own wrapper rather than `setScheduleSpan` outright —
+             see `setBoardScheduleSpan`, which is what makes the two readings
+             exclusive in both directions. */
+          onScheduleSpanChange={setBoardScheduleSpan}
           matchupWindow={matchupWindow}
           schedule={scheduleIndex}
           /* And the turn filter, which reads the same window over all of its

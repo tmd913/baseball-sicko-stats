@@ -1,5 +1,6 @@
 import type {
   BatterGameLog,
+  BoardProjection,
   GameLogGap,
   EspnOwnership,
   MatchupWindow,
@@ -227,6 +228,17 @@ export const api = {
   // a reset follows the defaults as they change rather than pinning today's.
   async saveResearchColumns(kind: PlayerKind, keys: string[] | null): Promise<UserPrefs> {
     return request('/api/prefs/research-columns', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ kind, keys }),
+    });
+  },
+  /** The research board's **projected** reading keeps its own set — same body,
+   *  its own entry. Its own for the reason the Stats tab's is: the lens lists a
+   *  strict subset of the board's vocabulary, so a write from its picker would
+   *  drop every Statcast and roster-% column from the board's saved list. */
+  async saveProjectedColumns(kind: PlayerKind, keys: string[] | null): Promise<UserPrefs> {
+    return request('/api/prefs/projected-columns', {
       method: 'PUT',
       headers: JSON_HEADERS,
       body: JSON.stringify({ kind, keys }),
@@ -565,6 +577,27 @@ export const api = {
   }> {
     const w = window === 'season' ? '' : `&window=${window}`;
     return request(`/api/research/teams?type=${kind}${w}`);
+  },
+  /**
+   * **The same board, projected** — every player in the league over a span of
+   * days nobody has played yet, which is what the board's own `Projected`
+   * toggle swaps its figures for.
+   *
+   * **The rows come back as `ResearchRow`s**, so the board draws them with its
+   * own columns, its own sort and its own filters and nothing downstream had to
+   * be told anything. Every field the projection cannot fill is `null` rather
+   * than the season's figure, so the lens's narrowed vocabulary
+   * (`researchColumns.tsx::projectedColumns`) is drawing the only numbers on
+   * the row.
+   *
+   * A route of its own rather than a parameter on `research`, for the reason
+   * `rosterProjection` is one beside `report`: that board is a cached blob
+   * served warm to every reader alike, where this is a computation over a span
+   * the reader picked. **Lazy on the toggle** — nobody who never presses it
+   * pays for it — and it needs no fantasy league at all.
+   */
+  async boardProjection(kind: PlayerKind, start: string, end: string): Promise<BoardProjection> {
+    return request(`/api/research/projected?type=${kind}&start=${start}&end=${end}`);
   },
   /**
    * Every player the league has something to say about today — his roster
