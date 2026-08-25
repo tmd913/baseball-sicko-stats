@@ -486,6 +486,34 @@ It also retires the two-`Summary` collision the `SummaryToggle` one section down
 
 **Nothing else moved, checked rather than assumed.** `.mup-chrome` is **145px at 320 and 114 above it, before and after**. Page and view overflow are **0 at 320, 390, 481, 640, 900, 1280, 1440 and 1920**, and no category row overflows at any of them. The **bye page is byte-identical** — chrome 140 at 320 and 109 above it in both builds, and its head clips `Brian&Tom's Excellent Adventure` at 320 and 390 exactly as it did, that name being longer than any phone can hold. The only clipping on the comparison page is at **320**, where `The Homewreckers` (133 > 126) and `THE BRONX FLOATERS` (158 > 126) clip — **and both clip identically on `main`**, measured on the same matchup rather than inferred from the table above, which was read off a different one.
 
+### And the card comes back the rest of the way
+
+**Reported a second time — *the matchup UI scale is a bit too big on a laptop*.** The section above records the first report and a half-step back from it (headline 32 → 29, figure 22 → 20, card 1060 → 970); this takes the other half, and the wide tier is the size it was before the second scale-up began. Before → after: headline **29 → 26**, category figure **20 → 18** and its label **14 → 13**, the group heading **13 → 12** and its tally **14 → 13**, the head's name **18 → 17** and record **14 → 13**, the badge **48 × 38 → 44 × 34** (glyph 21 → 19), the Moves names **16 → 15**, a row's padding **10 → 9** and its gap **11 → 10**, the card's padding **18 → 16**, the category rail **11 → 9px**, the meter **16 → 14**, `--mup-val-w` **70 → 64**, `--mup-cat-w` **56 → 52** and the card's cap **970 → 896**.
+
+**Every one of those numbers was already written down in the stylesheet as the true one.** The scale-up moved the declarations and left the comments beside them — `.mup-heads` still explained a 44 × 34 badge "against an identity block that is now a 17px name over a 13px record", `.mup-side-score` still argued "**26 against the row's 18**", `.mup-meter` still said "14 against the row's 9px track", `.mup-card` still derived 64 from a figure at 18px/700 and 52 from `SVHD` at 13px/700, and `.mup-view` still derived 896 from a name inking 268.9px at 17px/700. Coming back the rest of the way is therefore a purely numeric diff: **not one comment in the block needed editing**, and five of them stopped being wrong. That the file had been arguing for this tier the whole time is the strongest thing that can be said for it.
+
+**The bars come back with the type, having been the one thing tempted to stay.** An 11px rail costs a row no height at all — the row is `max(the figure's line box, the rail) + padding`, and an 18px figure's line box is 22 — so keeping it would have been free on a laptop. It goes anyway: the rail's ink was re-tuned to **26%** (`32 × 9/11`) for the taller track, and a fatter rail under smaller type is a proportion nobody measured. And the two fixed columns coming back is what pays the tracks for the narrower card at the widths where the cap does not bind — a track at 640 goes **165 → 177px** and at 900 **295 → 307**, longer than the scale-up left them.
+
+**One real defect went with it.** `.mup-row` took `gap: 11px` and `.mup-group-head` was left at 10 — but those two grids must agree about their columns, which is the whole reason `--mup-val-w` and `--mup-cat-w` are tokens ("four things have to agree about them"), and a 1px gap difference puts the group tallies out of line with the figure columns they head by 2px. Both are 10 again.
+
+**The `≤640` pins are gone**, being the second scale-up's own and now no-ops: they held the stacked head's name at 17, its record at 13 and its badge at 44 × 34 against a wide tier that had grown past them, and the wide tier has not. Two rules that agree today are two rules that will one day disagree. The `≤480` phone tier keeps its name at 14, which is the one place the name genuinely does not follow the card.
+
+**The phone moved too, and the section above says it did not.** *The `≤480` phone tier is untouched: its budget was already spent to the pixel* was true of every rule inside that block and false of the card, because a row's **vertical padding is not in it** — the phone reads the wide tier's `9px 0`, which the scale-up had made `10px 0`. So the phone had quietly grown 2px a row, twelve rows, and gets 25px of card back here. Nothing in that block itself was touched.
+
+**Measured, before → after**, on matchup 103 of period 20 at a 900px-tall window (844 on the phone widths):
+
+| | 320 | 390 | 640 | 900 | 1280 / 1440 / 1920 |
+| --- | --- | --- | --- | --- | --- |
+| card | 288 → 288 | 358 → 358 | 608 → 608 | 868 → 868 | 970 → **896** |
+| card height | 756 → **731** | 756 → **731** | 822 → **773** | 786 → **735** | 786 → **735** |
+| category row | 39 → **37** | 39 → **37** | 44 → **40** | 44 → **40** | 44 → **40** |
+| category track | 46 → 46 | 81 → 81 | 165 → **177** | 295 → **307** | 346 → **321** |
+| page scroll height | 979 → **954** | 948 → **923** | 1014 → **965** | 978 → **927** | 978 → **927** |
+
+Page and view overflow are **0 at 320, 390, 481, 640, 900, 1152, 1280, 1440 and 1920** before and after, and no category row overflows at any of them. Name clipping is **identical** at every width — only `Brian&Tom's Excellent Adventure`, and only from 900 down, which is the name no card in this league holds at any size. **The laptop still scrolls**: at 1440 × 900 the page is 927 tall against a 900 viewport, so 27px of it is below the fold where 78px was, and the Moves row that was cut off is on screen. Fitting the whole card in a browser window whose own chrome takes 90px is not something this tier can buy without going under the size the card started at.
+
+**Bundle**: CSS **178.51 → 178.36 kB** (gzip 31.98 → 31.95), JS unchanged at 693.66 / 204.64 gz — a change that removes more than it adds.
+
 ### The Projected toggle
 
 **The Summary's figures are where the week has got to, and one press swaps them

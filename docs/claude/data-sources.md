@@ -67,6 +67,39 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 
 **Neither function imports the other, and the reason is a cycle**: `schedule.ts` already imports `mlbStats.ts`, so folding them would close one. They are restated, each names the other, and each carries the reasoning — change one and read the other.
 
+### MLB calls a game Live half an hour before anybody plays it
+
+**`abstractGameState` flips to `Live` at `Warmup`, and the linescore is filled in to match.** Reported as *"it shouldn't say At bat or On deck or On mound until the game has started"*, and it is the wire rather than the app: measured on gamePk 823992 through the feed's own `timecode` machinery — `/api/v1.1/game/823992/feed/live/timestamps` lists every snapshot, and `?timecode=` replays one — the same game reads
+
+| timecode | status | inning | batter / on deck | boxscore `pitchers[]` |
+| --- | --- | --- | --- | --- |
+| `20260824_221101` | `('Preview', 'P', 'Pre-Game')` | 1 Top, 0 out | Steven Kwan / José Ramírez | away `[800048]`, home `[691946]` |
+| `20260825_011951` | `('Live', 'P', 'Warmup')` | 1 Top, 0 out | Steven Kwan / José Ramírez | away `[800048]`, home `[691946]` |
+| `20260825_013709` | `('Live', 'I', 'In Progress')` | 1 Top, 0 out | Steven Kwan / José Ramírez | away `[800048]`, home `[691946]` |
+
+Nothing in the middle row is a fact about a game. It is MLB writing down who is *due* up and who is *announced* to start, and the app read every one of it: `buildGameStatus`'s `live` gate was `state === 'live'`, so from Warmup on a watched leadoff man wore `At bat`, the man behind him `On deck`, the announced starter the pitching role, the summary row took its live tint and the opponent cell read `Top 1` — thirty minutes and change before first pitch. The middle row is the *only* one of the three the old code and the new code disagree about, which is the whole of the change.
+
+**`codedGameState` answers the question exactly, and MLB publishes the table that proves it.** `/api/v1/gameStatus` returns all **192** status rows; read off it, `PW`/`Warmup` is the **only** row pairing `abstractGameState: Live` with `codedGameState: 'P'`. Every other `'P'` row — `Pre-Game` and the fifteen `Delayed Start:` flavors — is a `Preview` this module already files as `scheduled`, and `'S'` is `Scheduled` itself. Everything else describes a game that has begun or is over: `I` in progress and its nineteen delays, `M`/`N` manager challenge and umpire review, `T`/`U` suspended, `F`/`O` final and completed early, `D`/`C` postponed and cancelled, `Q`/`R` forfeit. So `hasStarted` is *not `P`, not `S`* and needs no string match on `detailedState` — which is the same reason `isPostponedStatus` above prefers the code to the label, and the same reason neither of them can be broken by MLB adding a new delay reason.
+
+**A warmup game stays `live`, deliberately.** `state` is what the poll cadence reads — `App.tsx`'s `hasRealLiveGame`, and `savant.ts`'s choice of `LIVE_DAY_TTL` — so demoting it to `scheduled` would go quiet in the one half-hour where the next read *is* the first pitch, and the app would learn the game had started whenever the slow timer next came round. What `hasStarted` gates is the **situation** (who is up, who is on, who is in, which half, how many out), not the claim that the game is worth reading again soon. The one thing that changes on screen for a warmup game other than a mark going away is the badge, which improves: with `currentInning` null, `gameStatusView` falls through to `detailedState` and the cell reads `Warmup` where it read `Top 1`.
+
+**Driven end to end over the two feeds above**, through `getStatsApiGame` with `fetch` stubbed to serve them, before → after:
+
+| | `Warmup` before | `Warmup` after | `In Progress` after |
+| --- | --- | --- | --- |
+| `state` | `live` | `live` | `live` |
+| `currentInning` / `inningState` | 1 / `Top` | **null / null** | 1 / `Top` |
+| `outs` / `bases` | 0 / `{f,s,t}` | **null / null** | 0 / all false |
+| `atBatId` / `onDeckId` | 680757 / 608070 | **null / null** | 680757 / 608070 |
+| `pitchingId` | 691946 | **null** | 691946 |
+| `inGamePitcherIds` | `[800048, 691946]` | **`[]`** | `[800048, 691946]` |
+
+The right-hand column is byte-identical to what `In Progress` returned before the change, which is the half that had to not move.
+
+**Three modules build a status and all three take the test.** `mlbStats.ts::buildGameStatus` is the day pipeline's and the one the roster, the feed and the research board read; `game.ts::buildStatus` is the game page's, which nulls the four role fields already and needed the half-inning and the outs; `teamGames.ts` is a club's Results tab, which reads its half-inning straight off a hydrated schedule. The team list keeps a warmup game as a `live` **row** rather than dropping it back to `scheduled` — same reasoning as `state` above, since `anyLive` is what puts that club's list on the 60s TTL through first pitch — and claims no inning until there is one.
+
+**No cache version moved, and the test is the standing one — does anything read this back out of a blob.** A day snapshot is written only once every game on the date is final, so no stored day can hold a warmup status; and the compact feed a *final* is cached as is not the feed a live game is read from. Both halves of the rule that keeps `FEED_CACHE_VERSION` still for `inGamePitcherIds` itself (see the feed reference) hold for the gate over it.
+
 ### What an average plate appearance is worth, measured nightly
 
 **The rolling-xwOBA chart draws a reference line, and for its whole life that

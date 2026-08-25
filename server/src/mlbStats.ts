@@ -99,6 +99,45 @@ export function isPostponedStatus(s: GameStatusFields | undefined): boolean {
   );
 }
 
+/**
+ * **First pitch has been thrown** — the test that separates a game being played
+ * from one that is merely about to be.
+ *
+ * `abstractGameState` cannot answer this. MLB flips it to **`Live` at
+ * `Warmup`**, about half an hour before anybody throws anything, and fills the
+ * linescore in to match: measured on gamePk 823992 at timecode
+ * `20260825_011951` — status `('Live', 'P', 'Warmup')`, `currentInning` 1,
+ * `inningState` "Top", `outs` 0, `offense.batter` Steven Kwan,
+ * `offense.onDeck` José Ramírez, `defense.pitcher` George Klassen, and both
+ * sides' boxscore `pitchers[]` already one man long. Every one of those is the
+ * *projected* first half-inning rather than a thing that has happened, and the
+ * app read them as fact: a watched leadoff man wore `At bat`, the man behind
+ * him `On deck`, the announced starter `On mound`, and the opponent cell read
+ * `Top 1` — all of it thirty minutes early, all of it against a game where
+ * nobody had come out of the dugout.
+ *
+ * **`codedGameState` answers it exactly.** Read off MLB's own `/api/v1/gameStatus`
+ * reference (192 rows): `PW`/Warmup is the **only** row that pairs
+ * `abstractGameState: Live` with `codedGameState: 'P'`, and every other `'P'`
+ * row (`Pre-Game`, the fifteen `Delayed Start:` flavors) is a `Preview` that
+ * this module already files as `scheduled`. `'S'` is `Scheduled` itself.
+ * Everything else — `I` in progress and its delays, `M`/`N` challenge and
+ * review, `T`/`U` suspended, `F`/`O` final, `D`/`C` postponed and cancelled,
+ * `Q`/`R` forfeit — describes a game that started. So the whole of the rule is
+ * *not `P`, not `S`*, and it needs no `detailedState` string match to hold.
+ *
+ * **A warmup game stays `live` all the same**, and deliberately: `state` is
+ * what the client's poll cadence reads (`App.tsx`'s `hasRealLiveGame`) and what
+ * picks `LIVE_DAY_TTL` in `savant.ts`, so demoting it to `scheduled` would go
+ * quiet in the one half-hour where the next read is the first pitch. What this
+ * gates is the *situation* — who is up, who is on, who is throwing, which
+ * half — not the claim that the game is worth watching.
+ */
+export function hasStarted(s: GameStatusFields | undefined): boolean {
+  const code = s?.codedGameState;
+  return code !== 'P' && code !== 'S';
+}
+
 /** All regular-season games on a date (YYYY-MM-DD), with their schedule status. */
 export async function getGamesForDate(date: string): Promise<ScheduledGame[]> {
   const url =
@@ -1829,16 +1868,24 @@ function buildGameStatus(feed: LiveFeed): GameStatus {
         : 'scheduled';
   const ls = feed.liveData?.linescore;
   const o = ls?.offense;
-  const live = state === 'live';
+  // `started` gates everything the linescore projects before first pitch — see
+  // `hasStarted`, which is where the warmup feed that made this necessary is
+  // measured. `live` is that *and* a game under way, which is what the men on
+  // the field are only ever true of.
+  const started = hasStarted(s);
+  const live = state === 'live' && started;
   return {
     state,
     detailedState: s?.detailedState ?? '',
     startTime: feed.gameData?.datetime?.dateTime ?? null,
     homeScore: ls?.teams?.home?.runs ?? null,
     awayScore: ls?.teams?.away?.runs ?? null,
-    currentInning: ls?.currentInning ?? null,
-    inningState: ls?.inningState ?? null,
-    isTopInning: ls?.isTopInning ?? null,
+    // The half-inning is a projection until somebody throws: a warmup feed
+    // reads `Top 1`. Nulled, `gameStatusView` falls through to `detailedState`
+    // and the badge reads `Warmup`, which is both honest and more use.
+    currentInning: started ? ls?.currentInning ?? null : null,
+    inningState: started ? ls?.inningState ?? null : null,
+    isTopInning: started ? ls?.isTopInning ?? null : null,
     // Only meaningful mid-game; between innings/at rest there are no runners.
     bases: live ? baseState(o?.first, o?.second, o?.third) : null,
     outs: live ? ls?.outs ?? 0 : null,

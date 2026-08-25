@@ -1,5 +1,11 @@
 import type { TeamGameResult } from './types.js';
-import { getTeamAbbrevs, isFinalStatus, isPostponedStatus, type GameStatusFields } from './mlbStats.js';
+import {
+  getTeamAbbrevs,
+  hasStarted,
+  isFinalStatus,
+  isPostponedStatus,
+  type GameStatusFields,
+} from './mlbStats.js';
 import { SEASON } from './research.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
@@ -95,6 +101,7 @@ async function fetchSeason(teamId: number): Promise<TeamGameResult[]> {
     for (const g of d.games ?? []) {
       if (typeof g.gamePk !== 'number') continue;
       const state = stateOf(g.status);
+      const started = hasStarted(g.status);
       // **Only what has happened.** A fixture ahead is the Schedule tab's, drawn
       // off the one shared window with both announced starters on it; a row here
       // with two dashes where the score goes would be that tab's answer at lower
@@ -121,8 +128,13 @@ async function fetchSeason(teamId: number): Promise<TeamGameResult[]> {
         // still being played, and a tie — and both of them are correctly "not a
         // result yet or ever". MLB omits the flag rather than sending false.
         won: typeof mine?.isWinner === 'boolean' ? mine.isWinner : null,
-        inning: state === 'live' ? g.linescore?.currentInning ?? null : null,
-        inningState: state === 'live' ? g.linescore?.inningState ?? null : null,
+        // `hasStarted` as well as `live`: MLB calls a game Live at Warmup and
+        // hands out a `Top 1` linescore with it, half an hour before anybody
+        // plays it (see `mlbStats.ts`). The row stays — its state is MLB's and
+        // it keeps this club's list on the 60s TTL through first pitch — but it
+        // claims no half-inning until there is one.
+        inning: state === 'live' && started ? g.linescore?.currentInning ?? null : null,
+        inningState: state === 'live' && started ? g.linescore?.inningState ?? null : null,
       });
     }
   }
