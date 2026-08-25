@@ -684,7 +684,7 @@ at; the first two were a step towards it and are kept because they are still
 what the batter's row does.
 
 **A played pitcher's row is a pitching line, in a pitching line's order** —
-`IP, H, R, ER, BB, K`, then his decision. It was `IP, K, ER, H, BB`: the
+`IP, H, R, ER, K, BB`, then his decision. It was `IP, K, ER, H, BB`: the
 categories first and the line's own order nowhere. A **result** has a form every
 reader of a box score already knows, and a manager reading `6.0 IP, 3 H, 0 R,
 0 ER, 2 BB, 7 K` is not decoding it. **Every term, including the noughts**,
@@ -694,8 +694,8 @@ a shutout and a silent omission leaving the reader counting commas. **`R` as
 well as `ER`**, which a phrase had no room for and a line must have — they
 differ exactly where an error has come into it. A **loss** is the one decision
 that cannot be drawn: `PitchingLine` carries wins, saves and holds and no
-losses. Measured on the live league: `5.0 IP, 5 H, 2 R, 2 ER, 2 BB, 5 K, W` and
-`6.0 IP, 3 H, 1 R, 1 ER, 0 BB, 5 K, W`.
+losses. Measured on the live league: `5.0 IP, 5 H, 2 R, 2 ER, 5 K, 2 BB, W` and
+`6.0 IP, 3 H, 1 R, 1 ER, 5 K, 0 BB, W`.
 
 **A projected row is the league's own five categories, in the order the block
 above it prints them.** It was a fixed phrase — `4.4 PA, 0.9 H, 0.7 R, 0.6 RBI`
@@ -711,8 +711,37 @@ rate is formatted as itself**: `fmtValue` is right about `.842` and `2.91` and
 wrong about a projected count, where it would print `0.943` off a figure that is
 an expectation to a tenth at best. A category the line cannot produce is a dash,
 not a nought. Measured: `0.7 R, 0.2 HR, 0.6 RBI, 0.2 SB, .842 OPS` on a batter
-and `5.5 K, 0.4 W, 2.91 ERA, 1.10 WHIP, 0.0 SVHD` on a pitcher — each in its own
-block's header order.
+and `5.5 K, 0.4 W, 2.91 ERA, 1.10 WHIP` on a pitcher — each in its own block's
+header order.
+
+**And a projected pitcher gets one decision, not both.** He can earn a win or a
+save-and-hold and never the pair, so a line offering him `0.4 W` *and*
+`0.0 SVHD` was spending a term on a category he is not in. Which one is not a
+guess: **the engine has already answered it in the credits it projected**, so
+the credits lead — more saves and holds coming than wins is a man out of the
+bullpen — and **innings break the tie**, at nine of them.
+
+The tie-break is the half that had to be measured rather than assumed. On one
+read of the live league's two rosters:
+
+| | projected | called |
+| --- | --- | --- |
+| Walbert Ureña | `5.3 IP · 0.40 W · 0.00 SVHD` | starter, on the credits alone |
+| **Ian Seymour** | `3.1 IP · 0.00 W · 0.00 SVHD` | **starter, on the innings** |
+| Adrian Morejon | `0.5 IP · 0.10 W · 0.20 SVHD` | reliever, on the larger of the two |
+| six others | `0.3–0.5 IP · 0.00 W · 0.10–0.30 SVHD` | relievers |
+
+Seymour is why: a starter with no credit either way, whom `wins >= svhd` would
+have called a starter *by accident* and `wins > svhd` would have called a
+reliever outright. Driven in the page by dropping the batters from the
+projection so the relievers rise into the top three — starters read
+`5.5 K, 0.4 W, 2.91 ERA, 1.10 WHIP`, relievers read
+`0.5 K, 3.86 ERA, 1.07 WHIP, 0.2 SVHD`, each keeping the block's order around
+the term that was dropped.
+
+**The two sets are stat ids rather than a test on `SVHD`**, so a league scoring
+`SV` and `HD` separately — or scoring `L` — is covered by the same rule without
+knowing about it.
 
 **And the row under a *batter's* name is still a phrase, with two terms taken
 out of it.** The row is there to answer *why is this man first today*, which is

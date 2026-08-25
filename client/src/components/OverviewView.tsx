@@ -171,7 +171,7 @@ function anyPlay(line: DayLine): boolean {
 
 /**
  * **A pitcher's day, in the order a pitching line is written**: `IP, H, R, ER,
- * BB, K`, then his decision.
+ * K, BB`, then his decision.
  *
  * It was `IP, K, ER, H, BB` — the categories first and the line's own order
  * nowhere — which is the same mistake the row above it makes on purpose and
@@ -203,8 +203,8 @@ function pitchSummary(line: DayLine): string {
     `${p.hits} H`,
     `${p.runs} R`,
     `${p.earnedRuns} ER`,
-    `${p.walks} BB`,
     `${p.strikeouts} K`,
+    `${p.walks} BB`,
   ];
   if (p.wins) parts.push('W');
   if (p.saves) parts.push('SV');
@@ -236,6 +236,43 @@ function pitchSummary(line: DayLine): string {
  * A category the line cannot produce is a dash rather than a nought: a man with
  * no plate appearance projected has no OPS, and `.000` would be a claim.
  */
+/**
+ * **Starter or reliever, as the projection itself says it.**
+ *
+ * A projected pitcher can earn one decision or the other and never both, so a
+ * line offering him `0.4 W` *and* `0.0 SVHD` is spending a term on a category
+ * he is not in. Which one he is in is not a fact this file has to guess at —
+ * the engine has already answered it, in the credits it projected.
+ *
+ * **The credits lead, innings break the tie.** A man with more saves and holds
+ * coming than wins is out of the bullpen; equal (which in practice means both
+ * nought) is settled by whether the outs look like a turn. Nine — three
+ * innings — is the line, and it is the case that made the tie-break necessary
+ * rather than a default: measured on the live league, Walbert Ureña projects
+ * `5.3 IP · 0.40 W · 0.00 SVHD` and is a starter on the credits alone, but Ian
+ * Seymour projects `3.1 IP · 0.00 W · 0.00 SVHD` — a starter with no credit
+ * either way, whom a bare `wins >= svhd` test would have called a starter by
+ * accident and a `wins > svhd` test would have called a reliever outright. His
+ * innings are what say it.
+ *
+ * Checked over both rosters' pitchers on one read: six relievers at 0.3–0.5 IP
+ * all called relievers, the two men with a turn both called starters, and
+ * Adrian Morejon — `0.5 IP · 0.10 W · 0.20 SVHD`, credits on both sides —
+ * called a reliever by the larger of the two.
+ */
+function projectedRole(line: DayLine): 'starter' | 'reliever' {
+  const p = line.pitching;
+  if (!p) return 'reliever';
+  if (p.saves + p.holds > p.wins) return 'reliever';
+  return p.outs >= 9 ? 'starter' : 'reliever';
+}
+
+/** The decision categories, by which role can earn one. A league scoring `SV`
+ *  and `HD` separately is covered by the same two sets, which is why they are
+ *  sets of ids rather than a test on `SVHD`. */
+const STARTER_DECISIONS = new Set([53, 54]); // W, L
+const RELIEF_DECISIONS = new Set([56, 57, 58, 59, 60, 83]); // SVO, SV, BS, SV%, HD, SVHD
+
 function projSummary(
   kind: 'batter' | 'pitcher',
   line: DayLine,
@@ -244,7 +281,17 @@ function projSummary(
   const side = kind === 'pitcher' ? 'pitching' : 'batting';
   const group = categoryGroups(categories).find((g) => g.side === side);
   if (!group || group.categories.length === 0) return '—';
+  // **One decision, not both.** The categories he cannot earn are dropped
+  // rather than printed at nought — see `projectedRole`. The rest keep the
+  // block's own order, so what is left still reads against the header above it.
+  const relief = side === 'pitching' && projectedRole(line) === 'reliever';
+  const starter = side === 'pitching' && !relief;
   return group.categories
+    .filter(
+      (c) =>
+        !(relief && STARTER_DECISIONS.has(c.statId)) &&
+        !(starter && RELIEF_DECISIONS.has(c.statId)),
+    )
     .map((c) => {
       const v = categoryTotal(c, line);
       if (v === null || !Number.isFinite(v)) return `— ${c.label}`;
