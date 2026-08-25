@@ -37,6 +37,7 @@ import {
   useHandedness,
   usePlayerStatus,
   usePublishedHeight,
+  useScoringCategories,
 } from '../hooks';
 import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS } from '../types';
 import type {
@@ -1229,9 +1230,11 @@ export function ResearchTable({
    * arithmetic for the measured set, and the reader's saved measured list
    * surviving a press of the toggle untouched.
    */
+  const scoringCategories = useScoringCategories();
   const vocabulary = useMemo(
-    () => (projectedOn ? projectedColumns(kind, projection.oneDay) : allColumns),
-    [projectedOn, projection, kind, allColumns],
+    () =>
+      projectedOn ? projectedColumns(kind, projection.oneDay, scoringCategories) : allColumns,
+    [projectedOn, projection, kind, allColumns, scoringCategories],
   );
   const columnsByKey = useMemo(
     () => new Map(vocabulary.map((c) => [c.key, c])),

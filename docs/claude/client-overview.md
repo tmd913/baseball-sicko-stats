@@ -887,3 +887,72 @@ from, and for the per-day lineup read. **Client — the roster view** for the
 table `See the day →` lands on, and **Client — the date bar** for the presets it
 carries. **Client** for `today`, the tab strip and the loading discipline every
 block follows.
+
+
+---
+
+## The performer lists say what they are
+
+`TOP PERFORMERS`, over the three rows on every day card. They were three named
+rows under a category line with nothing between them, and the reading had to be
+inferred from the shape — a rank, a face and a figure, which is a leaderboard
+but not necessarily one *of* anything a reader could name. The card's head says
+which day; this says what the rows under it are.
+
+The heading carries the `title` that names which categories the ranking was made
+over — the fact the `See the day` button used to hold. A caption spelling them
+out was cut for being on every card; a *heading* that is on every card is where
+a fact of that kind belongs.
+
+---
+
+## Trending players
+
+A fourth block, last on the page: **who the league has been picking up over the
+last day**, in three rows of ten side-scrolling cards.
+
+It is the one block here that is not about a roster. Every other card answers
+*how is my week going*; this answers *what is everybody else doing about
+theirs* — which is the question the research board's `Ros%` and `Δ` columns
+exist for, read there by sorting six hundred rows and read here by looking. Last
+on the page for that reason: it is the block a reader scrolls to rather than
+lands on.
+
+**One day, not seven.** `TREND_WINDOWS` offers five and this takes the shortest,
+because a section called *trending* is about what happened overnight: a man
+added in three thousand leagues since yesterday is news, and the same man a week
+into a run is a player the reader has already decided about. The longer windows
+stay where they are useful, which is beside a stat line you can sort.
+
+**Risers only.** A drop is a fact about a player nobody is picking up, and a row
+of them is a list of men the reader has no decision to make about — where every
+card here is one press from his page and a possible add. The board's own `Δ`
+columns carry both directions and are the place for that reading.
+
+**Three rows split by seat, not by kind.** A manager streaming a starter and a
+manager chasing saves are two different errands, and a mixed list makes each
+scan past the other's answers. `eligible` decides — ESPN's own positions, the
+same join the padlock and the slot chip run on — so a swingman ESPN lists at
+both reads as a starter, which is what a league that lets you start him there
+means by it. A pitcher ESPN cannot place falls to `starter`.
+
+**Built in `App`, drawn here.** Every input is App's and none is the view's: the
+ownership read's trend windows, the roster percentages beside them, the season
+roster for a name and a club, `teamById` for the abbreviation and ESPN's
+eligibility for the seat. The view draws cards.
+
+**The club is the abbreviation.** `SeasonPlayer.team` is the full name — right
+in a table cell and three characters too many on a 116px card: measured, every
+card on the rail ellipsized its second line and half of them lost the position
+with it.
+
+**It needs a connected league and says nothing without one.** Roster percentages
+are ESPN's, so a reader with no league has no trend to draw and the block is
+absent rather than empty. So is a quiet morning on which nobody moved.
+
+The rail scrolls sideways rather than wrapping: ten cards is two lines on a
+desktop and five on a phone, and a block that changes height by three lines
+between widths is a page that reads differently on every screen. It bleeds
+through the app's gutters so the rail reaches the glass, which is what says
+*there is more of this*; `overscroll-behavior-x: none` in the one axis it
+scrolls, the app's standing rule.

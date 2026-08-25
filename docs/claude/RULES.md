@@ -301,6 +301,15 @@ monochrome; a live inning, a postponement, a lineup pip and a role tint are what
 color means. Where a scale genuinely *is* the reading (the League rankings'
 rank badge), it is argued where it sits.
 
+**One arithmetic, one implementation.** The figure that ranks the Overview's top
+performers (`categoryValue.ts::dayValue`) is the same figure the roster lens's
+`Value` column and the research lens's `VAL` column print — one scorer, two
+adapters, and `ScoringCategoriesContext` so every surface scores against the
+same set. The Overview's is **one day** and the two projected columns are **the
+whole span undivided**, which is the reading a projected board is opened for
+(six games of a good hitter outscore three of an equal one); the titles say
+which, because the two are not comparable.
+
 **An estimate never wears the same clothes as a measurement.** A dotted
 percentile bubble, a hatched split fill, a dashed projected chip, a muted
 projected row: solid means measured, broken means ours.

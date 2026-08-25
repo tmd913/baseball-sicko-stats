@@ -21213,6 +21213,20 @@ html[data-theme='light'] .league-table thead th {
 }
 
 /* ---- The top performers ------------------------------------------------- */
+/* **What the three rows under it are.** The same weight and tone as a standings
+   block's own title (`.mlb-standings-title`) and the League page's group heads —
+   a small uppercase label over a list, which is this app's one shape for *this
+   is what follows*. It is folded onto neither, the two being in trees that share
+   no other rule; what it does share is the tokens, so they cannot drift apart in
+   a theme. */
+.ov-perfs-head {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .ov-perfs {
   list-style: none;
   margin: 8px 0 0;
@@ -21352,6 +21366,20 @@ html[data-theme='light'] .league-table thead th {
    that need it, which is every card that has anything in it. Put on the list
    and the message instead, the two compose — 8px minimum, and `auto` takes
    whatever is left over. */
+/* **What the three rows under it are.** The same weight and tone as a standings
+   block's own title (`.mlb-standings-title`) and the League page's group heads —
+   a small uppercase label over a list, which is this app's one shape for *this
+   is what follows*. It is folded onto neither, the two being in trees that share
+   no other rule; what it does share is the tokens, so they cannot drift apart in
+   a theme. */
+.ov-perfs-head {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .ov-perfs {
   margin-bottom: 8px;
 }
@@ -21882,4 +21910,135 @@ html[data-theme='light'] .league-table thead th {
   .mlb-side-score {
     font-size: 15px;
   }
+}
+
+
+/* ---- Trending players, on the Overview ----------------------------------
+   Three side-scrolling rows of ten cards — who the league has been picking up
+   over the last day. It is the one block on that page not about a roster, and
+   the only one whose content is a *row* rather than a column, which is why it
+   has rules of its own rather than folding onto the day cards above it: a day
+   card is a pane with a head, a list and a foot, and this is a rail. */
+.ov-trending {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.trend-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* The seat, over the rail it names. `.ov-perfs-head`'s own shape — a small
+   uppercase label over a list — folded on rather than restated, the two being
+   the same statement on one page. */
+.trend-row-head,
+.ov-perfs-head {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* **The rail scrolls sideways and the page does not.** `overscroll-behavior-x`
+   in the one axis this box genuinely scrolls — the app's standing rule — so a
+   flick that runs off the tenth card cannot spring the page behind it. `none`
+   rather than `contain` for `.summary-scroll`'s stated reason: `contain` keeps
+   the element's own iOS bounce, which is the thing being complained about.
+
+   It bleeds through the app's gutters so the rail reaches the glass, which is
+   what says *there is more of this* on a phone — the same `--table-bleed` every
+   wide table on the page takes, with the padding put back inside so the first
+   card still lines up with the headings above it. */
+.trend-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+  margin-inline: calc(-1 * var(--table-bleed, 0px));
+  padding-inline: var(--table-bleed, 0px);
+}
+.trend-scroll::-webkit-scrollbar {
+  display: none;
+}
+.trend-cards {
+  display: flex;
+  gap: 10px;
+  width: max-content;
+}
+/* A card is a `<button>` — every one of them is a door into that player's page,
+   and a door has to be in the tab order and answer a keyboard. `flex: none` is
+   load-bearing: in a scrolling row a card that may shrink is a card that will,
+   and ten of them would squeeze to fit rather than overflow. */
+.trend-card {
+  flex: none;
+  width: 116px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px 9px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+}
+/* Hover is scoped, the standing rule for a pressable surface: a touch device
+   has no pointer to move away, so the tint sticks to the last card a finger
+   crossed and reads as a selection the app then declines to act on. */
+@media (hover: hover) {
+  .trend-card:hover {
+    background: var(--panel-2);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  }
+}
+.trend-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.trend-card-face {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-2);
+}
+.trend-card-name {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trend-card-meta {
+  font-size: 10px;
+  color: var(--faint);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* **The move is the reading, so it is the one figure that gets a color** — and
+   it is `--hit` because every card on this rail is a riser, which is the app's
+   rule that color is spent on state rather than on emphasis: the state here is
+   *going up*, and it is what the row is sorted by. */
+.trend-card-delta {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--hit);
+  font-variant-numeric: tabular-nums;
+}
+/* …and the level it moved from, which is the context that says whether four
+   points is a pickup nobody had or a man half the league already owns. Muted,
+   because it is not the reading. */
+.trend-card-pct {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }

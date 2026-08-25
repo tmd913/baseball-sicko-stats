@@ -1478,6 +1478,23 @@ export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
 export interface ResearchRow {
   id: number;
   name: string;
+  /**
+   * **Hit by pitch and sacrifice flies, on a projected row and nowhere else.**
+   *
+   * No column prints either, and the measured board does not carry them: they
+   * are here because the client scores a projected line against the reader's
+   * league categories (`categoryValue.ts`), and on-base percentage is the one
+   * rate in baseball whose denominator is not the obvious one — `AB + BB + HBP +
+   * SF`. Every other term that arithmetic needs is on the row or falls out of
+   * what is; these two do not, and a league scoring OBP or OPS would otherwise
+   * be scored two terms short of its own denominator.
+   *
+   * Optional because the measured board has no use for them and no reader of
+   * one, which is this repo's own rule read forwards: a field is added with its
+   * first reader, not before it.
+   */
+  hbp?: number;
+  sf?: number;
   savantName: string;
   kind: PlayerKind;
   team: string; // "MIL" — the abbreviation; a full name is column-wide

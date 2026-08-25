@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api } from './api';
 import { SignOutButton, Splash } from './auth';
 import { playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
+import { STANDARD_5X5 } from './categoryValue';
 import type {
   BoardProjection,
   EspnOwnership,
@@ -94,6 +95,7 @@ import {
 import type { ScheduleSpan, TurnDays } from './components/schedule';
 import {
   EligibilityContext,
+  ScoringCategoriesContext,
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
@@ -155,7 +157,8 @@ import LeagueView, {
   showingProjected,
 } from './components/LeagueView';
 import LeagueMatchupView, { MatchupButton, SummaryToggle } from './components/LeagueMatchup';
-import OverviewView from './components/OverviewView';
+import OverviewView, { TRENDING_TOP } from './components/OverviewView';
+import type { TrendingBoard, TrendingPlayer } from './components/OverviewView';
 import type { MatchupReading } from './components/LeagueMatchup';
 import type { LeagueTab } from './components/LeagueView';
 import MlbView, { MLB_TABS } from './components/MlbView';
@@ -5844,6 +5847,97 @@ export default function App() {
    * `detailsPlayer`'s own standing behavior rather than a rule invented here:
    * it renders the page only for a key one of its two sources can resolve.
    */
+  /**
+   * **The categories the reader's league scores**, or the standard 5×5 without
+   * one — the set every projected value on the app is computed against.
+   *
+   * It is `OverviewView`'s own line lifted up here, and lifted because it now
+   * has three readers rather than one: that page's top-performer ranking, the
+   * research board's projected `VAL` column and the roster lens's. Three copies
+   * of `board?.categories?.length ? … : STANDARD_5X5` would be three things
+   * that agree today, and the one that drifted would rank a player differently
+   * on two pages of the same app.
+   */
+  const scoringCategories = useMemo(
+    () => (scoreboard?.categories?.length ? scoreboard.categories : STANDARD_5X5),
+    [scoreboard],
+  );
+
+  /**
+   * **Who the league has been picking up over the last day** — the Overview's
+   * Trending block, in three rows of ten.
+   *
+   * Built here rather than in the view because every input is App's already and
+   * none of them is the view's: the ownership read's own trend windows, the
+   * roster percentages beside them, the season roster for a name and a club,
+   * and ESPN's eligibility for the seat. The view draws cards.
+   *
+   * **The one-day window**, which is `TREND_WINDOWS`' shortest. A section called
+   * *trending* is about what happened overnight; the longer windows stay where
+   * they are useful, which is as sortable columns on the research board.
+   *
+   * **Risers only.** A drop is a fact about a player nobody is picking up, and
+   * a row of them is a list of men the reader has no decision to make about —
+   * where every card here is one press from his page and a possible add. The
+   * board's own `Δ` columns carry both directions and are the place for that
+   * reading.
+   *
+   * **The seat comes from ESPN's eligibility**, the same join the padlock and
+   * the slot chip run on, so a swingman listed at both reads as a starter —
+   * which is what a league that lets you start him there means by it. A pitcher
+   * ESPN cannot place falls to `starter`, the app's own answer for one.
+   */
+  const trending = useMemo<TrendingBoard | null>(() => {
+    const day = rosterTrend?.find((w) => w.window === 1);
+    if (!day || knownPlayers.length === 0) return null;
+    const rows: (TrendingPlayer & { seat: keyof TrendingBoard })[] = [];
+    for (const p of knownPlayers) {
+      const delta = day.delta.get(p.id);
+      // Absent is flat and `null` is withheld — `rosterTrends`' own two
+      // absences, read the same way here.
+      if (delta == null || delta <= 0) continue;
+      const espnPositions = eligibility?.get(p.id) ?? null;
+      const seat: keyof TrendingBoard =
+        p.kind === 'batter'
+          ? 'batters'
+          : espnPositions
+            ? espnPositions.includes('SP')
+              ? 'starters'
+              : 'relievers'
+            : 'starters';
+      rows.push({
+        id: p.id,
+        name: p.name,
+        // **The abbreviation, not the club's name.** `SeasonPlayer.team` is the
+        // full one — `Boston Red Sox` — which is the right thing in a table
+        // cell and three characters too many on a 116px card: measured, every
+        // card on the rail ellipsized its second line and half of them lost the
+        // position with it. `teamById` is the app's own list and is already
+        // held here for the header search and the board's team rows.
+        // `teamId` is null for a free agent nobody has signed, whose card then
+        // falls back to the name the season roster gave him — the join-to-null
+        // rule, one cell wide.
+        team: (p.teamId !== null ? teamById.get(p.teamId)?.abbreviation : null) || p.team,
+        position: espnPositions?.join('/') || p.position || '',
+        kind: p.kind,
+        rosterPct: rosterPct?.get(p.id) ?? null,
+        delta,
+        seat,
+      });
+    }
+    rows.sort((a, b) => b.delta - a.delta);
+    const take = (seat: keyof TrendingBoard): TrendingPlayer[] =>
+      rows.filter((r) => r.seat === seat).slice(0, TRENDING_TOP);
+    const board = {
+      batters: take('batters'),
+      starters: take('starters'),
+      relievers: take('relievers'),
+    };
+    // Nobody moved anywhere, which on a quiet morning is a real answer — and
+    // the block says nothing rather than drawing three empty rows.
+    return board.batters.length || board.starters.length || board.relievers.length ? board : null;
+  }, [rosterTrend, rosterPct, knownPlayers, eligibility, teamById]);
+
   /** Every player the season roster can place — what decides whether a league
    *  news row's name is a door, `openLeaguePlayer` below being the door itself
    *  and needing the very same list to pick his kind. A `Set` because the feed
@@ -7834,6 +7928,12 @@ export default function App() {
         summary table's identity block, which is three components down from here
         and is the only leaf that wants it. Null with no league, which is what
         makes that block fall back to MLB's own listed position. */}
+    {/* What counts as a good day — the categories the reader's league scores,
+        or the standard 5×5 without one. Read by every surface that prints a
+        projected `Value`: the roster table on this page, the same table inside
+        a matchup's team page, and the research board's own lens. See
+        `scoringCategories`. */}
+    <ScoringCategoriesContext.Provider value={scoringCategories}>
     <EligibilityContext.Provider value={eligibility}>
     {/* Who has been in the news today or yesterday — read by the mark beside
         a name on both roster tables and on the player page's own heading. Null
@@ -8771,6 +8871,8 @@ export default function App() {
           /* The projected block's names: a projected line carries a key, an id
              and a kind and no name at all. */
           knownPlayers={knownPlayers}
+          /* Who the league is picking up — see `trending`. */
+          trending={trending}
           dates={overviewDates}
           onOpenPlayer={openLeaguePlayer}
           onSeeDay={openOverviewDay}
@@ -9396,6 +9498,7 @@ export default function App() {
     </HandednessContext.Provider>
     </RecentNewsContext.Provider>
     </EligibilityContext.Provider>
+    </ScoringCategoriesContext.Provider>
     </PlayerStatusContext.Provider>
     </FantasyRosterContext.Provider>
     </MutedContext.Provider>

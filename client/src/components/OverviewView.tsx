@@ -46,6 +46,7 @@ import type {
   EspnCategory,
   EspnScoreboard,
   EspnStandingsTeam,
+  PlayerKind,
   PlayerReport,
   RosterProjection,
   SeasonPlayer,
@@ -521,19 +522,36 @@ function DayBlock({
                     : 'No games played yet.'}
             </p>
           ) : (
-            <ol className="ov-perfs">
-              {top.map((p, i) => (
-                <li key={p.key}>
-                  <PerformerRow
-                    rank={i + 1}
-                    p={p}
-                    projected={projected}
-                    categories={categories}
-                    onOpenPlayer={onOpenPlayer}
-                  />
-                </li>
-              ))}
-            </ol>
+            <>
+              {/* **The list says what it is.** It was three named rows under a
+                  category line with nothing between them, and the reading had to
+                  be inferred from the shape — a rank, a face and a figure, which
+                  is a leaderboard but not necessarily one *of* anything a reader
+                  could name. The card's own head says which day; this says what
+                  the rows under it are, which is the one thing on the card that
+                  was being left to be worked out.
+
+                  `title` carries which categories the ranking was made over,
+                  where the `See the day` button used to hold it: a caption
+                  naming them was cut for being on every card, and a heading that
+                  *is* on every card is the right place for the fact to live. */}
+              <h4 className="ov-perfs-head" title={categoriesTitle}>
+                Top Performers
+              </h4>
+              <ol className="ov-perfs">
+                {top.map((p, i) => (
+                  <li key={p.key}>
+                    <PerformerRow
+                      rank={i + 1}
+                      p={p}
+                      projected={projected}
+                      categories={categories}
+                      onOpenPlayer={onOpenPlayer}
+                    />
+                  </li>
+                ))}
+              </ol>
+            </>
           )}
           {/* **The foot is one control, where it was a caption and a control.**
               `10 LEAGUE CATEGORIES` sat at the left end of every card saying
@@ -559,6 +577,141 @@ function DayBlock({
           )}
         </>
       )}
+    </section>
+  );
+}
+
+/* ---- Trending players ---------------------------------------------------- */
+
+/**
+ * **Who the league is picking up**, in three rows of ten.
+ *
+ * The one block on this page that is not about the reader's own roster. Every
+ * other card here answers *how is my week going*; this answers *what is
+ * everybody else doing about theirs*, which is the question the research
+ * board's `Ros%` and `Δ` columns exist for — read there by sorting six hundred
+ * rows, and read here by looking.
+ *
+ * **One day, not seven.** The board offers five windows and this takes the
+ * shortest, because a section called *trending* is about what happened
+ * overnight: a man added in three thousand leagues since yesterday is news, and
+ * the same man a week into a run is a player the reader has already decided
+ * about. The longer windows stay where they are useful, which is beside a stat
+ * line you can sort.
+ *
+ * **Three rows rather than one of thirty**, and the split is by seat rather than
+ * by kind: a manager streaming a starter and a manager chasing saves are two
+ * different errands, and a mixed list makes each of them scan past the other's
+ * answers. It is `eligible` that says which — ESPN's own positions, the same
+ * join the padlock and the slot chip run on — so a swingman ESPN lists at both
+ * reads as a starter, which is what a league that lets you start him there
+ * means by it.
+ *
+ * **It needs a connected league and says nothing without one.** Roster
+ * percentages are ESPN's, so a reader with no league has no trend to draw and
+ * the block is absent rather than empty — the app's rule that a section with
+ * nothing to say is not a section.
+ */
+
+/** One card. The identity, what share of leagues have him now, and the move
+ *  that put him on this list. */
+export interface TrendingPlayer {
+  id: number;
+  name: string;
+  team: string;
+  /** ESPN's own, where there is one — `SP`, `RP`, `2B/SS`. Falls back to MLB's
+   *  listed position, which is what the roster tables do for a player ESPN
+   *  cannot be joined to. */
+  position: string;
+  kind: PlayerKind;
+  /** Share of leagues rostering him now, or null where ESPN gave none. */
+  rosterPct: number | null;
+  /** The move over the last day, in points of roster percentage. Always
+   *  positive on this list — see `TRENDING_MIN`. */
+  delta: number;
+}
+
+export interface TrendingBoard {
+  batters: TrendingPlayer[];
+  starters: TrendingPlayer[];
+  relievers: TrendingPlayer[];
+}
+
+/** How many each row holds. Ten is what the reader asked for and is about what
+ *  a row can show before it stops being a glance and becomes a table. */
+export const TRENDING_TOP = 10;
+
+const TRENDING_ROWS: { key: keyof TrendingBoard; label: string }[] = [
+  { key: 'batters', label: 'Batters' },
+  { key: 'starters', label: 'Starting Pitchers' },
+  { key: 'relievers', label: 'Relievers' },
+];
+
+function TrendingCard({
+  p,
+  onOpenPlayer,
+}: {
+  p: TrendingPlayer;
+  onOpenPlayer: (id: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="trend-card"
+      onClick={() => onOpenPlayer(p.id)}
+      title={`${p.name} — open his page`}
+    >
+      <img className="trend-card-face" src={headshotUrl(p.id)} alt="" loading="lazy" />
+      <span className="trend-card-name">{surname(p.name)}</span>
+      <span className="trend-card-meta">
+        {p.team}
+        {p.position ? ` · ${p.position}` : ''}
+      </span>
+      {/* **The move is the reading and the level is the context**, in that
+          order and at that weight: the row is sorted by the first, and the
+          second is what says whether a 4-point move is a pickup nobody had or a
+          man half the league already owns. */}
+      <span className="trend-card-delta">+{p.delta.toFixed(1)}</span>
+      <span className="trend-card-pct">
+        {p.rosterPct === null ? '\u2014' : `${p.rosterPct.toFixed(0)}% rostered`}
+      </span>
+    </button>
+  );
+}
+
+function TrendingBlockView({
+  trending,
+  onOpenPlayer,
+}: {
+  trending: TrendingBoard;
+  onOpenPlayer: (id: number) => void;
+}) {
+  const rows = TRENDING_ROWS.filter((r) => trending[r.key].length > 0);
+  if (rows.length === 0) return null;
+  return (
+    <section className="ov-trending">
+      <h3 className="ov-heading">
+        Trending Players
+        <span className="ov-heading-note">added most in the last day</span>
+      </h3>
+      {rows.map((r) => (
+        <div className="trend-row" key={r.key}>
+          <h4 className="trend-row-head">{r.label}</h4>
+          {/* Side-scrolling rather than wrapping: ten cards is two lines on a
+              desktop and five on a phone, and a block that changes height by
+              three lines between widths is a page that reads differently on
+              every screen. `overscroll-behavior-x` keeps a flick that runs off
+              the end from springing the page behind it — the app's standing
+              rule, in the one axis this box genuinely scrolls. */}
+          <div className="trend-scroll">
+            <div className="trend-cards">
+              {trending[r.key].map((p) => (
+                <TrendingCard key={`${p.kind}-${p.id}`} p={p} onOpenPlayer={onOpenPlayer} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -764,6 +917,7 @@ export default function OverviewView({
   loadingTomorrow,
   loadingTodayProjection,
   knownPlayers,
+  trending,
   dates,
   onOpenPlayer,
   onSeeDay,
@@ -772,6 +926,10 @@ export default function OverviewView({
 }: {
   board: EspnScoreboard | null;
   onOpenMatchup: (id: number) => void;
+  /** Who the league has been picking up over the last day, in three rows — see
+   *  `TrendingBlockView`. Null with no connected league, whose roster
+   *  percentages these are, and the block is absent rather than empty. */
+  trending: TrendingBoard | null;
   /** The three reads. Null means *not answered yet*; an empty array means
    *  *answered, and there is nobody* — the two are drawn differently and the
    *  distinction is the whole of why these are nullable. */
@@ -1214,6 +1372,12 @@ export default function OverviewView({
           />
         </>
       )}
+      {/* **Last on the page**, under both sets of days, and that is the order
+          the page has always run in: the reader's own week, then his
+          opponent's, then the league's. It is the only block here that is not
+          about a roster at all, so it is the one a reader scrolls to rather
+          than lands on. */}
+      {trending && <TrendingBlockView trending={trending} onOpenPlayer={onOpenPlayer} />}
     </div>
   );
 }
