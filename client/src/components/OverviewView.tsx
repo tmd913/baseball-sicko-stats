@@ -180,7 +180,13 @@ function pitchSummary(line: DayLine): string {
   const p = line.pitching;
   if (!p) return '—';
   const parts = [`${formatIp(p.outs)} IP`, `${p.strikeouts} K`, `${p.earnedRuns} ER`];
-  if (p.hits + p.walks > 0) parts.push(`${p.hits + p.walks} BR`);
+  // **The hits and the walks, not the baserunners they add up to.** `5 BR` is
+  // the WHIP numerator and nothing a reader thinks in: five hits and no walks
+  // is a different outing from one hit and four, and the line was spending a
+  // term to hide which. Each is dropped when it is nought rather than printed
+  // as one, the row being a phrase rather than a box score.
+  if (p.hits) parts.push(`${p.hits} H`);
+  if (p.walks) parts.push(`${p.walks} BB`);
   if (p.wins) parts.push('W');
   if (p.saves) parts.push('SV');
   if (p.holds) parts.push('HD');
@@ -296,7 +302,10 @@ function PerformerRow({
     ? projSummary(p.kind, p.line)
     : p.kind === 'pitcher'
       ? pitchSummary(p.line)
-      : lineSummary(p.line.batting ?? NO_BATTING);
+      : // **No strikeouts on a ranking row** — see `lib.ts::lineSummary`, where the
+        // option is argued: the line under the name is here to say why this man
+        // is first today, and a strikeout is never why.
+        lineSummary(p.line.batting ?? NO_BATTING, { strikeouts: false });
   return (
     <button
       type="button"
