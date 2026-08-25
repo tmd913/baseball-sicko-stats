@@ -746,6 +746,18 @@ const PROJ_TIER_TITLE: Record<'announced' | 'projected' | 'estimated', string> =
  * them would be a summary of nothing; the roster's projected reading reached
  * the same answer and states it in the same words (*The Opponent column becomes
  * `G`*).
+ *
+ * **And the roster follows on the single day too**, which it did not for a
+ * while: that table went on dropping the cell over every span, so one reader
+ * narrowing to one date got the fixture on this board and `G` alone on his own
+ * roster. One question, two answers, decided by which table you were looking
+ * at. See *…except on a single day, where both are drawn* in
+ * **The Roster view**.
+ *
+ * **It is not in the Columns picker**, and that is the other half of drawing it
+ * at all — see `ResearchTable`'s `pickerColumns` and `toProjectedColumnKeys`: a
+ * column whose existence comes and goes with the span cannot record a decision
+ * over the span that never had it.
  */
 export const projectedOpponentColumn = (): Column => ({
   key: OPPONENT_KEY,
@@ -853,7 +865,33 @@ export function toProjectedColumnKeys(
   if (!keys) return null;
   const known = new Set(projectedColumns(kind, oneDay).map((c) => c.key));
   const kept = keys.filter((k) => known.has(k));
-  return kept.length > 0 ? kept : null;
+  if (kept.length === 0) return null;
+  /**
+   * **A column that only exists on one day cannot have been turned off on a
+   * span that had no such column**, so its absence from a saved list is not a
+   * decision and it leads the list back in.
+   *
+   * This is the mirror of the narrowing above and it is the half that was
+   * missing. A list saved over a *range* is saved out of a vocabulary the
+   * opponent is not in — the picker never offered it, there being one fixture
+   * per row of a week and no honest cell to draw — so the key is absent for the
+   * same reason `xwOBA` is: nobody was asked. Narrowing to a single day then
+   * read that absence as an answer, and the board came back with `G` where the
+   * one column a single day is read for should be. Measured on the live
+   * install: the pitching board's stored list (14 keys, saved over `Week 20`)
+   * drew no `Opp` on 2026-08-25 while the batting board — which had no stored
+   * list at all and so fell through to the defaults — drew it.
+   *
+   * **The reader can still not have it**, and it is the picker rather than this
+   * that says so: `Opp` is left out of the list the Columns dialog is handed
+   * under the lens, so there is no tick here to fight. A key the dialog cannot
+   * resolve is carried through its own reorder untouched (`ColumnPicker`'s
+   * `commit`), which is what keeps the two halves of that arrangement in step.
+   * See **The research board**, *The columns are the reader's under the lens
+   * too*.
+   */
+  if (oneDay && !kept.includes(OPPONENT_KEY)) kept.unshift(OPPONENT_KEY);
+  return kept;
 }
 
 // ---- Which columns show ---------------------------------------------------

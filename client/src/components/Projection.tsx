@@ -130,7 +130,10 @@ export function ProjectionNote({
           has room for him. <b>A reliever&rsquo;s Games is a fraction on purpose.</b> Nobody
           knows which nights he warms up, so every game his club has left carries the share of
           an outing he is usually good for — half an appearance tonight is what a man used in
-          half his club&rsquo;s games is worth, and the line beside it is worth the same share.
+          half his club&rsquo;s games is worth, and the line beside it is worth the same share.{' '}
+          <b>Pick a single day and the table names each man&rsquo;s opponent for it</b> — over a
+          run of days it does not, a week being a week of fixtures and naming one of them a
+          summary of none.
         </p>
       )}
       <p>
