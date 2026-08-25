@@ -11769,10 +11769,12 @@ button.start-line:focus-visible {
   flex-direction: column;
   align-items: stretch;
 }
-/* The three doors and the `Clear` beside them. A row of its own above the
-   calendar, and it wraps: at a phone's width three pills and a button do not
-   always share a line, and a run that scrolled would be a second scroller
-   inside a panel that is already inside a scroller. */
+/* The three doors. A row of its own above the calendar, and it wraps: at a
+   phone's width three pills do not always share a line with whatever else the
+   run comes to hold, and a run that scrolled would be a second scroller inside
+   a panel that is already inside a scroller. (`Clear` stood here and is on the
+   head's own span line now — see `projSpanLine`, which sticks where this panel
+   does not.) */
 .research-proj-spans {
   display: flex;
   flex-wrap: wrap;
@@ -12367,6 +12369,16 @@ button.start-line:focus-visible {
      which would space every line in it — the panels above included, whose own
      rhythm is their business. */
   margin-bottom: 3px;
+  /* **A row, because the line carries its own way out.** `Clear` sits beside
+     the span rather than under it: the two are one statement — *this is what
+     the table is, and this is how to stop* — and a button on a line of its own
+     would cost the head a row on the one page where every pixel of head is a
+     row of the table. `flex-start` rather than `space-between`, so the button
+     is against the words instead of stranded at the far edge of a 1,900px
+     head. */
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .research-proj-lead {
   color: var(--accent);

@@ -1820,9 +1820,9 @@ H 5.9 · ER 3.4 · BB 2.1 · K 4.1 · ERA 5.92 · WHIP 1.56 · K/9 7.2` — 24.8
 faced over 15.4 outs, and the four rates recompute off the counts printed beside
 them.
 
-**Bundle: 678.09 → 687.23 KB of JS** (200.37 → 202.94 gzipped) and **176.48 →
-177.17 KB of CSS** (31.61 → 31.74) — 9.1KB of JS raw and 2.6KB over the wire,
-against **0.7KB of CSS given back** raw and 0.04 gzipped, for a second reading of
+**Bundle: 678.09 → 687.10 KB of JS** (200.37 → 202.93 gzipped) and **176.48 →
+177.21 KB of CSS** (31.61 → 31.75) — 9.0KB of JS raw and 2.6KB over the wire,
+against **0.7KB of CSS given back** raw and 0.03 gzipped, for a second reading of
 the app's widest table, a server route, a column vocabulary, a picker, a span
 control and a key. The stylesheet shrinking is the honest report: the accordion
 the key opened into needed a block of rules, and the popover it became needs one

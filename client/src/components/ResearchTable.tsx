@@ -3261,36 +3261,46 @@ export function ResearchTable({
              * measurement's clothes. Schedule mode still takes both off, the
              * day columns being a vocabulary nobody picks.
              */}
-            {!schedule && projectedOn && (
+            {/**
+             * **One button for both readings**, where it was briefly two — and
+             * the two had come to mean different things. The measured copy
+             * counts the columns **on the table** and the projected one counted
+             * the columns that **exist**, so the same control read `31` beside a
+             * 44-column vocabulary and `19` beside a table drawing 16. Written
+             * once, they cannot part again; what differs is only which entry the
+             * `customised` dot is about.
+             *
+             * `- 1` for the turn filter's `Start`, which is that filter's own
+             * column and in no vocabulary — counting it would put a `30` on a
+             * button whose panel has 29 things in it.
+             */}
+            {!schedule && (
               <ColumnsButton
                 open={columnsOpen}
-                count={vocabulary.length - (activeTurn ? 1 : 0)}
-                customised={!!projColumnKeys}
+                count={columns.length - (activeTurn ? 1 : 0)}
+                customised={projectedOn ? !!projColumnKeys : !!columnKeys}
                 onToggle={() => setPanel('columns', !columnsOpen)}
               />
             )}
+            {/**
+             * **Ranks is the half of the pair that genuinely has no subject
+             * under the lens.** A percentile is a standing among the
+             * *qualified* players on a measured board — Savant's own bar — and
+             * nobody qualifies for a week nobody has played; ranking an estimate
+             * against a field of estimates would put a solid badge under a
+             * number this app's rule says must never wear a measurement's
+             * clothes. Schedule mode takes both off, the day columns being a
+             * vocabulary nobody picks.
+             */}
             {!schedule && !projectedOn && (
               <>
-                {/* Columns reads last: the three before it decide *who* is in the
-                    table, where this changes what is shown about them. Shared with
-                    the player page's Stats tab (`ColumnsButton`), so the two cannot
-                    come to look like different controls. */}
-                <ColumnsButton
-                  open={columnsOpen}
-                  /* What the picker lists, which is not what is drawn while the
-                     turn filter is on: `Start` is that filter's own column and
-                     is in no vocabulary, so counting it here would put a `30` on
-                     a button whose panel has 29 things in it. */
-                  count={columns.length - (activeTurn ? 1 : 0)}
-                  customised={!!columnKeys}
-                  onToggle={() => setPanel('columns', !columnsOpen)}
-                />
-                {/* And Ranks after it, which is the order the two are read in:
-                    Columns decides which numbers are on screen, this decides
-                    whether each of them carries a second reading. It is the run's
-                    other panel-less toggle, so it takes `.on` and never `.active`,
-                    exactly as Watchlist does. Shared with the Stats tab's caption
-                    row (`RanksButton`), for the reason `ColumnsButton` is. */}
+                {/* Ranks reads after Columns, which is the order the two are
+                    read in: Columns decides which numbers are on screen, this
+                    decides whether each of them carries a second reading. It is
+                    the run's other panel-less toggle, so it takes `.on` and
+                    never `.active`, exactly as Watchlist does. Shared with the
+                    Stats tab's caption row (`RanksButton`), for the reason
+                    `ColumnsButton` is. */}
                 <RanksButton
                   on={showRanks}
                   onToggle={() => onShowRanksChange(!showRanks)}
@@ -3433,15 +3443,15 @@ export function ResearchTable({
        * shut on it would take the calendar away in the same frame it drew it.
        * Picking on the calendar closes it, that press being the answer.
        *
-       * **`Clear` is always drawn while the lens is on.** It was drawn only
-       * where no pill was lit, on the reasoning that a lit pill is its own way
-       * off — press `Week 20` again and the lens goes, the rule the turn
-       * filter's day strip keeps for its own last day. That rule is true and it
-       * is not *findable*: nothing on a lit pill says it is also a switch, and
-       * a reader looking for the way back to the measured board has no reason
-       * to press the thing that is already selected. Reported as exactly that.
-       * One button that says what it does beats a gesture that has to be
-       * explained.
+       * **The way out is not in here**, and it has moved twice. Pressing the
+       * lit pill off was the first answer — the rule the turn filter's day strip
+       * keeps for its own last day — and it is true and not *findable*: nothing
+       * on a lit pill says it is also a switch. A `Clear` in this row was the
+       * second, and it is only reachable with the panel open, which is the one
+       * state a reader who wants the measured board back is not in. It rides on
+       * the head's own span line now (`projSpanLine`), which sticks — so it is
+       * on screen at row 400 and inside the expanded box, where this panel is
+       * neither.
        */}
       {projectedOpen && (
         <div className="research-panel research-proj-panel">
@@ -3476,18 +3486,6 @@ export function ResearchTable({
                 Custom
               </button>
             </div>
-            {projected && (
-              <button
-                type="button"
-                className="research-clear"
-                onClick={() => {
-                  onUiChange((u) => ({ ...u, panels: { ...u.panels, projected: false, projCustom: false } }));
-                  onProjSpanChange(null);
-                }}
-              >
-                Clear
-              </button>
-            )}
           </div>
           {/* **The calendar, at the panel's own width.** It is 260px inside the
               app's popover, where the box is what the popover can afford; here
@@ -3654,7 +3652,8 @@ export function ResearchTable({
   );
 
   /**
-   * **What the lens is reading, in the head.**
+   * **What the lens is reading, and the way out of it** — the last thing in the
+   * head before the count.
    *
    * The board's own version of the caption the Roster's projected reading once
    * had and retired. That one went because the date bar eight pixels above it
@@ -3665,18 +3664,27 @@ export function ResearchTable({
    * stated, and the head is the one box on this page that sticks and that the
    * expanded mode keeps.
    *
-   * **The days left matter as much as the dates.** A span whose clubs are
-   * mostly idle projects a board of dashes, and the count line directly under
-   * this one would then be the only number on screen — a table that looks
-   * broken with nothing to explain it. `5 days still to play` against a
-   * five-day span says the lens is drawing all of it; `1 day` against the same
-   * span says most of it has been played.
+   * **`Projected · Wed, Aug 26`, and no count of days.** It read `· 1 day still
+   * to play` for a round, on the argument that a span whose clubs are mostly
+   * idle draws a board of dashes and the count line under it would be the only
+   * number on screen. That case is real and it is the *zero* case, which the
+   * branch below still says in full; between one day and fourteen the figure
+   * was arithmetic the reader can do off the dates beside it, spent on the one
+   * line this head has for saying what the table is.
+   *
+   * **`Clear` rides on it**, which is what makes the lens undoable from where
+   * it is *stated* rather than only from inside the control that set it: this
+   * line is in the sticky head, so it is on screen at row 400 and inside the
+   * expanded box, where the button is neither. It is the panel's own `Clear`
+   * moved rather than a second one — one control for one action, and this is
+   * the reachable place for it.
    *
    * **At none the span is not printed at all**, and the line becomes the whole
    * sentence: naming a projected span there would be the lens taking credit for
-   * figures it did not touch. Reached by an inbound `?bproj=1` over a past
-   * range — every span the panel offers starts today, so a press cannot land
-   * here.
+   * figures it did not touch. Reached by an inbound `?bproj=1` over a past range
+   * — every span the panel offers starts today, so a press cannot land here —
+   * and it keeps the `Clear` beside it, that state being the one a reader most
+   * wants out of.
    *
    * Drawn only once the answer has landed. A line that named a span before the
    * server had clamped it (`start` is clamped forward to today) would be
@@ -3684,15 +3692,27 @@ export function ResearchTable({
    */
   const projSpanLine = projectedOn ? (
     <div className="research-proj-line">
-      {projection.daysLeft === 0 ? (
-        'Nothing to project — every game in these days has been played'
-      ) : (
-        <>
-          <span className="research-proj-lead">Projected</span> ·{' '}
-          {wideRange(projection.start, projection.end)} · {projection.daysLeft}{' '}
-          {projection.daysLeft === 1 ? 'day' : 'days'} still to play
-        </>
-      )}
+      <span>
+        {projection.daysLeft === 0 ? (
+          'Nothing to project — every game in these days has been played'
+        ) : (
+          <>
+            <span className="research-proj-lead">Projected</span> ·{' '}
+            {wideRange(projection.start, projection.end)}
+          </>
+        )}
+      </span>
+      <button
+        type="button"
+        className="research-clear"
+        onClick={() => {
+          setPanel('projected', false);
+          onProjSpanChange(null);
+        }}
+        title="Back to what has actually happened"
+      >
+        Clear
+      </button>
     </div>
   ) : null;
 
