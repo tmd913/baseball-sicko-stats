@@ -1180,6 +1180,46 @@ empty body means the server went away mid-answer, and anything else means
 something served the app in place of the API. The status rides along, so a
 caller that tests it still can.
 
+### And a truncated answer is retried, because it is not an answer
+
+**The readable message was half the fix and it made the other half visible.**
+With the parse failure named, the log said what the reader had been seeing: four
+of the boot reads failing together — `recent news`, `preferences`, `watchlist`
+and **`ESPN status`** — every time a server restart landed on top of them.
+
+**The `ESPN status` one is why this is a rule rather than a nicety.** It is read
+**once**, on mount, and a failure leaves `espnStatus` null — which
+`espnConnected` reads as *there is no league*, for the rest of the session. What
+that costs, all of it reported: no `Overview` tab and no `League` tab, the
+fantasy button leading to the **onboarding page** instead of its popover (it
+branches on the same boolean), and the roster views quietly reading the saved
+watchlist instead of the fantasy team. A one-second blip cost a session its
+fantasy league, and the app had no way back short of a reload.
+
+**An empty body on a GET is the transport failing, not the server answering**,
+and the layer that can tell those apart is this one. So `ApiError` carries
+`truncated` and `request` retries on that and nothing else:
+
+- **Two retries, 300ms then 900**, measured against the thing that causes it — a
+  `tsx watch` restart is back inside a second, so giving up sooner would fail on
+  the case this exists for and waiting longer would hold the boot for a server
+  that is genuinely gone.
+- **GET and HEAD only.** A retried `PUT` is a second write, and nothing here can
+  tell a request that never arrived from one that arrived and answered into a
+  closed socket. The safe half is the only half that repeats.
+
+**Driven both ways**, by fulfilling `/api/espn` with a `200` and an empty body —
+the exact shape a closed connection has — and counting how many:
+
+| truncated | outcome |
+| --- | --- |
+| 1 (a `tsx watch` blip) | **recovers**: `Overview · Roster · Research · League`, lands on `?view=overview`, no banner |
+| 3 | **recovers**, identically |
+| every one (server gone) | degrades honestly: `Roster · Research`, no view param, and the reason on the console |
+
+The last row is the one that makes the first two safe: a retry that papered over
+a real outage would be worse than the fault it replaced.
+
 ### Rule 1 has a fifth clause: never over data, and never *above* it either
 
 **Never over data** is a rule about curtains — a wait must not stand in front
