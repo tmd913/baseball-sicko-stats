@@ -92,19 +92,20 @@ ESPN banks a man only on the scoring periods he held a starting slot for, so
 counting the bench prints a day that reads **higher than the scoreboard directly
 above it**. That is the same fault, and the same fix, `LeagueTeam`'s Summary
 reading records (**Client — a league matchup**, and `lib.ts::projectStarters`,
-which cuts *days* rather than rows). The head says `Lineup · 20 of 29` so the
-reading is never a guess, and it says `Watchlist · 16` where there is no lineup
-to be a subset of — a fantasy team whose per-day read failed falls back to the
-second form, which is the honest direction: it counted everybody, so it says so.
+which cuts *days* rather than rows). **The head said `Lineup · 20 of 29` and no longer does.** It was argued for and
+the argument was about arithmetic: a lineup total and a roster total are
+different numbers, only one of them agrees with the scoreboard above, and the
+head said which. All of that is still true and none of it is the reader's
+question. Three lines of head — the day, the date, a count of men — put the
+thing a manager came for one line lower on a card that is already the second
+block of the page, to answer something nobody standing in front of it was
+asking. The fact survives where it is load-bearing: here, and in the ESPN check
+below, which is what establishes the agreement in the first place.
 
-**The count is the intersection rather than the lineup's own size.** ESPN's
-published lineup can name a man this roster read does not carry — somebody
-dropped since — and the block draws what it drew.
-
-**The projected block's is the *plan* rather than a lineup**, tomorrow having
-none: what the engine can say is which seat it would start him in
-(`ProjectedPlayerLine.lineup.days`), and a man it would bench every day of the
-span is in neither the count nor the block.
+**The projected block cuts by the *plan* rather than a lineup**, a day nobody
+has played having none: what the engine can say is which seat it would start him
+in (`ProjectedPlayerLine.lineup.days`), and a man it would bench every day of
+the span is in neither the count nor the block.
 
 ### Verified against ESPN, and the verification found the edge
 
@@ -547,13 +548,28 @@ figures are estimates and the one least worth a whole row of its own.
 
 | | raw | gzip |
 | --- | --- | --- |
-| CSS | 178,368 → 182,662 | 31,919 → **32,688** |
-| JS | 693,662 → 708,457 | 202,673 → **207,362** |
+| CSS | 178,368 → 182,679 | 31,919 → **32,692** |
+| JS | 693,662 → 708,163 | 202,673 → **207,203** |
 
-+769 bytes of CSS and +4.6KB of JS gzipped, for a view, a scoring module, a
++773 bytes of CSS and +4.5KB of JS gzipped, for a view, a scoring module, a
 measured constant table, the narrow-screen tab rule above, and the carousel.
 
 ### Presentation, and the two rules it leans on hardest
+
+**No separator between the day and the tag.** `TODAY · ↗ PROJECTED` became
+`TODAY ↗ PROJECTED`: the two are not two facts of equal weight with a dot to
+hold them apart — `PROJECTED` *qualifies* `TODAY`, where the roster face's own
+`SCHEDULE · WEEK 19` really is two. What holds them apart is 7px and the glyph,
+which is what a qualifier gets.
+
+**The two headings set the page's rhythm and are the only things that do.**
+`Your matchup` sat hard against the chrome seam above it and read as a caption
+on the bar rather than as the title of the block under it, so the view takes
+10px of `padding-top`. And the gap under each heading is now the **same 8px**,
+measured off the rendered page both ways — which took a *negative* margin under
+`Your days`, that one being a direct child of the column flex and so already
+carrying the container's own 18px where `.ov-matchup`'s heading carries only its
+own. The value that looks smaller is the one that comes out even.
 
 **An estimate never wears the same clothes as a measurement.** The projected
 block takes the **dashed border** `.lg-matchup.lg-proj` already uses — at the
