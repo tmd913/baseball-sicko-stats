@@ -7825,10 +7825,12 @@ button.start-line:focus-visible {
    ended up going. */
 .settings-btn,
 .fantasy-btn,
-/* The fifth: the way to the league's moves, beside the fantasy button it is
-   about. Folded on rather than restyled, which is what keeps every icon button
-   in this header identical by construction. */
-.tx-btn,
+/* There were five, the fifth being `.tx-btn` — the way to the league's moves.
+   It is gone, and what it carried is on the League tab in the row below (see
+   `.main-tab` and the note on `.lg-tab-dot`): the mark it existed for is worth
+   more on the pill that names the page than on a sixth icon square beside it,
+   and the header is the row this app takes pixels back from rather than
+   spends them in. */
 .edit-order-btn,
 .search-toggle {
   flex: none;
@@ -7847,7 +7849,6 @@ button.start-line:focus-visible {
 }
 .settings-btn:hover,
 .fantasy-btn:hover,
-.tx-btn:hover,
 .edit-order-btn:hover,
 .search-toggle:hover {
   color: var(--text);
@@ -7855,7 +7856,6 @@ button.start-line:focus-visible {
 }
 .settings-btn:focus-visible,
 .fantasy-btn:focus-visible,
-.tx-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible {
   outline: 2px solid var(--accent);
@@ -8985,9 +8985,6 @@ button.start-line:focus-visible {
    stop telling someone the report failed. */
 .app.edit-mode .settings-menu,
 .app.edit-mode .fantasy-menu,
-/* And the button beside it, which leads out of this screen to another page —
-   the same statement the entry above makes. */
-.app.edit-mode .tx-btn,
 .app.edit-mode .view-bar,
 /* The tools row goes with it. It is gated on `!editMode` in the render as well
    — a reading toggle over a screen with no table to read is not a thing this
@@ -13068,34 +13065,60 @@ button.start-line:focus-visible {
    moving the two tabs beside it each time. The corner it sits in is the 12px
    of horizontal padding the label never reaches, so it overlaps nothing at any
    width. */
-/* **And the same mark on the header button that leads here**, which is a
-   reversal of the sentence beside it: the dot was kept off the League pill
-   deliberately, on the grounds that *the tabs are drawn only on the League
-   view, so the dot is a statement about a page you are already on*. That
-   argument is right about the pill and is exactly why the mark is worth having
-   on `.tx-btn` — a button on every view, whose whole errand is *has anybody
-   done anything*. One rule for both, so the two can never come to be two
-   different reds; the corner each sits in is its own, a 36px square having no
-   label to keep clear of and 5px of its own edge to spare. */
+/* **And the same mark on the League tab of the app's own row**, which is the
+   sentence beside it reversed — and reversed a second time, since it was a
+   header button (`.tx-btn`) carrying this for a while and that button is gone.
+
+   The dot was kept off the League pill on the grounds that *the tabs are drawn
+   only on the League view, so the dot is a statement about a page you are
+   already on*. That is true of the **League view's own three tabs**, which is
+   what the sentence was about, and was never true of `.main-tabs`, which is on
+   screen on every view. So the mark sits on the pill that names the page, and
+   the sixth icon square that used to carry it has gone back to the header's
+   width — a row this app has twice had to find pixels in.
+
+   **One rule, two hosts**, so the two can never come to be two different reds,
+   and the two are never both on screen: the render draws the pill's only while
+   the reader is somewhere else, the League view's own Transactions tab being
+   the more precise statement of the same fact once you are on it.
+
+   **The corner is not shared, and that is the one thing the fold could not
+   bring across.** A `.lg-tab` is a pill sized to its own word, so a dot 5px in
+   from its right edge is a dot beside the word. A `.main-tab` is `flex: 1 1 0`
+   — a quarter of the window — with its label centered in it, so the same corner
+   is a corner of empty tab: measured at 1200, the tab is 289px wide and its
+   right edge is x=1178, which put the dot at 1167 against a `League` ending
+   around 1057. **110px of nothing between the mark and the thing it marks**,
+   reading as a dot loose at the right edge of the row rather than as one
+   attached to a tab.
+
+   So the main row's dot hangs off `.main-tab-label`, an inline box around the
+   word itself, and sits just past its right edge like a superscript. It is
+   `position: static`'s absence that matters here rather than the offsets: the
+   label is what has to be the containing block, and the tab must not be, or the
+   more specific rule below would be resolving against the wrong box. */
 .lg-tab,
-.tx-btn {
+.main-tab-label {
   position: relative;
 }
-.lg-tab-dot,
-.tx-dot {
+.main-tab-label {
+  display: inline-block;
+}
+.lg-tab-dot {
   position: absolute;
+  top: 4px;
+  right: 5px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--strikeout);
 }
-.lg-tab-dot {
-  top: 4px;
-  right: 5px;
-}
-.tx-dot {
-  top: 5px;
-  right: 5px;
+/* Beside the word rather than in a corner — see above. `-9px` clears the 6px
+   dot with 3px of air, and `-1px` lifts it to the cap line so it reads as a
+   badge on the word instead of a bullet beside it. */
+.main-tab-label .lg-tab-dot {
+  top: -1px;
+  right: -9px;
 }
 
 /* ---- Live feed (per-at-bat stream) ---- */

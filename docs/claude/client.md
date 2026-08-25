@@ -1076,6 +1076,38 @@ That field costs 418 of the header's 1136 — the content width the app was capp
 
 Twelve pixels is why the answer is three numbers rather than a control moved somewhere else — the right-hand cluster is the same total width, and the fantasy popover is where the user asked for this *not* to be. So a `max-width: 430px` block at the end of the stylesheet takes the wordmark from **18px to 15px** (measured, `Statcast Sicko` **121 → 101px** wide) and tightens `.brand`'s gap to 6 and the header's *column* gap to 10. That is **36px** back against the **27** the narrowest common phone (360) needs. Nothing that is aimed at with a thumb gives up a pixel: the mark, the gear, the two league buttons and the search are the same size at every width. Measured after, `.app-header` at those six widths: **84**, 36, 36, 36, 36, 36 — one line from 360 up, and 320 back to the 84 it was before the fifth square rather than the 90 it had reached. `column-gap` rather than `gap`, deliberately: the 640px block sets this row's gap to `--stack-gap`, which is the phone's rhythm and is what separates the two *lines* at 320, and the shorthand would take it with them.
 
+**The fifth square has gone, and the wordmark's three numbers bought a line
+nobody had ever had.** The two paragraphs above are left as written: the
+arithmetic in them is right and is exactly what makes this change worth a
+paragraph rather than a deletion. `.tx-btn` carried a dot saying *there are
+moves you have not seen*, and that mark is on the **League pill in the tab row**
+now — a control on every view that already says the word `League`, four inches
+from where the square was (see **Client — the League view's transactions tab**,
+where the move and the 110px measurement behind the dot's new anchor are
+argued). A square whose only job was a mark it did not need to own is a square
+this row cannot afford.
+
+**What came back is more than what was spent**, because the `max-width: 430px`
+block is kept. It was bought to pay for the fifth square and it is now pure
+slack, and the slack lands at the one width that never had any. Measured after,
+`.app-header` at 320 / 360 / 375 / 390 / 640 / 1200:
+
+| | 320 | 360 | 375 | 390 | 640 | 1200 |
+| --- | --- | --- | --- | --- | --- | --- |
+| before the square | 84 | 36 | 36 | 36 | 36 | 36 |
+| with it | 90 | 84 | 84 | 36 | 36 | 36 |
+| with it, plus the 430px block | 84 | 36 | 36 | 36 | 36 | 36 |
+| **now** | **36** | 36 | 36 | 36 | 36 | 36 |
+
+**One line at 320**, which this header has never been — the brand is 227px
+against the 276 a 320px phone leaves inside the app's gutters, where two lines
+had always been "the honest cost at the same widths where the research bar
+already takes a row it doesn't take at 390". That is **48px of pinned chrome**
+back on the narrowest phone, which is the most expensive kind: every page under
+it starts 48px higher. Keeping the 430px block is what buys it, so the wordmark
+stays at 15px on a phone and 18 from 640 — reverting it would spend the line
+again to grow three points of type.
+
 **There is no app-wide refresh.** There was one for a while — a `.refresh-btn` square in the brand cluster beside the gear and the fantasy button, backed by `App.tsx::refreshAll`, whose rule was *re-read every source the page in front of you is drawn from, and nothing else*: the connected league past its ten minutes, the report, the statuses map on the two views that draw it, the research blob on the research view, and the client's own clip cache. It is gone, and what is left is the app's ordinary freshness — the 20-second `/api/report` poll **only while a real game is live**, the statuses and ownership maps re-read on *entry* to the views that draw them, the research blob fetched once per kind and window and then kept for the life of the tab, and a reload for anything else.
 
 **The one thing that is left is the one thing a reload cannot fix**, and it is why the ESPN control stays: a move made on ESPN is invisible to this app until a cache expires, so the fantasy popover's **Refresh from ESPN** (`refreshFantasyFromMenu` over `refreshFantasy`) goes and asks — the ownership read with `?refresh=1`, then the roster and the report through the cache it has just refilled. It is the only true cache bypass in the app and the only caller of `MIN_SPIN`; see **ESPN fantasy league**, where it and the league page's own Refresh are set out.

@@ -2949,10 +2949,14 @@ export default function App() {
    * ever looks at the scoreboard should pay for a 250-row activity feed; the
    * dot on that tab overruled it, "there are moves you haven't seen" being a
    * claim the tab row has to make *before* the tab is opened. It is gated on
-   * nothing but the league now, because **the dot is in the header** — the
-   * button beside the fantasy one, which goes straight to the feed — and that
-   * button is on screen on every view. A mark that only tells the truth on the
-   * page it points at is a mark that says nothing.
+   * nothing but the league now, because **the dot is on the app's own tab row**
+   * — the League pill, which is on screen on every view. A mark that only tells
+   * the truth on the page it points at is a mark that says nothing.
+   *
+   * (This said *the header* while a `.tx-btn` beside the fantasy button carried
+   * the mark. The gate is unchanged by that button going away: what the read
+   * depends on is that the thing wearing the dot is drawn on every view, and
+   * the pill is.)
    *
    * What it costs is one request per app boot for a reader with a league,
    * answered from the server's own minute-long cache and about a tenth of its
@@ -7518,89 +7522,6 @@ export default function App() {
               </div>
             )}
           </div>
-          {/* **The way to the league's moves, from wherever you are.**
-
-              The fantasy button beside it opens a menu of *controls over the
-              app*; the League pill in the tab row opens the league's own page
-              on the tab it was last on. Neither is the errand this answers,
-              which is the one a manager has several times a day: *has anybody
-              done anything*. From the Roster view that was three presses — the
-              pill, then the Transactions tab, and the tab is the third of three
-              on a strip that scrolls at 320.
-
-              **The dot is the whole reason it is a button rather than an entry
-              in the menu beside it.** `client-league-transactions.md` records
-              the dot being kept off the League pill deliberately — *the tabs are
-              drawn only on the League view, so the dot is a statement about a
-              page you are already on* — and that is exactly the sentence this
-              reverses: a mark saying *there are moves you have not seen* is
-              worth nothing on the one page where you can already see them. It
-              is the same mark, drawn from the same comparison
-              (`unseenTransactions`), and pressing the button opens the tab that
-              clears it.
-
-              Gated on `espnConnected` like the League pill, and for its reason:
-              a button leading to a page that could only ever say *connect a
-              league* is chrome for a feature the reader hasn't got. */}
-          {espnConnected && (
-            <button
-              type="button"
-              /* **No `on` state**, where the fantasy button beside it has one.
-                 That one reports a *mode* — which list the roster views are
-                 reading — where this is a way to a page, and the app already
-                 says which page you are on twice over: the League tab is
-                 underlined and the Transactions tab is filled. A third mark for
-                 the same fact is a mark that says nothing. */
-              className="tx-btn"
-              /* The fact goes to a screen reader as words, since a colored
-                 circle names nothing — and it goes in the *label* rather than in
-                 a hidden child, an element with an `aria-label` taking no name
-                 from its contents at all. */
-              aria-label={
-                unseenTransactions
-                  ? 'League transactions — new moves since you last looked'
-                  : 'League transactions'
-              }
-              title={
-                unseenTransactions
-                  ? 'League transactions — new since you last looked'
-                  : 'League transactions'
-              }
-              onClick={() => {
-                setSettingsOpen(false);
-                setFantasyOpen(false);
-                // A matchup is a page drawn *over* this view whatever tab is
-                // behind it, so landing on the Transactions tab with one open
-                // would be landing behind it. The press names a page; it lets go
-                // of the one that was covering it.
-                setMatchupId(null);
-                setMatchupTeam(null);
-                setView('league');
-                setLeagueTab('transactions');
-              }}
-            >
-              {/* Two arrows passing, which is what a transaction is — the same
-                  thing `.lg-tx-swap`'s `⇄` says on a trade row, drawn at the
-                  weight the header's other icons are drawn at. */}
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M4 8h14" />
-                <path d="M14.5 4.5 18 8l-3.5 3.5" />
-                <path d="M20 16H6" />
-                <path d="M9.5 12.5 6 16l3.5 3.5" />
-              </svg>
-              {unseenTransactions && <span className="tx-dot" aria-hidden="true" />}
-            </button>
-          )}
         </div>
         {/* The icon cluster, in the header rather than over the list: these
             belong to the watchlist itself, not to whichever view is reading it,
@@ -7750,6 +7671,43 @@ export default function App() {
               >
                 Research
               </button>
+              {/* **The dot is on this tab now, and it was a button in the
+                  header.** That button existed for one errand a manager has
+                  several times a day — *has anybody done anything* — and for
+                  one mark, which the League pill was deliberately denied on the
+                  grounds recorded in `client-league-transactions.md`: *the tabs
+                  are drawn only on the League view, so the dot is a statement
+                  about a page you are already on*. That was true of the
+                  **League view's own three tabs** and was never true of this
+                  strip, which is on screen on every view. So the mark belongs
+                  here, and a sixth icon square in the header spending 36px to
+                  carry it does not — the pill it would have led to is four
+                  inches away and already says the word `League`.
+
+                  **And it is not drawn on the League view itself**, which is
+                  the same argument read one page in: with the view open its own
+                  Transactions tab wears the dot, and that one says *which of
+                  the three*, where this one can only say *in here somewhere*.
+                  Two reds for one fact, the more precise of them an inch under
+                  the vaguer. At most one is ever on screen.
+
+                  It is `.lg-tab-dot`'s own rule folded on rather than a second
+                  red, and it is **absolutely positioned** for the reason that
+                  one is: a tab that grows by 13px the moment something happens
+                  and shrinks back when it is read is a row that changes width
+                  under the reader.
+
+                  **What it is positioned against is the label, not the tab**,
+                  and that is the one thing the fold could not bring across. A
+                  `.lg-tab` is a pill sized to its own word, so a dot 5px in from
+                  its right edge is a dot beside the word; a `.main-tab` is
+                  `flex: 1 1 0` — a **quarter of the window** — with the label
+                  centered in it. Measured at 1200: the tab is 289px wide and its
+                  right edge is at x=1178, so the corner put the dot at 1167 with
+                  `League` ending around 1057 — **110px of empty tab between the
+                  mark and the thing it marks**, reading as a dot loose at the
+                  right edge of the row. Hence `.main-tab-label`, an inline box
+                  around the word that the dot hangs off instead. */}
               {espnConnected && (
                 <button
                   type="button"
@@ -7760,8 +7718,23 @@ export default function App() {
                     setEditMode(false);
                     setView('league');
                   }}
+                  title={
+                    unseenTransactions && view !== 'league'
+                      ? 'Your fantasy league — new moves since you last looked'
+                      : undefined
+                  }
                 >
-                  League
+                  <span className="main-tab-label">
+                    League
+                    {unseenTransactions && view !== 'league' && (
+                      <>
+                        {/* The fact goes to a screen reader as words: a colored
+                            circle names nothing. */}
+                        <span className="lg-tab-dot" aria-hidden="true" />
+                        <span className="sr-only"> — new moves since you last looked</span>
+                      </>
+                    )}
+                  </span>
                 </button>
               )}
             </div>
