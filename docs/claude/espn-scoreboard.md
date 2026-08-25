@@ -83,6 +83,15 @@ safe rather than merely right this afternoon:
   putting it back as a day's total would read, in a `lowerBetter` category, as
   the best score in the league.
 
+  *(**Superseded, and by the same correction the projection took first.** The
+  rule is right about *ineligible* and wrong about *early*: on the first day of
+  a week nobody has thrown an inning, so nobody has an ERA for today's
+  production to move, and the live card drew `—` against `—` for both rates
+  while the opponent's starter was three innings into a shutout. `sideFrom` now
+  goes through `espn.ts::withLiveDay`, which passes `withAddedComponents`'
+  `createRates` and then puts the narrower half of this rule back. See **A rate
+  the side is early for is not a rate it is ineligible for** below.)*
+
 **The bench and IL are excluded** (`NON_ACCRUING_SLOTS`, ESPN's slots 16 and
 17), which is what the 120-of-120 check validates: everything else counts, the
 same fail-safe direction `toRosterPlayer` takes for the slot chip.
@@ -187,6 +196,14 @@ since a category a team cannot score in is not a category it is losing, and a
 zero in a `lowerBetter` category would otherwise read as the best score in the
 league.
 
+**That scan covered the settled periods only, and the flag is not false on a
+live one.** Every one of those 5,244 cells belongs to a week that finished, and
+a finished week has innings in it. On the first day of a week the flag is
+`true` on both rate categories for every side in the league — which is the
+finding the next section is about, and it means "`ineligible` is false
+everywhere" must be read as "in a week that was played", not as a fact about
+the field.
+
 **That tally is what the scoreboard's headline now prints** — `wins`/`losses`/
 `ties` per side, as `6-3-1` rather than the bare wins the card used to show, so
 the one number on the card is the one number this file has measured against
@@ -215,6 +232,17 @@ nothing to divide — and carries neither **47 (ERA)** nor **41 (WHIP)** at all.
 Skipped, the headline read **`0-0-8`** on a ten-category league, which says two
 of the ten are somebody's and does not say whose. Level on nothing is what they
 are, so they are level: **`0-0-10`**.
+
+*(**One correction to that sentence, found later the same evening.** ESPN does
+carry 47 and 41 — as
+`{"ineligible":true,"rank":0,"result":"TIE","score":"Infinity"}`, a **string**
+where a number belongs, which `sideFrom`'s `typeof cell.score !== 'number'` test
+dropped without a trace. So they are present and unusable rather than absent,
+and everything the rule above concludes still holds: they reach `scores` as
+absences either way, and ESPN's own `result` on the cell is `TIE`, which is the
+verdict the tally reaches independently. What the correction does change is what
+can be done about it — a cell that says *no denominator* rather than *cannot
+score* is a rate we may rebuild, which is the next section.)*
 
 Which also means **only a rate can reach the tie**, and that is what keeps the
 ineligibility rule intact rather than merely mostly intact: a counting category
@@ -256,6 +284,118 @@ as it does for a matchup — checked on the live league, all 23 stats with the
 *week's* figures rather than the season's (24 R, 7 HR, .677 OPS). Nothing here
 had to change for it; the card was simply declining to read them. See **Client —
 the League view**, *A bye card shows his week*.
+
+### A rate the side is early for is not a rate it is ineligible for
+
+**The live card showed no ERA and no WHIP while the opponent's starter was three
+innings into a shutout.** Reported as *"why am I not seeing ERA/WHIP for my
+current matchup even though my opponent has a pitcher that's pitched 3
+innings"*, and it is the third time the same distinction has had to be drawn:
+`createRates` drew it for the projection, the tie rule drew it for the tally,
+and this is the figures themselves.
+
+`sideFrom` merged today's day onto ESPN's through-yesterday score with
+`withAddedComponents`' `createRates` **off**, under the standing rule that today
+*"can move a number ESPN already gave this side and can never invent one"*. On
+the first day of a week there is no number to move: nobody has thrown an inning,
+so nobody has a rate, and the merge dropped a figure the components in its own
+hands could produce. Every other day of the week the rate is already there and
+gets rebuilt correctly, which is why this survived a season — **it is one day of
+every week wide, and it closes overnight** when ESPN's batch folds the day into
+`cumulativeScore`.
+
+**The two surfaces of the same page disagreed, which is how it was pinned
+down.** Measured at 19:49 ET on 2026-08-24, the first day of period 20, team 12
+having thrown 3.1 innings on 3 hits, no walks and no earned runs:
+
+| | matchup card | Rankings, `Current matchup` |
+| --- | --- | --- |
+| team 12 ERA | `—` | **0.00** |
+| team 12 WHIP | `—` | **0.90** |
+
+Same week, same components, two answers — and the **rankings are the half that
+was right**: `withRates` there rebuilds every rate category from its components
+with no absent-guard at all, and has since *The Rankings tab takes the same fix
+on the same day*. So the fix is the scoreboard catching up to a rule this file
+already had, not a new one.
+
+**`espn.ts::withLiveDay` is where it lives**, between `sideFrom` and
+`withAddedComponents`, because this caller needs two things the projection's
+does not and neither belongs inside a function they share. It passes
+`createRates` and then takes back the two halves of the old rule that were
+right:
+
+- **A category ESPN genuinely calls the side ineligible for stays out.**
+- **The components `createRates` invents are dropped again.** The projection's
+  scores go through `categoryScores` before they reach the wire and this
+  caller's do not, so the merged map's **48, 68 and 76 ids** (the three sides
+  logged) come back down to what ESPN sent plus the categories the league
+  scores: **21 keys a side before, 23 after** where the side has pitched, 21
+  where it has not.
+
+#### `Infinity` is an empty denominator, not an ineligibility
+
+**And this is what the change actually cost**, because the first, faithful
+version of that first bullet withheld exactly the figure the change exists to
+produce, and drew `—` against `—` all over again. ESPN sends the rate cell:
+
+```
+{"ineligible":true,"rank":0,"result":"TIE","score":"Infinity"}
+```
+
+on **both rate categories, both sides, all six matchups** of period 20's first
+day. The flag does not mean *this team cannot score in this category*; it means
+*there is nothing to divide by yet*. A side that has not pitched is early, which
+is the same distinction `createRates` is built on, arriving this time in ESPN's
+own field. So `sideFrom` tests the score: `String(cell.score) !== 'Infinity'`
+before it believes an `ineligible`, and anything else ESPN calls ineligible is
+still taken at its word.
+
+Two things follow from the shape of that cell:
+
+- **The `score` is a string.** `typeof cell.score !== 'number'` dropped it
+  silently, which is why the cell was recorded above as absent altogether. The
+  field is typed `number | string` now, so the string cannot be mistaken for a
+  figure.
+- **ESPN's own `result` is `TIE`**, which is the verdict `tallyCategories`
+  reaches for two absences by its own arithmetic. The tie rule was argued from
+  first principles a section ago and ESPN agrees with it in the payload.
+
+#### What it moves, and what it does not
+
+**Measured through the route, before → after**, on one fetch with both tallies
+computed off it so no figure moved under the comparison:
+
+| | before | after |
+| --- | --- | --- |
+| team 12, 4.0 IP | `— / —` | **`ERA 2.25 / WHIP 0.750`** |
+| team 9, 9.1 IP | `— / —` | **`2.89 / 1.286`** |
+| team 6, no innings | `— / —` | `— / —` |
+| 6 vs 12 headline | `1-1-8` / `1-1-8` | `1-1-6` / `1-1-6` |
+| 9 vs 4 headline | `3-0-7` / `0-3-7` | `3-2-5` / `2-3-5` |
+| payload | 11,048 B | 11,174 B |
+
+A side that has not pitched is **unmoved**, which is the `DERIVED` zero-
+denominator guard doing its job rather than an argument that it would: every one
+of the nine rules returns `null` on an empty denominator, so no `0.00` that
+would read as the best score in the league can be reached from here.
+
+**The headline sums to eight for a few hours of a Monday**, and that is the one
+thing this makes look worse before it looks better. While one side has pitched
+and the other has not, the rates stop being *both* absent and become absent on
+one side — which `tallyCategories` **skips**, that being its standing answer to
+a figure only one side has. It is not the `0-0-8` the tie rule was written
+against: there the card showed `—` against `—` and could not say whose the two
+categories were, and here it shows `—` against `2.25` and says so plainly. The
+moment the second side throws an inning both rates are real on both sides and
+the categories are decided again — 9 vs 4 in the table above, back to ten.
+
+**No cache version moves with this.** `getMatchups` writes a blob only for a
+frozen period, `today` is null on every frozen read, and `withLiveDay` returns
+`scores` untouched when there is no day to add — so a settled week is
+byte-identical, tally included, and `-v3` still describes what is stored. This
+is the other side of the rule that took the blob to `-v3` in the first place: a
+version guards what is *stored*, and nothing stored changed.
 
 ### A category day by day, and the four ways ESPN cannot be asked for it
 

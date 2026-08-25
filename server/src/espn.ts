@@ -3002,7 +3002,17 @@ interface EspnScheduleSide {
     wins?: number;
     losses?: number;
     ties?: number;
-    scoreByStat?: Record<string, { score?: number; ineligible?: boolean }> | null;
+    /**
+     * **`score` is not always a number and `ineligible` does not always mean
+     * ineligible** — measured on the live league at 19:58 ET on 2026-08-24, the
+     * first day of period 20, where every side's ERA and WHIP cell came back
+     * `{"ineligible":true,"rank":0,"result":"TIE","score":"Infinity"}`. That is
+     * ESPN saying *this rate has no denominator yet*, and it is the shape
+     * `sideFrom` reads the distinction off; a side that has thrown an inning by
+     * then has an ordinary numeric cell. Typed as it arrives rather than as it
+     * usually is, so the string cannot be mistaken for a figure.
+     */
+    scoreByStat?: Record<string, { score?: number | string; ineligible?: boolean }> | null;
   } | null;
   /** The lineup as it stands on the scoring period the request named, each
    *  player carrying his stat line for that one day. Empty on a request that
@@ -3549,8 +3559,11 @@ export function withAddedComponents(
   categories: EspnCategory[],
   /**
    * **Whether a *rate* absent from `scores` may be created from what is being
-   * added**, and it is false for the caller this function was written for and
-   * true for the projection.
+   * added**. It is the default for nobody now and passed by both callers, which
+   * is a correction rather than a widening: it went in for the projection and
+   * the live day turned out to have the same hole, one day of every week wide
+   * (see `withLiveDay`, which passes it and then puts the narrower half of the
+   * old rule back).
    *
    * The rule above — a category ESPN left out is one the side is ineligible for,
    * and adding a day's production must not put it back — is right about *today*
@@ -3585,8 +3598,10 @@ export function withAddedComponents(
     if (DERIVED[n]) continue;
     if (merged[n] === undefined) {
       // A component the side has no figure for is still a component of a rate
-      // that may be created. It is not a category — `categoryScores` ships only
-      // what the league scores — so this adds nothing to the wire.
+      // that may be created. It is not a category, and neither caller puts one
+      // on the wire — the projection's goes through `categoryScores` and the
+      // live day's through `withLiveDay`, which keeps only what ESPN sent and
+      // the categories the league scores.
       if (!createRates) continue;
       merged[n] = 0;
     }
@@ -3603,6 +3618,104 @@ export function withAddedComponents(
   return merged;
 }
 
+/**
+ * **ESPN's through-yesterday score with today's day added on, for the live
+ * scoreboard** — `withAddedComponents` with the two things this caller needs
+ * and `projection.ts`'s does not.
+ *
+ * **It passes `createRates`**, and the reason that flag exists is the same one
+ * read on the other surface of the same page. At the top of a week nobody has a
+ * denominator, so ESPN has **no ERA and no WHIP** for anybody, and the standing
+ * rule that today "can never invent" a category then withheld a figure a side
+ * genuinely had. Reported as *"why am I not seeing ERA/WHIP for my current
+ * matchup even though my opponent has a pitcher that's pitched 3 innings"*, and
+ * measured on the live league at 19:49 ET on 2026-08-24, the first day of
+ * period 20: team 12 had thrown **3.1 innings, 3 hits, no walks and no earned
+ * runs** and the matchup card drew `—` against `—` for both rates — while the
+ * **Rankings tab's `Current matchup` span, the same week off the same
+ * components, drew `ERA 0.00 / WHIP 0.90`**. Two surfaces of one page
+ * disagreeing about one week is what *The Rankings tab takes the same fix on
+ * the same day* exists to prevent, and the rankings are the half that was
+ * already right: `withRates` there rebuilds every rate from its components with
+ * no such guard. So this is the scoreboard catching up rather than a new rule.
+ *
+ * **Measured through the route, before → after**, on the same six sides an hour
+ * later: a side that has pitched goes from `— / —` to a figure (team 12,
+ * 4.0 innings: `ERA 2.25 / WHIP 0.750`; team 9, 9.1: `2.89 / 1.286`), a side
+ * that has not is unmoved (teams 6 and 1, no innings, both still `— / —`), and
+ * the whole scoreboard payload goes **11,048 → 11,174 bytes**.
+ *
+ * **The two guards `createRates` carries hold here unchanged**, and they are
+ * what make it safe rather than merely right this evening: only a `DERIVED`
+ * rate may be created and never a counting category (ESPN sends those as `0`
+ * from the first minute, so an absent one is genuinely ineligible), and every
+ * `DERIVED.of` returns `null` on an empty denominator, so a side that has not
+ * pitched gets no ERA rather than a `0.00` that would read as the best score in
+ * the league. That is not reasoning about the dangerous case, it is the
+ * measurement above: team 6, with no innings thrown, still has neither rate
+ * after the change.
+ *
+ * **It moves the headline, and the movement is honest.** While one side has
+ * pitched and the other has not, the two rates stop being *both* absent and
+ * become absent on one side — which `tallyCategories` **skips** rather than
+ * ties, that being its standing answer to a figure only one side has. So the
+ * triple sums to eight for a few hours of a Monday (measured, team 6 against
+ * team 12: `1-1-8` → `1-1-6`) where the both-absent tie made it sum to ten.
+ * That is not the `0-0-8` the tie rule was written against: there the card
+ * showed `—` against `—` and could not say whose the two categories were, and
+ * here it shows `— ` against `2.25` and says so plainly. The moment the second
+ * side throws an inning both rates are real on both sides and the category is
+ * decided — measured on the same read, teams 9 and 4 both having pitched:
+ * `3-0-7`/`0-3-7` → `3-2-5`/`2-3-5`, back to ten with ERA and WHIP among the
+ * decided rather than among the ties. (All six tallies were recomputed off one
+ * fetch, old rule against new, so no figure moved under the comparison.)
+ *
+ * **Two things it then takes back**, both because this caller ships `scores`
+ * straight down the wire where the projection's goes through `categoryScores`
+ * first:
+ *
+ * - **A category ESPN calls the side *ineligible* for stays out**, which is the
+ *   half of the old rule that was right. Ineligible is not early: the side has
+ *   the components either way, so nothing else here would stop the rate being
+ *   built for it. **But ESPN spells the two the same**, and finding that out is
+ *   what this change actually cost — see `sideFrom`, where a rate with no
+ *   denominator arrives flagged `ineligible` with the string `"Infinity"` for a
+ *   score. The scan that found `ineligible` false on 5,244 cells was over the
+ *   **settled** periods, where both sides have pitched and the flag never
+ *   appears; a live week's first day was never in it.
+ * - **The components `createRates` invents are dropped again.** A day's bucket
+ *   carries 80 stat ids where `scoreByStat` carries 23, so keeping them would
+ *   put dozens of numbers a side on the wire that nothing reads — measured, the
+ *   merged map came back with **48, 68 and 76 ids** on the three sides logged.
+ *   What ESPN sent, plus the categories the league scores, is what survives:
+ *   **21 keys a side before, 23 after** where the side has pitched (the two are
+ *   its ERA and its WHIP) and 21 where it has not.
+ *
+ * **No cache version moves with this**, which is the rule about *what is
+ * stored* rather than what is computed: `getMatchups` writes a blob only for a
+ * frozen period, `today` is null on every frozen read, and this function
+ * returns `scores` untouched when there is no day to add. A settled week is
+ * therefore byte-identical, tally included, and `-v3` still describes it.
+ */
+function withLiveDay(
+  scores: Record<number, number>,
+  today: Record<number, number> | undefined,
+  categories: EspnCategory[],
+  ineligible: Set<number>,
+): Record<number, number> {
+  if (!today) return scores;
+  const merged = withAddedComponents(scores, today, categories, true);
+  const scored = new Set(categories.map((c) => c.statId));
+  const out: Record<number, number> = {};
+  for (const [id, v] of Object.entries(merged)) {
+    const n = Number(id);
+    if (ineligible.has(n)) continue;
+    if (scores[n] === undefined && !scored.has(n)) continue;
+    out[n] = v;
+  }
+  return out;
+}
+
 function sideFrom(
   raw: EspnScheduleSide | undefined,
   live: boolean,
@@ -3611,17 +3724,47 @@ function sideFrom(
 ): { teamId: number; scores: Record<number, number>; points: number | null } | null {
   if (!raw || typeof raw.teamId !== 'number') return null;
   const scores: Record<number, number> = {};
+  /** The categories ESPN says this side genuinely **cannot score in** — kept
+   *  rather than merely skipped, because `withLiveDay` may now build a rate the
+   *  side has no figure for, and this is the one absence it must not fill. */
+  const ineligible = new Set<number>();
   for (const [id, cell] of Object.entries(raw.cumulativeScore?.scoreByStat ?? {})) {
-    // A category the side is ineligible for is left out rather than sent as a
-    // zero, which in a `lowerBetter` category would otherwise read as the best
-    // score in the league.
-    if (!cell || cell.ineligible === true || typeof cell.score !== 'number') continue;
+    if (!cell) continue;
+    if (cell.ineligible === true) {
+      /**
+       * **`Infinity` is an empty denominator, not an ineligibility**, and the
+       * two arrive wearing the same flag. Measured on the live league at 19:58
+       * ET on 2026-08-24, the first day of period 20, on all six matchups and
+       * both sides: the ERA and WHIP cells come back
+       * `{"ineligible":true,"rank":0,"result":"TIE","score":"Infinity"}` —
+       * a *string*, which is why `typeof cell.score !== 'number'` had been
+       * dropping them silently and why they were recorded as "absent
+       * altogether" rather than present and unusable. (ESPN's own `result` on
+       * that cell is `TIE`, which is the verdict `tallyCategories` reaches
+       * independently for two absences.)
+       *
+       * A side that has not pitched is early, not ineligible — the distinction
+       * `withAddedComponents`' `createRates` is built on — so this is left out
+       * of the set and the rate is rebuilt from the components instead. Without
+       * this test the guard below would withhold exactly the figure the guard's
+       * own caller exists to produce: the fix was written, measured, and drew
+       * `—` against `—` all over again.
+       *
+       * Anything else ESPN calls ineligible is taken at its word and stays out,
+       * which is the rule as it was: a category a side cannot score in is not
+       * one it is losing, and a zero in a `lowerBetter` category would read as
+       * the best score in the league.
+       */
+      if (String(cell.score) !== 'Infinity') ineligible.add(Number(id));
+      continue;
+    }
+    if (typeof cell.score !== 'number') continue;
     scores[Number(id)] = cell.score;
   }
   const points = live ? raw.totalPointsLive ?? raw.totalPoints : raw.totalPoints;
   return {
     teamId: raw.teamId,
-    scores: withAddedComponents(scores, today?.[raw.teamId], categories),
+    scores: withLiveDay(scores, today?.[raw.teamId], categories, ineligible),
     points: typeof points === 'number' ? points : null,
   };
 }
