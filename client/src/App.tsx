@@ -152,6 +152,7 @@ import LeagueView, {
   showingProjected,
 } from './components/LeagueView';
 import LeagueMatchupView, { MatchupButton, SummaryToggle } from './components/LeagueMatchup';
+import OverviewView from './components/OverviewView';
 import type { MatchupReading } from './components/LeagueMatchup';
 import type { LeagueTab } from './components/LeagueView';
 
@@ -185,7 +186,7 @@ const MIN_SPIN = 450;
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
  */
-type View = 'summary' | 'feed' | 'research' | 'league';
+type View = 'overview' | 'summary' | 'feed' | 'research' | 'league';
 
 /** The two *readings* of the Roster page — the stat table and the stream. They
  *  are one tab now (`Roster`) and were two, and the pair survives as the value
@@ -209,7 +210,7 @@ function isRosterView(v: View): boolean {
  *  your own roster and come back from, which is what every other page over a
  *  view in here already is (`player=`, `team=`, `game=`, `mup=`). See
  *  `matchupButton`. */
-function mainTab(v: View): 'roster' | 'research' | 'league' {
+function mainTab(v: View): 'overview' | 'roster' | 'research' | 'league' {
   return v === 'summary' || v === 'feed' ? 'roster' : v;
 }
 
@@ -785,6 +786,14 @@ export default function App() {
   // where you left rather than resetting to Summary.
   const [view, setView] = useState<View>(() => {
     const v = initialParams.get('view');
+    // **The front page — the first tab, and deliberately not the default.**
+    // `summary` is still what a bare URL means and what every link in the wild
+    // that omits `view=` has always meant, which is the rule this app applies
+    // to every other param: an omitted one is the default, and changing the
+    // default changes what somebody else's link says. Leading the strip is a
+    // statement about where the page belongs, not about where a reader who
+    // never asked for it should land.
+    if (v === 'overview') return 'overview';
     if (v === 'research') return 'research';
     // Only reachable with a league connected — the pill is not drawn without
     // one — but a link is read here before the status has landed, so it opens
@@ -2771,7 +2780,13 @@ export default function App() {
         // against the roster report, the ownership map, the lineups and the
         // matchup window this same view already asks for. A reader with no
         // league connected pays nothing, the whole test being gated on one.
-        matchupId != null || wantMyMatchup || isRosterView(view));
+        //
+        // **And the Overview draws the card itself**, which is the same read
+        // put to a heavier use: that page's first block *is* the matchup, so
+        // without the board it has nothing to draw rather than one button
+        // fewer. Same request, same minute of cache, and on a view a connected
+        // reader is likely to open first.
+        matchupId != null || wantMyMatchup || isRosterView(view) || view === 'overview');
 
   /**
    * The scoreboard, read on entry to the League view and whenever the period
@@ -3069,8 +3084,14 @@ export default function App() {
     // `Matchup` button opens the identical page over the identical board, and a
     // test that named one view would have left it sitting still on the door
     // most people will use.
+    // **The Overview's matchup block is on this list for the reason the
+    // Scoreboard tab is**: it draws the same card off the same board, so a page
+    // left open through an evening would otherwise show a week that stopped
+    // moving at the moment it was opened.
     if (
-      ((view === 'league' && leagueTab === 'scoreboard') || matchupId != null) &&
+      ((view === 'league' && leagueTab === 'scoreboard') ||
+        view === 'overview' ||
+        matchupId != null) &&
       scoreboardLive
     ) {
       api.espnScoreboard(matchupPeriod).then(setScoreboard).catch(quiet('scoreboard'));
@@ -4692,6 +4713,178 @@ export default function App() {
     }
     void loadBoardProjection();
   }, [researchProjected, researchTeams, loadBoardProjection]);
+
+  /* ---- The Overview's three days ----------------------------------------
+   *
+   * **Three reads, and every one of them is an endpoint that already existed.**
+   * The Overview is a composition rather than a data source: yesterday and
+   * today are `/api/report` over a one-day range — which is also where the
+   * day's **lineup** comes from, that response carrying `lineups` keyed by date
+   * whenever it is reading a fantasy team — and tomorrow is
+   * `/api/projection/roster` over one day, whose `lineup.days` is the plan the
+   * projected block cuts by. Nothing new is fetched and nothing new is cached;
+   * the arithmetic that makes a page out of them is `categoryValue.ts`.
+   *
+   * **Read on entry to the view and kept**, the way the League page's tabs are:
+   * a reader who never opens the Overview pays nothing, and one who crosses to
+   * the Roster and back does not pay twice. The clock (`today`) is in the deps
+   * because it moves on resume, which is exactly the case a day block must not
+   * survive — `TODAY` over yesterday's games is the fault `today` exists to
+   * prevent, three views over.
+   *
+   * **Each day fails on its own.** A failure costs its own block and never the
+   * page: a dead projection leaves Today and Yesterday standing, and each block
+   * says what it has rather than the view becoming a message.
+   */
+  const overviewDates = useMemo(
+    () => ({ yesterday: addDays(today, -1), today, tomorrow: addDays(today, 1) }),
+    [today],
+  );
+
+  /** One played day of the Overview: the reports, and who was in the lineup on
+   *  it. Held together because they are one answer — the block cuts the first
+   *  by the second, and a report that landed without its lineup would count the
+   *  bench for as long as the second half was in flight. */
+  interface OverviewDay {
+    players: PlayerReport[];
+    /** Null in saved-roster mode, and on a day the per-day lineup read could
+     *  not answer for — in which case the block counts everybody and says
+     *  `Watchlist` rather than claiming a lineup it has not got. */
+    lineup: Set<string> | null;
+  }
+
+  const [ovToday, setOvToday] = useState<OverviewDay | null>(null);
+  const [ovYesterday, setOvYesterday] = useState<OverviewDay | null>(null);
+  const [ovTomorrow, setOvTomorrow] = useState<RosterProjection | null>(null);
+  const [ovTodayLoading, setOvTodayLoading] = useState(false);
+  const [ovYesterdayLoading, setOvYesterdayLoading] = useState(false);
+  const [ovTomorrowLoading, setOvTomorrowLoading] = useState(false);
+  /** One sequence number per block, not one for the view: the three reads land
+   *  independently and a slow projection must not discard a fresh Today. Only
+   *  the newest of each may write, which is the app's own rule for any read
+   *  that can be superseded — and these can, the clock moving on resume. */
+  const ovRead = useRef({ today: 0, yesterday: 0, tomorrow: 0 });
+
+  const loadOverviewDay = useCallback(
+    (
+      date: string,
+      which: 'today' | 'yesterday',
+      set: (d: OverviewDay | null) => void,
+      setLoading: (on: boolean) => void,
+    ) => {
+      const seq = ++ovRead.current[which];
+      setLoading(true);
+      return api
+        .report(date, date, usingFantasy ? 'fantasy' : 'saved')
+        .then((r) => {
+          if (seq !== ovRead.current[which]) return;
+          const keys = r.lineups?.[date];
+          set({ players: r.players, lineup: keys ? new Set(keys) : null });
+        })
+        .catch((e: Error) => {
+          // The block's own failure, and the block's own message: the page has
+          // two other days on it and neither is any less true for this one
+          // having failed.
+          if (seq === ovRead.current[which]) console.error(`reading ${which} failed:`, e.message);
+        })
+        .finally(() => {
+          if (seq === ovRead.current[which]) setLoading(false);
+        });
+    },
+    [usingFantasy],
+  );
+
+  useEffect(() => {
+    if (view !== 'overview') return;
+    // The same two waits every other roster read makes, and for the same
+    // reason: firing before the saved preference and the connection status have
+    // landed spends the request on the wrong list and replaces it a moment
+    // later. See the report effect above, which carries the measurement.
+    if (!prefsSettled && !rosterSourceFromUrl) return;
+    if (rosterSource === 'fantasy' && !espnStatusSettled) return;
+    void loadOverviewDay(overviewDates.today, 'today', setOvToday, setOvTodayLoading);
+    void loadOverviewDay(
+      overviewDates.yesterday,
+      'yesterday',
+      setOvYesterday,
+      setOvYesterdayLoading,
+    );
+    const seq = ++ovRead.current.tomorrow;
+    setOvTomorrowLoading(true);
+    api
+      .rosterProjection(
+        overviewDates.tomorrow,
+        overviewDates.tomorrow,
+        usingFantasy ? 'fantasy' : 'watchlist',
+        fantasyTeamId,
+      )
+      .then((p) => {
+        if (seq === ovRead.current.tomorrow) setOvTomorrow(p);
+      })
+      .catch((e: Error) => {
+        if (seq === ovRead.current.tomorrow) {
+          console.error("reading tomorrow's projection failed:", e.message);
+        }
+      })
+      .finally(() => {
+        if (seq === ovRead.current.tomorrow) setOvTomorrowLoading(false);
+      });
+  }, [
+    view,
+    overviewDates,
+    loadOverviewDay,
+    usingFantasy,
+    fantasyTeamId,
+    roster,
+    prefsSettled,
+    rosterSourceFromUrl,
+    rosterSource,
+    espnStatusSettled,
+  ]);
+
+  /**
+   * **A press on a day block's `See the day →`: the Roster view over that one
+   * day.** A door rather than a filter — the Overview names three days and the
+   * three men who did most on each, and the whole of any of them is the page
+   * next door, which is why this crosses rather than growing a fourth list
+   * here.
+   *
+   * **It carries the preset rather than the dates**, which is the app's own rule
+   * that a preset is a *rule* and not a range: all three of the Overview's days
+   * are named ones (`Today`, `Yesterday`, `Tomorrow`), so a link copied off the
+   * Roster afterwards re-derives on the recipient's own today rather than
+   * pinning this reader's. It read `preset: null` and landed on `Custom range ·
+   * Mon, Aug 24` for the day the bar three lines up was calling `Today`.
+   *
+   * **And tomorrow opens the Projected reading**, because that is the block it
+   * was pressed on. A played day's door is the stat table; tomorrow has no
+   * stats to be a table of, and the Roster over a day nobody has played is a
+   * grid of dashes — where the lens is the same estimate the block itself is
+   * drawn from, one row per man instead of three. Its range is written to the
+   * `projected` scope **by name**, which is `toggleRosterProjected`'s own rule
+   * and for its reason: `setRange` writes whichever scope `dateScopeRef` is
+   * pointing at, and on this commit that is still the view being left.
+   */
+  const openOverviewDay = useCallback(
+    (date: string) => {
+      const label = date === today ? 'Today' : date < today ? 'Yesterday' : 'Tomorrow';
+      const days = { start: date, end: date, preset: label };
+      // Before the state below, for the reason the projected toggle states: the
+      // `view !== 'summary'` reset would otherwise fire on the same commit and
+      // put the lens straight back out.
+      setView('summary');
+      setScheduleSpan(null);
+      setRosterSummary(false);
+      if (date > today) {
+        setRanges((prev) => ({ ...prev, projected: days }));
+        setRosterProjected(true);
+      } else {
+        setRanges((prev) => ({ ...prev, summary: days }));
+        setRosterProjected(false);
+      }
+    },
+    [today],
+  );
 
   /**
    * **Turning the lens on moves the reader to the days it is about**, the rule
@@ -7487,6 +7680,37 @@ export default function App() {
               their own conditions and none of them depends on the report. */}
           {initialLoadSettled && (
             <div className="main-tabs" role="tablist" aria-label="Page">
+              {/* **The Overview leads**, and it leads because it is the only
+                  tab that answers a question rather than offering a reading:
+                  the other three are *your players*, *the league's season* and
+                  *your fantasy league*, each of which the reader has to know
+                  what to look for in. This one is *how is it going* — the
+                  matchup you are in, the day being played, the day behind it
+                  and the day ahead — which is what somebody opening the app
+                  actually came for, and it is drawn from those three pages'
+                  own data rather than from anything of its own.
+
+                  **It appears on the same terms as the Roster.** Its three day
+                  blocks are about a roster, so with nothing watched and no
+                  league there is nothing for any of them to report on and the
+                  tab would lead to a page of empty states — which is the same
+                  test `showRosterViews` already makes for the tab beside it,
+                  read one condition wider because a connected league gives the
+                  matchup block a subject on its own. */}
+              {(showRosterViews || espnConnected) && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'overview'}
+                  className={`main-tab${view === 'overview' ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setEditMode(false);
+                    setView('overview');
+                  }}
+                >
+                  Overview
+                </button>
+              )}
               {/* Nothing watched, nothing for either reading to report on — so
                   this tab only appears once there is something to read. */}
               {showRosterViews && (
@@ -7751,7 +7975,35 @@ export default function App() {
           reader's own (see `matchupButton`), so all three of those states are
           answered by the button not being there — and the page it opens is the
           overlay below, which every other door already opened. */}
-      {view === 'league' ? (
+      {view === 'overview' ? (
+        <OverviewView
+          /* The same board the League page draws, and the same one the Roster's
+             own `Matchup` button is found on — one read, three doors. */
+          board={scoreboard}
+          onOpenMatchup={(id) => {
+            // A card names the matchup and nothing more, so it opens on the
+            // Summary in the middle — the same press the Scoreboard's cards make.
+            setMatchupId(id);
+            setMatchupTeam(null);
+          }}
+          today={ovToday?.players ?? null}
+          yesterday={ovYesterday?.players ?? null}
+          tomorrow={ovTomorrow}
+          todayLineup={ovToday?.lineup ?? null}
+          yesterdayLineup={ovYesterday?.lineup ?? null}
+          loadingToday={ovTodayLoading}
+          loadingYesterday={ovYesterdayLoading}
+          loadingTomorrow={ovTomorrowLoading}
+          usingFantasy={usingFantasy}
+          /* The projected block's names: a projected line carries a key, an id
+             and a kind and no name at all. */
+          knownPlayers={knownPlayers}
+          dates={overviewDates}
+          onOpenPlayer={openLeaguePlayer}
+          onSeeDay={openOverviewDay}
+          connected={espnConnected}
+        />
+      ) : view === 'league' ? (
         <LeagueView
           tab={leagueTab}
           board={scoreboard}

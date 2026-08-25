@@ -400,7 +400,7 @@ export function asProjected(m: EspnMatchup, p: EspnProjectedMatchup): EspnMatchu
   };
 }
 
-function MatchupCard({
+export function MatchupCard({
   matchup,
   categories,
   teams,
@@ -408,6 +408,7 @@ function MatchupCard({
   format,
   live,
   projected = false,
+  mineTag = true,
   onOpen,
 }: {
   matchup: EspnMatchup;
@@ -421,6 +422,18 @@ function MatchupCard({
    *  the dashed border and what a cell's own tooltip claims, which must not say
    *  "so far" about a total that reaches the end of the week. */
   projected?: boolean;
+  /**
+   * **Whether to draw the `Your matchup` label at all.**
+   *
+   * True on a board, where the card is one of ten and the label is what says
+   * *which*. False where the card is the only one on the page — the Overview
+   * draws the reader's own matchup and nothing else — because a mark that would
+   * be on every row marks nothing, which is the same rule that suppresses the
+   * roster baseball on a board that is only your roster and the padlock on
+   * `Other Rosters` alone. The accent border stays either way: it costs no
+   * space and it is what carries the statement into a screenshot.
+   */
+  mineTag?: boolean;
   onOpen: (id: number) => void;
 }) {
   const { home, away } = matchup;
@@ -498,7 +511,7 @@ function MatchupCard({
         }
       }}
     >
-      {mine && <div className="lg-mine-tag">Your matchup</div>}
+      {mine && mineTag && <div className="lg-mine-tag">Your matchup</div>}
       {sides.map((side) => {
         const team = teams.get(side.teamId);
         return (

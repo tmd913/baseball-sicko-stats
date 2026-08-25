@@ -196,6 +196,40 @@ back to `?preset=Today` with the Roster still the active tab. `?mup=119` on the
 Roster does the same without the rewrite. `?view=league&mup=119` is untouched —
 the same overlay, the League pill lit, Escape back to `view=league`.
 
+### And the row is four again, with the Overview leading
+
+**Overview · Roster · Research · League.** The two sections above are the record
+of how the strip got to three and they are left as written: the argument that
+took `Matchup` out of it is unchanged and is exactly what keeps this one in.
+
+A tab says **which subject you are on**, and the test the strip has applied
+twice is that a sort order is not a page and a door is not a subject. The
+Overview passes it from a direction none of the other three do. Roster is *your
+players*, Research is *the league's season*, League is *your fantasy league* —
+three subjects, each of which the reader has to know what to look for in. This
+one is a **question**: how is it going. The matchup you are in, the day being
+played, the day behind it and the day ahead, on one page with no controls at
+all.
+
+**It leads, and it is deliberately not the default.** `view=overview` is opted
+into; `summary` is still what a bare URL means and what every link in the wild
+that omits `view=` has always meant. That is the rule this app applies to every
+other param — an omitted one is the default, and changing a default changes what
+somebody else's link says. Leading the strip is a statement about where the page
+belongs, not about where a reader who never asked for it should land.
+
+**It appears on the same terms as the Roster, read one condition wider**:
+`showRosterViews || espnConnected`. Its three day blocks are about a roster, so
+with nothing watched *and* no league there is nothing for any of them to report
+on and the tab would lead to a page of empty states — which is the test
+`showRosterViews` already makes for the tab beside it. A connected league gives
+the matchup block a subject on its own, which is the extra clause.
+
+**And it is a composition rather than a fourth data source** — the same
+scoreboard the Roster's `Matchup` button reads, `/api/report` over one day
+twice, and one day of `/api/projection/roster`. See **Client — the Overview**,
+which carries the whole of it.
+
 ### `Summary` is the Roster's fifth reading, and the one whose days are not yours
 
 **The matchup page's own `Summary` toggle, on your own table**: this roster over
@@ -1503,6 +1537,11 @@ lists, player keys, the app's own chrome and scroll behavior, the loading system
 the kind tabs, the header and the injured filter), and each file below is one
 surface of the app.
 
+- **`client-overview.md`** — the Overview: the app's front page and first tab —
+  this week's matchup card, then today, yesterday and tomorrow as a block each,
+  printing the day's totals in the league's own scoring categories and naming
+  the three men who did most for them. And `categoryValue.ts`, which is how a
+  day is scored.
 - **`client-dates.md`** — the date controls: the full-width bar and the row it
   opens, the component the matchup page shares with it, and the range the Roster
   and the Feed each keep of their own.
