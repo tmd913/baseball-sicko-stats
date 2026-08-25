@@ -19681,6 +19681,8 @@ html[data-theme='powder'] .espn-status,
 html[data-theme='light'] .espn-status,
 html[data-theme='powder'] .lg-matchup,
 html[data-theme='light'] .lg-matchup,
+html[data-theme='powder'] .ov-day,
+html[data-theme='light'] .ov-day,
 html[data-theme='powder'] .order-row,
 html[data-theme='light'] .order-row {
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
@@ -19746,6 +19748,9 @@ html[data-theme='dark'] .espn-status,
 html[data-theme='lavender'] .lg-matchup,
 html[data-theme='maroon'] .lg-matchup,
 html[data-theme='dark'] .lg-matchup,
+html[data-theme='lavender'] .ov-day,
+html[data-theme='maroon'] .ov-day,
+html[data-theme='dark'] .ov-day,
 html[data-theme='lavender'] .order-row,
 html[data-theme='maroon'] .order-row,
 html[data-theme='dark'] .order-row {
@@ -20789,5 +20794,362 @@ html[data-theme='light'] .league-table thead th {
   }
   .brand {
     gap: 6px;
+  }
+}
+
+
+/* ---- The Overview -------------------------------------------------------
+ *
+ * The app's front page: the matchup you are in, then the day being played, the
+ * day behind it and the day ahead, as three blocks that say the same five
+ * things in the same five columns.
+ *
+ * **Almost nothing here is new paint.** The category lines are `.lg-cats` and
+ * `.lg-cat-row` outright — folded in the JSX rather than restyled, because a
+ * category line under a side-of-the-ball label is the same object here as it is
+ * on a scoreboard card, and two rules that agree about a grid today are two
+ * rules that will one day differ. What this section adds is the block that
+ * holds them, the performer row, and the one thing that genuinely is new: a
+ * projected block, drawn as a projection.
+ *
+ * **At the end of the file**, with its own narrow-screen rules after its own
+ * base rules — the stylesheet's oldest trap, that a media query adds no
+ * specificity. */
+.overview-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* Wide enough for three day blocks at ~360 apiece and their gaps, which is
+     what sets it: measured, three blocks at 1120 are 365 / 365 / 365 with two
+     12px gaps, and the matchup card above keeps its own `--card-column` cap of
+     800 inside it. Above 1120 the page stops growing rather than stretching
+     five category columns across a desk monitor. */
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+}
+/* **`width: 100%` beside the auto margins, and it is load-bearing.** An auto
+   margin on the cross axis suppresses a flex item's stretch, so a centered
+   block inside a column flex shrinks to its content — the fault
+   `.upcoming-detail .pct-card` records and that bit the splits card twice. */
+.ov-matchup {
+  max-width: var(--card-column);
+  width: 100%;
+  margin: 0 auto;
+}
+.ov-heading {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ov-heading-note {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--faint);
+}
+
+/* **One column, and three only where three fit.** Mobile-first, so the media
+   query below adds the columns rather than a narrow one taking them away —
+   which is the same rule the section header states, arrived at from the other
+   side. Two columns is deliberately not a step: three blocks in two columns is
+   a row of two and an orphan, and the orphan is `TOMORROW`, the one of the
+   three whose figures are estimates and the one least worth a whole row. */
+.ov-days {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.ov-day {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  padding: 10px 12px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* **A projected block is drawn as a projection** — the app's standing rule that
+   an estimate never wears the same clothes as a measurement, at the size of a
+   whole block because every figure in it is one. The same dashed border
+   `.lg-matchup.lg-proj` takes, and for the same reason: marking each of twelve
+   cells would be one claim made twelve times. */
+.ov-day-proj {
+  border-style: dashed;
+}
+/* The head reads like the app's own date face — the qualifier in small caps
+   over the day at weight — because it is stating the same kind of fact four
+   lines under a bar that states it that way. Folded in spirit rather than in
+   selector: `.date-face` is a three-column grid built for a bar, and this is a
+   two-line stack in a card, so what is shared is the type and the order. */
+.ov-day-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 6px;
+}
+.ov-day-lead {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ov-day-proj-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--faint);
+}
+.ov-day-date {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+/* *Whose day this is a day of*, which is the one thing a reader cannot get from
+   the figures: a lineup total and a roster total are different numbers and only
+   one of them agrees with the scoreboard above. */
+.ov-day-who {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  margin-top: 2px;
+}
+/* The two category blocks stack inside the card, the second taking `.lg-cats`'s
+   own `border-top` as the rule between them — one mark, already declared. */
+.ov-cat-block + .ov-cat-block {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+/* A projected figure is muted where a measured one is not. It is a second mark
+   inside a block the dashed border has already marked, and it is worth it: the
+   category line is the one row a reader's eye crosses between the three blocks,
+   so the difference has to be legible without the border in view. */
+.ov-cat-val.is-proj {
+  color: var(--muted);
+}
+
+/* ---- The top performers ------------------------------------------------- */
+.ov-perfs {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* The whole row opens his page, which is what every other list of players in
+   this app does. The app's own bare-button reset — `font-family: inherit`
+   rather than `font: inherit`, the shorthand having reset `font-size` on this
+   stylesheet's buttons once already. */
+.ov-perf {
+  display: grid;
+  grid-template-columns: 14px 26px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 4px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+/* **Hover on a full-width row in a list is scoped**, the app's own rule: a
+   touch device has no pointer to move away, so the tint sticks to the last row
+   a finger crossed and reads as a selection the app then declines to act on.
+   `:active` and `:focus-visible` are never scoped. */
+@media (hover: hover) {
+  .ov-perf:hover {
+    background: var(--panel-2);
+  }
+}
+.ov-perf:active {
+  background: var(--panel-2);
+}
+.ov-perf:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ov-perf-rank {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.ov-perf-face {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--panel-2);
+}
+.ov-perf-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ov-perf-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The line itself, and it wraps rather than clipping: `2-4, 2 R, HR, 3 RBI, SB,
+   1.250 OPS` is longer than a 360px block's middle column at every width, and a
+   day's line with its tail cut off is a day the reader has to open the player
+   page to find out about. Two lines is the worst case and the block reserves
+   nothing for it — the rows are a list rather than a grid, so a second line
+   pushes the row below it down and nothing else. */
+.ov-perf-line {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* What the day was worth, in per-day standard deviations across the categories
+   his side of the ball scores. **It is monochrome**, which is this app's rule
+   that color is spent on state rather than on emphasis: the number is already
+   the reason the row is where it is in the list, and a green scale down three
+   rows would be the ranking said twice. */
+.ov-perf-val {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  padding-left: 4px;
+}
+.ov-perf-val.is-proj {
+  color: var(--muted);
+}
+
+/* ---- A block's own empty states and its foot ---------------------------- */
+/* Every one of these names its own cause. *No games yet* and *nobody did
+   anything* are the same empty box and very different mornings, which is why
+   there are three of them rather than one. */
+.ov-day-empty {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 2px;
+}
+.ov-day-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+/* Which categories the ranking was made over — the league's own name where
+   there is a league, `standard 5×5` where there is not. It is a caption rather
+   than a control: a reader with no league must not be left to assume the
+   ordering was his league's. */
+.ov-day-scale {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The door to the whole day: the Roster view over that one date. A small aimed
+   target, so it keeps its hover unscoped — the rule above applies to full-width
+   rows and cards in a scrolling list, not to buttons. */
+.ov-day-more {
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+.ov-day-more:hover {
+  text-decoration: underline;
+}
+.ov-day-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* **Three across once three fit, and 900 is measured.** It was declared at 860
+   and the measurement moved it: a block's category line is a grid with a 58px
+   leading column and a `minmax(36px, 1fr)` per category, and it scrolls
+   sideways inside itself (`.lg-cats` is `overflow-x: auto`) the moment the
+   block is narrower than the five columns want. Driven at six widths on the
+   live league's ten categories — the block width, and `scrollWidth -
+   clientWidth` on its two category lines:
+
+   | window | block | line overflow |
+   | --- | --- | --- |
+   | 860 | 264px | **10px** |
+   | 880 | 271px | **3px** |
+   | 900 | 277px | 0 |
+   | 920 | 284px | 0 |
+   | 960 | 297px | 0 |
+
+   So 900 is the first width at which a third of the page still holds the line
+   the block is drawn from, and the two below it were three columns that each
+   scrolled — the reading a column layout is *for* being that the eye crosses
+   the three at one glance, which it cannot do if each of them is hiding a
+   category. Page-body overflow is 0 at every one of the six either way, this
+   being a scroller inside a card rather than a page that has burst. */
+@media (min-width: 900px) {
+  .ov-days {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+
+/* **The tab strip has a fourth tab, and 340 is where its words stop fitting.**
+   `.main-tab` is `flex: 1 1 0` — four equal columns whatever their words are —
+   so a fourth tab costs the strip **no height at all** (measured: 37px at 320 /
+   375 / 390 / 640 / 900 / 1200 / 1920 with three tabs and with four, and the
+   pinned chrome 148 / 100 / 100 / 100 / 102 / 102 / 102 either way). What it
+   costs is width per tab, and at the narrow end the two longest words run out
+   of it — measured as `scrollWidth - clientWidth` on each of the four:
+
+   | window | Overview | Roster | Research | League |
+   | --- | --- | --- | --- | --- |
+   | 320 | **4px** | 0 | **4px** | 0 |
+   | 330 | **2px** | 0 | **2px** | 0 |
+   | 340 | **1px** | 0 | **1px** | 0 |
+   | 350 | 0 | 0 | 0 | 0 |
+   | 360 | 0 | 0 | 0 | 0 |
+
+   They ellipsize rather than burst the page, which is what `min-width: 0` and
+   `text-overflow` are there for — but `Overvie…` on the tab that leads the
+   strip is the row failing to name the page it is pointing at. So below 350 the
+   type gives up a point and the side padding halves, which is the same trade
+   the header makes at 430 and for the same reason: a target you aim at with a
+   thumb is not where to find pixels, and a word is not a target.
+
+   **At the end of the file**, after `.main-tab`'s own declarations a thousand
+   lines up, because a media query adds no specificity. */
+@media (max-width: 350px) {
+  .main-tab {
+    font-size: 13px;
+    padding-inline: 3px;
   }
 }
