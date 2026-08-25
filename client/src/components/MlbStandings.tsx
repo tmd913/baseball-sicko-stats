@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import type { MlbStandings, StandingsRecord, StandingsSpan, StandingsTeam } from '../types';
 import { teamLogoUrl } from '../lib';
 import { LoadingBlock } from './Loading';
-import { ScrollRow, useOverflowArrows } from './TabStrip';
+import { useOverflowArrows } from './TabStrip';
 
 /**
  * # Where the thirty clubs stand
@@ -64,6 +64,24 @@ export const STANDINGS_SPANS: { span: StandingsSpan; label: string }[] = [
   { span: 15, label: 'Last 15' },
   { span: 7, label: 'Last 7' },
 ];
+
+/** What a span calls itself in a tooltip and in a `<select>`'s own — written
+ *  once because the pill run and the dropdown are the same control drawn twice,
+ *  and two copies of a sentence are two sentences that will one day differ. */
+function spanTitle(span: StandingsSpan): string {
+  return span === 'season'
+    ? "The whole season, in MLB's own numbers"
+    : `Every club's record over the last ${span} days`;
+}
+
+/** A `<select>` hands back a string; this is the one place it becomes a span
+ *  again. An unrecognized value falls back to the season rather than emptying
+ *  the view — the rule the URL reader one file over already follows. */
+function toSpan(raw: string): StandingsSpan {
+  if (raw === 'season') return 'season';
+  const n = Number(raw);
+  return STANDINGS_SPANS.some((s) => s.span === n) ? (n as StandingsSpan) : 'season';
+}
 
 /** MLB's own two, by id. Written out because the standings payload carries the
  *  id and not the name, and because these two strings are the one part of this
@@ -270,17 +288,24 @@ export default function MlbStandingsTab({
   const columns = useMemo(() => columnsFor(span, group), [span, group]);
   return (
     <div className="mlb-standings">
-      {/* **The two controls scroll rather than wrapping or shrinking.**
-          Measured at 390 before: the row was **96px** — the span run is 358px
-          wide and broke to a second line, and `Last 60` then wrapped *inside*
-          its own pill, taking every span pill from 25px to 40. At 640 it was
-          still 84. That is the fault `.view-tools` was given `ScrollRow` for,
-          in this file's own words: a row of controls too wide for a phone gives
-          up what is off the end and says so with two arrows, rather than
-          shedding its words or growing a line. The pills are `nowrap` here so
-          the second half of it cannot happen either. */}
-      <ScrollRow label="the standings controls" className="mlb-standings-tools">
-        <div className="view-switch" role="tablist" aria-label="Standings grouping">
+      {/* **Two controls, each drawn twice — a run of pills and a `<select>`,
+          with a media query picking.** That is the app's own answer for every
+          strip of pills that outgrows a narrow screen (the research board's
+          window tabs and position row, the Schedule span, the Rankings spans,
+          the matchup picker), and `.mlb-standings-select` is folded onto
+          `.research-window-select` so all of them are one control by
+          construction. Both are rendered and the stylesheet chooses, rather
+          than a JS media test that could drift from the CSS.
+
+          It was a `ScrollRow` for a day and that was the wrong shape here. A
+          scroller is right where the run is *long* and its members are peers a
+          reader browses — the roster's five readings, a player page's nine
+          tabs. These two are short, closed sets where the reader is picking one
+          value, which is what a `<select>` is; and side-scrolling hid a filter
+          behind a gesture on the one device where the reader cannot see there
+          is more of it without trying. */}
+      <div className="mlb-standings-tools">
+        <div className="view-switch mlb-standings-run" role="tablist" aria-label="Standings grouping">
           {STANDINGS_GROUPS.map((g) => (
             <button
               key={g.key}
@@ -295,7 +320,19 @@ export default function MlbStandingsTab({
             </button>
           ))}
         </div>
-        <div className="view-switch" role="tablist" aria-label="Standings span">
+        <select
+          className="mlb-standings-select"
+          aria-label="Standings grouping"
+          value={group}
+          onChange={(e) => onGroup(e.target.value as StandingsGroup)}
+        >
+          {STANDINGS_GROUPS.map((g) => (
+            <option key={g.key} value={g.key} title={g.title}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+        <div className="view-switch mlb-standings-run" role="tablist" aria-label="Standings span">
           {STANDINGS_SPANS.map((s) => (
             <button
               key={String(s.span)}
@@ -304,17 +341,25 @@ export default function MlbStandingsTab({
               aria-selected={s.span === span}
               className={`view-tab${s.span === span ? ' active' : ''}`}
               onClick={() => onSpan(s.span)}
-              title={
-                s.span === 'season'
-                  ? "The whole season, in MLB's own numbers"
-                  : `Every club's record over the last ${s.span} days`
-              }
+              title={spanTitle(s.span)}
             >
               {s.label}
             </button>
           ))}
         </div>
-      </ScrollRow>
+        <select
+          className="mlb-standings-select"
+          aria-label="Standings span"
+          value={String(span)}
+          onChange={(e) => onSpan(toSpan(e.target.value))}
+        >
+          {STANDINGS_SPANS.map((s) => (
+            <option key={String(s.span)} value={String(s.span)} title={spanTitle(s.span)}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
       <Body
         data={data}
         groups={groups}

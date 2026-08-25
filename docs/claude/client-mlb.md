@@ -159,15 +159,40 @@ On a window the wild-card grouping keeps its rows and loses its line, with a
 sentence saying why — a line across seven days would claim three clubs are in,
 off seven days of baseball.
 
-### The controls live in the tab
+### The controls live in the tab, and collapse to dropdowns
 
 Not in the app's tools row, which is the Fantasy page's own decision read one
 view over: a control above the strip is a control over the *page*, and these two
-govern one third of it. **It is a `ScrollRow`** — measured at 390 before, the row
-was 96px, the span run being 358px wide and breaking to a second line with
-`Last 60` then wrapping inside its own pill; scrolling, it is one 36px line at
-every width from 320 up. The pills are `nowrap` so the second half of that
-cannot happen either.
+govern one third of it.
+
+**Below 700 each run becomes a `<select>`**, which is the app's answer for every
+strip of pills that outgrows a narrow screen — the research board's window tabs
+and position row, the Schedule span, the Rankings spans, the matchup picker —
+and `.mlb-standings-select` is folded onto `.research-window-select` so all of
+them are one control by construction. Both are rendered and the stylesheet
+chooses, rather than a JS media test that could drift from the CSS.
+
+**700 is measured rather than borrowed, and this is the one row in the app that
+cannot take its 640.** It holds *two* runs on one line — the grouping at 243px
+and the spans at 358 with 12px between, **613px** — so with the app's 22px
+gutters it needs a **657px** window, and at 640 the two would break to two lines
+for the seventeen pixels before the dropdowns arrived. A row that is briefly two
+lines on the way to being one control is the fault the swap exists to prevent.
+700 leaves room for a sixth span without this being re-measured.
+
+Measured after: the row is **36px at 320, 390, 640, 700, 701, 760, 900 and
+1280**, one line at every one of them, and the page body never scrolls sideways.
+Before any of it, at 390 the row was **96px** — the span run broke to a second
+line and `Last 60` then wrapped inside its own pill, taking every span pill from
+25px to 40. The pills keep `nowrap` so that second half cannot come back at a
+width where the runs are still drawn.
+
+**It was a `ScrollRow` for a day, and that was the wrong shape.** A scroller is
+right where the run is long and its members are peers a reader browses — the
+roster's five readings, a player page's nine tabs. These two are short, closed
+sets where the reader is picking one value, which is what a `<select>` is; and
+side-scrolling hides a filter behind a gesture on the one device where the
+reader cannot see there is more of it without trying.
 
 ### The table
 

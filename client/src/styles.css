@@ -813,7 +813,8 @@ body {
 .research-window-select,
 .research-pos-select,
 .schedule-span-select,
-.mup-select {
+.mup-select,
+.mlb-standings-select {
   display: none;
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
@@ -839,7 +840,8 @@ body {
 .research-window-select:hover,
 .research-pos-select:hover,
 .schedule-span-select:hover,
-.mup-select:hover {
+.mup-select:hover,
+.mlb-standings-select:hover {
   border-color: var(--accent);
 }
 /* On phones a pill row that would overflow off-screen gives way to a compact
@@ -21616,28 +21618,23 @@ html[data-theme='light'] .league-table thead th {
    row, `Season · Last 60 · …` would sit over two tabs it says nothing about,
    and a reader pressing it on the News tab would watch nothing happen.
 
-   **It is a `ScrollRow`**, so the two groups keep their words at every width
-   and give up only what runs off the end. Measured at 390 before: the row was
-   **96px tall** — the span run is 358px wide, so it broke to a second line and
-   `Last 60` then wrapped inside its own pill, taking every span pill from 25px
-   to 40 — and at 640 it was still 84. Scrolling, it is one 36px line at every
-   width from 320 up.
-
-   The one thing this row states of its own is `flex: none`. `.tool-scroll` is
-   `flex: 1 1 100%`, which is right inside `.view-tools` — a *wrapping row*,
-   where a 100% basis is what puts the run on a line of its own — and is a
-   height in a flex **column**, which is what this tab is. The gap between the
-   two groups is `.tool-scroll-inner`'s own 12px and wants nothing from here. */
+   The row itself is a plain flex line. It does **not** wrap, because the width
+   at which it would is the width at which both runs become `<select>`s — see
+   the media query at the foot of this section for the measurement that sets
+   it. */
 .mlb-standings-tools {
-  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--tools-row-gap);
 }
-/* And the other half of the same fault: a pill must not wrap inside itself.
-   `Last 60` is two words and the run is `flex: none`, so without this the
-   pills grow a line each the moment the row is tight — which is the shape the
-   scroller exists to prevent, happening one level down. */
+/* And the half of the same fault a swap alone does not fix: a pill must not
+   wrap inside itself. `Last 60` is two words and the run is `flex: none`, so
+   without this the pills grow a line each the moment the row is tight — which
+   is the shape the dropdown exists to prevent, happening one level down. */
 .mlb-standings-tools .view-tab {
   white-space: nowrap;
 }
+
 /* What the board is drawn from, in words, because on a window the numbers are
    *ours* rather than MLB's and a table that does not say so is a table making a
    claim it has not earned. Capped at the prose column the news list uses: this
@@ -21855,6 +21852,37 @@ html[data-theme='light'] .league-table thead th {
   color: var(--faint);
 }
 
+/* **The two runs give way to their dropdowns, and 700 is measured rather than
+   borrowed.**
+
+   The app's own swap width is 640 and every other pill row in it uses that one.
+   This row is the case that cannot: it holds **two** runs on one line — the
+   grouping at 243px and the spans at 358 with 12px between them, **613px** — so
+   with the app's 22px gutters either side it needs a **657px** window, and at
+   640 the two would break to two lines for the seventeen pixels before the
+   dropdowns arrived. A row that is briefly two lines on the way to being one
+   control is the fault this swap exists to prevent, so the swap happens first.
+
+   700 rather than 657: the runs are fixed words, so the number would not move
+   on its own, and a round one leaves room for a sixth span or a fourth grouping
+   without this having to be re-measured.
+
+   **At the end of the file**, because a media query adds no specificity and
+   `.view-switch`'s own `display: inline-flex` is a thousand lines above. */
+@media (max-width: 700px) {
+  .mlb-standings-run.view-switch {
+    display: none;
+  }
+  .mlb-standings-select {
+    display: block;
+    /* Only as wide as its own widest option, so the two share a line at every
+       width they are drawn at — and `min-width: 0` so that at 320 one of them
+       gives up characters rather than pushing the row off screen. The pair the
+       research board draws takes the identical two declarations. */
+    flex: none;
+    min-width: 0;
+  }
+}
 /* **Narrow screens, and at the end of the file** — a media query adds no
    specificity, so a block that overrides the rules above has to sit after them.
    Two things give at 430: the card grid drops its 300px floor (below that a
