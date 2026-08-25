@@ -929,6 +929,24 @@ of them is a list of men the reader has no decision to make about — where ever
 card here is one press from his page and a possible add. The board's own `Δ`
 columns carry both directions and are the place for that reading.
 
+**And free agents only**, which is the same sentence one step further on. A man
+being added in three thousand leagues is news; a man being added in three
+thousand leagues *who is already on somebody's roster in this one* is news the
+reader can do nothing whatever about — and half the rail was that. The test is
+the research board's own: absent from `ownedIds` is available, where present
+means rostered by anybody, the reader included.
+
+Note what this does **not** filter on. `Ros%` is ESPN-wide and ownership is this
+league, so a man at 45% across ESPN who nobody here has taken stays on the rail
+— which is exactly the card worth drawing. Measured on the live league: the
+three rows went from `Sogard · Adell · Raleigh` to `Sogard · Lee · Gasper`,
+dropping the 80%-rostered catcher and keeping the 45% second baseman, and all
+three rows still filled their ten.
+
+**A null `ownedIds` draws nothing rather than everything.** The read has not
+landed, and the board states the failure this avoids in as many words: the
+alternative is a list that silently claims every player is available.
+
 **Three rows split by seat, not by kind.** A manager streaming a starter and a
 manager chasing saves are two different errands, and a mixed list makes each
 scan past the other's answers. `eligible` decides — ESPN's own positions, the

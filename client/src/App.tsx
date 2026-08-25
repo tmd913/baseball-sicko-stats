@@ -5882,6 +5882,18 @@ export default function App() {
    * board's own `Δ` columns carry both directions and are the place for that
    * reading.
    *
+   * **And free agents only**, which is the same sentence one step further on. A
+   * man being added in three thousand leagues is news; a man being added in
+   * three thousand leagues *who is already on somebody's roster in this one* is
+   * news the reader can do nothing whatever about, and half the rail was that.
+   * The test is the research board's own — absent from `ownedIds` is available,
+   * where present means rostered by anybody, the reader included.
+   *
+   * **A null `ownedIds` draws nothing rather than everything.** The read has not
+   * landed, and the board states the failure this avoids in as many words: the
+   * alternative is a list that silently claims every player is available. The
+   * block is absent for the moment it takes and appears whole.
+   *
    * **The seat comes from ESPN's eligibility**, the same join the padlock and
    * the slot chip run on, so a swingman listed at both reads as a starter —
    * which is what a league that lets you start him there means by it. A pitcher
@@ -5889,13 +5901,15 @@ export default function App() {
    */
   const trending = useMemo<TrendingBoard | null>(() => {
     const day = rosterTrend?.find((w) => w.window === 1);
-    if (!day || knownPlayers.length === 0) return null;
+    if (!day || !ownedIds || knownPlayers.length === 0) return null;
     const rows: (TrendingPlayer & { seat: keyof TrendingBoard })[] = [];
     for (const p of knownPlayers) {
       const delta = day.delta.get(p.id);
       // Absent is flat and `null` is withheld — `rosterTrends`' own two
       // absences, read the same way here.
       if (delta == null || delta <= 0) continue;
+      // Rostered by anybody in this league is rostered — see the note above.
+      if (ownedIds.has(p.id)) continue;
       const espnPositions = eligibility?.get(p.id) ?? null;
       const seat: keyof TrendingBoard =
         p.kind === 'batter'
@@ -5936,7 +5950,7 @@ export default function App() {
     // Nobody moved anywhere, which on a quiet morning is a real answer — and
     // the block says nothing rather than drawing three empty rows.
     return board.batters.length || board.starters.length || board.relievers.length ? board : null;
-  }, [rosterTrend, rosterPct, knownPlayers, eligibility, teamById]);
+  }, [rosterTrend, rosterPct, knownPlayers, eligibility, teamById, ownedIds]);
 
   /** Every player the season roster can place — what decides whether a league
    *  news row's name is a door, `openLeaguePlayer` below being the door itself
