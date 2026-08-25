@@ -4828,9 +4828,13 @@ export default function App() {
       /** Whose team — absent means the reader's own, which is what `/api/report`
        *  already means by an absent `teamId`. */
       teamId?: number,
+      /** **A poll leaves no mark.** Rule 1: a re-read of a card that already
+       *  has figures on it must not put a wait over them, so the live tick
+       *  passes this and the entry read does not. */
+      quiet = false,
     ) => {
       const seq = ++ovRead.current[which];
-      setLoading(true);
+      if (!quiet) setLoading(true);
       return api
         .report(date, date, usingFantasy ? 'fantasy' : 'saved', false, teamId)
         .then((r) => {
@@ -4845,7 +4849,7 @@ export default function App() {
           if (seq === ovRead.current[which]) console.error(`reading ${which} failed:`, e.message);
         })
         .finally(() => {
-          if (seq === ovRead.current[which]) setLoading(false);
+          if (seq === ovRead.current[which] && !quiet) setLoading(false);
         });
     },
     [usingFantasy],
@@ -4989,6 +4993,63 @@ export default function App() {
     proj(overviewDates.tomorrow, 'oppTomorrow', setOvOppTomorrow, setOvOppTomorrowLoading);
     proj(overviewDates.today, 'oppTodayProj', setOvOppTodayProjection, setOvOppTodayProjLoading);
   }, [view, overviewOppId, usingFantasy, overviewDates, loadOverviewDay]);
+
+  /**
+   * **The Overview's `TODAY` card follows the day it is about.**
+   *
+   * Every other card on this page is settled — yesterday is played and tomorrow
+   * is an estimate — and today is the one that moves. Left alone it was the
+   * figure the page happened to open on, so a card opened at noon still read
+   * noon's line at four o'clock, and the projection it had opened as never
+   * swapped for the result.
+   *
+   * **The same twenty seconds the roster's own live poll uses**
+   * (`LIVE_POLL_MS`), and the same gate: *a real game is under way*, read off
+   * the report already in hand rather than off a clock. Nothing ticks in the
+   * morning before first pitch or at midnight after the last out, which is what
+   * makes a poll on a page a reader leaves open all evening affordable.
+   *
+   * **The opponent's card rides the same tick**, for the reason the roster's
+   * projection rides its own: the two halves of this page are one comparison,
+   * and a page where your afternoon updated and his did not would be two
+   * different minutes read as a matchup.
+   *
+   * **Quietly** — no wait over a card that already has figures on it — and the
+   * swap out of the projected reading needs nothing of its own: `todayStarted`
+   * is derived from the report, so the first tick that carries a live game
+   * turns the estimate into the result.
+   */
+  const overviewLive =
+    view === 'overview' &&
+    [ovToday, ovOppToday].some((d) =>
+      (d?.players ?? []).some((r) =>
+        r.games.some((g) => g.date === overviewDates.today && g.status.state === 'live'),
+      ),
+    );
+  useEffect(() => {
+    if (!overviewLive) return;
+    const t = setInterval(() => {
+      void loadOverviewDay(
+        overviewDates.today,
+        'today',
+        setOvToday,
+        setOvTodayLoading,
+        undefined,
+        true,
+      );
+      if (overviewOppId != null) {
+        void loadOverviewDay(
+          overviewDates.today,
+          'oppToday',
+          setOvOppToday,
+          setOvOppTodayLoading,
+          overviewOppId,
+          true,
+        );
+      }
+    }, LIVE_POLL_MS);
+    return () => clearInterval(t);
+  }, [overviewLive, overviewDates.today, overviewOppId, loadOverviewDay]);
 
   /**
    * **A press on a day block's `See the day →`: the Roster view over that one

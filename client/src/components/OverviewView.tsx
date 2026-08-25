@@ -169,63 +169,88 @@ function anyPlay(line: DayLine): boolean {
   return (line.batting?.pa ?? 0) > 0 || (line.pitching?.battersFaced ?? 0) > 0;
 }
 
-/** A pitcher's day in one phrase — `6.0 IP, 6 K, 0 ER, W`. The batter's
- *  equivalent is `lib.ts::lineSummary`, which every other surface in the app
- *  already prints; there was no pitcher's twin of it because no other surface
- *  prints a pitcher's *day* in a sentence, and this is deliberately terser than
- *  `rangePitchingSummary` — over one outing an ERA is the earned runs and a
- *  WHIP is the baserunners, so printing both would be printing the same two
- *  numbers twice. */
+/**
+ * **A pitcher's day, in the order a pitching line is written**: `IP, H, R, ER,
+ * BB, K`, then his decision.
+ *
+ * It was `IP, K, ER, H, BB` — the categories first and the line's own order
+ * nowhere — which is the same mistake the row above it makes on purpose and
+ * this one has no reason to. A **played** day is a result, and a result has a
+ * form every reader of a box score already knows; a manager reading
+ * `6.0 IP, 3 H, 0 R, 0 ER, 2 BB, 7 K` is not decoding it. The *projected* row
+ * is where the categories belong, and it has them (below).
+ *
+ * **Every term, including the noughts**, which reverses the note this function
+ * used to carry about dropping a term at zero. That rule is right for a
+ * *phrase* and wrong for a *line*: `0 R, 0 ER` is the whole story of a
+ * shutout, and a line that silently omitted them would leave the reader
+ * counting commas to work out which figure was missing. The decision is the one
+ * thing still conditional, there being no such thing as a nought decision.
+ *
+ * **`R` as well as `ER`**, which the old phrase had no room for and a line must
+ * have: they differ exactly where an error has come into it, and that is a
+ * difference a manager is entitled to see rather than a rounding of it.
+ *
+ * A **loss** is the one decision that cannot be drawn: `PitchingLine` carries
+ * `wins`, `saves` and `holds` and no losses — the boxscore credit this app
+ * stores has never included them. Nothing is invented in its place.
+ */
 function pitchSummary(line: DayLine): string {
   const p = line.pitching;
   if (!p) return '—';
-  const parts = [`${formatIp(p.outs)} IP`, `${p.strikeouts} K`, `${p.earnedRuns} ER`];
-  // **The hits and the walks, not the baserunners they add up to.** `5 BR` is
-  // the WHIP numerator and nothing a reader thinks in: five hits and no walks
-  // is a different outing from one hit and four, and the line was spending a
-  // term to hide which. Each is dropped when it is nought rather than printed
-  // as one, the row being a phrase rather than a box score.
-  if (p.hits) parts.push(`${p.hits} H`);
-  if (p.walks) parts.push(`${p.walks} BB`);
+  const parts = [
+    `${formatIp(p.outs)} IP`,
+    `${p.hits} H`,
+    `${p.runs} R`,
+    `${p.earnedRuns} ER`,
+    `${p.walks} BB`,
+    `${p.strikeouts} K`,
+  ];
   if (p.wins) parts.push('W');
   if (p.saves) parts.push('SV');
   if (p.holds) parts.push('HD');
   return parts.join(', ');
 }
 
-/** A projected line in the same phrase, with the fractions kept. `0.7 H` reads
- *  as an expectation where `1 H` would read as a hit somebody got; an estimate
- *  never wears the same clothes as a measurement, and here that is the decimal
- *  as much as the dashed border around the block. */
-function projSummary(kind: 'batter' | 'pitcher', line: DayLine): string {
-  if (kind === 'pitcher') {
-    const p = line.pitching;
-    if (!p) return '—';
-    const parts = [`${(p.outs / 3).toFixed(1)} IP`, `${p.strikeouts.toFixed(1)} K`];
-    if (p.earnedRuns > 0) parts.push(`${p.earnedRuns.toFixed(1)} ER`);
-    if (p.wins >= 0.1) parts.push(`${p.wins.toFixed(1)} W`);
-    if (p.saves + p.holds >= 0.1) parts.push(`${(p.saves + p.holds).toFixed(1)} SVHD`);
-    return parts.join(', ');
-  }
-  const b = line.batting;
-  if (!b) return '—';
-  // **Four terms at most, and the fourth is whichever is worth most.** Six
-  // fractions wrapped to two lines in a 365px block and read as a table that
-  // had lost its columns; a projected day's *shape* is carried by the plate
-  // appearances, the hits and the one thing he is likelier than usual to do.
-  const parts = [`${b.pa.toFixed(1)} PA`, `${b.hits.toFixed(1)} H`];
-  const extras: [number, string][] = [
-    [b.hr, 'HR'],
-    [b.rbi, 'RBI'],
-    [b.runs, 'R'],
-    [b.sb, 'SB'],
-  ];
-  extras
-    .filter(([v]) => v >= 0.05)
-    .sort((x, y) => y[0] - x[0])
-    .slice(0, 2)
-    .forEach(([v, label]) => parts.push(`${v.toFixed(1)} ${label}`));
-  return parts.join(', ');
+/**
+ * **A projected line is the league's own categories, in the order the card
+ * above it prints them.**
+ *
+ * It was a fixed phrase — `4.4 PA, 0.9 H, 0.7 R, 0.6 RBI` for a batter,
+ * `5.3 IP, 5.5 K, 1.7 ER` for a pitcher — chosen for readability and answering
+ * a question nobody on this page is asking. **Plate appearances are not a
+ * category**, and neither are hits in a league that scores OPS. The block is
+ * headed by five columns; the row under it should be those five figures for
+ * this man, so the eye carries from `HR 1.7` on the team's line to the `0.2 HR`
+ * that is his share of it.
+ *
+ * **`categoryGroups` gives both the set and the order**, which is the same
+ * function the block's own header row is drawn from — so the row and the
+ * columns above it cannot come to disagree about which five, or in what order,
+ * and a league scoring something else gets its own five here for free.
+ *
+ * **A count keeps one decimal and a rate is formatted as itself.** `fmtValue`
+ * is right about the rates — an OPS is `.797` and an ERA is `3.76`, which is
+ * the whole reason it exists — and wrong about a projected count, where it
+ * would print `0.943` off a figure that is an expectation to a tenth at best.
+ * A category the line cannot produce is a dash rather than a nought: a man with
+ * no plate appearance projected has no OPS, and `.000` would be a claim.
+ */
+function projSummary(
+  kind: 'batter' | 'pitcher',
+  line: DayLine,
+  categories: EspnCategory[],
+): string {
+  const side = kind === 'pitcher' ? 'pitching' : 'batting';
+  const group = categoryGroups(categories).find((g) => g.side === side);
+  if (!group || group.categories.length === 0) return '—';
+  return group.categories
+    .map((c) => {
+      const v = categoryTotal(c, line);
+      if (v === null || !Number.isFinite(v)) return `— ${c.label}`;
+      return `${c.format === 'count' ? v.toFixed(1) : fmtValue(v, c)} ${c.label}`;
+    })
+    .join(', ');
 }
 
 /* ---- The day block ------------------------------------------------------- */
@@ -291,15 +316,19 @@ function PerformerRow({
   rank,
   p,
   projected,
+  categories,
   onOpenPlayer,
 }: {
   rank: number;
   p: Performer;
   projected: boolean;
+  /** The league's own, for a projected row — which prints them rather than a
+   *  phrase of this file's choosing. */
+  categories: EspnCategory[];
   onOpenPlayer: (id: number) => void;
 }) {
   const summary = projected
-    ? projSummary(p.kind, p.line)
+    ? projSummary(p.kind, p.line, categories)
     : p.kind === 'pitcher'
       ? pitchSummary(p.line)
       : // **No strikeouts on a ranking row** — see `lib.ts::lineSummary`, where the
@@ -427,17 +456,33 @@ function DayBlock({
           <CategoryLine categories={categories} line={total} projected={projected} />
           {top.length === 0 ? (
             <p className="ov-day-empty">
+              {/* **Four states, because the live tick made a fourth one
+                  visible.** With the card following the day, there is now a
+                  stretch — first pitch to first plate appearance — where the
+                  games have started and nobody has done anything, and `No games
+                  played yet.` was flatly wrong about it. The two facts are
+                  different and the card holds both: `games` counts fixtures
+                  that are under way or over, `anyPlay` asks whether anything
+                  has happened in them. */}
               {projected
                 ? `Nobody in ${lead.toLowerCase()}’s lineup has a game to play.`
                 : anyPlay(total)
                   ? 'Nobody in the lineup has done anything worth ranking yet.'
-                  : 'No games played yet.'}
+                  : total.games > 0
+                    ? 'Games are under way — nothing on the board yet.'
+                    : 'No games played yet.'}
             </p>
           ) : (
             <ol className="ov-perfs">
               {top.map((p, i) => (
                 <li key={p.key}>
-                  <PerformerRow rank={i + 1} p={p} projected={projected} onOpenPlayer={onOpenPlayer} />
+                  <PerformerRow
+                    rank={i + 1}
+                    p={p}
+                    projected={projected}
+                    categories={categories}
+                    onOpenPlayer={onOpenPlayer}
+                  />
                 </li>
               ))}
             </ol>
