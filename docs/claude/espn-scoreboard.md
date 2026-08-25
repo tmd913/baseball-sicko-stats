@@ -731,10 +731,21 @@ knowing before trusting the points-league card.
   bytes** on a checked week — which is the rule `espn-lineup-…` already follows
   for a finished day's roster and for the same reason: you cannot retroactively
   score a run in a week that is over. The period being played is memory-only on
-  **`LIVE_TTL_MS`**, a minute, which is the cadence the League page's own poll
-  reads through (**Client — the League view**, *The page updates itself, a
-  minute at a time*) — so a reader sitting on the scoreboard is never more than
-  about a minute behind ESPN, and a settled week costs nothing at all.
+  **`LIVE_TTL_MS`**, **thirty seconds**, which is the cadence the League page's
+  own poll reads through (**Client — the League view**, *The page updates
+  itself, half a minute at a time*) — so a reader sitting on the scoreboard is
+  never more than about a minute behind ESPN, and a settled week costs nothing
+  at all.
+
+  **It was a minute, and "about a minute behind" was out by a factor of two.**
+  The poll and this cache are two independent windows of the same length stacked
+  end to end, so a tick every 60s landing on a blob up to 60s old is up to
+  **120s** behind. ESPN's board, sampled every 20s across four minutes of live
+  games, moves **once a minute** — so the reader routinely missed a whole cycle.
+  Halving both together puts the worst case at 60s, which is that quantum. The
+  pairing with `lib.ts::LEAGUE_POLL_MS` is the load-bearing part: shorten one
+  without the other and the shorter is wasted. The sampling and the numbers are
+  in **Client — the League view**.
 - **`?refresh=1` drops every period of the league from memory**, not just the
   one asked for — "read my league again" is a statement about the league rather
   than about a week, which is exactly what `getOwnership` says — **while the
@@ -2230,9 +2241,10 @@ client says when the list is at it.
 transactions, 415 players, 197 adds, 49 drops and 4 trades; **140ms** at the
 first ask past the minute and **3.2ms** inside it.
 
-**What the polling costs upstream is one league's worth per minute, not one per
+**What the polling costs upstream is one league's worth per tick, not one per
 reader**, which is the measurement the whole cadence rests on: every cache in
 this file is keyed by league, so twelve leaguemates all sitting on the League
-page cost the same one read a minute that one of them does — and only while
-somebody has the page in front of them, a hidden browser tab skipping its ticks
-outright.
+page cost the same one read that one of them does — and only while somebody has
+the page in front of them, a hidden browser tab skipping its ticks outright.
+That is also what makes the cadence affordable to halve: two reads a minute for
+a whole league rather than two per reader.

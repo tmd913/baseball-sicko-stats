@@ -1829,13 +1829,33 @@ export function wideRange(start: string, end: string): string {
  * can drop somebody at any hour — and until now all three were read on entry
  * and then left, so a page anybody actually sits on quietly went stale.
  *
- * A minute rather than the report's twenty seconds, and the reason is what is
+ * Thirty seconds rather than the report's twenty, and the reason is what is
  * being watched. That poll tracks a *plate appearance* — bases, count, the
- * batter at the plate — where this tracks a **week's** totals, which ESPN's own
- * scoreboard does not move faster than about a minute anyway. It is matched to
- * `espn.ts::LIVE_TTL_MS` so that a tick either reads a cache under a minute old
- * or goes and asks, which is the cheapest way to be a minute behind ESPN and no
- * more.
+ * batter at the plate — where this tracks a **week's** totals off ESPN's own
+ * board.
+ *
+ * **It was a minute, and a minute was the wrong half of the arithmetic.** The
+ * reasoning was sound as far as it went — ESPN does not move faster than about
+ * a minute, so why ask more often — and it missed that the reader's lag is not
+ * the poll but **the poll plus the server's cache**, two independent windows of
+ * the same length stacked end to end. At 60/60 a tick lands on a blob up to
+ * 60s old, so the reader sits **up to two minutes behind ESPN and about a
+ * minute behind on average** — which, against a board that moves once a minute,
+ * means routinely missing a whole cycle. Reported as the matchup page being out
+ * of sync with everything else, and it was.
+ *
+ * **ESPN's cadence is measured rather than assumed now.** Sampled straight
+ * through the server every 20s across four minutes of live games (2026-08-24,
+ * 22:21–22:25 ET), its board moved at 22:23:10, 22:24:12 and 22:25:13 — gaps of
+ * **123s, 61s, 61s**, never inside a 20s window. The movement quantum is a
+ * minute, so polling faster than that buys nothing *from ESPN*; what buys
+ * something is not letting two minutes' worth of window stack in front of it.
+ *
+ * So both halves are halved together — this and `espn.ts::LIVE_TTL_MS`, which
+ * is matched to it by design — and the worst case goes **120s → 60s**, exactly
+ * ESPN's own quantum, so the reader can never be more than one cycle behind.
+ * Below 30 the returns go with it: a 15s pair would double the upstream traffic
+ * to be told the same numbers, the board having not moved.
  *
  * **A tick is skipped while the tab is hidden**, which is where this parts from
  * the report poll deliberately: a league read is 10–120KB upstream against a
@@ -1844,7 +1864,7 @@ export function wideRange(start: string, end: string): string {
  * immediately rather than waiting out the interval, so what a reader returns to
  * is current — which is also what keeps the Transactions dot honest.
  */
-export const LEAGUE_POLL_MS = 60_000;
+export const LEAGUE_POLL_MS = 30_000;
 
 /**
  * **How often the roster re-reads itself while a game is being played** — the

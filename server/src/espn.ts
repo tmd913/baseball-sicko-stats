@@ -62,9 +62,19 @@ const OWNERSHIP_TTL_MS = 10 * 60 * 1000;
  * Ten minutes is the right span for a *roster*, which changes when a manager
  * acts; it is far too long for a scoreboard, which changes while games are on
  * and which is the one thing somebody sitting on the League page is watching.
- * A minute is what makes that page live: the client polls the tab it is showing
- * on the same cadence, so a poll either reads a cache under a minute old or
- * goes and asks, and the reader is never more than about a minute behind ESPN.
+ * Thirty seconds is what makes that page live: the client polls the tab it is
+ * showing on the same cadence, so a poll either reads a cache under thirty
+ * seconds old or goes and asks.
+ *
+ * **It was a minute, matched to a minute's poll, and the two stacked.** "Never
+ * more than about a minute behind ESPN" was the claim and it was out by a
+ * factor of two: a tick every 60s landing on a blob up to 60s old is **up to
+ * 120s behind**, and ESPN's board — sampled every 20s across four minutes of
+ * live games — moves once a minute, so the reader routinely missed a whole
+ * cycle. Halving both windows together puts the worst case at 60s, which is
+ * that quantum, so the page can never be more than one of ESPN's own updates
+ * behind. The pairing is the load-bearing part: change this without changing
+ * `lib.ts::LEAGUE_POLL_MS` and the shorter of the two is wasted.
  *
  * **What this deliberately does not shorten is anything settled.** A finished
  * matchup period and a finished span are facts and are read back off their
@@ -73,7 +83,7 @@ const OWNERSHIP_TTL_MS = 10 * 60 * 1000;
  * somebody has the page open (`App.tsx::LEAGUE_POLL_MS`, which skips a tick
  * while the tab is hidden).
  */
-const LIVE_TTL_MS = 60 * 1000;
+const LIVE_TTL_MS = 30 * 1000;
 
 /** The MLB name index changes only as players are added to the season roster. */
 const INDEX_TTL_MS = 60 * 60 * 1000;
