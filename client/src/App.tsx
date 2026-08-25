@@ -4804,6 +4804,29 @@ export default function App() {
   const [ovYesterdayLoading, setOvYesterdayLoading] = useState(false);
   const [ovTomorrowLoading, setOvTomorrowLoading] = useState(false);
   const [ovTodayProjLoading, setOvTodayProjLoading] = useState(false);
+  /**
+   * **Have the two effects below actually fired?** — which is the one thing
+   * eight `loading` flags cannot say, and the whole difference between *this
+   * read has not started* and *this read is over*. Both look identical from
+   * outside: nothing in flight and nothing in hand.
+   *
+   * It matters because the page is drawn all at once now (see
+   * `overviewSettled`), so the gate has to hold through the window before
+   * anything is asked for — a fantasy reader's four reads wait on
+   * `espnStatusSettled`, and the opponent's four wait on a board that lands
+   * later still. Without these the gate would read *settled* on the very first
+   * render, draw an empty page, and then be overtaken by everything it was
+   * supposed to wait for.
+   *
+   * A latch rather than a counter, and never lowered: a **re**-read is the case
+   * rule 1 protects — the last answer stays standing and no curtain goes over
+   * it — so once these are up they have said all they have to say. The
+   * opponent's stays up across a period step for the same reason, which leaves
+   * last week's cards on screen while this week's are read rather than blanking
+   * the foot of the page.
+   */
+  const [ovFired, setOvFired] = useState(false);
+  const [ovOppFired, setOvOppFired] = useState(false);
   /** One sequence number per block, not one for the view: the three reads land
    *  independently and a slow projection must not discard a fresh Today. Only
    *  the newest of each may write, which is the app's own rule for any read
@@ -4885,6 +4908,7 @@ export default function App() {
     // later. See the report effect above, which carries the measurement.
     if (!prefsSettled && !rosterSourceFromUrl) return;
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
+    setOvFired(true);
     void loadOverviewDay(overviewDates.today, 'today', setOvToday, setOvTodayLoading);
     void loadOverviewDay(
       overviewDates.yesterday,
@@ -4954,6 +4978,7 @@ export default function App() {
   const overviewOppId = overviewOpponent?.teamId ?? null;
   useEffect(() => {
     if (view !== 'overview' || overviewOppId == null || !usingFantasy) return;
+    setOvOppFired(true);
     void loadOverviewDay(
       overviewDates.today,
       'oppToday',
@@ -4993,6 +5018,86 @@ export default function App() {
     proj(overviewDates.tomorrow, 'oppTomorrow', setOvOppTomorrow, setOvOppTomorrowLoading);
     proj(overviewDates.today, 'oppTodayProj', setOvOppTodayProjection, setOvOppTodayProjLoading);
   }, [view, overviewOppId, usingFantasy, overviewDates, loadOverviewDay]);
+
+  /**
+   * **Has the Overview got everything it is going to draw?**
+   *
+   * The page is a composition of up to nine reads that answer over about a
+   * second, and it used to draw each of them the moment it had it. What that
+   * looks like from a chair is the fault: the matchup card lands, the page
+   * jumps; three day cards swap their own waits for figures one at a time, each
+   * a different height, and the carousel resizes under the finger; then the
+   * board answers, `Their days` appears out of nothing, and the page grows by a
+   * second carousel. Six reflows to arrive at one page. The app's rule that a
+   * block wait belongs where there is nothing to show yet was being kept **per
+   * card** on a surface where the *page* is the unit — three cards of one row
+   * are not three panes, and a heading that appears a beat after the block it
+   * names was never one either.
+   *
+   * So the whole body waits, and lands at once. Which is a question only this
+   * component can answer: the view is handed eight loading flags and can see
+   * that none is up, and cannot see that four of them have not been *raised*
+   * yet, or that a board is still in flight whose answer decides whether there
+   * is a `Their days` section at all.
+   *
+   * **Four terms, and each is a different way of not being finished:**
+   *
+   * - `ovFired` — the reader's own four have been asked for. Before that they
+   *   are waiting on `prefsSettled` and `espnStatusSettled`, which from outside
+   *   is indistinguishable from having finished.
+   * - the four flags — none of them still in flight.
+   * - the board — `espnStatusSettled` says whether one is even coming, and then
+   *   `scoreboard` or `scoreboardError` says it has come, **one way or the
+   *   other**. The error term is what keeps a dead ESPN from spinning this page
+   *   for ever: a failure costs the matchup card and the opponent's carousel,
+   *   which is this app's rule that a failure costs its own column and never
+   *   the request.
+   * - the opponent's four, on the same two terms as the reader's own, and only
+   *   where there is an opponent to read: no league, no matchup, a bye and a
+   *   saved-watchlist reader all resolve to no section rather than to a wait.
+   *
+   * **A failed day read settles like a successful one**, `loading` going false
+   * either way — the card has an empty state for it (`no roster is being read`)
+   * and drawing that is finishing, not failing to finish.
+   *
+   * **It is false again on a re-read and the page does not blank**, which is
+   * rule 1 and is enforced one level down: `OverviewView` latches the first
+   * settle and never puts the curtain up twice. The live tick is quiet and does
+   * not move this at all.
+   */
+  const overviewSettled =
+    ovFired &&
+    !ovTodayLoading &&
+    !ovYesterdayLoading &&
+    !ovTomorrowLoading &&
+    !ovTodayProjLoading &&
+    espnStatusSettled &&
+    (!needsScoreboard || scoreboard !== null || scoreboardError !== null) &&
+    (overviewOppId == null ||
+      !usingFantasy ||
+      (ovOppFired &&
+        !ovOppTodayLoading &&
+        !ovOppYesterdayLoading &&
+        !ovOppTomorrowLoading &&
+        !ovOppTodayProjLoading));
+
+  /**
+   * **And once it has been drawn, it is never curtained again** — rule 1, which
+   * `overviewSettled` on its own would break in two places. Crossing to another
+   * tab and back **unmounts and remounts** the view, and its effects re-fire, so
+   * the raw flag goes false over four reads whose last answers this component is
+   * still holding; the clock rolling on resume does the same. Both are re-reads,
+   * and a re-read leaves the last answer standing.
+   *
+   * Latched here rather than in the view for exactly that reason: a `useRef` in
+   * `OverviewView` is a new ref on every remount, which is the case it is needed
+   * for. The `||` is what makes the first settle frame-accurate — the term is
+   * already true on the render that flips it, and this only has to catch up.
+   */
+  const [ovDrawn, setOvDrawn] = useState(false);
+  useEffect(() => {
+    if (overviewSettled) setOvDrawn(true);
+  }, [overviewSettled]);
 
   /**
    * **The Overview's `TODAY` card follows the day it is about.**
@@ -8225,6 +8330,13 @@ export default function App() {
           onOpenPlayer={openLeaguePlayer}
           onSeeDay={openOverviewDay}
           connected={espnConnected}
+          /* Whether every read behind this page has answered — see
+             `overviewSettled` above, which is the one thing the view is not
+             already holding: that four of its eight flags have not been raised
+             yet, and that a board is still to say whether there is a foot to
+             the page. Latched, so a re-read never puts the curtain back up over
+             cards this component is still holding. */
+          ready={overviewSettled || ovDrawn}
         />
       ) : view === 'league' ? (
         <LeagueView
