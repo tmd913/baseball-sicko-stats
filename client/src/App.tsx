@@ -168,8 +168,9 @@ import LeagueTeam from './components/LeagueTeam';
 import OverviewView, { TRENDING_CARD_WINDOWS, TRENDING_TOP } from './components/OverviewView';
 import type {
   RailBoard,
-  TrendingBoard,
+  SpotlightTab,
   TrendingPlayer,
+  TrendingRail,
   ValuePlayer,
   ValueRail,
 } from './components/OverviewView';
@@ -2513,6 +2514,47 @@ export default function App() {
     const raw = initialParams.get('mgrp');
     return raw === 'wildcard' || raw === 'league' ? raw : 'division';
   });
+
+  /**
+   * **Which reading the Overview's Player Spotlight is showing** — its two rails
+   * are one block with a switch now, and this is which side of it.
+   *
+   * In the URL as `spot=value`, by the rule every other tab strip in this app
+   * follows (`lt=`, `mlb=`, `mgrp=`): which data a view shows belongs in the
+   * link, and a link that leaves it out describes a different page. Absent means
+   * `trending`, which is the rail the block opens on and the one that lands
+   * first — so the common case writes nothing.
+   *
+   * An unrecognized value **falls back rather than emptying the view**, here as
+   * everywhere, and so does a `spot=value` that arrives before the value rail
+   * does (or on a matchup with no days left, which has none) — the section picks
+   * the first tab it actually has.
+   */
+  const [spotlightTab, setSpotlightTab] = useState<SpotlightTab>(() =>
+    initialParams.get('spot') === 'value' ? 'value' : 'trending',
+  );
+
+  /**
+   * **Which window the trending rail is ranked on**, of the three its cards
+   * print — `spotw=3` in the URL, one day being the rail's own default and so
+   * writing nothing.
+   *
+   * A separate piece of state from the tab above rather than a compound one,
+   * because the two are answers to different questions and a reader who has
+   * picked `7D`, looked at the value rail and come back should find `7D` where
+   * they left it. It survives the crossing of the spotlight's own switch for the
+   * same reason a span survives the crossing of a kind: a sub-selection inside a
+   * page is not a leaving.
+   *
+   * An unrecognized value falls back to the default here, and a window the
+   * ownership read has **no baseline for** falls back in `trending` below — the
+   * board it would rank cannot be built, and an empty rail under a pressed tab
+   * says the wrong thing about a league where nobody moved.
+   */
+  const [spotWindow, setSpotWindow] = useState<TrendWindow>(() => {
+    const raw = Number(initialParams.get('spotw'));
+    return (TRENDING_CARD_WINDOWS as readonly number[]).includes(raw) ? (raw as TrendWindow) : 1;
+  });
   /** Whether the Scoreboard's calendar is open. Its own flag rather than the
    *  app bar's `dateOpen`: the two bars are never on screen together, but one
    *  left open behind a view change would open the other. */
@@ -4595,6 +4637,14 @@ export default function App() {
     if (view === 'mlb' && mlbTab === 'standings' && standingsGroup !== 'division') {
       p.set('mgrp', standingsGroup);
     }
+    // Scoped to the view that draws it, the rule above's own — a spotlight tab
+    // on a link to the Roster names a reading that is not in force.
+    if (view === 'overview' && spotlightTab !== 'trending') p.set('spot', spotlightTab);
+    // Scoped to the tab that draws it, one step further in — a window on a link
+    // that opens the value rail names a ranking nothing on screen is made of.
+    if (view === 'overview' && spotlightTab === 'trending' && spotWindow !== 1) {
+      p.set('spotw', String(spotWindow));
+    }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     // The feed's own lens — one key, the row above being single-select.
@@ -4680,6 +4730,8 @@ export default function App() {
     mlbTab,
     mlbDay,
     standingsGroup,
+    spotlightTab,
+    spotWindow,
     matchupId,
     matchupTeam,
     matchupReading,
@@ -6149,18 +6201,25 @@ export default function App() {
    * which is what a league that lets you start him there means by it. A pitcher
    * ESPN cannot place falls to `starter`, the app's own answer for one.
    */
-  const trending = useMemo<TrendingBoard | null>(() => {
-    const day = rosterTrend?.find((w) => w.window === 1);
-    if (!day || !ownedIds || knownPlayers.length === 0) return null;
+  const trending = useMemo<TrendingRail | null>(() => {
+    if (!ownedIds || knownPlayers.length === 0) return null;
     // The windows the card draws, of the five the ownership read carries — see
     // `TRENDING_CARD_WINDOWS`. Found once rather than per player, the list being
     // five entries and the loop below six hundred.
     const windows = TRENDING_CARD_WINDOWS.map((w) => rosterTrend?.find((x) => x.window === w)).filter(
       (w): w is NonNullable<typeof w> => w != null,
     );
-    const rows: (TrendingPlayer & { seat: keyof TrendingBoard; delta: number })[] = [];
+    // **The window asked for, or the first one there is.** A `?spotw=7` link, or
+    // a reader who picked seven days on a league whose history only reaches
+    // three, would otherwise get an empty rail under a pressed tab — which reads
+    // as *nobody moved* rather than as *that span cannot be measured yet*. The
+    // rail carries the window it actually used and the switch marks that one, so
+    // the page never claims a ranking it did not make.
+    const on = windows.find((w) => w.window === spotWindow) ?? windows[0];
+    if (!on) return null;
+    const rows: (TrendingPlayer & { seat: keyof RailBoard<TrendingPlayer>; delta: number })[] = [];
     for (const p of knownPlayers) {
-      const delta = day.delta.get(p.id);
+      const delta = on.delta.get(p.id);
       // Absent is flat and `null` is withheld — `rosterTrends`' own two
       // absences, read the same way here.
       if (delta == null || delta <= 0) continue;
@@ -6173,7 +6232,7 @@ export default function App() {
       const deltas: Partial<Record<TrendWindow, number | null>> = {};
       for (const w of windows) deltas[w.window] = w.delta.get(p.id) ?? null;
       const espnPositions = eligibility?.get(p.id) ?? null;
-      const seat: keyof TrendingBoard =
+      const seat: keyof RailBoard<TrendingPlayer> =
         p.kind === 'batter'
           ? 'batters'
           : espnPositions
@@ -6198,16 +6257,16 @@ export default function App() {
         kind: p.kind,
         rosterPct: rosterPct?.get(p.id) ?? null,
         // **The card prints three windows and is sorted on one**, so the row
-        // carries both: `deltas` is what is drawn and `delta` is the one-day
-        // move the list is ranked by, which the filter above has already
-        // established is a positive number.
+        // carries both: `deltas` is what is drawn and `delta` is the move over
+        // the window in force, which the filter above has already established is
+        // a positive number.
         deltas,
         delta,
         seat,
       });
     }
     rows.sort((a, b) => b.delta - a.delta);
-    const take = (seat: keyof TrendingBoard): TrendingPlayer[] =>
+    const take = (seat: keyof RailBoard<TrendingPlayer>): TrendingPlayer[] =>
       rows.filter((r) => r.seat === seat).slice(0, TRENDING_TOP);
     const board = {
       batters: take('batters'),
@@ -6216,8 +6275,10 @@ export default function App() {
     };
     // Nobody moved anywhere, which on a quiet morning is a real answer — and
     // the block says nothing rather than drawing three empty rows.
-    return board.batters.length || board.starters.length || board.relievers.length ? board : null;
-  }, [rosterTrend, rosterPct, knownPlayers, eligibility, teamById, ownedIds]);
+    return board.batters.length || board.starters.length || board.relievers.length
+      ? { board, window: on.window, windows: windows.map((w) => w.window) }
+      : null;
+  }, [rosterTrend, rosterPct, knownPlayers, eligibility, teamById, ownedIds, spotWindow]);
 
   /**
    * **The days the matchup has left**, which is what the value rail is drawn
@@ -9582,6 +9643,11 @@ export default function App() {
           trending={trending}
           /* …and who the projection likes for the rest of the week. */
           highValue={highValue}
+          /* …and which of the two the switch between them is on, and which
+             window the trending one is ranked over. */
+          spotlight={spotlightTab}
+          onSpotlight={setSpotlightTab}
+          onSpotWindow={setSpotWindow}
           dates={overviewDates}
           onOpenPlayer={openLeaguePlayer}
           onSeeDay={openOverviewDay}
