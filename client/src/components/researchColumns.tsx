@@ -90,14 +90,47 @@ export interface Column {
   headNode?: ReactNode;
 }
 
-/** The column list cut into the picker's labeled sections. */
+/**
+ * The column list cut into the picker's labeled sections.
+ *
+ * **A column names its section and the ones after it follow**, which is what
+ * makes the picker's order the table's order — a reader who has found `OBP`
+ * three columns along finds it three chips along.
+ *
+ * **A title names one section, however many times it is used.** The projected
+ * lens is the case that made this necessary: `VAL` is a fantasy figure and
+ * belongs beside `Ros%` in the picker, but it leads the table's stat run and
+ * `Ros%` closes it, so the two runs are at opposite ends of the same list. Cut
+ * positionally they were two sections both called `Fantasy` — which React draws
+ * under one key, and which asks the reader which of the two identical headings
+ * is the one they want.
+ *
+ * **A recurring section sits where its *last* naming column does**, not its
+ * first. Ordering on the first would move `Fantasy` from the end of the picker
+ * — where a reader has learned `Ros%` and the `Δ` windows are — up to second,
+ * for the sake of the one line of it that leads the table. The run a reader
+ * scrolls to is the run that decides where the section is.
+ */
 export function columnGroups(columns: Column[]): { title: string; columns: Column[] }[] {
-  const out: { title: string; columns: Column[] }[] = [];
+  const byTitle = new Map<string, Column[]>();
+  const order: string[] = [];
+  let current = 'Stats';
   for (const c of columns) {
-    if (c.group || out.length === 0) out.push({ title: c.group ?? 'Stats', columns: [] });
-    out[out.length - 1].columns.push(c);
+    if (c.group) {
+      current = c.group;
+      // Named again: the section keeps its columns and takes the new position.
+      const at = order.indexOf(current);
+      if (at >= 0) order.splice(at, 1);
+      order.push(current);
+    } else if (!byTitle.has(current)) {
+      // The leading run, before any column has named a section.
+      order.push(current);
+    }
+    const held = byTitle.get(current);
+    if (held) held.push(c);
+    else byTitle.set(current, [c]);
   }
-  return out;
+  return order.map((title) => ({ title, columns: byTitle.get(title) ?? [] }));
 }
 
 /** A club's winning percentage off the record its row carries, guarded like
@@ -345,23 +378,39 @@ export const trendKey = (w: TrendWindow): string => (w === 7 ? 'rosterTrend' : `
 
 const trendOf = (r: ResearchRow, w: TrendWindow): number | null => r.rosterTrends?.[w] ?? null;
 
+/**
+ * **How a roster-% move is written**, wherever one is drawn — this board's five
+ * `\u0394` columns and the Overview's trending cards, which print the same three
+ * of them on a 124px card.
+ *
+ * Zero takes no sign at all. It used to come out as `\u22120.0`, the sign being
+ * chosen on `> 0` — which reads as a fall of nothing, and there are a great many
+ * flat players on a board that drops zeroes from the wire.
+ *
+ * Exported so the rail cannot come to write it differently: two implementations
+ * of one presentation are two that will one day disagree about the em dash.
+ */
+export function formatTrend(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '\u2014';
+  if (v === 0) return '0.0';
+  return `${v > 0 ? '+' : '\u2212'}${Math.abs(v).toFixed(1)}`;
+}
+
+/** …and which way it points, for the two classes that color it. Null at both
+ *  absences and at a flat zero — a move of nothing is not a direction. */
+export function trendDirection(v: number | null | undefined): 'up' | 'down' | null {
+  return v === null || v === undefined || v === 0 ? null : v > 0 ? 'up' : 'down';
+}
+
 const trendColumn = (w: TrendWindow): Column => ({
   key: trendKey(w),
   label: `\u0394${w}d`,
   title: `Change in roster % over the last ${w === 1 ? 'day' : `${w} days`}`,
-  format: (r) => {
-    const v = trendOf(r, w);
-    // Zero takes no sign at all. It used to come out as "\u22120.0", the sign
-    // being chosen on `> 0` — which reads as a fall of nothing, and there are a
-    // great many flat players on a board that drops zeroes from the wire.
-    if (v === null) return '\u2014';
-    if (v === 0) return '0.0';
-    return `${v > 0 ? '+' : '\u2212'}${Math.abs(v).toFixed(1)}`;
-  },
+  format: (r) => formatTrend(trendOf(r, w)),
   value: (r) => trendOf(r, w),
   cellClass: (r) => {
-    const v = trendOf(r, w);
-    return v === null || v === 0 ? undefined : v > 0 ? 'research-trend-up' : 'research-trend-down';
+    const dir = trendDirection(trendOf(r, w));
+    return dir === null ? undefined : dir === 'up' ? 'research-trend-up' : 'research-trend-down';
   },
 });
 
@@ -843,7 +892,14 @@ function projectedValueColumn(categories: EspnCategory[]): Column {
     title:
       'What his projected line is worth over these days, in the categories your league scores — the figure the Overview ranks its top performers by, totalled over the span rather than per day',
     pick: 'Projected value',
-    group: 'Value',
+    // **`Fantasy`, with `Ros%` and the `Δ` windows** — the section for the facts
+    // that exist only because a league is connected, which is exactly what this
+    // is: a line scored against *your* categories. It read `Value` and that was
+    // wrong twice over — a section of its own for one column, and, the cut being
+    // positional, a section that then swallowed the whole counting run behind it
+    // and retitled it. Measured on the lens before the fix, the picker's second
+    // section read `Value` over `VAL PA AB H/AB R HR RBI BB K SB CS`.
+    group: 'Fantasy',
     format: (r) => {
       const v = valueOf(r);
       return v === null ? '\u2014' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
@@ -895,7 +951,15 @@ export function projectedColumns(kind: PlayerKind, oneDay: boolean, categories: 
   const withValue = [
     ...stats.slice(0, 1),
     projectedValueColumn(categories),
-    ...stats.slice(1),
+    // **The counting run is put back on its own section**, which inserting a
+    // grouped column into the middle of it takes away: the picker's cut runs a
+    // section on until the next column that names one, so `PA` onwards would
+    // otherwise be filed under `VAL`'s. It re-declares `G`'s own title rather
+    // than a title of its own, and `columnGroups` merges the two runs — so the
+    // reader sees one `Counting` section holding the eleven columns the board
+    // draws in that order.
+    ...stats.slice(1, 2).map((c) => ({ ...c, group: c.group ?? stats[0].group ?? 'Stats' })),
+    ...stats.slice(2),
     // **Roster % and the five trend windows survive the lens**, which they did
     // not and should have. Every other column here is a *stat*, and the lens's
     // rule is that it draws only what a projection can fill — which is what

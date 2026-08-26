@@ -42,6 +42,7 @@
  * See `docs/claude/client-overview.md`.
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type {
   EspnCategory,
   EspnScoreboard,
@@ -50,6 +51,7 @@ import type {
   PlayerReport,
   RosterProjection,
   SeasonPlayer,
+  TrendWindow,
 } from '../types';
 import { playerKey } from '../types';
 import { categoryTotal, dayValue, STANDARD_5X5 } from '../categoryValue';
@@ -65,6 +67,10 @@ import {
   prettyGameDate,
   surname,
 } from '../lib';
+// The board's own two, imported rather than written again: the trending cards
+// print the same fact its `Δ` columns do, and one presentation of a signed move
+// is one place for it to be decided.
+import { formatTrend, trendDirection } from './researchColumns';
 import { LoadingBlock } from './Loading';
 import { useDelayedFlag } from '../hooks';
 import { useOverflowArrows } from './TabStrip';
@@ -618,78 +624,152 @@ function DayBlock({
   );
 }
 
-/* ---- Trending players ---------------------------------------------------- */
+/* ---- The two player rails ------------------------------------------------ */
 
 /**
- * **Who the league is picking up**, in three rows of ten.
+ * **The rails at the foot of the page** — three side-scrolling rows of ten
+ * cards, split by seat, every card a door into that player's page. There are
+ * two of them and they are one component drawn twice.
  *
- * The one block on this page that is not about the reader's own roster. Every
- * other card here answers *how is my week going*; this answers *what is
- * everybody else doing about theirs*, which is the question the research
- * board's `Ros%` and `Δ` columns exist for — read there by sorting six hundred
- * rows, and read here by looking.
+ * They are the only blocks here that are not about the reader's own roster.
+ * Everything above answers *how is my week going*; these answer *what should I
+ * do about it*, and they answer it from the two directions a manager weighs
+ * against each other:
  *
- * **One day, not seven.** The board offers five windows and this takes the
- * shortest, because a section called *trending* is about what happened
- * overnight: a man added in three thousand leagues since yesterday is news, and
- * the same man a week into a run is a player the reader has already decided
- * about. The longer windows stay where they are useful, which is beside a stat
- * line you can sort.
+ * - **Trending Players** — who the league has been picking up. The question the
+ *   research board's `Ros%` and `Δ` columns exist for, read there by sorting six
+ *   hundred rows and read here by looking.
+ * - **High Value Players** — who the projection says is worth the most over the
+ *   days this matchup has left. The same question the board's `VAL` column under
+ *   the projected lens answers, and the same arithmetic
+ *   (`categoryValue.ts::dayValue`) the day cards above rank their performers by.
+ *
+ * The pair is the reading. A man on both rails is one the league has noticed
+ * *and* the projection likes; a man on the second alone is the pickup nobody has
+ * got to yet, which is the best card on the page.
  *
  * **Three rows rather than one of thirty**, and the split is by seat rather than
  * by kind: a manager streaming a starter and a manager chasing saves are two
  * different errands, and a mixed list makes each of them scan past the other's
- * answers. It is `eligible` that says which — ESPN's own positions, the same
- * join the padlock and the slot chip run on — so a swingman ESPN lists at both
- * reads as a starter, which is what a league that lets you start him there
- * means by it.
+ * answers. It is ESPN's own eligibility that says which — the same join the
+ * padlock and the slot chip run on — so a swingman listed at both reads as a
+ * starter, which is what a league that lets you start him there means by it.
  *
- * **It needs a connected league and says nothing without one.** Roster
- * percentages are ESPN's, so a reader with no league has no trend to draw and
- * the block is absent rather than empty — the app's rule that a section with
- * nothing to say is not a section.
+ * **Free agents only, on both.** A man being added in three thousand leagues is
+ * news; a man being added in three thousand leagues *who is already on
+ * somebody's roster in this one* is news the reader can do nothing whatever
+ * about. The same sentence holds one step further on for the value rail: a rail
+ * of the best players in baseball is a rail of men nobody can have, and the
+ * arithmetic is only worth printing where there is a decision behind it.
+ *
+ * **Both need a connected league and say nothing without one.** Roster
+ * percentages are ESPN's and so is the category list a value is scored over, so
+ * a reader with no league has neither rail — absent rather than empty, the app's
+ * rule that a section with nothing to say is not a section.
  */
 
-/** One card. The identity, what share of leagues have him now, and the move
- *  that put him on this list. */
-export interface TrendingPlayer {
+/** What every card on either rail draws above its figure: the identity, and the
+ *  club and seat under it. */
+export interface RailPlayer {
   id: number;
   name: string;
+  /** The abbreviation — `BOS`, not `Boston Red Sox`. A full club name is three
+   *  characters too many on a card this wide; see `App`'s own note, where the
+   *  ellipsized second line that established it is measured. */
   team: string;
   /** ESPN's own, where there is one — `SP`, `RP`, `2B/SS`. Falls back to MLB's
    *  listed position, which is what the roster tables do for a player ESPN
    *  cannot be joined to. */
   position: string;
   kind: PlayerKind;
-  /** Share of leagues rostering him now, or null where ESPN gave none. */
-  rosterPct: number | null;
-  /** The move over the last day, in points of roster percentage. Always
-   *  positive on this list — see `TRENDING_MIN`. */
-  delta: number;
 }
 
-export interface TrendingBoard {
-  batters: TrendingPlayer[];
-  starters: TrendingPlayer[];
-  relievers: TrendingPlayer[];
+/** One card on the trending rail. */
+export interface TrendingPlayer extends RailPlayer {
+  /** Share of leagues rostering him now, or null where ESPN gave none. */
+  rosterPct: number | null;
+  /**
+   * The move over each window the card draws, in points of roster percentage.
+   *
+   * **A window may be missing and a window may be null, and they are different
+   * absences** — the research board's own two, read the same way here. Missing
+   * is a span the server found no baseline for; null is a player ESPN has no
+   * roster % for at all. Both print an em dash, and neither is a nought.
+   */
+  deltas: Partial<Record<TrendWindow, number | null>>;
+}
+
+/** One card on the high-value rail. */
+export interface ValuePlayer extends RailPlayer {
+  /** What his projected line is worth over the days the matchup has left, in
+   *  the categories the league scores — `categoryValue.ts`, over the span
+   *  undivided, which is the reading a projected board is opened for. */
+  value: number;
+  /** How many games that projection is made of, which is the context the figure
+   *  is meaningless without: six games of a good hitter outscore three of an
+   *  equal one, and this is the column that says which he is. */
+  games: number;
+  rosterPct: number | null;
+}
+
+export interface RailBoard<T> {
+  batters: T[];
+  starters: T[];
+  relievers: T[];
+}
+export type TrendingBoard = RailBoard<TrendingPlayer>;
+
+/** The value rail, and the span it was drawn over — the heading names the last
+ *  day so the reader never has to guess how far ahead the figure looks. */
+export interface ValueRail {
+  board: RailBoard<ValuePlayer>;
+  /** Last day of the projected span, `YYYY-MM-DD`. */
+  through: string;
 }
 
 /** How many each row holds. Ten is what the reader asked for and is about what
  *  a row can show before it stops being a glance and becomes a table. */
 export const TRENDING_TOP = 10;
 
-const TRENDING_ROWS: { key: keyof TrendingBoard; label: string }[] = [
+/**
+ * **The three windows a trending card prints**, of the five the board offers.
+ *
+ * One number was the whole card and it was the wrong number to be alone with: a
+ * four-point move overnight is a different player depending on whether the week
+ * behind it is `+4` or `+20`, and the card could not tell them apart. Three
+ * spans read as a shape — flat then sharp is a man who just did something, and a
+ * steady climb is a man the league has been coming round to for a week.
+ *
+ * **Three rather than five.** `15d` and `30d` are the two that answer *is he
+ * established*, which is a question about the season and belongs beside a stat
+ * line you can sort; a section called *trending* is about the last few days, and
+ * two more columns on a 124px card is a table.
+ *
+ * The rail is still **sorted on the first of them** — the heading says so — and
+ * they are drawn in span order so the eye reads left to right through time.
+ */
+export const TRENDING_CARD_WINDOWS = [1, 3, 7] as const;
+
+const RAIL_ROWS: { key: keyof RailBoard<RailPlayer>; label: string }[] = [
   { key: 'batters', label: 'Batters' },
   { key: 'starters', label: 'Starting Pitchers' },
   { key: 'relievers', label: 'Relievers' },
 ];
 
-function TrendingCard({
+/**
+ * The card both rails draw: face, name, club and seat, then whatever figure the
+ * rail it is on is about. A `<button>`, because every one of them is a door into
+ * that player's page and a door has to be in the tab order and answer a
+ * keyboard.
+ */
+function RailCard({
   p,
   onOpenPlayer,
+  children,
 }: {
-  p: TrendingPlayer;
+  p: RailPlayer;
   onOpenPlayer: (id: number) => void;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -704,32 +784,74 @@ function TrendingCard({
         {p.team}
         {p.position ? ` · ${p.position}` : ''}
       </span>
-      {/* **The move is the reading and the level is the context**, in that
-          order and at that weight: the row is sorted by the first, and the
-          second is what says whether a 4-point move is a pickup nobody had or a
-          man half the league already owns. */}
-      <span className="trend-card-delta">+{p.delta.toFixed(1)}</span>
-      <span className="trend-card-pct">
-        {p.rosterPct === null ? '\u2014' : `${p.rosterPct.toFixed(0)}% rostered`}
-      </span>
+      {children}
     </button>
   );
 }
 
-function TrendingBlockView({
-  trending,
+/**
+ * The three moves, labeled and in span order.
+ *
+ * **Colored by direction, which is the app's rule read straight**: color is
+ * spent on state, and *rising* and *falling* are the state. It is the research
+ * board's own presentation of the same fact — `formatTrend` and
+ * `trendDirection` are imported from the board rather than written again, so
+ * the two cannot come to disagree about the minus sign or about what a flat
+ * `0.0` looks like.
+ */
+function TrendDeltas({ deltas }: { deltas: Partial<Record<TrendWindow, number | null>> }) {
+  return (
+    <span className="trend-wins">
+      {TRENDING_CARD_WINDOWS.map((w) => {
+        const v = deltas[w];
+        const dir = trendDirection(v);
+        return (
+          <span className="trend-win" key={w}>
+            <span className="trend-win-lab">{w}D</span>
+            <span
+              className={dir === null ? 'trend-win-val' : `trend-win-val is-${dir}`}
+              title={`Change in roster % over the last ${w === 1 ? 'day' : `${w} days`}`}
+            >
+              {formatTrend(v)}
+            </span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** A projected game count as the rest of the app prints one: to a tenth, with a
+ *  whole number left whole. The same rule as `SummaryTable.tsx::projCount` and
+ *  for the same reason — a reliever's `6.4` is a share of his club's games and a
+ *  starter's `3` is three turns, and printing the second as `3.0` claims a
+ *  precision the number has not got. */
+const projGames = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/** One rail: a heading that says what it is and what it was ranked on, then the
+ *  three rows that have anybody in them. */
+function PlayerRail<T extends RailPlayer>({
+  title,
+  note,
+  board,
+  figure,
   onOpenPlayer,
 }: {
-  trending: TrendingBoard;
+  title: string;
+  /** What the ranking was made on, beside the heading — the fact that is true of
+   *  every card and so belongs once, over all of them. */
+  note: string;
+  board: RailBoard<T>;
+  figure: (p: T) => ReactNode;
   onOpenPlayer: (id: number) => void;
 }) {
-  const rows = TRENDING_ROWS.filter((r) => trending[r.key].length > 0);
+  const rows = RAIL_ROWS.filter((r) => board[r.key].length > 0);
   if (rows.length === 0) return null;
   return (
     <section className="ov-trending">
       <h3 className="ov-heading">
-        Trending Players
-        <span className="ov-heading-note">added most in the last day</span>
+        {title}
+        <span className="ov-heading-note">{note}</span>
       </h3>
       {rows.map((r) => (
         <div className="trend-row" key={r.key}>
@@ -742,14 +864,84 @@ function TrendingBlockView({
               rule, in the one axis this box genuinely scrolls. */}
           <div className="trend-scroll">
             <div className="trend-cards">
-              {trending[r.key].map((p) => (
-                <TrendingCard key={`${p.kind}-${p.id}`} p={p} onOpenPlayer={onOpenPlayer} />
+              {board[r.key].map((p) => (
+                <RailCard key={`${p.kind}-${p.id}`} p={p} onOpenPlayer={onOpenPlayer}>
+                  {figure(p)}
+                </RailCard>
               ))}
             </div>
           </div>
         </div>
       ))}
     </section>
+  );
+}
+
+/** …and the two rails themselves, which are that component and a figure each. */
+function TrendingRail({
+  trending,
+  onOpenPlayer,
+}: {
+  trending: TrendingBoard;
+  onOpenPlayer: (id: number) => void;
+}) {
+  return (
+    <PlayerRail
+      title="Trending Players"
+      note="added most in the last day"
+      board={trending}
+      onOpenPlayer={onOpenPlayer}
+      figure={(p) => (
+        <>
+          <TrendDeltas deltas={p.deltas} />
+          {/* The level the moves happened from, which is the context that says
+              whether four points is a pickup nobody had or a man half the
+              league already owns. Muted, because it is not the reading. */}
+          <span className="trend-card-pct">
+            {p.rosterPct === null ? '—' : `${p.rosterPct.toFixed(0)}% rostered`}
+          </span>
+        </>
+      )}
+    />
+  );
+}
+
+function ValueRailView({
+  rail,
+  onOpenPlayer,
+}: {
+  rail: ValueRail;
+  onOpenPlayer: (id: number) => void;
+}) {
+  return (
+    <PlayerRail
+      title="High Value Players"
+      note={`most projected value through ${prettyDate(rail.through)}`}
+      board={rail.board}
+      onOpenPlayer={onOpenPlayer}
+      figure={(p) => (
+        <>
+          {/* **Monochrome, where the trending rail's figure is colored** — and
+              the difference is the app's own rule rather than a taste. A move is
+              a *state*, rising or falling, and gets a color for it; a value is a
+              ranking figure, and it is already the reason the card is where it
+              is on the rail. It is drawn exactly as the day cards' performer
+              rows draw the same arithmetic, one decimal and always signed, so
+              the two read as one figure. */}
+          <span className="trend-card-val">
+            {p.value >= 0 ? '+' : '−'}
+            {Math.abs(p.value).toFixed(1)}
+          </span>
+          {/* Games first, because it is what the figure is made of, then the
+              level — the same context the trending card ends on, and the answer
+              to *has anybody else noticed*. */}
+          <span className="trend-card-pct">
+            {`${projGames(p.games)} G`}
+            {p.rosterPct === null ? '' : ` · ${p.rosterPct.toFixed(0)}% rostered`}
+          </span>
+        </>
+      )}
+    />
   );
 }
 
@@ -960,6 +1152,7 @@ export default function OverviewView({
   loadingTodayProjection,
   knownPlayers,
   trending,
+  highValue,
   dates,
   onOpenPlayer,
   onSeeDay,
@@ -970,9 +1163,14 @@ export default function OverviewView({
   board: EspnScoreboard | null;
   onOpenMatchup: (id: number) => void;
   /** Who the league has been picking up over the last day, in three rows — see
-   *  `TrendingBlockView`. Null with no connected league, whose roster
-   *  percentages these are, and the block is absent rather than empty. */
+   *  `PlayerRail`. Null with no connected league, whose roster percentages these
+   *  are, and the block is absent rather than empty. */
   trending: TrendingBoard | null;
+  /** …and who is worth the most over the days the matchup has left, in the same
+   *  three rows. Null until the two projected boards it is built from have
+   *  landed, and with no connected league at all — a value is scored against a
+   *  league's own categories, and there is no matchup to have days left of. */
+  highValue: ValueRail | null;
   /** The three reads. Null means *not answered yet*; an empty array means
    *  *answered, and there is nobody* — the two are drawn differently and the
    *  distinction is the whole of why these are nullable. */
@@ -1453,7 +1651,15 @@ export default function OverviewView({
           opponent's, then the league's. It is the only block here that is not
           about a roster at all, so it is the one a reader scrolls to rather
           than lands on. */}
-      {trending && <TrendingBlockView trending={trending} onOpenPlayer={onOpenPlayer} />}
+      {/* **Trending first and value second**, which is the order a manager
+          reads them in: *what has everybody else decided* is the cheaper
+          question and the one that arrives first, and *what does the projection
+          say* is the one you check it against. The value rail is also the later
+          of the two to land, its two board reads being the biggest thing this
+          page asks for — so the page does not reflow around a block appearing
+          above one already on screen. */}
+      {trending && <TrendingRail trending={trending} onOpenPlayer={onOpenPlayer} />}
+      {highValue && <ValueRailView rail={highValue} onOpenPlayer={onOpenPlayer} />}
     </div>
   );
 }

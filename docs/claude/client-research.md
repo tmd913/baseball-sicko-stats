@@ -2031,6 +2031,38 @@ fields the projected board fills and nothing prints. Two more, intentional walks
 and wild pitches, are simply not projected and score nought for everybody, which
 lowers every row by the same amount and so changes no ranking.
 
+### `VAL` is filed under `Fantasy` in the picker, and a section has one heading
+
+The picker cuts the column list positionally: a column names a section and the
+ones after it follow, which is what makes the picker's order the table's order —
+a reader who found `OBP` three columns along finds it three chips along.
+
+`VAL` broke that in both directions at once. It named a section `Value` for
+itself alone, and because the cut runs on, that section then **swallowed the
+whole counting run behind it and retitled it**: measured on the lens before the
+fix, the picker's second section read `Value` over `VAL PA AB H/AB R HR RBI BB K
+SB CS`, and `Counting` above it held `G` by itself.
+
+It belongs in **`Fantasy`**, with `Ros%` and the five `Δ` windows — the section
+for the facts that exist only because a league is connected, which is exactly
+what a line scored against *your* categories is. That takes two things:
+
+- **`columnGroups` merges same-titled sections.** `VAL` leads the table's stat
+  run and `Ros%` closes it, so the two `Fantasy` runs are at opposite ends of one
+  list; cut positionally they were two sections with the same heading, which
+  React draws under one key and which asks the reader which of two identical
+  headings is theirs.
+- **A recurring section sits where its *last* naming column does.** Ordering on
+  the first would move `Fantasy` from the end of the picker — where a reader has
+  learned `Ros%` and the `Δ`s are — up to second, for the sake of the one line of
+  it that leads the table.
+
+And the counting run re-declares `G`'s own title, so the merge puts the eleven
+columns back under one `Counting` heading in the order the board draws them.
+Measured after: `Counting` (11), `Slash line` (5), `Rates` (2), `Fantasy` (`VAL`,
+`Ros%`, `Δ1d`–`Δ30d`). The measured board is untouched — no title repeats there,
+so nothing merges and nothing moves.
+
 ### `SVHD` is a sum, so it is rounded back to a tenth
 
 The board prints a count with `String` rather than to a width, and it is right
