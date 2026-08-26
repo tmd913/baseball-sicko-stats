@@ -2321,14 +2321,29 @@ happened to balance. The main strip's own lesson, one box down again.
 A hairline closes the head, so the description below starts a statement rather
 than running on from two names.
 
-**Almost nothing above it and a real gap below, which is not symmetry.** The
-dialog body already pays 12px above this head, so the 10px top padding it
-shipped with put **22px between the title bar and the two faces** — a head
-floating in the box rather than heading it — while under it the hairline sat
-9px off the description (`.pa-des`'s own margin) and read as a rule *belonging
-to* the sentence beneath. `padding: 2px 0 10px` with a 10px margin under the
-line measures **14px above the faces and 19px from the rule to the text**: the
-head sits at the top of the box, and the description starts its own statement.
+**Almost nothing above it, and the air it has goes inside.** The dialog body
+already pays 12px above this head, so the 10px top padding it shipped with put
+**22px between the title bar and the two faces** — a head floating in the box
+rather than heading it. 2px measures **14 above the faces**, which is the head
+sitting at the top of the box.
+
+**The rule spans the box, and that is what settles the space under it.** It
+stopped 12px short of each edge and read as an underline belonging to the two
+names rather than as a divider between two registers of the dialog. It bleeds
+now — `margin-inline` out by `--table-bleed` and `padding-inline` back in, the
+same pair every wide table in this app takes through the box that holds it, and
+**`.app-dialog-body` declares that token as its own 12px** exactly as `.app`
+(22), the player-page overlay (16) and the full-page table box (12) declare
+theirs. Measured at 1000: the head runs 101→899 where the body runs 101→899,
+and the description still starts at 113.
+
+The gap beneath it then wanted **less**, not more. It was 9px flat (`.pa-des`'s
+own margin) while the rule was inset, and read as a line drawn under a sentence;
+it went to 19 for one commit, which read as a gap. **11** is what it is —
+`margin-bottom: 2px` on top of that 9 — the air belonging between the faces and
+the rule (10px of padding inside) rather than between the rule and the sentence.
+A divider that reaches both edges is already a divider and does not need
+distance to prove it.
 
 **The circle is folded onto `.feed-photo`** rather than restyled — a 40px round
 headshot that is a button into a man's page is one object, and this is that

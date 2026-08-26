@@ -3234,21 +3234,36 @@ body {
   justify-content: center;
   align-items: center;
   gap: 10px;
-  /* **Almost nothing above and a real gap below**, which is not symmetry for
-     its own sake: the dialog body already pays 12px above this head, so a 10px
-     top padding on top of that put **22px between the title bar and the two
-     faces** — the head floating in the box rather than heading it — while
-     below, the hairline was 9px off the description (`.pa-des`'s own margin)
-     and read as a rule *belonging to* the sentence under it. 2 above and 10
-     below, plus a 10px margin under the line, makes it 14 above the faces and
-     19 under the rule: the head sits at the top of the box and the description
-     starts its own statement. */
-  padding: 2px 0 10px;
+  /* **Almost nothing above it, and the air it has goes inside.** The dialog
+     body already pays 12px above this head, so a 10px top padding on top of
+     that put **22px between the title bar and the two faces** — the head
+     floating in the box rather than heading it. 2 above measures 14, which is
+     the head sitting at the top of the box.
+
+     Below, the air belongs **between the faces and the rule** rather than
+     between the rule and the sentence: 10px of bottom padding inside, and 2 of
+     margin outside on top of `.pa-des`'s own 9, which measures **11 from the
+     rule to the description**. It was 9 flat, where the line read as an
+     underline belonging to the sentence under it, and 19 for a commit, where
+     it read as a gap — and 19 is what the rule spanning the box made
+     unnecessary: a divider that reaches both edges is already a divider, and
+     does not need distance to prove it. */
+  /* **The rule spans the box, so the head bleeds and re-pads.** The line is a
+     divider between two registers of the dialog, not an underline belonging to
+     the two names — and one stopping 12px short of each edge reads as the
+     latter, a rule drawn *under something* rather than across the box. The
+     bleed is `--table-bleed`, which `.app-dialog-body` declares as its own 12px
+     padding: negative margin out and equal padding back in, so the border box
+     widens by exactly what the container has to give while the content sits
+     where it sat. The same pair every wide table in this app takes through the
+     box that holds it. */
+  padding: 2px var(--table-bleed, 0px) 10px;
+  margin-inline: calc(-1 * var(--table-bleed, 0px));
   /* The head is a register of its own, closed the way the scoreboard card's
      foot is opened: a hairline rather than a gap, so the description below
      starts a new statement instead of running on from the two names. */
   border-bottom: 1px solid var(--border);
-  margin-bottom: 10px;
+  margin-bottom: 2px;
 }
 .pa-mu-man {
   display: flex;
@@ -11325,6 +11340,14 @@ button.start-line:focus-visible {
   align-items: stretch;
   gap: 10px;
   padding: 12px;
+  /* **How far something in here may bleed back out through that padding**, and
+     it is declared here for the reason the other three are declared on their
+     own boxes: the answer is this container's own side padding, and a child can
+     never be allowed to bleed by more or less than the box it is in has to
+     give. This is the fourth such container — `.app` gives 22, the player-page
+     overlay 16, the full-page table box 12 — and the one child that takes it is
+     the play detail's matchup head, whose closing rule spans the box. */
+  --table-bleed: 12px;
   /* **And it is a container**, which the accordion-to-popup swap made
      load-bearing. A plate appearance's detail sizes itself with `@container`
      queries — the strike zone stacks under the pitch table below 600, the
