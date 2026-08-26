@@ -22004,7 +22004,8 @@ html[data-theme='light'] .league-table thead th {
    uppercase label over a list — folded on rather than restated, the two being
    the same statement on one page. */
 .trend-row-head,
-.ov-perfs-head {
+.ov-perfs-head,
+.ov-perfs-val-head {
   margin: 0;
   font-size: 11px;
   font-weight: 800;
@@ -22031,9 +22032,39 @@ html[data-theme='light'] .league-table thead th {
    **Here rather than up in the top-performers section**, which is where it was
    written first and where it did nothing: the fold above is later in the file
    and `margin: 0` at equal specificity wins on source order. The same trap the
-   narrow-screen blocks and `.date-row .date-presets` already record. */
-.ov-perfs-head {
+   narrow-screen blocks and `.date-row .date-presets` already record.
+
+   *(The margin has since moved off the label and onto the row that holds it and
+   the `VALUE` column heading — a class the fold does not name, so the
+   source-order trap no longer decides it. It stays sited here anyway: the fold
+   is what the label's shape comes from, and the two rules being read together
+   is the whole reason the trap was found.)* */
+.ov-perfs-head-row {
   margin-top: 14px;
+  /* **The two labels are the two ends of one line**, which is what makes the
+     right-hand one read as a column heading rather than as a second sentence.
+     `baseline` rather than `center` because they are the same 11px type: on a
+     line whose two halves are the same size, aligning boxes and aligning
+     letters are the same thing until one of them wraps, and baseline is the one
+     that stays right if it ever does. */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  /* **The 4px is the performer row's own padding**, not a nudge. `.ov-perf` is
+     a grid inside `padding: 4px 4px`, so the value column's right edge sits 4px
+     inside the card and a label flush to the card would stand 4px proud of the
+     numbers it names. Measured on the live page at 1400: label right edge
+     **1247 → 1243px** against the three values' **1243**, and 351 against 351 on
+     the same card at 390. The card does not grow for it — 370px with the label
+     and 370 with it hidden, the two labels being one line — and page-body
+     overflow is 0 at both widths. */
+  padding-right: 4px;
+}
+/* It names a column of numbers, so it does not wrap into one: `TOP PERFORMERS`
+   is the half with room to give on a phone. */
+.ov-perfs-val-head {
+  white-space: nowrap;
 }
 /* **The rail scrolls sideways and the page does not.** `overscroll-behavior-x`
    in the one axis this box genuinely scrolls — the app's standing rule — so a

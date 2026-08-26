@@ -1020,6 +1020,31 @@ over — the fact the `See the day` button used to hold. A caption spelling them
 out was cut for being on every card; a *heading* that is on every card is where
 a fact of that kind belongs.
 
+**And the figure at the right end of every row says what it is.** `VALUE`, on
+the same line as the heading and over the column it names. The rows carry a
+rank, a face, a line and a number, and the number was the one column on the card
+with nothing over it — the card's own category line above it labels every one of
+*its* figures, so a bold `+1.4` beside a batting line with no heading read as
+one more stat rather than as the thing the three rows are sorted by.
+
+**It is the word the other three surfaces already use.** The roster lens and a
+matchup team page print `Value`, the research lens `VAL`; one figure, four
+surfaces, one word — which is the point of naming it here rather than
+captioning it, a caption having to explain what a heading can just say. The
+sentence it would have carried is the label's `title` instead.
+
+**A sibling of the `h4`, not a second half of it.** The heading names the list,
+and a column label is not part of that name: inside it, a screen reader
+navigating headings would announce `Top Performers Value`. So the two sit in a
+flex row that carries the 14px the label used to, and the label's shape folds
+onto `.ov-perfs-head` rather than restating it.
+
+Measured at 1400: the label's right edge **1247 → 1243px**, against the three
+values' **1243** — the 4px is `.ov-perf`'s own row padding, not a nudge — and
+351 against 351 on the same card at 390. **The card does not grow for it**, the
+two labels being one line: 370px with the label and 370 with it hidden, and
+page-body overflow 0 at both widths.
+
 ---
 
 ## Trending players

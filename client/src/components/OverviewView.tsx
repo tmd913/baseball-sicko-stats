@@ -549,9 +549,32 @@ function DayBlock({
                   where the `See the day` button used to hold it: a caption
                   naming them was cut for being on every card, and a heading that
                   *is* on every card is the right place for the fact to live. */}
-              <h4 className="ov-perfs-head" title={categoriesTitle}>
-                Top Performers
-              </h4>
+              <div className="ov-perfs-head-row">
+                <h4 className="ov-perfs-head" title={categoriesTitle}>
+                  Top Performers
+                </h4>
+                {/* **And the figure at the right end says what it is.** The
+                    rows carry a rank, a face, a line and a number, and the
+                    number was the one column on the card with nothing over it
+                    — a reader who has not opened its tooltip has a bold `+1.4`
+                    beside a batting line and no way to tell it from another
+                    stat. `VALUE` is the word the other three surfaces use for
+                    the same figure (the roster lens and a matchup team page
+                    print `Value`, the research lens `VAL`), which is the point
+                    of naming it here rather than captioning it: one figure,
+                    four surfaces, one word.
+
+                    A sibling of the heading rather than a second half of it.
+                    The `h4` names the list and a column label is not part of
+                    that name — inside it, a screen reader navigating headings
+                    would hear `Top Performers Value`. */}
+                <span
+                  className="ov-perfs-val-head"
+                  title="What the day is worth in the categories your league scores — standard deviations of a player-day, averaged over the categories his side of the ball scores, and the figure these three are ranked by"
+                >
+                  Value
+                </span>
+              </div>
               <ol className="ov-perfs">
                 {top.map((p, i) => (
                   <li key={p.key}>

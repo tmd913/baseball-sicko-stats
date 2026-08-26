@@ -163,7 +163,33 @@ const kMinusBb = (r: ResearchRow): number | null => {
 /** Saves plus holds. A plain sum rather than a guarded ratio: both are counts,
  *  and zero is a real answer (a starter has none), so it stays a 0 for the
  *  format to dash rather than a null for the sort to bury. */
-const svhd = (r: ResearchRow): number => (r.saves ?? 0) + (r.holds ?? 0);
+/**
+ * Saves plus holds — **rounded back to the tenth its two halves arrived at.**
+ *
+ * The measured board sums two integers and this is a no-op on it. Under the
+ * projected lens it is not: the server rounds every printed count to a tenth
+ * (`projection.ts::round1`) precisely so a reader can add a column up and get
+ * what was printed, and the sum of two of those is not a tenth in binary
+ * floating point. `credit` prints a count with `String` rather than to a width —
+ * a count being an integer everywhere else on this board — so the whole of it
+ * lands in the cell. Reported off the shipped board as
+ * `SVHD 2.6999999999999997`, which is Brock Stewart's `0.4 + 2.3`.
+ *
+ * **Measured on the live board**, pitchers over Aug 26 – Sep 6: 823 rows, 230
+ * of them with a saves-plus-holds figure at all, and **25 of those 230 printed
+ * a seventeen-digit string**. After: none.
+ *
+ * **Rounded here rather than in the formatter**, because the format is not the
+ * only reader: `value` is what the board sorts and what the filter builder
+ * thresholds against, and `SVHD ≥ 2.7` against `2.6999999999999997` is a row
+ * the reader can see and the filter cannot. One arithmetic, one implementation.
+ *
+ * It is the only derived count on this board that adds two projected ones —
+ * every other column of that kind (`H/AB`, `XBH`, `TB`, `SB−CS`) is off the
+ * lens's own key list. A new one owes the same rounding.
+ */
+const svhd = (r: ResearchRow): number =>
+  Math.round(((r.saves ?? 0) + (r.holds ?? 0)) * 10) / 10;
 
 /** Stolen-base success rate, over attempts rather than games. */
 const sbRate = (r: ResearchRow): number | null =>

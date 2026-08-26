@@ -2031,6 +2031,35 @@ fields the projected board fills and nothing prints. Two more, intentional walks
 and wild pitches, are simply not projected and score nought for everybody, which
 lowers every row by the same amount and so changes no ranking.
 
+### `SVHD` is a sum, so it is rounded back to a tenth
+
+The board prints a count with `String` rather than to a width, and it is right
+to: on the measured board every count is an integer and `5.0` would be a lie
+about the precision of it. Under the lens they are tenths — `projection.ts`
+rounds every printed component with `round1` precisely so a reader can add a
+column up and get what was printed — and `String` is still right for one of
+them.
+
+**It is not right for the sum of two.** `SVHD` is the one derived count on the
+lens's own key list that adds two projected figures together, and two tenths do
+not add to a tenth in binary floating point: Brock Stewart's `0.4 + 2.3` is
+`2.6999999999999997`, and that is what the cell printed. Reported off the
+shipped board, and measured there — pitchers over Aug 26 – Sep 6, 823 rows, 230
+with a saves-plus-holds figure at all, **25 of those 230 printing a
+seventeen-digit string**.
+
+**Rounded in `svhd` rather than in `credit`**, because the format is not the
+only reader. `value` is what the board sorts on and what the filter builder
+thresholds against, and `SVHD ≥ 2.7` against `2.6999999999999997` is a row the
+reader can see and the filter cannot — a fault that survives any fix made in the
+formatter. One arithmetic, one implementation.
+
+The roster's own projected table never had this: `SummaryTable.tsx::projCount`
+rounds to a tenth before printing, because it prints a column a reader adds up.
+The board's `count` and `credit` do not, which is the difference the fix works
+around rather than erases — a **new** derived count on the lens's key list owes
+the same rounding at the point the arithmetic is done.
+
 **`Ros%` and the five `Δ` windows are drawn under the lens now**, and were not.
 The lens's rule is that it draws only what a projection can fill, which is the
 wrong test for these two runs: they are not projections of anything. They are
