@@ -534,6 +534,13 @@ body {
    list and the feed — which are read down rather than across. */
 .app {
   padding: 14px var(--app-gutter) 80px;
+  /* **The space the pinned bar no longer takes in flow.** `--chrome-space` is
+     the bar's measured height plus whatever bottom margin it carries on this
+     view (14px on the Overview, 0 under a `.view-tools` row), and it is 0
+     wherever the bar is not fixed — the three column views, and a window too
+     short to afford pinning it — which is what makes the `max` the whole of the
+     scoping: those views fall back to the 14px above. See `.app-chrome`. */
+  padding-top: max(14px, var(--chrome-space));
   /* How far a wide table inside this box may bleed back out through those
      gutters — see `.summary-scroll, .research-scroll, .glog-scroll` below. It is
      declared by the *container* rather than by the table because the answer is
@@ -609,8 +616,40 @@ body {
    it back in normal flow, where the margin does what it was written to do. The
    feed, the games view and the edit screen are what the pinning is for. */
 .app-chrome {
-  position: sticky;
-  top: 0;
+  /* **Fixed rather than sticky, and that is a bug fix rather than a taste.**
+     Measured off a 30fps screen recording on an iPhone: crossing the main tabs
+     left **one frame** — 33ms, four crossings out of four — in which the page
+     was drawn correctly and every *pinned* box in it was not drawn at all.
+     Their space was kept, so nothing moved; the header, the tab row and the MLB
+     board's day bar were simply absent, and the frame after had them. What the
+     missing boxes had in common was `position: sticky` and nothing else — the
+     sub-tab strip a few pixels under the missing header is static and painted
+     in the same frame. WebKit keeps a sticky box's offset on the scrolling
+     thread and re-resolves it after a commit that changes the page under it;
+     fixed has no such constraint to catch up on.
+
+     Tried first and rejected, both on the phone and both still flashing:
+     `will-change: transform` and `transform: translateZ(0)` on the sticky bar,
+     which give it a layer of its own without taking the constraint away. And
+     `z-index` was never the question — the bar is already the top layer at 41,
+     and in the flash frame nothing is drawn over it, the bar is drawn nowhere.
+
+     **The insets cancel the bar's own margins rather than resetting them**:
+     `top: 14px` against the `margin-top: -14px` below puts it at 0, and a gutter
+     of inset against a gutter of negative margin puts its edges on the window's,
+     which is where the bleed already had them. Reset instead, the margin is a
+     number the page can no longer measure — see `--chrome-space` in `hooks.ts`,
+     which is what `.app` gives back, and which has to include the bottom margin
+     because a fixed box's margins move nothing.
+
+     The three column views and a window too short to afford a pinned bar put it
+     back to `static` in the rules below, exactly as they did when it was sticky,
+     and `--chrome-space` is 0 in both those cases — so the padding `.app` gives
+     back falls to its own 14px without either rule having to say so twice. */
+  position: fixed;
+  top: 14px;
+  left: var(--app-gutter);
+  right: var(--app-gutter);
   /* Above everything in the page's own flow — the float button (20), the date
      popover (30) — and below both the full-page table mode (45) and the
      overlays (the player page at 50, the how-to and league pages at 60), all
@@ -8290,6 +8329,16 @@ button.start-line:focus-visible {
   position: sticky;
   top: var(--chrome-h);
   z-index: 39;
+  /* **A layer of its own, which the chrome next door did *not* get.** These bars
+     stay sticky — a bar that is in flow until you scroll past it cannot be
+     `position: fixed` without a spacer standing in for it — so the fault
+     `.app-chrome` sets out is still theirs to avoid, and this is the one thing
+     that avoids it for them: measured on the phone, the chrome going fixed
+     stopped its own flash and left the MLB board's day bar flashing on its own,
+     and this line stopped that. It is exactly what did *not* work while the
+     chrome above was still sticky, which is the useful part — a layer is enough
+     for a bar the page is not re-laying itself out around. */
+  will-change: transform;
 }
 /* **The two tab-level bars stick to the same edge**, and it is the same
    declaration rather than a second one that agrees today — which is why it sits
@@ -8322,6 +8371,9 @@ button.start-line:focus-visible {
   position: sticky;
   top: var(--chrome-h);
   z-index: 39;
+  /* The layer, for the reason `.app > .date-bar` above carries — and this is the
+     bar the fault was measured on. */
+  will-change: transform;
 }
 /* A window with no room for the chrome unpins it (see `.app-chrome`'s own rule)
    and this goes with it, for that rule's reason and not by inheriting it:
