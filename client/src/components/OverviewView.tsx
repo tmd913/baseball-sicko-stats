@@ -624,29 +624,29 @@ function DayBlock({
   );
 }
 
-/* ---- The two player rails ------------------------------------------------ */
+/* ---- Player Spotlight ---------------------------------------------------- */
 
 /**
- * **The rails at the foot of the page** — three side-scrolling rows of ten
- * cards, split by seat, every card a door into that player's page. There are
- * two of them and they are one component drawn twice.
+ * **The block at the foot of the page** — three side-scrolling rows of ten
+ * cards, split by seat, every card a door into that player's page, and a switch
+ * that says which thirty men they are.
  *
- * They are the only blocks here that are not about the reader's own roster.
- * Everything above answers *how is my week going*; these answer *what should I
- * do about it*, and they answer it from the two directions a manager weighs
- * against each other:
+ * It is the only block here that is not about the reader's own roster.
+ * Everything above answers *how is my week going*; this answers *what should I
+ * do about it*, from the two directions a manager weighs against each other:
  *
- * - **Trending Players** — who the league has been picking up. The question the
+ * - **Trending** — who the league has been picking up. The question the
  *   research board's `Ros%` and `Δ` columns exist for, read there by sorting six
- *   hundred rows and read here by looking.
- * - **High Value Players** — who the projection says is worth the most over the
- *   days this matchup has left. The same question the board's `VAL` column under
- *   the projected lens answers, and the same arithmetic
+ *   hundred rows and read here by looking, over whichever of three windows is
+ *   pressed.
+ * - **High Value** — who the projection says is worth the most over the days
+ *   this matchup has left. The same question the board's `VAL` column under the
+ *   projected lens answers, and the same arithmetic
  *   (`categoryValue.ts::dayValue`) the day cards above rank their performers by.
  *
- * The pair is the reading. A man on both rails is one the league has noticed
- * *and* the projection likes; a man on the second alone is the pickup nobody has
- * got to yet, which is the best card on the page.
+ * The pair is the reading. A man on both is one the league has noticed *and* the
+ * projection likes; a man on the second alone is the pickup nobody has got to
+ * yet, which is the best card on the page.
  *
  * **Three rows rather than one of thirty**, and the split is by seat rather than
  * by kind: a manager streaming a starter and a manager chasing saves are two
@@ -717,7 +717,27 @@ export interface RailBoard<T> {
   starters: T[];
   relievers: T[];
 }
-export type TrendingBoard = RailBoard<TrendingPlayer>;
+
+/**
+ * The trending rail, and **the window it was ranked on** — which is a choice
+ * now rather than a fact.
+ *
+ * The card has printed three spans since it stopped printing one, and printing
+ * three while ranking on the first is half an offer: *added most in the last
+ * day* and *added most in the last week* are different lists of men, and the
+ * second is the one a manager plans a week around. So the same three windows are
+ * a switch, and the rail is ranked on whichever is pressed.
+ *
+ * `windows` is what the ownership read actually has a baseline for, so the
+ * switch offers no span the server could not measure; `window` is the one in
+ * force, which is not always the one asked for — see `App`, where a selection
+ * with no baseline behind it falls back rather than emptying the rail.
+ */
+export interface TrendingRail {
+  board: RailBoard<TrendingPlayer>;
+  window: TrendWindow;
+  windows: TrendWindow[];
+}
 
 /** The value rail, and the span it was drawn over — the heading names the last
  *  day so the reader never has to guess how far ahead the figure looks. */
@@ -799,21 +819,56 @@ function RailCard({
  * the two cannot come to disagree about the minus sign or about what a flat
  * `0.0` looks like.
  */
-function TrendDeltas({ deltas }: { deltas: Partial<Record<TrendWindow, number | null>> }) {
+/** `day` / `3 days` — one span written one way, since four strings on this block
+ *  name it and a rail whose heading and whose tooltip disagree about what `3D`
+ *  means is worse than either. */
+const spanWords = (w: TrendWindow): string => (w === 1 ? 'day' : `${w} days`);
+
+const windowTitle = (w: TrendWindow): string =>
+  `Change in roster % over the last ${spanWords(w)}`;
+
+function TrendDeltas({
+  deltas,
+  ranked,
+}: {
+  deltas: Partial<Record<TrendWindow, number | null>>;
+  /** The window the rail is sorted on, whose column is marked. */
+  ranked: TrendWindow;
+}) {
   return (
     <span className="trend-wins">
+      {TRENDING_CARD_WINDOWS.map((w) => (
+        // **The ranked column is named on the card, not only on the switch.**
+        // Thirty cards ordered by a figure that looks like the two beside it is
+        // a list whose order is a puzzle; one brighter label answers it where
+        // the reader is looking. It marks something precisely because it is one
+        // of three — the rule against a mark on every row is about the marks
+        // that distinguish nothing.
+        <span
+          className={w === ranked ? 'trend-win-lab is-on' : 'trend-win-lab'}
+          key={`h${w}`}
+          title={windowTitle(w)}
+        >
+          {w}D
+        </span>
+      ))}
+      {/* **The head rule is a grid row of its own**, spanning the three columns
+          — which is what lets it cross the gaps the column rules stand in and
+          come out as one continuous line rather than three segments with a
+          break at each divider. It is drawn rather than declared as a
+          `border-bottom` on the labels for exactly that reason: a border stops
+          at the cell it is on. */}
+      <span className="trend-wins-rule" />
       {TRENDING_CARD_WINDOWS.map((w) => {
         const v = deltas[w];
         const dir = trendDirection(v);
         return (
-          <span className="trend-win" key={w}>
-            <span className="trend-win-lab">{w}D</span>
-            <span
-              className={dir === null ? 'trend-win-val' : `trend-win-val is-${dir}`}
-              title={`Change in roster % over the last ${w === 1 ? 'day' : `${w} days`}`}
-            >
-              {formatTrend(v)}
-            </span>
+          <span
+            className={dir === null ? 'trend-win-val' : `trend-win-val is-${dir}`}
+            key={`v${w}`}
+            title={windowTitle(w)}
+          >
+            {formatTrend(v)}
           </span>
         );
       })}
@@ -821,39 +876,21 @@ function TrendDeltas({ deltas }: { deltas: Partial<Record<TrendWindow, number | 
   );
 }
 
-/** A projected game count as the rest of the app prints one: to a tenth, with a
- *  whole number left whole. The same rule as `SummaryTable.tsx::projCount` and
- *  for the same reason — a reliever's `6.4` is a share of his club's games and a
- *  starter's `3` is three turns, and printing the second as `3.0` claims a
- *  precision the number has not got. */
-const projGames = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-
-/** One rail: a heading that says what it is and what it was ranked on, then the
- *  three rows that have anybody in them. */
-function PlayerRail<T extends RailPlayer>({
-  title,
-  note,
+/** The three seat rows of one rail. The section around them is the spotlight's,
+ *  which is why this draws no heading: the two rails are two readings of one
+ *  block now rather than two blocks. */
+function RailRows<T extends RailPlayer>({
   board,
   figure,
   onOpenPlayer,
 }: {
-  title: string;
-  /** What the ranking was made on, beside the heading — the fact that is true of
-   *  every card and so belongs once, over all of them. */
-  note: string;
   board: RailBoard<T>;
   figure: (p: T) => ReactNode;
   onOpenPlayer: (id: number) => void;
 }) {
-  const rows = RAIL_ROWS.filter((r) => board[r.key].length > 0);
-  if (rows.length === 0) return null;
   return (
-    <section className="ov-trending">
-      <h3 className="ov-heading">
-        {title}
-        <span className="ov-heading-note">{note}</span>
-      </h3>
-      {rows.map((r) => (
+    <>
+      {RAIL_ROWS.filter((r) => board[r.key].length > 0).map((r) => (
         <div className="trend-row" key={r.key}>
           <h4 className="trend-row-head">{r.label}</h4>
           {/* Side-scrolling rather than wrapping: ten cards is two lines on a
@@ -873,75 +910,209 @@ function PlayerRail<T extends RailPlayer>({
           </div>
         </div>
       ))}
-    </section>
+    </>
   );
 }
 
-/** …and the two rails themselves, which are that component and a figure each. */
-function TrendingRail({
+/** The trending rail's figure: the three moves, then the level they happened
+ *  from — the context that says whether four points is a pickup nobody had or a
+ *  man half the league already owns. Muted, because it is not the reading. */
+function trendingFigure(p: TrendingPlayer, ranked: TrendWindow): ReactNode {
+  return (
+    <>
+      <TrendDeltas deltas={p.deltas} ranked={ranked} />
+      <span className="trend-card-pct">
+        {p.rosterPct === null ? '—' : `${p.rosterPct.toFixed(0)}% rostered`}
+      </span>
+    </>
+  );
+}
+
+/** A projected game count as the rest of the app prints one: to a tenth, with a
+ *  whole number left whole. The same rule as `SummaryTable.tsx::projCount` and
+ *  for the same reason — a reliever's `6.4` is a share of his club's games and a
+ *  starter's `3` is three turns, and printing the second as `3.0` claims a
+ *  precision the number has not got. */
+const projGames = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/**
+ * The value rail's figure.
+ *
+ * **Monochrome, where the trending rail's is colored** — and the difference is
+ * the app's own rule rather than a taste. A move is a *state*, rising or
+ * falling, and gets a color for it; a value is a ranking figure, and it is
+ * already the reason the card is where it is on the rail. It is drawn exactly as
+ * the day cards' performer rows draw the same arithmetic, one decimal and always
+ * signed, so the two read as one figure.
+ *
+ * Under it, games first — it is what the figure is made of — and then the level,
+ * which is the same context the trending card ends on and the answer to *has
+ * anybody else noticed*.
+ */
+function valueFigure(p: ValuePlayer): ReactNode {
+  return (
+    <>
+      {/* **The same box the trending card's three moves are drawn in**, with one
+          column instead of three — which is what makes the two rails' cards the
+          same height by construction rather than by a measured `min-height`, and
+          what stops the page moving under a reader who presses the switch. It
+          also names the figure, which the day cards' own performer lists needed
+          for the same reason: a bold signed number beside a batting line is not
+          self-evidently a ranking. */}
+      <span className="trend-wins is-solo">
+        <span className="trend-win-lab">Value</span>
+        <span className="trend-wins-rule" />
+        <span className="trend-card-val">
+          {p.value >= 0 ? '+' : '−'}
+          {Math.abs(p.value).toFixed(1)}
+        </span>
+      </span>
+      <span className="trend-card-pct">
+        {`${projGames(p.games)} G`}
+        {p.rosterPct === null ? '' : ` · ${p.rosterPct.toFixed(0)}% rostered`}
+      </span>
+    </>
+  );
+}
+
+/** Which reading of the spotlight is on screen. In the URL as `spot=value`, the
+ *  trending rail being the one it opens on. */
+export type SpotlightTab = 'trending' | 'value';
+
+/**
+ * **Player Spotlight — the two rails as one block with a switch.**
+ *
+ * They were two sections, one under the other, and that was the wrong shape for
+ * what they are: the same thirty cards in the same three rows, ranked two ways.
+ * Stacked, the page ended in six seat headings and sixty cards and the reader
+ * had to hold *which rail am I in* while scrolling through it — where the
+ * question the block answers is one question with two answers, which is what a
+ * switch is for.
+ *
+ * **The note is the tab's, not the block's.** `Player Spotlight` says what the
+ * section is and cannot say what the figure on the card means; the note beside
+ * it does, and changes with the switch — `added most in the last day` against
+ * `most projected value through Sep 6`. So the heading never has to carry both,
+ * and the card never has to explain itself.
+ *
+ * **The switch is drawn only where there are two things to switch between.** The
+ * value rail lands after the trending one (two board reads against a map already
+ * in hand) and is absent entirely once the matchup has no days left, and a
+ * control with one live option is a control that marks nothing — the app's own
+ * rule, the same one that suppresses the kind tabs when one kind is watched. It
+ * is also why the tab that a `?spot=value` link names **falls back rather than
+ * emptying the view**: an inbound link can easily name a rail this reader has
+ * not got.
+ */
+function SpotlightSection({
   trending,
+  highValue,
+  tab,
+  onTab,
+  onWindow,
   onOpenPlayer,
 }: {
-  trending: TrendingBoard;
+  trending: TrendingRail | null;
+  highValue: ValueRail | null;
+  tab: SpotlightTab;
+  onTab: (tab: SpotlightTab) => void;
+  onWindow: (w: TrendWindow) => void;
   onOpenPlayer: (id: number) => void;
 }) {
+  const tabs: { key: SpotlightTab; label: string; note: string; title: string }[] = [];
+  if (trending) {
+    tabs.push({
+      key: 'trending',
+      label: 'Trending',
+      note: `added most in the last ${spanWords(trending.window)}`,
+      title: `Who the league has been picking up over the last ${spanWords(trending.window)} — free agents only`,
+    });
+  }
+  if (highValue) {
+    tabs.push({
+      key: 'value',
+      label: 'High Value',
+      note: `most projected value through ${prettyDate(highValue.through)}`,
+      title:
+        'Who is worth the most over the days this matchup has left, in the categories your league scores — free agents only',
+    });
+  }
+  if (tabs.length === 0) return null;
+  const active = tabs.find((t) => t.key === tab) ?? tabs[0];
   return (
-    <PlayerRail
-      title="Trending Players"
-      note="added most in the last day"
-      board={trending}
-      onOpenPlayer={onOpenPlayer}
-      figure={(p) => (
-        <>
-          <TrendDeltas deltas={p.deltas} />
-          {/* The level the moves happened from, which is the context that says
-              whether four points is a pickup nobody had or a man half the
-              league already owns. Muted, because it is not the reading. */}
-          <span className="trend-card-pct">
-            {p.rosterPct === null ? '—' : `${p.rosterPct.toFixed(0)}% rostered`}
-          </span>
-        </>
-      )}
-    />
-  );
-}
-
-function ValueRailView({
-  rail,
-  onOpenPlayer,
-}: {
-  rail: ValueRail;
-  onOpenPlayer: (id: number) => void;
-}) {
-  return (
-    <PlayerRail
-      title="High Value Players"
-      note={`most projected value through ${prettyDate(rail.through)}`}
-      board={rail.board}
-      onOpenPlayer={onOpenPlayer}
-      figure={(p) => (
-        <>
-          {/* **Monochrome, where the trending rail's figure is colored** — and
-              the difference is the app's own rule rather than a taste. A move is
-              a *state*, rising or falling, and gets a color for it; a value is a
-              ranking figure, and it is already the reason the card is where it
-              is on the rail. It is drawn exactly as the day cards' performer
-              rows draw the same arithmetic, one decimal and always signed, so
-              the two read as one figure. */}
-          <span className="trend-card-val">
-            {p.value >= 0 ? '+' : '−'}
-            {Math.abs(p.value).toFixed(1)}
-          </span>
-          {/* Games first, because it is what the figure is made of, then the
-              level — the same context the trending card ends on, and the answer
-              to *has anybody else noticed*. */}
-          <span className="trend-card-pct">
-            {`${projGames(p.games)} G`}
-            {p.rosterPct === null ? '' : ` · ${p.rosterPct.toFixed(0)}% rostered`}
-          </span>
-        </>
-      )}
-    />
+    <section className="ov-trending">
+      {/* A wrapper with no layout of its own, and it earns its place: the
+          section is a 14px flex column, and the heading and the switch under it
+          are one thing separated by the heading's own 8px. Two flex children
+          would be 22px apart. */}
+      <div className="ov-spot-head">
+        <h3 className="ov-heading">
+          Player Spotlight
+          <span className="ov-heading-note">{active.note}</span>
+        </h3>
+        {(tabs.length > 1 || (active.key === 'trending' && (trending?.windows.length ?? 0) > 1)) && (
+          <div className="ov-spot-tools">
+            {/* **Two switches, and only where each has two things to choose
+                between.** A control with one live option marks nothing — the
+                same rule that suppresses the kind tabs on a watchlist of one
+                kind. The rails' switch goes when the value rail has not landed
+                (or the matchup has no days left); the windows' switch goes when
+                the ownership read has one baseline, and both times what is left
+                is the reading itself rather than a control that cannot be
+                pressed. */}
+            {tabs.length > 1 && (
+              <div className="view-switch" role="tablist" aria-label="Player spotlight">
+                {tabs.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={t.key === active.key}
+                    className={`view-tab${t.key === active.key ? ' active' : ''}`}
+                    onClick={() => onTab(t.key)}
+                    title={t.title}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {active.key === 'trending' && trending && trending.windows.length > 1 && (
+              // **The windows' switch is the trending rail's alone**, which is
+              // why it is drawn beside the rails' switch rather than under the
+              // heading in its own right: it is a cut of *this* reading, and a
+              // control that stayed on screen naming a span the value rail is
+              // not ranked over would be a lens the page says is in force when
+              // it is not.
+              <div className="view-switch" role="tablist" aria-label="Trend window">
+                {trending.windows.map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    role="tab"
+                    aria-selected={w === trending.window}
+                    className={`view-tab${w === trending.window ? ' active' : ''}`}
+                    onClick={() => onWindow(w)}
+                    title={`Rank on the move over the last ${spanWords(w)}`}
+                  >
+                    {w}D
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {active.key === 'value' && highValue ? (
+        <RailRows board={highValue.board} figure={valueFigure} onOpenPlayer={onOpenPlayer} />
+      ) : trending ? (
+        <RailRows
+          board={trending.board}
+          figure={(p) => trendingFigure(p, trending.window)}
+          onOpenPlayer={onOpenPlayer}
+        />
+      ) : null}
+    </section>
   );
 }
 
@@ -1153,6 +1324,9 @@ export default function OverviewView({
   knownPlayers,
   trending,
   highValue,
+  spotlight,
+  onSpotlight,
+  onSpotWindow,
   dates,
   onOpenPlayer,
   onSeeDay,
@@ -1165,12 +1339,20 @@ export default function OverviewView({
   /** Who the league has been picking up over the last day, in three rows — see
    *  `PlayerRail`. Null with no connected league, whose roster percentages these
    *  are, and the block is absent rather than empty. */
-  trending: TrendingBoard | null;
+  trending: TrendingRail | null;
   /** …and who is worth the most over the days the matchup has left, in the same
    *  three rows. Null until the two projected boards it is built from have
    *  landed, and with no connected league at all — a value is scored against a
    *  league's own categories, and there is no matchup to have days left of. */
   highValue: ValueRail | null;
+  /** Which of the two the spotlight is showing, and the setter behind its
+   *  switch. Held in `App` rather than here because it is in the URL — see
+   *  `SpotlightSection`. */
+  spotlight: SpotlightTab;
+  onSpotlight: (tab: SpotlightTab) => void;
+  /** …and the window the trending rail is ranked on. The value in force rides on
+   *  `trending` itself, this being the one that was asked for. */
+  onSpotWindow: (w: TrendWindow) => void;
   /** The three reads. Null means *not answered yet*; an empty array means
    *  *answered, and there is nobody* — the two are drawn differently and the
    *  distinction is the whole of why these are nullable. */
@@ -1651,15 +1833,20 @@ export default function OverviewView({
           opponent's, then the league's. It is the only block here that is not
           about a roster at all, so it is the one a reader scrolls to rather
           than lands on. */}
-      {/* **Trending first and value second**, which is the order a manager
-          reads them in: *what has everybody else decided* is the cheaper
-          question and the one that arrives first, and *what does the projection
-          say* is the one you check it against. The value rail is also the later
-          of the two to land, its two board reads being the biggest thing this
-          page asks for — so the page does not reflow around a block appearing
-          above one already on screen. */}
-      {trending && <TrendingRail trending={trending} onOpenPlayer={onOpenPlayer} />}
-      {highValue && <ValueRailView rail={highValue} onOpenPlayer={onOpenPlayer} />}
+      {/* **Trending leads the switch**, which is the order a manager reads the
+          two in: *what has everybody else decided* is the cheaper question and
+          the one that arrives first, and *what does the projection say* is the
+          one you check it against. It is also the earlier of the two to land —
+          the value rail waits on two board reads, the biggest thing this page
+          asks for — so the tab a reader arrives on is the tab that is ready. */}
+      <SpotlightSection
+        trending={trending}
+        highValue={highValue}
+        tab={spotlight}
+        onTab={onSpotlight}
+        onWindow={onSpotWindow}
+        onOpenPlayer={onOpenPlayer}
+      />
     </div>
   );
 }

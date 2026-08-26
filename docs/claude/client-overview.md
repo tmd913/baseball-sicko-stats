@@ -1047,121 +1047,230 @@ page-body overflow 0 at both widths.
 
 ---
 
-## Trending players
+## Player Spotlight
 
-A fourth block, last on the page: **who the league has been picking up over the
-last day**, in three rows of ten side-scrolling cards.
+The block at the foot of the page: **three side-scrolling rows of ten cards,
+split by seat, every card a door into that player's page** — and a switch that
+says which thirty men they are.
 
-It is the one block here that is not about a roster. Every other card answers
-*how is my week going*; this answers *what is everybody else doing about
-theirs* — which is the question the research board's `Ros%` and `Δ` columns
-exist for, read there by sorting six hundred rows and read here by looking. Last
-on the page for that reason: it is the block a reader scrolls to rather than
-lands on.
+It was two sections stacked, `Trending Players` over `High Value Players`, and
+that was the wrong shape for what they are: the same rows of the same cards,
+ranked two ways. Stacked, the page ended in six seat headings and sixty cards,
+and the reader had to hold *which rail am I in* the whole way down — where the
+question is one question with two answers, which is what a switch is for.
 
-**One day, not seven** — that is what the rail is *ranked* on, and the heading
-says so. A section called *trending* is about what happened overnight: a man
-added in three thousand leagues since yesterday is news, and the same man a week
-into a run is a player the reader has already decided about.
+It is the only block here that is not about the reader's own roster. Everything
+above answers *how is my week going*; this answers *what should I do about it*,
+from the two directions a manager weighs against each other:
 
-**But the card prints three of the five windows — `1D`, `3D`, `7D`.** One figure
-was the whole card and it was the wrong number to be alone with: a four-point
-move overnight is a different player depending on whether the week behind it
-reads `+4` or `+20`, and a single figure cannot tell them apart. Three spans read
-as a shape — flat then sharp is a man who has just done something, a steady climb
-is a man the league has been coming round to all week — and the reader sorts the
-two without being told which is which.
+- **Trending** — who the league has been picking up. The question the research
+  board's `Ros%` and `Δ` columns exist for, read there by sorting six hundred
+  rows and read here by looking.
+- **High Value** — who the projection says is worth the most over the days this
+  matchup has left. The same figure the board's `VAL` column prints under the
+  projected lens, and the same arithmetic (`categoryValue.ts::dayValue`) the day
+  cards rank their performers by.
 
-Three rather than five, because `15d` and `30d` answer *is he established*, which
-is a question about the season and belongs beside a stat line you can sort. Two
-more columns on a 128px card is a table.
+The pair is the reading. A man on both is one the league has noticed *and* the
+projection likes; a man on the second alone is the pickup nobody has got to yet,
+which is the best card on the page.
 
-They are drawn in span order, left to right through time, **colored by
-direction** — the board's own two colors for the same fact, and the board's own
-`formatTrend`/`trendDirection` rather than a second copy of them, so the two
-cannot come to disagree about the minus sign or about what a flat `0.0` looks
-like. A window with **no baseline is left off** and one whose player ESPN has no
-roster % for is **null**; both draw an em dash, and neither is a nought. Those
-are `rosterTrends`' own two absences, read here the way the board reads them.
+**The note is the tab's, not the block's.** `Player Spotlight` says what the
+section is and cannot say what the figure on the card means; the note beside it
+does, and changes with the switch — `added most in the last 3 days` against
+`most projected value through Sep 6`. So the heading never carries both and the
+card never has to explain itself.
 
-The card went **116 → 128px** for it. Measured at 11px tabular, the widest cell
-on the live rail is `+13.8` at **34.5px**, against a column of 30.7 at the old
-width and **34.7 at the new** — nothing on any of the sixty cards overflows one,
-and nothing on a card is ellipsized. Page-body overflow is 0 at 1400 and at 390,
-where 2.8 cards of the rail show.
+**Trending leads**, which is the order a manager reads the two in — *what has
+everybody else decided* is the cheaper question — and it is also the earlier of
+the two to land, the value rail waiting on two board reads. So the tab a reader
+arrives on is the tab that is ready.
 
-**Risers only.** A drop is a fact about a player nobody is picking up, and a row
-of them is a list of men the reader has no decision to make about — where every
-card here is one press from his page and a possible add. The board's own `Δ`
-columns carry both directions and are the place for that reading.
+**In the URL as `spot=value`**, by the rule every other tab strip in this app
+follows: which data a view shows belongs in the link. Absent means trending. A
+`spot=value` that arrives before the value rail does — or on a matchup with no
+days left, which has none — **falls back rather than emptying the view**: the
+section picks the first tab it actually has.
 
-**And free agents only**, which is the same sentence one step further on. A man
-being added in three thousand leagues is news; a man being added in three
-thousand leagues *who is already on somebody's roster in this one* is news the
-reader can do nothing whatever about — and half the rail was that. The test is
-the research board's own: absent from `ownedIds` is available, where present
-means rostered by anybody, the reader included.
+### Three rows, split by seat
+
+A manager streaming a starter and a manager chasing saves are two different
+errands, and a mixed list makes each of them scan past the other's answers. It is
+ESPN's own eligibility that says which — the same join the padlock and the slot
+chip run on — so a swingman listed at both reads as a starter, which is what a
+league that lets you start him there means by it. A pitcher ESPN cannot place
+falls to `starter` on the trending rail and to the projected row's own
+server-computed `starter` flag on the value rail, which is the one place the
+second can do better than the first.
+
+**Free agents only, on both.** A man being added in three thousand leagues is
+news; a man being added in three thousand leagues *who is already on somebody's
+roster in this one* is news the reader can do nothing whatever about — and half
+the rail was that. The test is the research board's own: absent from `ownedIds`
+is available, where present means rostered by anybody, the reader included. The
+same sentence holds one step further on for the value rail: a rail of the best
+players in baseball is a rail of men nobody can have.
 
 Note what this does **not** filter on. `Ros%` is ESPN-wide and ownership is this
-league, so a man at 45% across ESPN who nobody here has taken stays on the rail
-— which is exactly the card worth drawing. Measured on the live league: the
-three rows went from `Sogard · Adell · Raleigh` to `Sogard · Lee · Gasper`,
-dropping the 80%-rostered catcher and keeping the 45% second baseman, and all
-three rows still filled their ten.
+league, so a man at 45% across ESPN who nobody here has taken stays on the rail —
+which is exactly the card worth drawing. Measured on the live league when the
+filter went in: the three rows went from `Sogard · Adell · Raleigh` to
+`Sogard · Lee · Gasper`, dropping the 80%-rostered catcher and keeping the 45%
+second baseman, and all three rows still filled their ten.
 
 **A null `ownedIds` draws nothing rather than everything.** The read has not
 landed, and the board states the failure this avoids in as many words: the
 alternative is a list that silently claims every player is available.
 
-**Three rows split by seat, not by kind.** A manager streaming a starter and a
-manager chasing saves are two different errands, and a mixed list makes each
-scan past the other's answers. `eligible` decides — ESPN's own positions, the
-same join the padlock and the slot chip run on — so a swingman ESPN lists at
-both reads as a starter, which is what a league that lets you start him there
-means by it. A pitcher ESPN cannot place falls to `starter`.
+**Both need a connected league and say nothing without one.** Roster percentages
+are ESPN's and so is the category list a value is scored over, so a reader with
+no league has neither rail — absent rather than empty, the app's rule that a
+section with nothing to say is not a section. So is a quiet morning on which
+nobody moved.
 
-**Built in `App`, drawn here.** Every input is App's and none is the view's: the
-ownership read's trend windows, the roster percentages beside them, the season
-roster for a name and a club, `teamById` for the abbreviation and ESPN's
-eligibility for the seat. The view draws cards.
-
-**The club is the abbreviation.** `SeasonPlayer.team` is the full name — right
-in a table cell and three characters too many on a 116px card: measured, every
-card on the rail ellipsized its second line and half of them lost the position
-with it. (The value rail below needs no such lookup: a `ResearchRow` already
-carries the abbreviation.)
-
-**It needs a connected league and says nothing without one.** Roster percentages
-are ESPN's, so a reader with no league has no trend to draw and the block is
-absent rather than empty. So is a quiet morning on which nobody moved.
-
-The rail scrolls sideways rather than wrapping: ten cards is two lines on a
+The rails scroll sideways rather than wrapping: ten cards is two lines on a
 desktop and five on a phone, and a block that changes height by three lines
-between widths is a page that reads differently on every screen. It bleeds
+between widths is a page that reads differently on every screen. They bleed
 through the app's gutters so the rail reaches the glass, which is what says
-*there is more of this*; `overscroll-behavior-x: none` in the one axis it
-scrolls, the app's standing rule.
+*there is more of this*; `overscroll-behavior-x: none` in the one axis they
+scroll, the app's standing rule.
 
----
+### The card's figure is a small table
 
-## High value players
+A trending card prints **three windows — `1D`, `3D`, `7D`** — where it printed
+one. One figure was the wrong number to be alone with: a four-point move
+overnight is a different player depending on whether the week behind it reads
+`+4` or `+20`, and a single figure cannot tell them apart. Three spans read as a
+shape — flat then sharp is a man who has just done something, a steady climb is a
+man the league has been coming round to all week.
 
-A fifth block, and the last: **who is worth the most over the days this matchup
-has left**, in the same three rows of ten.
+Three rather than five, because `15d` and `30d` answer *is he established*, which
+is a question about the season and belongs beside a stat line you can sort.
 
-**The two rails are one component drawn twice** (`PlayerRail`), and the pair is
-the reading. Trending is what everybody else has already decided; this is what
-the projection says. A man on both is one the league has noticed *and* the
-projection likes; a man on the second alone is the pickup nobody has got to yet,
-which is the best card on the page.
+**And they are drawn as a table** — a head row, a rule under it, the figures
+below, two column rules and a border round the lot. Three numbers at one weight
+in three equal tracks read as one long number before they read as three readings:
+`+0.7 +1.1 +1.4` with nothing between them is a run the eye has to be told where
+to cut. The rules are the whole of what says otherwise, and they are the
+vocabulary every other table in this app already uses.
 
-**The figure is `VAL`** — `categoryValue.ts` over the reader's own scoring
-categories, over the span undivided, which is exactly what the research board's
-projected lens prints and what the day cards' `VALUE` column ranks its
-performers by. Six games of a good hitter outscore three of an equal one, and
-*who will give me the most this week* is the question a rail like this is opened
-for. It is therefore **not** comparable to a day card's `+1.4`, which is one day,
-and the two headings say which each is.
+Three things about how it is built, each of which the obvious alternative gets
+wrong:
+
+- **The head rule is a grid item spanning `1 / -1`**, not a `border-bottom` on
+  the labels. A border stops at the cell it is on, so it would come out as three
+  segments with a break at each column rule; a spanning row crosses the gaps and
+  is one line by construction. It carries `margin-inline: calc(-1 * var(--win-pad))`
+  so it meets the box's border the way a table's does.
+- **The column rules are absolutely positioned on the container**, not
+  `border-left` on the tracks. A border there is drawn at the track's edge —
+  the whole gap from the column before it and hard against the one after — and,
+  box sizing being border-box, it takes a pixel out of a track that has none to
+  give. It also could not run past the head rule, which is what makes the block
+  look like a table rather than two blocks that happen to line up.
+- **Their arithmetic is exact rather than `33%`.** An absolutely positioned
+  element's `100%` is the *padding box*, so a track is
+  `(100% − 2 × pad − 2 × gap) / 3` and the first gap's center is a pad plus a
+  track plus half a gap along. `33.3%` misses it by a sixth of the gap plus the
+  padding — a visible lean at this size.
+
+A window with **no baseline is left off** and one whose player ESPN has no roster
+% for is **null**; both draw an em dash, and neither is a nought. Those are
+`rosterTrends`' own two absences, read here the way the board reads them. The
+figures are **colored by direction**, off the board's own `formatTrend` and
+`trendDirection` rather than a second copy of them, so the two cannot come to
+disagree about the minus sign or about what a flat `0.0` looks like.
+
+### The window is a switch, and the ranked column is marked
+
+Printing three spans while ranking on the first is half an offer: *added most in
+the last day* and *added most in the last week* are different lists of men, and
+the second is the one a manager plans a week around. So the same three windows
+are a second switch beside the first, and the rail is ranked on whichever is
+pressed. Measured on the live league, the batters' row: `Sogard · Gasper · Lee ·
+Tawa · Keaschall` on `1D`, `Sogard · Lee · Gasper · Tawa · Keaschall` on `3D`,
+`Sogard · McNeil · Gasper · Lee · Flores Jr.` on `7D`.
+
+**The ranked column is named on the card, not only on the switch.** Thirty cards
+ordered by a figure that looks like the two beside it is a list whose order is a
+puzzle; one brighter label answers it where the reader is looking. It marks
+something precisely *because* it is one of three — the rule against a mark on
+every row is about marks that distinguish nothing. A step in brightness rather
+than a color: nothing is rising or falling about being the sorted column, and the
+two colors under it already mean something else.
+
+**`spotw=3` in the URL**, one day being the default and so writing nothing, and
+scoped one step further in than `spot=`: a window on a link that opens the value
+rail names a ranking nothing on screen is made of. It is **separate state from
+the tab**, so a reader who picks `7D`, looks at the value rail and comes back
+finds `7D` where they left it — a sub-selection inside a page is not a leaving.
+
+**A window the ownership read has no baseline for falls back** to the first one
+it does have, and the rail carries the window it *actually* used so the switch
+marks that one. An empty rail under a pressed tab would read as *nobody moved*
+rather than as *that span cannot be measured yet*. The switch offers only the
+windows there are, and is not drawn at all when there is one — a control with one
+live option marks nothing, the same rule that suppresses the kind tabs on a
+watchlist of one kind. The rails' switch goes the same way when the value rail
+has not landed.
+
+Both switches sit in one wrapping row. Measured: the pair needs 324.3px
+(180.4 + 8 + 135.9) and the app's 22px gutters leave 346 at 390 — one line on a
+phone — against 276 at 320, where the second drops to a line of its own and the
+row grows 36 → 80px. Wrapping rather than scrolling because both are *controls*:
+a rail can be half off the screen and still say there is more of it, where half a
+control off the screen is a reading the reader cannot reach.
+
+### The value card is the same box with one column
+
+The value rail's figure is drawn in **the same bordered table**, one column,
+headed `VALUE`. That is what makes the two rails' cards the same height *by
+construction* rather than by a `min-height` somebody measured once — so nothing
+on the page moves when the switch is pressed. Measured: **167px on both tabs**,
+the boxes 45px on both.
+
+The one thing that differs is the size of the figure — 15px against the deltas'
+11 — so both value rows carry a **declared `line-height: 18px`**. A line box
+declared rather than derived is the same height whatever is in it. Declared
+rather than measured because it is a number this stylesheet chooses; the
+alternative is a height off a font the app does not pick, which is the thing that
+rule warns against.
+
+**And the box is as wide as its contents, not as wide as the card.** The trending
+box is full width because it has three columns to divide and they have to line up
+down the rail; one column stretched to the same 126px is a box with a figure
+adrift in the middle of it, which is what the rail shipped as. `width: auto` with
+a 72px floor — half the card, centered by the card's own `align-items` — and the
+height is untouched, which is the whole point of the box being shared.
+
+It also **names the figure**, which the day cards' own performer lists needed for
+the same reason: a bold signed number beside a batting line is not self-evidently
+a ranking.
+
+**The figure is monochrome, where trending's is colored**, and the difference is
+the app's rule rather than a taste: a move is a *state* — rising, falling — and
+gets a color for it; a value is a ranking figure, already said by where the card
+sits on the rail. It is drawn at `.ov-perf-val`'s own size and weight, one decimal
+and always signed, so the one arithmetic reads as one figure on both blocks. Under
+it, `11 G · 6% rostered`: what the figure is made of, then whether anybody else
+has noticed.
+
+### The card is 144px, and every pixel of the growth is accounted for
+
+It was 116. Measured at 11px tabular, the widest cell on the live rail is `+13.8`
+at **34.5px**, and a third of the old card's 98px of content was 30.7 — which it
+does not fit at all. A track is now `(144 − 2 card border − 16 card padding − 2
+box border − 2 × 3 box padding − 2 × 6 gap) / 3` = **35.33px**, and nothing on
+any of the sixty cards overflows one or is ellipsized. Page-body overflow is 0 at
+1400, 390 and 320.
+
+**The club is the abbreviation.** `SeasonPlayer.team` is the full name — right in
+a table cell and three characters too many on a card this wide: measured at 116,
+every card on the rail ellipsized its second line and half of them lost the
+position with it. The value rail needs no such lookup — a `ResearchRow` already
+carries the abbreviation.
+
+### What the value rail is drawn over, and what it costs
 
 **The days the matchup has left** — today through the period's last day, and
 today rather than tomorrow because a manager reading this at nine in the morning
@@ -1171,8 +1280,13 @@ no arithmetic here beyond the max. **Past the end of the period the rail is
 absent**: `matchupWindow.next` is deliberately not read for it, a projection of a
 matchup that has not started being a different reading with a different heading —
 the same decision the roster's Schedule view records about a `Next matchup` pill.
-The heading names the last day (`most projected value through Sep 6`) so the
-reader never has to work out how far ahead the figure looks.
+The note names the last day (`most projected value through Sep 6`) so the reader
+never has to work out how far ahead the figure looks.
+
+**The span undivided**, which is the reading a projected board is opened for: six
+games of a good hitter outscore three of an equal one, and *who will give me the
+most this week* is the question. It is therefore **not** comparable to a day
+card's `+1.4`, which is one day, and the two notes say which each is.
 
 **Two board reads, and no new endpoint.** It is `/api/research/projected` for
 each kind over that span — the same request the research board's lens makes and
@@ -1185,27 +1299,15 @@ himself.
 **It is not on the boot gate.** `App` holds the frame behind the `Splash` until
 the roster, the report and the league status have answered; a rail at the foot of
 the page is not worth a page that waits for it. The block is absent until it
-lands and then appears whole — and it is drawn **below** trending partly for
-that: the later of the two to land is the lower of the two, so nothing appears
-above a block already on screen.
-
-**Free agents only, a null `ownedIds` drawing nothing rather than everything, and
-the seat off ESPN's eligibility** — all three are the trending rail's rules, kept
-for the trending rail's reasons. A rail of the best players in baseball is a rail
-of men nobody can have. The one place it can do better: a pitcher ESPN cannot
-place falls to the row's own `starter` flag, which the server computed, where
-trending can only fall to `starters`.
+lands and then appears whole.
 
 **A row with no value, and a row with no game, are not on it.**
-`projectedRowValue` is null where the league scores nothing computable on his
-side of the ball, and a rail ranked on a figure has nothing to say about a man
-without one. `games` of nought is the same reading the lens's own `Games` column
-takes — *there is nothing here to project*, which is not a measurement of zero.
+`projectedRowValue` is null where the league scores nothing computable on his side
+of the ball, and a rail ranked on a figure has nothing to say about a man without
+one. `games` of nought is the same reading the lens's own `Games` column takes —
+*there is nothing here to project*, which is not a measurement of zero.
 
-**The figure is monochrome, where trending's is colored**, and the difference is
-the app's rule rather than a taste: a move is a *state* — rising, falling — and
-gets a color for it; a value is a ranking figure, already said by where the card
-sits on the rail. It is drawn at `.ov-perf-val`'s own size and weight, one
-decimal and always signed, so the one arithmetic reads as one figure on both
-blocks. Under it, `11 G · 6% rostered`: what the figure is made of, then whether
-anybody else has noticed.
+**Built in `App`, drawn here.** Every input is App's and none is the view's: the
+ownership read's trend windows, the roster percentages beside them, the season
+roster for a name and a club, `teamById` for the abbreviation, ESPN's eligibility
+for the seat, and the two projected boards. The view draws cards.

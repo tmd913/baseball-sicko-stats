@@ -21995,6 +21995,28 @@ html[data-theme='light'] .league-table thead th {
   flex-direction: column;
   gap: 14px;
 }
+/* **The heading and the switch under it are one item of that column.** The
+   heading already carries an 8px bottom margin, which is the interval the two
+   want; as two flex children they would sit 22px apart. The wrapper has no
+   layout of its own and is not meant to — it is a bracket, and this rule exists
+   to say so rather than to do anything. */
+.ov-spot-head {
+  display: block;
+}
+/* **The two switches side by side, and they wrap rather than scroll.** Measured:
+   the pair needs 324.3px (180.4 + 8 + 135.9) and the app's 22px gutters leave
+   346 at 390 — one line on a phone — against 276 at 320, where the second
+   switch drops to a line of its own and the block grows 36 → 80px.
+
+   Wrapping rather than a scroller because both are *controls*: a rail can be
+   half off the screen and still say there is more of it, where half a control
+   off the screen is a reading the reader cannot reach. Two lines of switches at
+   320 is the cheapest way to keep every option pressable. */
+.ov-spot-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .trend-row {
   display: flex;
   flex-direction: column;
@@ -22097,15 +22119,18 @@ html[data-theme='light'] .league-table thead th {
    and ten of them would squeeze to fit rather than overflow. */
 .trend-card {
   flex: none;
-  /* **128px, where it was 116**, and the twelve pixels are the three moves the
-     card carries now in place of one figure. Measured at 11px tabular, the
-     widest cell on the live rail is `+13.8` at **34.5px**; a third of the old
-     card's 98px of content, less the 3px gaps, is 30.7. At 128 the column is
-     **34.7px** and no cell on the rail overflows one — measured across all
-     sixty, with nothing on a card ellipsized either. The same twelve pixels go
-     to the name and the `CLUB \u00b7 POS` line under it, which the block's own
-     note records as ellipsizing at the old width. */
-  width: 128px;
+  /* **144px, where it was 116**, and every one of the twenty-eight pixels is
+     accounted for by what the card carries now: three moves in place of one
+     figure, the two rules between them, and the box drawn round the lot.
+
+     Measured at 11px tabular, the widest cell on the live rail is `+13.8` at
+     **34.5px**. A track is `(144 − 2 card border − 16 card padding − 2 box
+     border − 2 × 3 box padding − 2 × 6 gap) / 3` = **35.33px**, so nothing on
+     the rail overflows one; a third of the old card's 98px of content was 30.7,
+     which does not fit it at all. The same pixels go to the name and the
+     `CLUB \u00b7 POS` line under it, which the block's own note records as
+     ellipsizing at 116. */
+  width: 144px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -22184,18 +22209,110 @@ html[data-theme='light'] .league-table thead th {
    is in them — a card whose `1D` is `+0.4` and whose `7D` is `\u221212.4` would
    otherwise put its labels at three different places and the rail would read as
    ten different cards. */
+/* **The three moves are drawn as a small table** — a head row of spans, a rule
+   under it, and the figures below — because three numbers at one weight in
+   three equal tracks read as one long number before they read as three
+   readings: `+0.7 +1.1 +1.4` in a row with nothing between them is a run the eye
+   has to be told where to cut. Two column rules and a head rule are the whole of
+   what says otherwise, and they are the vocabulary every other table in this app
+   already uses.
+
+   **Six cells and a rule, not three stacked pairs.** The head rule has to cross
+   the gaps the column rules stand in, and a `border-bottom` on a label stops at
+   the label — so the rule is a grid item of its own spanning `1 / -1`, which
+   makes it one continuous line by construction. */
 .trend-wins {
+  /* Named because the column rules' positions are derived from them: an
+     absolutely positioned hairline has to be told where a track ends, and a
+     track is a function of both. */
+  --win-gap: 6px;
+  --win-pad: 3px;
+  position: relative;
   margin-top: 4px;
   width: 100%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0 3px;
+  column-gap: var(--win-gap);
+  row-gap: 3px;
+  /* **The box is drawn**, which is what makes the three figures a table rather
+     than three figures with lines between them: a rule needs something to run
+     between, and column rules floating in an unbordered card read as ticks. The
+     radius is `--control-radius-inner`, the app's own answer for a box inside a
+     box — the card it sits in is `--radius`. */
+  padding: 3px var(--win-pad);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
 }
-.trend-win {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* One column and no rules to draw between them — the value rail's own figure,
+   which is the same box so that the two rails' cards are the same height by
+   construction rather than by a number somebody measured once.
+
+   **And it is as wide as its contents, not as wide as the card.** The trending
+   box is full width because it has three columns to divide and they have to line
+   up down the rail; one column stretched to the same 126px is a box with a
+   figure adrift in the middle of it, which is what the rail shipped as. `auto`
+   with a floor: the card centers it (`align-items: center`), the floor keeps
+   `+4.6` and `−0.2` the same shape, and the height is untouched — which is the
+   whole point of the box being shared, so the switch still moves nothing. */
+.trend-wins.is-solo {
+  grid-template-columns: 1fr;
+  width: auto;
+  min-width: 72px;
+}
+.trend-wins.is-solo::before,
+.trend-wins.is-solo::after {
+  content: none;
+}
+.trend-win-lab,
+.trend-win-val {
+  /* A grid item's automatic minimum is its content, which would let one wide
+     figure push its track past the other two and the block past the card. */
   min-width: 0;
+  text-align: center;
+}
+.trend-wins-rule {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--border);
+  /* Out through the box's own padding, so the head rule meets the border the
+     way a table's does rather than stopping three pixels short of it. */
+  margin-inline: calc(-1 * var(--win-pad));
+}
+/* **The column rules sit in the gaps, and are drawn on the container.**
+
+   Not on the cells: a `border-left` there is drawn at the track's edge — the
+   whole gap from the column before it and hard against the one after — and, box
+   sizing being border-box, it takes that pixel out of a track that has none to
+   give. And not on the cells of *one* row either, since the rule has to run past
+   the head rule to look like a table rather than like two blocks that happen to
+   line up.
+
+   So two absolutely positioned hairlines, outside the layout entirely, at the
+   two gaps' own centers, running the full height of the box between its own
+   borders. The arithmetic is exact rather than `33%`: an absolutely positioned
+   element's `100%` is the **padding box**, so a track is
+   `(100% − 2 × pad − 2 × gap) / 3` and the first gap's center is a pad plus a
+   track plus half a gap along. `33.3%` misses it by a sixth of the gap plus the
+   padding, which is a visible lean at this size. */
+.trend-wins::before,
+.trend-wins::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.trend-wins::before {
+  left: calc(
+    var(--win-pad) + (100% - 2 * var(--win-pad) - 2 * var(--win-gap)) / 3 + var(--win-gap) / 2 - 0.5px
+  );
+}
+.trend-wins::after {
+  left: calc(
+    var(--win-pad) + 2 * (100% - 2 * var(--win-pad) - 2 * var(--win-gap)) / 3 + 1.5 * var(--win-gap) -
+      0.5px
+  );
 }
 /* The span, over the move it names — the same small-uppercase-label-over-a-
    figure the day cards' category line and `TOP PERFORMERS` already are. */
@@ -22203,7 +22320,15 @@ html[data-theme='light'] .league-table thead th {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--faint);
+  line-height: 12px;
+}
+/* The column the rail is actually ordered by. A step in brightness rather than
+   a color: it is not a *state* — nothing is rising or falling about being the
+   sorted column — and the two colors under it already mean something else. */
+.trend-win-lab.is-on {
+  color: var(--text);
 }
 /* **Colored by direction, and monochrome where there is none.** Color is spent
    on state, and rising and falling are the state — the research board's own two
@@ -22216,6 +22341,15 @@ html[data-theme='light'] .league-table thead th {
   font-weight: 800;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  /* **Pinned, and it is what makes the two rails' cards the same height.** The
+     value rail draws the same box with one column, and the only thing in it that
+     differs is the size of the figure — 15px against 11. A line box declared
+     rather than derived means the two rows are the same height whatever is in
+     them, so the boxes match, so the cards match, and nothing on the page moves
+     when the switch is pressed. Declared rather than measured because it is a
+     number this stylesheet chooses: the alternative is a `min-height` off a font
+     the app does not pick, which is the thing that rule warns against. */
+  line-height: 18px;
 }
 .trend-win-val.is-up {
   color: var(--hit);
@@ -22230,9 +22364,11 @@ html[data-theme='light'] .league-table thead th {
    Monochrome for the same reason `.ov-perf-val` is, and at the same size and
    weight, so the one arithmetic reads as one figure on both blocks. */
 .trend-card-val {
-  margin-top: 4px;
   font-size: 15px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  /* `.trend-win-val`'s own line box — see there. It sits in the same table row
+     and has to be the same height. */
+  line-height: 18px;
 }
