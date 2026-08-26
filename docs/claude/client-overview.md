@@ -1311,3 +1311,88 @@ one. `games` of nought is the same reading the lens's own `Games` column takes �
 ownership read's trend windows, the roster percentages beside them, the season
 roster for a name and a club, `teamById` for the abbreviation, ESPN's eligibility
 for the seat, and the two projected boards. The view draws cards.
+
+### And the last card in every row is a door into the board it is a top ten of
+
+A rail is ten men off a board of six hundred, so it has always had an eleventh
+answer it could not give: *and who else*. The research board is where that is
+answered — the same population, the same free-agent cut, the same figure in a
+column — and reaching it was **four presses**: the tab, the position pill, the
+Columns dialog for the window the rail is ranked on, and the header to sort it.
+`See more` is that, done.
+
+**At the end of the row rather than in the heading**, which is where the
+question is asked: a reader who wants more has scrolled the row to its end, and
+a door at the far end is the one thing a scrolling row can offer that a heading
+cannot — it is *found* by the gesture that produced the want. It is drawn once
+per seat, so the door is about the row it is in.
+
+**It is a `.trend-card` with two rules added**, not a link in the margin: it
+sits in the flex row, takes the same 144px and the same border, and scrolls with
+the ten ahead of it. What it has not got is a face, so the 46px circle a
+headshot occupies is an arrow at that size — which is what keeps the card's
+height and the baseline of the line under it the same as its neighbors' by
+construction rather than by a measured floor (checked: **144 × 167 at 390**, the
+player card beside it 167). The permanent accent tint is the same `color-mix`
+every card in the row already uses on hover, held on, which says *pressable and
+not one of these* without spending a hue.
+
+#### What `openSpotlightBoard` sets, and what it deliberately does not
+
+Six things, and each of them is *what the rail is* rather than a tidying-up:
+
+- **The view and the reading** — `research`, on the player board rather than the
+  clubs (`board=teams` is thirty rows and has no roster % at all), with the
+  Schedule mode off, that mode replacing the stat columns with days.
+- **The position pill**, off the seat the card was in: `batters`, `SP`, `RP`.
+  It is what makes the board the *row* that was pressed rather than the block.
+- **Free agents only** — which both rails are, and which the board's own default
+  already is. **Set locally rather than through `setResearchInclude`, so nothing
+  is written to the reader's record**: the door states a reading for this
+  errand, and a saved preference changed by a press nobody made on the buttons
+  that own it is the kind of quiet write this app declines to make.
+  `researchIncludeTouched` goes up with it, or a late `/api/prefs` would put the
+  reader's own set back over the top.
+- **The lens and its span, on the value rail.** `VAL` exists only under the
+  projected reading, and the span is `valueSpan` — the very days the rail was
+  drawn over, so the board's figure is the card's figure rather than a second
+  projection over a different week.
+- **The sort**, on the rail's own column, descending: `trendKey(window)` for
+  whichever window the switch is on, `projValue` for the value rail.
+- **That column made visible**, and this one is not cosmetic. **A sort naming a
+  column the table has not got silently falls back to the board's default**
+  (`ResearchTable::sortableKey`), and four of the five trend windows are
+  `DEFAULT_OFF` — so a rail ranked on `1D` or `3D` would land on a board ordered
+  by `Ros%` and look like the door had done nothing. `withColumn` puts it at its
+  canonical place among whatever the reader has on, and `withProjectedColumn` is
+  its twin against the lens's vocabulary. **Nothing is written where the column
+  is already on**: an absent entry means *follow the defaults as they change*,
+  and seeding it with a copy of today's would freeze that and make
+  `isDefaultColumns` answer false for a set nobody had touched. In practice the
+  door pins a list only for the four held-back windows.
+
+**What it leaves alone is the reader's own work**: a search, a stat filter, a
+`Starting` day set. Those are authored, they are on screen, and the count line
+above the table says how many rows they left — where clearing them would be a
+door destroying something to make room for itself. The paging is not authored
+and does go back to the first page, off `freshResearchUi().shown` so the number
+cannot come to disagree with the board opened cold.
+
+#### Driven, and the two lists compared row by row
+
+Pressed from the Batters row on `7D`, the rail and the board it opened read the
+same top ten in the same order and with the same figures: **+14.1, +4.3, +3.9,
++3.8, +3.5, +3.5, +3.4, +3.0, +2.7, +2.2** — the one transposition is a tie at
+`+3.5` the two sorts break differently — and the board then goes on where the
+rail stopped, `+2.0` and `+1.8`. The URL is
+`?view=research&pos=SP&cols=…rosterTrend3…` with `▼Δ3d` lit from the SP row on
+`3D`, and the count line reads `284 of 626 pitchers`.
+
+From the High Value row: `?view=research&bproj=1&start=2026-08-25&end=2026-09-06`
+with `▼VAL` lit, and the top six matching the rail's cards figure for figure
+(`+4.6, +4.3, +4.3, +4.2, +4.2, +4.1`). The `cols=` on that URL is the reader's
+own saved projected set — verified by opening `?view=research&bproj=1` cold and
+getting the identical list, which is the check that the door wrote no columns.
+
+**The bundle**: JS **742,494 → 744,096** raw and **216,837 → 217,332** gzipped;
+CSS **192,020 → 192,406** and **34,187 → 34,243**.
