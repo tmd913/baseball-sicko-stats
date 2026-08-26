@@ -3202,31 +3202,53 @@ body {
    against another, and this is the one surface in the app that draws it that
    way.
 
-   Three tracks — batter, `vs`, pitcher — rather than a flex row with a spacer,
-   because the two men must be the same width whatever their names are: `1fr`
-   each and the `vs` sized to itself puts the axis of the head at the middle of
-   the box and not at the middle of the longer name. The pitcher's half reads
-   **inward** (`row-reverse`, name then face) so the two headshots sit either
-   side of the `vs`.
+   Three tracks — batter, `vs`, pitcher — **each the width of what is in it**,
+   with the row of them centered. The pitcher's half reads **inward**
+   (`row-reverse`, name then face) so the two headshots sit either side of the
+   `vs` rather than both to the left of their names.
 
-   **Both halves pack toward the middle**, which is the `space-between` fault
-   the main tab strip records, one box down and answered the same way: the
-   dialog is 800px wide on a desktop and the two men are ~200px of it, so left-
-   and right-aligned they sat in opposite corners with a two-character `vs`
-   marooned between them — two players on a page rather than one facing the
-   other. `flex-end` on both (which on the reversed half is its left edge)
-   clusters them either side of the word, and a long name grows outward into
-   the slack rather than the pair drifting apart. */
+   **It was `1fr auto 1fr`, and that is two decisions of which only one
+   survived.** The first was that the two men pack toward the middle rather than
+   to the edges of their columns — the `space-between` fault the main tab strip
+   records, one box down: the dialog is 800px on a desktop and the two men are
+   ~250px of it, so aligned outward they sat in opposite corners with a
+   two-character `vs` marooned between them, two players on a page rather than
+   one facing the other. `flex-end` on both halves (which on the reversed one is
+   its left edge) is that fix and it stays.
+
+   The second was that equal columns put the axis of the head at the middle of
+   the box rather than at the middle of the longer name — true, and it cost a
+   name. An equal column is an equal *share*, and the two names are never equal:
+   at 390 the head is 332px, so each man had 150 and `Crow-Armstrong` needs 157
+   with his circle and gap — measured, it drew as `Crow-Armstr…` while `Pfaadt`
+   left 50px of his own share empty beside it. Content-sized tracks give the
+   long name the room the short one is not using (measured at 390: **157, 13,
+   91** in a 332px head, nothing clipped), and centering the group is what the
+   `1fr` columns were really buying — the pair reads as centered because it *is*
+   centered, rather than because the two halves happen to balance. It is the
+   main strip's own lesson: an equal column is an equal target, and the mark it
+   carries is the width of the thing in it. */
 .pa-matchup {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto auto auto;
+  justify-content: center;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
+  /* **Almost nothing above and a real gap below**, which is not symmetry for
+     its own sake: the dialog body already pays 12px above this head, so a 10px
+     top padding on top of that put **22px between the title bar and the two
+     faces** — the head floating in the box rather than heading it — while
+     below, the hairline was 9px off the description (`.pa-des`'s own margin)
+     and read as a rule *belonging to* the sentence under it. 2 above and 10
+     below, plus a 10px margin under the line, makes it 14 above the faces and
+     19 under the rule: the head sits at the top of the box and the description
+     starts its own statement. */
+  padding: 2px 0 10px;
   /* The head is a register of its own, closed the way the scoreboard card's
      foot is opened: a hairline rather than a gap, so the description below
      starts a new statement instead of running on from the two names. */
   border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
 }
 .pa-mu-man {
   display: flex;

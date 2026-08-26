@@ -2249,8 +2249,25 @@ word `vs`, and the pitcher's the same way — his block mirrored so the two face
 sit either side of the word rather than both to the left of their names. Both
 names and both headshots open the man's page. Nothing is lost: `LHB` and `RHP`
 are the same two facts `.pa-hand` carried, split between the two men they are
-each about, and where MLB names no hand the sub-line falls back to `Batter` or
-`Pitcher` so the block never stops saying which of the two it is.
+each about.
+
+**Each man is named by surname**, which is `surname` — the helper the summary
+table's opponent cell and the feed's Upcoming bar already name a starter with.
+The head is two names either side of a `vs` on one line, and it is the
+*pairing* being read there: `Crow-Armstrong vs Pfaadt` is a sentence where two
+full names are two labels. The whole name is not lost — the dialog's own title
+carries the batter's in full, both blocks carry theirs as a `title`, the
+headshot's tooltip and accessible name are the full name (a tooltip and a
+screen reader are the two places where nothing is being fitted onto a line),
+and either man's page is one press away.
+
+**The hand comes off the season roster where the play does not carry it.** A
+plate appearance has `stand` and `pThrows`; a *batter faced* has only the
+batter's, so a pitcher-side head would otherwise draw no hand for the man whose
+outing it is, and an old cached day has neither. `useHandedness` is the map the
+whole app reads a hand off, keyed by person — so the block asks it rather than
+being threaded a hand from four call sites, and falls back to `Batter` or
+`Pitcher` only where even that has nothing to say.
 
 **The batter's id comes from the caller, not from the wire.** A
 `PlateAppearance` names the pitcher (`pitcherId`, `pitcherName`) and nobody
@@ -2286,26 +2303,70 @@ of Escape closes the page and leaves the at-bat where it was — a second closes
 that. Exactly one thing per press, at a depth the ladder had not been driven to
 before.
 
-**Drawn at 1000 and at 390.** At 1000 the head is 800px and the two men were in
-opposite corners of it with a two-character `vs` marooned between — the
-`space-between` fault the main tab strip records, one box down — so both halves
-pack toward the middle (`flex-end` on each, which on the mirrored half is its
-left edge) and a long name grows outward into the slack instead. At 390 the two
-blocks are 150px each in a 332px head and fill it. A hairline closes the head,
-so the description below starts a statement rather than running on from two
-names.
+**Drawn at 1000 and at 390, and the layout took two passes.** At 1000 the head
+is 800px and the two men were in opposite corners of it with a two-character
+`vs` marooned between — the `space-between` fault the main tab strip records,
+one box down — so both halves pack toward the middle (`flex-end` on each, which
+on the mirrored half is its left edge). The tracks were `1fr auto 1fr` with it,
+to put the head's axis at the middle of the box rather than at the middle of the
+longer name, and **that cost a name**: an equal column is an equal *share*, and
+two names are never equal. At 390 the head is 332px, so each man had 150 and
+`Crow-Armstrong` needs 157 with his circle and gap — measured, it drew as
+`Crow-Armstr…` while `Pfaadt` left 50px of his own share empty beside it.
+Content-sized tracks with the row centered give the long name the room the short
+one is not using: **157, 13, 91** in a 332px head, nothing clipped, and the pair
+still reads as centered because it now *is* rather than because the two halves
+happened to balance. The main strip's own lesson, one box down again.
+
+A hairline closes the head, so the description below starts a statement rather
+than running on from two names.
+
+**Almost nothing above it and a real gap below, which is not symmetry.** The
+dialog body already pays 12px above this head, so the 10px top padding it
+shipped with put **22px between the title bar and the two faces** — a head
+floating in the box rather than heading it — while under it the hairline sat
+9px off the description (`.pa-des`'s own margin) and read as a rule *belonging
+to* the sentence beneath. `padding: 2px 0 10px` with a 10px margin under the
+line measures **14px above the faces and 19px from the rule to the text**: the
+head sits at the top of the box, and the description starts its own statement.
 
 **The circle is folded onto `.feed-photo`** rather than restyled — a 40px round
 headshot that is a button into a man's page is one object, and this is that
 object two boxes further in. The role rings stay the feed's alone: a dialog
 head has no live role to draw.
 
-**And the row that opens it dropped the pitcher's first name.** `.pa-pitcher`
-read `vs Chris Bassitt (RHP)`; it reads `vs Bassitt (RHP)` now, through
-`surname` — the same helper the summary table's opponent cell and the feed's
-Upcoming bar already name a starter with, and for the same reason. The row is
-one line carrying an inning glyph, a base diamond, an outcome badge, an RBI
-mark, the contact figures and a bat speed, and a pitcher is referred to by
-surname anyway. Nothing is lost by it now that the full name is at the head of
-the box the row opens, beside his face — which is the half of this change that
-makes the other half free.
+**And the row that opens it dropped the pitcher's first name too.**
+`.pa-pitcher` read `vs Chris Bassitt (RHP)`; it reads `vs Bassitt (RHP)` now,
+through the same `surname`. The row is one line carrying an inning glyph, a base
+diamond, an outcome badge, an RBI mark, the contact figures and a bat speed, and
+a man named one way in the row and another in the box it opens would be two
+readings of one name a press apart.
+
+### The pitcher's side of the same at-bat draws the same head
+
+**A batter faced is that at-bat read from the mound**, and its dialog
+(`.faced-detail`, inside an inning's own box) opened straight onto the
+description with nothing saying who threw it — true of every row in the list,
+which is exactly the argument for saying it once at the head of each box rather
+than nowhere.
+
+**`PlayMatchup` takes two men rather than a `PlateAppearance`**, which is what
+makes that possible: one implementation and two adapters, the rule
+`categoryValue.ts` states for a figure applied to a block. A `FacedBatter`
+names the batter where a `PlateAppearance` names the pitcher — each side
+carries the *other* man, because each is always read as one man's — so the
+missing half comes from the caller either way. On the pitcher's side that is
+`InningsList`, which already takes `pitcherId` and `pitcherName` for the inning
+dialog's own heading and now passes both a rung further in, through
+`InningBlock` and `InningRows`. His hand needs nothing threaded: the head asks
+the season roster.
+
+Without the shared component the two dialogs for one at-bat would be two heads
+that agree today.
+
+**Driven at 1000**: feed → an outing → `Innings` → the 9th → `Luis Torrens —
+Strikeout · Bot 9`, whose head reads `Torrens (RHB) vs Megill (RHP)` with both
+faces and both presses. The stack is four deep there — the outing page (46),
+the inning dialog (47), the batter faced (48) and the player page a press opens
+over all of them (50) — and Escape unwinds it **one box per press, top down**:
+page, faced, inning, outing.
