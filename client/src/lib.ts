@@ -1839,6 +1839,24 @@ function prettyWeekday(iso: string): string {
  * which opens a calendar. `prettyDate` was already in `lib.ts` for exactly that
  * argument, one caller earlier.
  */
+/**
+ * A name in the possessive.
+ *
+ * **A name already ending in `s` takes the bare apostrophe** — `Baldy's Bozos'`
+ * rather than `Baldy's Bozos's`, which is what a plain `+ "'s"` produces on the
+ * live league and reads as a typo wherever it lands.
+ *
+ * **Here rather than in `LeagueTeam.tsx`, where it was written**, for
+ * `wideRange`'s own reason one function down: it has a second caller. That one
+ * puts a team name in a slot chip's title on a leaguemate's page; the Overview's
+ * opponent cards put one in the title of the door onto that page. Two copies of
+ * one apostrophe rule are two chances for one of them to grow the typo back.
+ */
+export function possessive(name: string | undefined | null): string | null {
+  if (!name) return null;
+  return /s$/i.test(name) ? `${name}’` : `${name}’s`;
+}
+
 export function wideRange(start: string, end: string): string {
   return start === end ? prettyWeekday(start) : `${prettyDate(start)} – ${prettyDate(end)}`;
 }

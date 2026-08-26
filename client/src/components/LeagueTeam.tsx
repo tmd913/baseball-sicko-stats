@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
-import { LIVE_POLL_MS, projectStarters, rangeDatesOf, seatKinds, startedOn } from '../lib';
+import {
+  isInjured,
+  LIVE_POLL_MS,
+  possessive,
+  projectStarters,
+  rangeDatesOf,
+  seatKinds,
+  startedOn,
+} from '../lib';
 import type { FantasySlot } from '../hooks';
 import { LoadingBlock } from './Loading';
 import { LiveFeed, FEED_PAGE_SIZE } from './LiveFeed';
@@ -38,18 +46,6 @@ import type {
  * row of pills at the head of it.
  */
 
-/**
- * A team name in the possessive, for the slot chip's title.
- *
- * **A name already ending in `s` takes the bare apostrophe** — `Baldy's Bozos'`
- * rather than `Baldy's Bozos's`, which is what a plain `+ "'s"` produced on the
- * live league and reads as a typo on every chip of that manager's page.
- */
-function possessive(name: string | undefined): string | null {
-  if (!name) return null;
-  return /s$/i.test(name) ? `${name}’` : `${name}’s`;
-}
-
 /** How much of the feed to open on, per stream — the app's own `feedShown`, one
  *  page down. A reading position rather than a view, so it is state rather than
  *  anything in the URL.
@@ -70,6 +66,7 @@ export default function LeagueTeam({
   end,
   reading,
   startersOnly = false,
+  hideInjured = false,
   lens,
   onLens,
   schedule,
@@ -110,6 +107,27 @@ export default function LeagueTeam({
    * key set and then thrown away; this draws it.
    */
   startersOnly?: boolean;
+  /**
+   * **The app's own hide-injured filter, applied to somebody else's roster.**
+   *
+   * It arrived with the Roster view's `Opponent` switch, which draws this page
+   * in place of the reader's own table — and the whole promise of that switch
+   * is that every control on the page goes on meaning what it meant. The
+   * settings menu's toggle is one of them, so a leaguemate's page has to honor
+   * it or the one control the reader cannot see from the row would silently
+   * stop applying.
+   *
+   * `isInjured` on `rosterStatus`, which is `App.tsx`'s own `shownReports` test
+   * run over these rows rather than a second one written here — and applied
+   * ahead of everything below it for the same reason it is applied ahead of the
+   * kind split there: the starters divider, the `Total` line and the feed all
+   * describe the rows on screen, and a filter under any of them would leave one
+   * of the three counting a player nobody can see.
+   *
+   * Default false, which is what the matchup page's own two team pages pass by
+   * omission: that page has no settings menu and never had this filter.
+   */
+  hideInjured?: boolean;
   /** **Which kind of play the feed reading draws** — the app's own single-select
    *  lens, `all` being the whole stream. The overlay owns it for the reason it
    *  owns the reading, the kind and the dates; what this page owns is *where
@@ -333,8 +351,19 @@ export default function LeagueTeam({
 
   /** **Both kinds, in one list** — the tab row that used to cut this page in
    *  half is gone app-wide, and the table below stacks a batter table and a
-   *  pitcher table by itself. See App's `viewCards` for the whole of that. */
-  const teamCards = report ?? [];
+   *  pitcher table by itself. See App's `viewCards` for the whole of that.
+   *
+   *  **And the hide-injured filter first**, ahead of the starters arithmetic and
+   *  the stream alike — see `hideInjured`. */
+  const teamCards = useMemo(
+    () =>
+      report === null
+        ? []
+        : hideInjured
+          ? report.filter((r) => !isInjured(r.rosterStatus))
+          : report,
+    [report, hideInjured],
+  );
 
   /** The stream's identity: which days — App's own `feedKey`, and what both the
    *  remount and the paging position are keyed by. It named a kind while there

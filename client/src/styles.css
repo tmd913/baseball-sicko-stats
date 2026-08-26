@@ -558,7 +558,13 @@ body {
    reach, which reads as a control floating in a margin rather than as the band
    the page hangs from. `.mlb-board >` for the reason the two above take a child
    combinator: nothing else in that tree has bled through these gutters. */
+/* **And the row that stands in the bar's place on the Roster's `Matchup`
+   reading** — `.rmup-head`, which takes the bar's bleed for the reason it takes
+   its padding and its hairline: they are two drawings of one band, and a band
+   that reached a different edge on one of them would read as a different row.
+   See `.rmup-head` in the matchup section. */
 .app > .date-bar,
+.app > .rmup-head,
 .league-view > .date-bar,
 .mlb-board > .date-bar {
   --bar-bleed: var(--app-gutter);
@@ -8955,7 +8961,8 @@ button.start-line:focus-visible {
 .projected-toggle svg,
 .feed-toggle svg,
 .summary-toggle svg,
-.matchup-open svg {
+.matchup-open svg,
+.opponent-toggle svg {
   flex: none;
 }
 
@@ -10788,14 +10795,19 @@ button.start-line:focus-visible {
    `.active`, being a plain switch with no panel. */
 .feed-toggle,
 .summary-toggle,
-/* **The door onto the matchup page, first in that same run** — the one control
-   there that is not a reading of the table under it. It is folded onto the
-   shape, the flex rule, the hover and the focus ring below, and deliberately
-   **not onto `.on`**: a door has no state to be in, so a lit one would be a
-   button claiming a reading it does not have. That is the whole of the
-   difference between it and the four beside it, and it is one selector list
-   rather than a second set of rules that agree today. */
-.matchup-open {
+/* **The two that are not readings of your own table, first in that same run**
+   — the matchup's comparison card in place of it, and the whole page read for
+   the other manager.
+
+   *(This block used to say `.matchup-open` was folded onto everything here
+   **except** `.on`, on the grounds that a door has no state to be in. That was
+   right while it opened an overlay and is not now: it is a reading, it lights
+   like the four beside it, and it is on every list including that one. The
+   paragraph is kept rather than deleted, this file's own rule for reasoning
+   that has been superseded — what it recorded is why a *door* would not take
+   `.on`, which is still the test for the next control that asks.)* */
+.matchup-open,
+.opponent-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -10814,7 +10826,8 @@ button.start-line:focus-visible {
 .schedule-toggle:hover,
 .projected-toggle:hover,
 .feed-toggle:hover,
-.matchup-open:hover {
+.matchup-open:hover,
+.opponent-toggle:hover {
   color: var(--text);
 }
 /* `.active` is "the panel is open"; `.on` is "the panel holds something",
@@ -10843,7 +10856,8 @@ button.start-line:focus-visible {
 .projected-toggle,
 .feed-toggle,
 .summary-toggle,
-.matchup-open {
+.matchup-open,
+.opponent-toggle {
   flex: none;
   white-space: nowrap;
 }
@@ -10851,7 +10865,9 @@ button.start-line:focus-visible {
 .schedule-toggle.on,
 .projected-toggle.on,
 .feed-toggle.on,
-.summary-toggle.on {
+.summary-toggle.on,
+.matchup-open.on,
+.opponent-toggle.on {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -10861,7 +10877,8 @@ button.start-line:focus-visible {
 .projected-toggle:focus-visible,
 .feed-toggle:focus-visible,
 .summary-toggle:focus-visible,
-.matchup-open:focus-visible {
+.matchup-open:focus-visible,
+.opponent-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -17698,6 +17715,18 @@ span.mup-move-name:hover {
      what `--mup-val-w` above already exists to avoid. */
   --mup-card-w: 896px;
 }
+/* **And the same token on the app**, which is the second box that draws this
+   card: the Roster's `Matchup` reading renders `.mup-card` as a child of `.app`,
+   where `--mup-card-w` was simply undefined — and a `max-width: var()` with no
+   value is invalid at computed-value time, so the card ran the full width of a
+   1920 window with its two figure columns a metre apart. Declared by the
+   *container* rather than by the card, which is `--table-bleed`'s own rule in
+   this file: the number is a fact about the box the card is being read in. The
+   overlay's own declaration stays where it is and wins inside it by
+   inheritance, both being the same 896. */
+.app {
+  --mup-card-w: 896px;
+}
 /* **A team page's roster reading is a fixed-height column**, so the table's own
    header row and total row stick — which is `.app.summary-mode`'s answer to
    exactly this, one level up, and `.details-view.gamelog-mode`'s one page
@@ -17886,6 +17915,67 @@ span.mup-move-name:hover {
 .mup-week-dates {
   font-size: 12px;
   color: var(--muted);
+}
+
+/* ---- The same card, on the Roster view ------------------------------------
+   The Roster's `Matchup` reading draws `MatchupCard` where its table would be
+   (`App.tsx::matchupCardOn`), and this row stands where its **date bar** would.
+   That is the whole of what it is: the bar's job on that page is to say which
+   days the numbers cover, and on this reading the days are the fantasy week's
+   rather than the reader's — so the row states them and offers nothing, which
+   is the `Summary` lens's `fixed` bar taken one step further.
+
+   **It takes the bar's own shape rather than resembling it**: the bleed is
+   folded onto `.app > .date-bar`'s rule above, and the padding and the hairline
+   are `.date-bar`'s numbers rather than invented ones. The two are alternatives
+   in one slot, so what the reader should see crossing between them is one band
+   changing what it says.
+
+   **It is not the same height, and that is measured rather than overlooked.**
+   At 1200, 390 and 320 the bar is **54px** and this row is **45**: the bar's
+   face is two lines (an 11px preset word over a 15px date) where this is one,
+   and the 45 is the key's own 30px button plus the shared 7px padding either
+   side. Padding it out to 54 was tried and rejected — it is 9px of air under a
+   one-line row, bought to keep a band the same height across a press that
+   replaces everything below it anyway. Nothing moves under the finger: the
+   press lands in the tools row above, which is at **y=99 (390/320) and y=166
+   (1200)** on both readings, and what changes is the 45px band and the page
+   under it.
+
+   The grid is `.mup-nav-row`'s and for its reason — the week centered on the
+   page's own middle with the key held to its right, rather than the pair
+   centered together, which would sit the week left of center by half the key. */
+.rmup-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(auto, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  /* The containing block for the key's panel — see below. Without it the panel
+     resolves against whatever is positioned further up and opens against the
+     page rather than against this row. */
+  position: relative;
+  margin-inline: calc(-1 * var(--bar-bleed, 0px));
+  padding: 7px var(--bar-pad);
+  border-top: 1px solid var(--border);
+}
+.rmup-head > * {
+  grid-column: 2;
+}
+.rmup-head > .info-key {
+  grid-column: 3;
+  justify-self: start;
+}
+/* Leftward from the row's right edge, which is `.mup-chrome .info-key-panel`'s
+   own answer in the band this row replaces — the button sits near the middle of
+   a wide window, and a 320px panel anchored to it would run off the right at
+   390. `--app-gutter` rather than the overlay's 16px, this row being the app's
+   own box. */
+.rmup-head .info-key-panel {
+  right: var(--app-gutter);
+  left: auto;
+  top: calc(100% + 8px);
+  bottom: auto;
+  width: min(340px, calc(100vw - 44px));
 }
 /* ---- A team page's reading run and its dates ----------------------------
    **They were the last row of the pinned band and the row under it; they are
@@ -21213,20 +21303,15 @@ html[data-theme='light'] .league-table thead th {
 }
 
 /* ---- The top performers ------------------------------------------------- */
-/* **What the three rows under it are.** The same weight and tone as a standings
-   block's own title (`.mlb-standings-title`) and the League page's group heads —
-   a small uppercase label over a list, which is this app's one shape for *this
-   is what follows*. It is folded onto neither, the two being in trees that share
-   no other rule; what it does share is the tokens, so they cannot drift apart in
-   a theme. */
-.ov-perfs-head {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+/* *(`.ov-perfs-head`'s shape was declared **three** times in this file —
+   twice here, byte-identical and each under its own copy of the comment above,
+   and a third time down in the trending block, where `.trend-row-head` folded
+   onto it by restating the six declarations in a shared selector list. Only the
+   third one was doing anything: a later single-class rule wins on source order,
+   which is this stylesheet's own recorded trap. It was found by writing a top
+   margin into the first copy and measuring no change. The fold stands and is
+   where the shape lives; what is left in this section is the one thing that is
+   this label's alone and not the rail's — see `.ov-perfs-head` there.)* */
 .ov-perfs {
   list-style: none;
   margin: 8px 0 0;
@@ -21366,20 +21451,6 @@ html[data-theme='light'] .league-table thead th {
    that need it, which is every card that has anything in it. Put on the list
    and the message instead, the two compose — 8px minimum, and `auto` takes
    whatever is left over. */
-/* **What the three rows under it are.** The same weight and tone as a standings
-   block's own title (`.mlb-standings-title`) and the League page's group heads —
-   a small uppercase label over a list, which is this app's one shape for *this
-   is what follows*. It is folded onto neither, the two being in trees that share
-   no other rule; what it does share is the tokens, so they cannot drift apart in
-   a theme. */
-.ov-perfs-head {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 .ov-perfs {
   margin-bottom: 8px;
 }
@@ -21940,6 +22011,29 @@ html[data-theme='light'] .league-table thead th {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+}
+/* **And the gap above the performers' label, which is only this one's.**
+   `.trend-row-head` sits in a flex column with its own `gap`; this one is a
+   child of a day card whose rhythm is 8px between every pair of children, and
+   it was the one pair at **0** — a label whose whole job is to say *what the
+   three rows under it are* sitting flush on the twenty figures over it, so it
+   read as the last line of the category line rather than the first of the list.
+
+   **14 above against the list's 8 below**, deliberately unequal: at 8/8 the
+   label is equidistant from the thing it names and the thing it does not, and
+   the reader has to work out which way it points. 14 is the app's own second
+   interval — the chrome's gap, `.app`'s own padding — rather than a number
+   invented for this card. Measured at 1200 and 390: gap above **0 → 14**, gap
+   below **8** unchanged, and page-body overflow 0. The card grows by the 14:
+   **354 → 368px at 1200**, and 370 at 390, where the carousel stretches its
+   three to one height and the tallest of them sets it.
+
+   **Here rather than up in the top-performers section**, which is where it was
+   written first and where it did nothing: the fold above is later in the file
+   and `margin: 0` at equal specificity wins on source order. The same trap the
+   narrow-screen blocks and `.date-row .date-presets` already record. */
+.ov-perfs-head {
+  margin-top: 14px;
 }
 /* **The rail scrolls sideways and the page does not.** `overscroll-behavior-x`
    in the one axis this box genuinely scrolls — the app's standing rule — so a

@@ -60,6 +60,7 @@ import {
   formatIp,
   headshotUrl,
   lineSummary,
+  possessive,
   prettyDate,
   prettyGameDate,
   surname,
@@ -431,6 +432,7 @@ function DayBlock({
   loading,
   onOpenPlayer,
   onSeeDay,
+  seeDayTitle,
 }: {
   /** `TODAY`, `YESTERDAY`, `TOMORROW` — the qualifier over the date, which is
    *  the app's own date face read in the same order (`.date-face-lead` over
@@ -443,12 +445,24 @@ function DayBlock({
   performers: Performer[] | null;
   loading: boolean;
   onOpenPlayer: (id: number) => void;
-  /** **Null draws no foot at all**, which is the opponent's carousel: the door
-   *  this opens is the Roster view, and that is *yours*. A press promising
-   *  somebody else's Tuesday and delivering your own would be worse than no
-   *  press — his roster is read on the matchup page, one press away through the
-   *  card at the top of this one. */
+  /**
+   * **Null draws no foot at all**, which is what it is for and no longer what
+   * the opponent's carousel passes.
+   *
+   * *(It said: the door this opens is the Roster view, and that is yours — a
+   * press promising somebody else's Tuesday and delivering your own would be
+   * worse than no press. That was exactly right until the Roster grew an
+   * `Opponent` switch, and it is the reason the switch makes this work: the
+   * door can now open **his** Tuesday, because the page it opens can be about
+   * him. The paragraph is kept rather than deleted — it is the record of what
+   * the door had to be able to do before this foot could be drawn on his
+   * cards.)*
+   */
   onSeeDay: ((date: string) => void) | null;
+  /** What the door says it will do, where naming the categories the ranking was
+   *  made over is not the more useful fact — which is the opponent's carousel,
+   *  whose foot opens a page about somebody the reader is not. */
+  seeDayTitle?: string;
 }) {
   const total = useMemo(
     () => addLines((performers ?? []).map((p) => p.line)),
@@ -569,7 +583,7 @@ function DayBlock({
                 type="button"
                 className="ov-day-more"
                 onClick={() => onSeeDay(date)}
-                title={categoriesTitle}
+                title={seeDayTitle ?? categoriesTitle}
               >
                 See the day
               </button>
@@ -744,6 +758,7 @@ function DayCarousel({
   categoriesTitle,
   onOpenPlayer,
   onSeeDay,
+  seeDayTitle,
   label,
 }: {
   dates: Record<DayKey, string>;
@@ -754,6 +769,9 @@ function DayCarousel({
   categoriesTitle: string;
   onOpenPlayer: (id: number) => void;
   onSeeDay: ((date: string) => void) | null;
+  /** The foot's own `title`, where the row's door is about somebody other than
+   *  the reader — see `DayBlock`. */
+  seeDayTitle?: string;
   /** What the row is, for the two labels a screen reader gets — the row's own
    *  and its dots'. Two carousels on one page cannot both be called
    *  "Yesterday, today and tomorrow". */
@@ -864,6 +882,7 @@ function DayCarousel({
             loading={loading[d]}
             onOpenPlayer={onOpenPlayer}
             onSeeDay={onSeeDay}
+            seeDayTitle={seeDayTitle}
           />
         ))}
       </div>
@@ -921,6 +940,7 @@ export default function OverviewView({
   dates,
   onOpenPlayer,
   onSeeDay,
+  onSeeOppDay,
   connected,
   ready,
 }: {
@@ -977,6 +997,18 @@ export default function OverviewView({
   dates: { today: string; yesterday: string; tomorrow: string };
   onOpenPlayer: (id: number) => void;
   onSeeDay: (date: string) => void;
+  /**
+   * **The same door, landing on the opponent** — the Roster view over that day
+   * with its `Opponent` switch on.
+   *
+   * A prop of its own rather than a flag on `onSeeDay`, because the two are
+   * different destinations and the page that owns the destination is App: one
+   * callback that took *whose* would put half of a navigation decision in the
+   * component that only knows which card was pressed. Null where the app cannot
+   * offer it, which is the same three-way absence `opponentName` already has —
+   * so the foot is drawn on his cards exactly when there is a page behind it.
+   */
+  onSeeOppDay: ((date: string) => void) | null;
   connected: boolean;
   /** **The page may be drawn** — every read behind it has answered, all nine of
    *  them, the board included and including the four that only exist once the
@@ -1294,7 +1326,11 @@ export default function OverviewView({
             myTeamId={myTeamId}
             format={board!.format}
             live={board!.live}
-            mineTag={false}
+            /* Neither the label nor the accent border: this is the only card
+               on the page, so a mark saying *which one is yours* marks nothing
+               — see `markMine`, where that rule and the reversal it records
+               live. */
+            markMine={false}
             onOpen={onOpenMatchup}
           />
         </section>
@@ -1347,12 +1383,25 @@ export default function OverviewView({
           saying there is nobody to compare with is chrome for a week that
           hasn't got one, and the page above it is whole without this.
 
-          **`See the day →` is not drawn on these cards**, and that is the one
-          thing that is not simply the same component: the door it opens is the
-          Roster view, which is *yours*. A press that promised somebody else's
-          Tuesday and delivered your own would be worse than no press at all;
-          the matchup page is where a leaguemate's roster is read, and it is one
-          press away through the card at the top. */}
+          **`See the day` is drawn on these cards now**, which reverses what this
+          note used to say and is worth the whole paragraph, because what changed
+          is not the button.
+
+          It said: *the door it opens is the Roster view, which is yours — a
+          press that promised somebody else's Tuesday and delivered your own
+          would be worse than no press at all; the matchup page is where a
+          leaguemate's roster is read.* Every word of that was true, and it was
+          an argument about the **destination** rather than about the card. The
+          Roster view has an `Opponent` switch now (`App.tsx`'s `rosterOpp`), so
+          the destination can be about him — the same table, the same day, his
+          players — and the foot that could not be drawn is the foot this block
+          most wanted: a card that says his Tuesday came to 7 runs and three
+          homers, with a press that answers *which of his men*.
+
+          It is the same `onSeeDay` and the same button; what differs is where
+          it lands (`onSeeOppDay`), and its `title`, which names him rather than
+          the categories — the categories being the more useful fact on your own
+          cards and the *whose* being the one here. */}
       {opponentName !== null && (
         <>
           <h2 className="ov-heading">
@@ -1367,7 +1416,11 @@ export default function OverviewView({
             categories={categories}
             categoriesTitle={categoriesTitle}
             onOpenPlayer={onOpenPlayer}
-            onSeeDay={null}
+            onSeeDay={onSeeOppDay}
+            /* `possessive`, not `+ "’s"`: half this league's names end in an
+               `s` and `Baldy's Bozos’s` reads as a typo — the same rule and the
+               same function a slot chip's title on his page already takes. */
+            seeDayTitle={`Read ${possessive(opponentName)} roster over this day`}
             label={`${opponentName} — yesterday, today and tomorrow`}
           />
         </>

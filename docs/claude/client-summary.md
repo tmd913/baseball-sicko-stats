@@ -725,6 +725,194 @@ falls to null and the strip draws nothing rather than borrowing a number. That
 is the documented case, caught by instrumenting `GamePark` rather than guessed
 at.
 
+### This week's matchup, and this week's opponent
+
+**Two controls at the head of the readings run that are not about your own
+rows** — the comparison card in place of the table, and the whole page read for
+the manager you are playing. They are `App.tsx`'s `rosterMatchup` (`rmup=1`) and
+`rosterOpp` (`opp=1`), they exclude each other, and neither lit is your own
+table.
+
+**Both replace a page you used to have to leave the Roster to reach.** The
+`Matchup` control was a **door**: it wrote `mup=<id>` and opened the overlay —
+the body pinned, the background inert, a Back row and Escape — which is the same
+page a Scoreboard card, a Rankings row and the Overview's card open. That
+argument is recorded in **Client — the matchup page**, *A matchup is a page, not
+a tab*, and it is still right for those three: they can name **any** of the
+league's ten matchups, so the reader has picked a subject and a page they come
+back from is the shape for it. Your own week is not picked. There is exactly one
+of it, the reader is already on the page whose numbers it is about, and covering
+that page put the two readings of one week — *what my players did* and *what
+that came to against him* — a screen apart with a Back button between them.
+
+#### `Matchup` puts the card where the table is, and the week where the bar is
+
+The card is `MatchupCard`, the same component the overlay's middle page draws
+(**Client — the matchup page**, *The matchup's Summary*), extracted out of
+`LeagueMatchup.tsx` for this second caller: the two heads, the whole-matchup
+meter, the categories down the middle, the `Projected` toggle at their foot, the
+acquisitions and the moves, and the day-by-day chart a category row opens. One
+card, two surfaces — the rule this repo applies the moment a second caller
+appears, and the alternative was a comparison that agreed with the overlay's on
+the day it was written.
+
+**The date bar's slot is taken by the week rather than left empty.** The bar's
+job on this page is to say which days the numbers cover, and on this reading the
+days are the fantasy week's rather than the reader's — so `.rmup-head` states
+them and offers nothing: `Week 20 · Aug 24 – Aug 25 · LIVE`, in the matchup
+page's own `.mup-week` spans and through the app's one date face (`wideRange`),
+with the bars key beside it. That is the `Summary` lens's `fixed` bar (*The
+`Summary` reading*, below) taken one step further — there is not even a range to
+draw a bar around.
+
+**It is not the same height as the bar, and that is measured rather than
+overlooked.** At 1200, 390 and 320 the bar is **54px** and this row is **45**:
+the bar's face is two lines (an 11px preset word over a 15px date) where this is
+one, and 45 is the key's own 30px button plus the shared 7px padding either side.
+Padding it out to 54 was tried and rejected — 9px of air under a one-line row,
+bought to keep a band the same height across a press that replaces everything
+below it anyway. Nothing moves under the finger: the press lands in the tools
+row above, which is at **y=99 (390/320)** and **y=166 (1200)** on both
+readings.
+
+**The app is not in `summary-mode` on this reading**, which is one test in one
+place (`matchupCardOn`) rather than three that agree. That class is the
+viewport-tall flex column the *table* needs so its header and total rows can
+stick; the card is a tall thing that scrolls the page, so the column would trap
+it. `tableTakesChrome` reads the same test — with no pane there is nothing to
+hand the tools row and the dates to, and they go back in the page above the card
+(*The tools row and the dates are inside the pane*, above, for why that split
+exists at all).
+
+**The key is in the chrome, not in the card**, which is the overlay's own rule
+for the same panel: what it explains is ten category rows the reader is still
+going down, so a key inside a card that scrolls has gone by the time it is
+wanted. `MatchupBarsKey` is exported with the card and both hosts draw it —
+here beside the week face, there in the pinned band. Measured at 1200 the panel
+runs **858 → 1178** against a window of 1200, at 390 **48 → 368**, and at 320
+**22 → 298**: inside the screen at every width, anchored to the row's right edge
+less `--app-gutter` rather than to a button that sits near the middle of a wide
+one.
+
+**A bye draws no card and no button.** ESPN publishes one as a matchup with no
+away side, so `myMatchup` finds it like any other; what the two controls are
+drawn on is `myComparison`, which is that row **only where it has two sides**. A
+comparison of one team would be the line the Scoreboard already draws, and the
+overlay's answer to a bye — a bye head over that manager's own roster — is a
+*page*, which is exactly what this reading is not. So on a bye week the run is
+four readings of your own rows and neither of the two that are about somebody
+else, which is the honest answer to *there is nobody else*.
+
+#### `Opponent` reads the whole page for him
+
+Not a lens over the table but a switch under it: the rows are his, and every
+control on the page goes on meaning what it meant — `Feed`, `Schedule`,
+`Projected`, `Summary`, the date bar, the hide-injured toggle in the settings
+menu, and a name that opens the player page.
+
+**It is `LeagueTeam`, which is this view drawn for a leaguemate.** That
+component is `SummaryTable` and `LiveFeed` over a `PlayerReport[]` of the app's
+own shape (**Client — the matchup page**, *A team page is the app's own Roster
+and Feed views*), and it was reachable only through the overlay's strip of three
+tabs — a page whose date bar, readings and kind of scroll were a second set of
+controls that had to agree with the ones behind it. Three callers now: the two
+sides of a matchup, and this.
+
+**What it needed of that component is one prop**, `hideInjured`. The matchup page
+has no settings menu and never had that filter; this page does, and the whole
+promise of the switch is that the controls keep their meaning, so a filter the
+reader cannot see from the row would otherwise silently stop applying. It runs
+`isInjured` on `rosterStatus` — App's own `shownReports` test rather than a
+second one — and ahead of the starters arithmetic and the stream alike, for the
+reason App applies it ahead of everything: the divider, the `Total` line and the
+feed all describe the rows on screen. Measured on the live league over `Today`:
+his table **28 → 25** rows with the toggle on, the reader's own **30 → 26**.
+
+**Whose team the views are drawing is one id in one place** (`rosterViewTeamId`),
+because five things have to agree about it: the report, the projection, the slot
+chips, the per-day lineups the divider reads, and the sentence the empty state
+prints. Null is *the reader's own*, which is what `fantasyTeamId` already means.
+Measured, the switch moves exactly the reads it should — `/api/report?…
+&source=fantasy&teamId=12`, `/api/espn/rosters?teams=12&date=…` and
+`/api/projection/roster?…&teamId=12`.
+
+**A projection carries the team it was read for**, which the switch is what makes
+necessary. The read fires on `rosterViewTeamId`, so for one commit after a
+crossing the answer in hand is about the other manager — and drawn straight that
+is one roster's rows under another's estimates. `rosterProjectionTeam` is a ref
+written beside the answer and read at both draw sites; it is the same guard the
+overlay's own team projection makes by holding the team beside the lens, and one
+ref answers both directions here.
+
+**`Summary` on his table is his *lineup*, where on yours it is your roster.**
+That is `LeagueTeam`'s `startersOnly` and is deliberately not carried onto your
+own table — the argument is in **Client — the matchup page**, *It is the lineup,
+not the roster*: a leaguemate's page has to cut his bench out by hand to agree
+with the category card, where this view already draws the starters divider over
+its own rows. Driven on the live week, his `MATCHUP TO DATE` foot reads
+**`Total · 11 of 13`** over `12/43, 7 R, 3 HR, 8 RBI, 1 SB, .823` — the `n of m`
+that says how many the lineup left out.
+
+#### What each control does to the others
+
+`Matchup` and `Opponent` clear each other, and `Matchup` clears the three
+readings of the table as well — `Schedule`, `Projected` and `Summary` — which is
+the run's own rule and not a tidying: those are departures from the plain table,
+one at a time, and this replaces the table outright. It was tried the other way,
+on the reasoning that the four are about the table this stands in front of and a
+reader who pressed `Matchup` from `Projected` should come back to it; measured,
+the row read **`Matchup, Summary`** with the card on screen, which is a control
+claiming a reading over a card it is not a reading of. `FeedToggle` clears the
+same three one button along and for the same reason. Pressing a table reading
+*from* the card comes back to the table first — the same one-deep rule `Schedule`
+and `Summary` already keep from the stream (*It is a mode of the two tables*,
+below).
+
+**`Opponent` clears none of them**, which is the asymmetry that says what the two
+controls are: one replaces the table and the other changes whose rows are in it,
+so a reader crossing to his opponent keeps the reading they were on.
+
+**Driven through ten presses on the live league at 1200**, reading the state back
+each time: `Matchup` → `Opponent` → `Feed` → `Feed` → `Schedule` → `Projected` →
+`Summary` → `Opponent` → `Matchup` → `Matchup`. **Exactly one of the four table
+readings is lit at every step and never two**, `Opponent` stays lit across all
+of them and goes out only on `Matchup`, the last press lands on the plain table
+with **nothing** lit, and there is **exactly one date bar or one week face on
+screen and never both** — `bars 1 face 0` on the eight table steps and `bars 0
+face 1` on the two card ones. The bar's lead reads `TODAY` / `SCHEDULE · WEEK
+20` / `PROJECTED` / `MATCHUP TO DATE` in turn against the face's
+`Week 20 · Aug 24 – Aug 25 · LIVE`. Page-body overflow **0** throughout, no
+console errors, and 28 of his rows in every table reading.
+
+**Leaving the Roster puts each away, and they leave at different tiers.**
+`rosterMatchup` goes with the other table readings — the Feed is a leaving for
+it, since it replaces the table — where `rosterOpp` survives `Roster ↔ Feed` and
+goes only on a crossing of the **view** tabs: which manager you are reading is
+not a fact about the table or the stream, so that crossing is a sub-selection
+inside one page. Both are navigation-only tests on state seeded from the URL, so
+an inbound `?opp=1` or `?rmup=1` is already on its own surface on the first
+render; and a page opened *over* the Roster — a player, a club, a game — leaves
+`view` where it is and costs neither. Driven: a player page opened off his table
+and closed with Escape leaves `opp=1` standing; `Research` and back clears it.
+
+**The overlay is untouched.** Re-driven from the Scoreboard after the
+extraction: a card opens `mup=119` at **1200 × 900**, the pinned band at **114px**
+with the bars key in it, the card at **896px**, the strip reading
+`BOZO · Matchup · B&T`, ten category rows, a press on `R` opening
+`Runs — week 20` with its chart, one press of Escape closing that chart and
+leaving the matchup standing, and the `BOZO` tab opening his 28 rows in
+`roster-mode`.
+
+**Three doors into this reading**, and none of them is the overlay: the button
+in the run, a `?rmup=1` link, and the Overview's own matchup card — which
+carried the reader into the overlay until this existed and now lands here, that
+card only ever naming the reader's own week. See **Client — the Overview**,
+*The card opens the Roster's reading*.
+
+**Bundle**, for the whole of this change including the Overview's new doors and
+the `view=` fix below: JS **731.94 → 735.46 KB** (216.14 → 216.94 gzipped), CSS
+**188.67 → 189.21** (33.63 → 33.73).
+
 ### The Schedule view: the days ahead, in place of the stats
 
 **Both wide tables are cut by what has already happened, and the question a fantasy manager arrives with on a Sunday night is not.** *Who plays how many games this week, against whom, and which of my starters gets two turns* is answerable from neither the summary table (a roster's past range) nor the research board (the league's past season), and it is the question the whole week turns on. So both tables take a **Schedule view**: a column per day across the top, a row per player, each cell naming that day's opponent — `@ LAD`, `vs SEA`, a faint dash for an off day — with a per-row count of the games in the span and, on a pitcher's row, the days his club has **announced** him to start.

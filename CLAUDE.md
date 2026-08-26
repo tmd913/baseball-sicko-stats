@@ -82,7 +82,7 @@ what it is, and most of them are not recoverable from the code.
 | `PlayerDetails.tsx` `PlayerOverview.tsx` `PlayerSchedule.tsx` `GameLog.tsx` `PlatoonSplits.tsx` `RollingXwoba.tsx` `PlayerWindowTable.tsx` `PlayerNews.tsx` `PlayerOrderEditor.tsx` `Tutorial.tsx` `DetailsShell.tsx` | `sicko-player-page` |
 | `TeamDetails.tsx` `DetailsShell.tsx` `ParkFactors.tsx` | `sicko-team-page` |
 | `GamePage.tsx` `game.ts` `teamGames.ts` `DetailsShell.tsx` | `sicko-game-page` |
-| `LeagueView.tsx` `LeagueMatchup.tsx` `LeagueRankings.tsx` `LeagueTransactions.tsx` `LeagueTeam.tsx` `MatchupSeriesChart.tsx` `Projection.tsx` | `sicko-league` |
+| `LeagueView.tsx` `LeagueMatchup.tsx` `MatchupCard.tsx` `LeagueRankings.tsx` `LeagueTransactions.tsx` `LeagueTeam.tsx` `MatchupSeriesChart.tsx` `Projection.tsx` | `sicko-league` |
 | `MlbView.tsx` `MlbScoreboard.tsx` `MlbStandings.tsx` `MlbNews.tsx`, the main tab strip | `sicko-mlb` |
 | `PitcherCard.tsx` `Arsenal.tsx` `ArsenalCharts.tsx` `Innings.tsx` `OutingPage.tsx` `OpponentTable.tsx` `PitchSequence.tsx` `StrikeZone.tsx` | `sicko-pitchers` |
 | `Modal.tsx` `InfoKey.tsx`, `useDismissable`, anything that opens a popup | `sicko-dialogs` |
