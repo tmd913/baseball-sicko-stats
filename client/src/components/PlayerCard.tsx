@@ -300,6 +300,7 @@ function GameBlock({
               pa={pa}
               gamePk={game.gamePk}
               name={report.name}
+              batterId={report.id}
             />
           ))}
         </div>

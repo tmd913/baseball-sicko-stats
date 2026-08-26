@@ -1,4 +1,9 @@
-import type { MlbScoreboard, MlbScoreboardGame, MlbScoreboardTeam } from './types.js';
+import type {
+  BaseState,
+  MlbScoreboard,
+  MlbScoreboardGame,
+  MlbScoreboardTeam,
+} from './types.js';
 import {
   getTeamAbbrevs,
   hasStarted,
@@ -37,6 +42,19 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  * card draws is in one request — the score, where a live game has got to, both
  * announced starters, the three pitchers a finished game names, the ballpark
  * and which game of the series it is.
+ *
+ * **The live matchup put ~60% on that**, re-measured on the same two days once
+ * `offense`/`defense` were added: 8,646 → **13,506** on the finished day and
+ * 11,627 → **18,790** on the live one. The three fields the card gained are
+ * two names and three flags; the rest of it is `fields=` being a **flat name
+ * filter** with no notion of the path a name sits on — `first`, `second` and
+ * `third` are the runners on the offense block *and* the corners and the
+ * keystone on the defense block, so asking for the bases asks for the whole
+ * defensive alignment, and `batter`/`pitcher` are each on both blocks too. It
+ * is the one place in this cut where something is fetched that nothing draws,
+ * and there is no way to ask for less: MLB has no per-path form of `fields=`.
+ * Nineteen kilobytes once a minute, held in memory and shared by every reader,
+ * is what that is worth paying.
  *
  * The alternative was `/api/v1/schedule` bare plus a `feed/live` per game for
  * the half-inning, which is fifteen requests for a fact the linescore hydration
@@ -106,7 +124,16 @@ interface ScheduleResponse {
         away?: SideResponse;
         home?: SideResponse;
       };
-      linescore?: { currentInning?: number; inningState?: string; outs?: number };
+      linescore?: {
+        currentInning?: number;
+        inningState?: string;
+        outs?: number;
+        /** Whoever is batting — and, between halves, whoever is about to. The
+         *  runners hang off it because they are the batting club's. */
+        offense?: { batter?: Person; first?: Person; second?: Person; third?: Person };
+        /** Whoever is in the field, of whom the card wants exactly one. */
+        defense?: { pitcher?: Person };
+      };
       decisions?: { winner?: Person; loser?: Person; save?: Person };
       venue?: { name?: string };
       seriesGameNumber?: number;
@@ -145,6 +172,22 @@ function stateOf(s: GameStatusFields | undefined): MlbScoreboardGame['state'] {
  *  with no name is a door with no label, and neither half is worth guessing. */
 function person(p: Person | undefined): { id: number; name: string } | null {
   return typeof p?.id === 'number' && p.fullName ? { id: p.id, name: p.fullName } : null;
+}
+
+/**
+ * The runners, off the batting club's own block.
+ *
+ * **A base is occupied where MLB names the man on it**, there being no boolean
+ * on the wire — the key is simply absent where nobody is there. Measured on
+ * 2026-08-25: a `Top 4` read `second` alone and every `Middle` read none, MLB
+ * clearing the runners at the change of half rather than carrying them over.
+ */
+function bases(offense: { first?: Person; second?: Person; third?: Person } | undefined): BaseState {
+  return {
+    first: typeof offense?.first?.id === 'number',
+    second: typeof offense?.second?.id === 'number',
+    third: typeof offense?.third?.id === 'number',
+  };
 }
 
 function side(
@@ -187,7 +230,8 @@ async function fetchDay(date: string): Promise<MlbScoreboard> {
     `&fields=dates,games,gamePk,gameDate,officialDate,status,abstractGameState,` +
     `codedGameState,detailedState,reason,teams,away,home,team,id,name,score,` +
     `isWinner,leagueRecord,wins,losses,probablePitcher,fullName,linescore,` +
-    `currentInning,inningState,outs,decisions,winner,loser,save,venue,` +
+    `currentInning,inningState,outs,offense,defense,batter,pitcher,first,second,` +
+    `third,decisions,winner,loser,save,venue,` +
     `seriesGameNumber,gamesInSeries`;
   const res = await fetch(url, { headers: UA });
   if (!res.ok) throw new Error(`MLB schedule returned ${res.status} for ${date}`);
@@ -217,6 +261,14 @@ async function fetchDay(date: string): Promise<MlbScoreboard> {
         inning: playing ? g.linescore?.currentInning ?? null : null,
         inningState: playing ? g.linescore?.inningState ?? null : null,
         outs: playing && typeof g.linescore?.outs === 'number' ? g.linescore.outs : null,
+        // **The same `playing` gate the half-inning takes**, and for a reason
+        // one step past that one: MLB keeps sending `offense` and `defense`
+        // long after a game is over — the last man to bat and the last man to
+        // pitch, which on a `Final` card would read as a matchup in progress.
+        // `person` is the join-to-null rule, so an id with no name is nobody.
+        bases: playing ? bases(g.linescore?.offense) : null,
+        atBat: playing ? person(g.linescore?.offense?.batter) : null,
+        onMound: playing ? person(g.linescore?.defense?.pitcher) : null,
         venue: g.venue?.name ?? null,
         seriesGame: typeof g.seriesGameNumber === 'number' ? g.seriesGameNumber : null,
         seriesLength: typeof g.gamesInSeries === 'number' ? g.gamesInSeries : null,

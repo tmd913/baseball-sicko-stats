@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { MlbScoreboard, MlbScoreboardGame, MlbScoreboardTeam } from '../types';
 import { teamLogoUrl, wideRange } from '../lib';
+import { BaseDiamond } from './BaseDiamond';
 import { LoadingBlock } from './Loading';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
 import type { DatePreset } from './DateControls';
@@ -39,8 +40,9 @@ import type { DatePreset } from './DateControls';
  * over*: `Final`, a live half-inning, or the first pitch. Then both clubs with
  * their records and the score, the home side second — the way a line score is
  * written. Under them the one line that changes with the state: the two
- * announced starters before a game, the winning and losing pitcher after it,
- * MLB's own reason on a postponement.
+ * announced starters before a game, the pitcher and the batter while it is
+ * being played, the winning and losing pitcher after it, MLB's own reason on a
+ * postponement.
  *
  * **No line score and no box.** Both are on the game's own page, which every
  * card opens, and drawing nine columns of runs across fifteen cards would be
@@ -232,10 +234,14 @@ function GameCard({ game, onOpen }: { game: MlbScoreboardGame; onOpen: (pk: numb
                 ? half ?? (game.detailedState || 'Live')
                 : time ?? (game.detailedState || 'Scheduled')}
         </span>
-        {game.state === 'live' && game.outs !== null && (
-          <span className="mlb-game-outs">
-            {game.outs} out
-          </span>
+        {/* **The situation, drawn rather than said.** This was `2 out` in
+            words, which is half of what a reader watching a live card wants and
+            the half that is already implied by the next pitch; the diamond is
+            the feed's own glyph (`BaseDiamond`, out dots and all) and says the
+            same thing plus who is on base. One mark rather than a word beside a
+            picture that would repeat it. */}
+        {game.state === 'live' && game.bases !== null && (
+          <BaseDiamond bases={game.bases} outs={game.outs ?? 0} className="mlb-game-bases" />
         )}
         {game.seriesGame !== null && game.seriesLength !== null && game.seriesLength > 1 && (
           <span className="mlb-game-series">
@@ -282,14 +288,42 @@ function Side({
 
 /**
  * The one line under the score, and **which line it is is the state**: two
- * announced starters before a game, the decisions after it, MLB's own reason on
- * a postponement, and nothing at all where there is nothing to say — an absent
+ * announced starters before a game, **the two men in the middle of it while it
+ * is being played**, the decisions after it, MLB's own reason on a
+ * postponement, and nothing at all where there is nothing to say — an absent
  * child rather than an empty one, which is what keeps a card of one height from
  * standing beside a card of another for no reason.
+ *
+ * The live line takes the slot the probables had, which is the whole of why it
+ * is here: that slot already means *the pitching matchup on this card*, and
+ * before first pitch the two announced starters are what it is. Once somebody
+ * is on the mound, the man there and the man facing him are the same fact
+ * measured rather than promised — the card's own reason for dropping the
+ * probables at first pitch, answered instead of merely obeyed.
+ *
+ * **`P` and `AB` rather than two bare names**, which is the vocabulary the
+ * final line already uses one state along (`W`, `L`, `S`): a role, then who.
+ * Two names either side of a `vs` would read as the two clubs' starters, which
+ * is exactly what the line says before the game and exactly what it no longer
+ * means after it.
  */
 function Foot({ game }: { game: MlbScoreboardGame }) {
   if (game.state === 'postponed') {
     return <span className="mlb-game-foot">{game.reason ?? 'No make-up date announced'}</span>;
+  }
+  if (game.state === 'live' && game.onMound && game.atBat) {
+    // **`DUE` between halves.** MLB swaps its offense and defense blocks on the
+    // third out, so a card on `Middle 6` carries the bottom's pitcher and its
+    // leadoff man — a true and useful pair that nobody is yet batting in.
+    // `Top`/`Bottom` is the half being played; anything else is the gap.
+    const batting = game.inningState === 'Top' || game.inningState === 'Bottom';
+    return (
+      <span className="mlb-game-foot">
+        <span className="mlb-game-role">P</span> {game.onMound.name}{' '}
+        <span className="mlb-vs">vs</span>{' '}
+        <span className="mlb-game-role">{batting ? 'AB' : 'DUE'}</span> {game.atBat.name}
+      </span>
+    );
   }
   if (game.state === 'final') {
     const parts: string[] = [];

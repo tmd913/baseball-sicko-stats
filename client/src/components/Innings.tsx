@@ -10,7 +10,7 @@ import {
 } from '../lib';
 import { BaseDiamond } from './BaseDiamond';
 import { Modal } from './Modal';
-import { InlineVideoClip } from './PlateAppearanceCard';
+import { InlineVideoClip, PlayMatchup } from './PlateAppearanceCard';
 import { PitchSequence } from './PitchSequence';
 
 /** One row inside an inning: a batter he faced, or something that happened on
@@ -174,11 +174,18 @@ function FacedBatterCard({
   fb,
   seq,
   gamePk,
+  pitcherId,
+  pitcherName,
 }: {
   fb: FacedBatter;
   // Where this batter came up within the inning — 1 for the inning's first.
   seq: number;
   gamePk: number;
+  /** Whose outing, for the dialog's matchup head — the other half of the
+   *  at-bat, which a `FacedBatter` does not name because every row in the list
+   *  is his. */
+  pitcherId: number;
+  pitcherName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const kind = outcomeKind(fb.event);
@@ -234,6 +241,17 @@ function FacedBatterCard({
           onClose={() => setOpen(false)}
         >
           <div className="faced-detail">
+            {/* **The same head a batter's own dialog carries**, and this is the
+                same at-bat: `PlayMatchup` takes two men rather than a plate
+                appearance for exactly this caller. The batter is the row's, the
+                pitcher is whose outing this is — which is why the list has to
+                pass him down, a `FacedBatter` naming only the man at the plate.
+                The hands come off the season roster where the play carries
+                none, so the pitcher's `RHP` needs nothing threaded. */}
+            <PlayMatchup
+              batter={{ id: fb.batterId, name: fb.batterName, hand: fb.stand }}
+              pitcher={pitcherName ? { id: pitcherId, name: pitcherName, hand: null } : null}
+            />
             {fb.description && <p className="pa-des">{fb.description}</p>}
             {contact && (
               <div className="pa-contact">
@@ -277,7 +295,17 @@ function InningLine({ s, active }: { s: ReturnType<typeof inningStats>; active?:
  *  happened on the bases between them. Its own component because it is what the
  *  dialog holds, and a `.map` with a running counter inside JSX reads worse than
  *  a named list. */
-function InningRows({ group, gamePk }: { group: InningGroup; gamePk: number }) {
+function InningRows({
+  group,
+  gamePk,
+  pitcherId,
+  pitcherName,
+}: {
+  group: InningGroup;
+  gamePk: number;
+  pitcherId: number;
+  pitcherName?: string;
+}) {
   // The batter number is the batter's, so it counts batters and skips the
   // events between them — `.faced-seq` answers "which man of the inning is
   // this", and a balk is not one of them.
@@ -291,6 +319,8 @@ function InningRows({ group, gamePk }: { group: InningGroup; gamePk: number }) {
             fb={row.fb}
             seq={++seq}
             gamePk={gamePk}
+            pitcherId={pitcherId}
+            pitcherName={pitcherName}
           />
         ) : (
           <InningBaseEvent key={`e-${row.ev.kind}-${i}`} ev={row.ev} gamePk={gamePk} />
@@ -348,11 +378,15 @@ function InningRows({ group, gamePk }: { group: InningGroup; gamePk: number }) {
 function InningBlock({
   group,
   gamePk,
+  pitcherId,
   pitcherName,
   active,
 }: {
   group: InningGroup;
   gamePk: number;
+  /** Whose outing, for the matchup head on each batter's own dialog one rung
+   *  further in. */
+  pitcherId: number;
   /** Whose inning, for the dialog's heading — the bar sits under a header that
    *  has already said it, and the box does not. Optional for the same reason
    *  `paTitle`'s is: one call site has no name in scope. */
@@ -401,7 +435,12 @@ function InningBlock({
               own corners has an automatic minimum size of zero and the cards
               cut their own clips in half. */}
           <div className="inning-batters">
-            <InningRows group={group} gamePk={gamePk} />
+            <InningRows
+              group={group}
+              gamePk={gamePk}
+              pitcherId={pitcherId}
+              pitcherName={pitcherName}
+            />
           </div>
         </Modal>
       )}
@@ -455,6 +494,7 @@ export function InningsList({
           key={`${group.inning}-${group.half}`}
           group={group}
           gamePk={game.gamePk}
+          pitcherId={pitcherId}
           pitcherName={pitcherName}
           active={group.inning === activeInning && (group.half === 'Top') === st.isTopInning}
         />

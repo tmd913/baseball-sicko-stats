@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
+import { playerKey } from '../types';
 import { api } from '../api';
-import { contactHighlight, eventLabel, finalSwingBatSpeed, outcomeKind } from '../lib';
+import {
+  contactHighlight,
+  eventLabel,
+  finalSwingBatSpeed,
+  headshotUrl,
+  outcomeKind,
+  surname,
+} from '../lib';
+import { useHandedness, usePlayerDoor } from '../hooks';
 import { PlaySituation } from './BaseDiamond';
 import { ClipVideo } from './ClipVideo';
 import { Modal } from './Modal';
@@ -220,13 +229,25 @@ export function PlateAppearanceCard({
   pa,
   gamePk,
   name,
+  batterId,
   showVideo = true,
 }: {
   pa: PlateAppearance;
   gamePk: number;
-  /** Whose at-bat, for the dialog's heading — the row itself sits under a
-   *  header that has already said it. */
+  /** Whose at-bat, for the dialog's heading and the batter half of its matchup
+   *  head — the row itself sits under a header that has already said it. */
   name?: string;
+  /**
+   * **His MLB id, which the plate appearance itself does not carry.**
+   *
+   * It names the pitcher (`pitcherId`, `pitcherName`) and nobody else, because
+   * a `PlateAppearance` is always read as *one man's* — it hangs off the
+   * `PlayerReport` whose day it is, on all three surfaces that draw this card.
+   * So the batter comes from the caller, which is where `name` has always come
+   * from and for exactly the same reason, rather than being added to a field on
+   * the wire that every stored day would then have to be re-fetched to fill.
+   */
+  batterId?: number;
   // When false, the dialog omits the (button-triggered) clip: the feed draws
   // the clip directly under the item, so the play is already watchable there
   // and a second copy in the box would be the same video twice.
@@ -254,9 +275,16 @@ export function PlateAppearanceCard({
         />
         <span className={`pa-badge kind-${kind}`}>{eventLabel(pa.event)}</span>
         {pa.rbi > 0 && <span className="pa-rbi">{pa.rbi} RBI</span>}
+        {/* **The surname alone**, which is the rule every other place in this app
+            names a pitcher beside a matchup already follows — the summary
+            table's opponent cell and the feed's Upcoming bar both read
+            `surname`. The row is a single line holding an inning glyph, a
+            badge, an RBI mark, the contact figures and a bat speed, and a
+            pitcher is referred to by surname anyway; the full name is in the
+            dialog this row opens, at the head of it, beside his face. */}
         {pa.pitcherName && (
           <span className="pa-pitcher">
-            vs {pa.pitcherName}
+            vs {surname(pa.pitcherName)}
             {pa.pThrows ? ` (${pa.pThrows}HP)` : ''}
           </span>
         )}
@@ -273,7 +301,13 @@ export function PlateAppearanceCard({
           className="play-detail-box"
           onClose={() => setOpen(false)}
         >
-          <PlateAppearanceDetail pa={pa} gamePk={gamePk} showVideo={showVideo} />
+          <PlateAppearanceDetail
+            pa={pa}
+            gamePk={gamePk}
+            name={name}
+            batterId={batterId}
+            showVideo={showVideo}
+          />
         </Modal>
       )}
     </div>
@@ -281,8 +315,167 @@ export function PlateAppearanceCard({
 }
 
 /**
- * What the card's accordion used to hold, unchanged: the handedness line, the
- * description, the batted ball, the pitch table and the strike zone.
+ * One of the two men in the matchup head — his headshot, his name and what hand
+ * he does it with, as a door into his page.
+ *
+ * **A door only where there is something behind it**, which is two tests and
+ * not one: an id (a name off the wire with no id is nobody this app can open)
+ * and a door in context (nothing outside `App`'s provider has one). Either
+ * missing and the block is the same block drawn as plain text, which is the
+ * rule `OpponentPress` and the MLB news list already keep — a press that does
+ * nothing is worse than no press.
+ *
+ * **The headshot and the name are two presses, not one**, exactly as a roster
+ * row and a feed item draw them: the circle and the word each open the page,
+ * and a reader who aims at either has hit it.
+ *
+ * The hand line is the whole of what the dialog's old `pa-hand` row said
+ * (`LHB vs Chris Bassitt (RHP)`), split between the two men it was about. Where
+ * MLB names no hand — which happens on an old cached day — the sub-line falls
+ * back to the role, so the block never loses the one word that says which of
+ * the two this is.
+ */
+function PaMan({
+  id,
+  name,
+  hand,
+  role,
+}: {
+  id: number | null;
+  name: string;
+  /** `L`/`R` off the plate appearance, or null. */
+  hand: string | null;
+  role: 'batter' | 'pitcher';
+}) {
+  const door = usePlayerDoor();
+  // **The season roster answers where the play does not.** A plate appearance
+  // carries `stand` and `pThrows`, and a batter faced carries only the batter's
+  // — so the pitcher's half of a pitcher-side head would have no hand at all,
+  // and an old cached day has neither. `useHandedness` is the map the whole app
+  // reads a hand off (`PlayerIdentity`, the research board), keyed by person, so
+  // the head asks it rather than being threaded a hand from four call sites.
+  const known = useHandedness(id ?? 0);
+  const hasHand = hand ?? (role === 'batter' ? known?.bats : known?.throws) ?? null;
+  const [failed, setFailed] = useState(false);
+  const open = door && id !== null ? () => door(playerKey({ id, kind: role })) : null;
+  // **The surname alone**, which is how this app names a man beside a matchup
+  // everywhere else — the summary table's opponent cell, the feed's Upcoming
+  // bar, and the row this dialog opens from. The head is two names either side
+  // of a `vs` on one line, and it is the *pairing* that is being read there:
+  // `Peña vs Warren` is the sentence, where two full names are two labels. The
+  // whole name is still on the page — the dialog's own title carries the
+  // batter's, and either man's is one press away, on the page his face opens.
+  const shown = surname(name);
+  const sub = hasHand
+    ? `${hasHand}H${role === 'batter' ? 'B' : 'P'}`
+    : role === 'batter'
+      ? 'Batter'
+      : 'Pitcher';
+  const photo =
+    failed || id === null ? (
+      <div className="pa-mu-photo pa-mu-photo-empty" aria-hidden="true" />
+    ) : (
+      <img
+        className="pa-mu-photo"
+        src={headshotUrl(id)}
+        alt={name}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  return (
+    <span className={`pa-mu-man pa-mu-${role}`}>
+      {open ? (
+        <button
+          type="button"
+          className="pa-mu-photo-link"
+          /* The **full** name here and on the `alt` below: a tooltip and an
+             accessible name are the two places where nothing is being fitted
+             onto a line, and a screen reader announcing `Warren` where the page
+             holds two men would be the trim costing something real. */
+          title={`${name} — Statcast details`}
+          aria-label={`${name} — Statcast details`}
+          onClick={open}
+        >
+          {photo}
+        </button>
+      ) : (
+        photo
+      )}
+      <span className="pa-mu-id">
+        {open ? (
+          <button type="button" className="pa-mu-name pa-mu-press" title={name} onClick={open}>
+            {shown}
+          </button>
+        ) : (
+          <span className="pa-mu-name" title={name}>
+            {shown}
+          </span>
+        )}
+        <span className="pa-mu-hand">{sub}</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * **Who faced whom**, at the head of a play's dialog: the batter, the pitcher,
+ * and each one's face and page.
+ *
+ * **Two men rather than a `PlateAppearance`**, which is what lets the pitcher's
+ * side of the app draw the same head: a batter faced (`FacedBatter`, the row
+ * inside an inning) is the very same event read from the mound, and it names
+ * the batter where the plate appearance names the pitcher. One implementation,
+ * two adapters — the rule `categoryValue.ts` states for a figure, applied to a
+ * block. Without it the two dialogs for one at-bat would be two heads that
+ * agree today.
+ *
+ * **It replaces the `pa-hand` line**, which said the same facts in nine
+ * characters of shorthand and one name (`LHB vs Chris Bassitt (RHP)`) and made
+ * only the *pitcher* nameable — the batter being, on the feed, the man whose
+ * header the item sat under, and on a dialog opened from anywhere else, nobody
+ * at all. A plate appearance is one man against another and this is the one
+ * place in the app that draws it as such; a reader who has just watched a clip
+ * of it wants the man who threw it as much as the man who hit it, and until now
+ * the pitcher's name here was text and his page was three navigations away.
+ *
+ * The pitcher's block is **mirrored** — name then face, reading inward — so the
+ * two headshots sit either side of the `vs` rather than both to the left of
+ * their names, which is the arrangement that says *these two are facing each
+ * other* rather than *here are two players in a list*.
+ */
+export interface MatchupMan {
+  id: number | null;
+  name: string;
+  /** `L`/`R` where the play carries it; null falls back to the season roster. */
+  hand: string | null;
+}
+
+export function PlayMatchup({
+  batter,
+  pitcher,
+}: {
+  batter: MatchupMan | null;
+  pitcher: MatchupMan | null;
+}) {
+  const left = batter ? <PaMan {...batter} role="batter" /> : null;
+  const right = pitcher ? <PaMan {...pitcher} role="pitcher" /> : null;
+  // Nothing to say and no box to say it in — the card's own rule for an absent
+  // foot, one dialog up.
+  if (!left && !right) return null;
+  return (
+    <div className="pa-matchup">
+      {left}
+      {left && right && <span className="pa-mu-vs">vs</span>}
+      {right}
+    </div>
+  );
+}
+
+/**
+ * What the card's accordion used to hold: the matchup head (which was a line of
+ * handedness shorthand), the description, the batted ball, the pitch table and
+ * the strike zone.
  *
  * Its own component rather than inlined into the dialog, because the pitch
  * table and the zone share a hover/tap highlight and that state belongs to the
@@ -292,10 +485,14 @@ export function PlateAppearanceCard({
 function PlateAppearanceDetail({
   pa,
   gamePk,
+  name,
+  batterId,
   showVideo,
 }: {
   pa: PlateAppearance;
   gamePk: number;
+  name?: string;
+  batterId?: number;
   showVideo: boolean;
 }) {
   const [activePitch, setActivePitch] = useState<number | null>(null);
@@ -305,15 +502,10 @@ function PlateAppearanceDetail({
   const contact = contactHighlight(pa);
   return (
     <div className="pa-detail">
-      {(pa.pitcherName || (pa.stand && pa.pThrows)) && (
-        <div className="pa-hand">
-          {pa.pitcherName
-            ? `${pa.stand ? `${pa.stand}HB ` : ''}vs ${pa.pitcherName}${
-                pa.pThrows ? ` (${pa.pThrows}HP)` : ''
-              }`
-            : `${pa.stand}HB vs ${pa.pThrows}HP`}
-        </div>
-      )}
+      <PlayMatchup
+        batter={name ? { id: batterId ?? null, name, hand: pa.stand } : null}
+        pitcher={pa.pitcherName ? { id: pa.pitcherId, name: pa.pitcherName, hand: pa.pThrows } : null}
+      />
 
       <div className="pa-body">
         <div className="pa-main">

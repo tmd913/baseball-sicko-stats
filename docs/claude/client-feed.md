@@ -2233,3 +2233,155 @@ Verified in the running app. Batter, from a roster cell: `upcoming-sp` →
 loanDepot park. Batter, from a Schedule row: the same order with *Ethan Pecko ·
 RHP · starting for HOU · projected*. Pitcher, from a Schedule row: *Aaron Nola ·
 RHP · PHI's starter, his counterpart* over T-Mobile Park and the PHI lineup.
+
+### The at-bat dialog names both men, and both are doors
+
+**A plate appearance is one man against another, and its dialog said so in nine
+characters of shorthand.** `.pa-hand` was a single 11px line at the head of the
+box — `LHB vs Chris Bassitt (RHP)` — which named the *pitcher* and left the
+batter to be inferred from the feed header the card sat under. On a dialog
+opened from a game's Plays tab or from a player card's game block there is no
+such header in view, and the man whose at-bat it is was nowhere in the box at
+all except in the dialog's own title. Neither name was a press.
+
+**It is a matchup head now**: the batter's headshot, his name and his hand, the
+word `vs`, and the pitcher's the same way — his block mirrored so the two faces
+sit either side of the word rather than both to the left of their names. Both
+names and both headshots open the man's page. Nothing is lost: `LHB` and `RHP`
+are the same two facts `.pa-hand` carried, split between the two men they are
+each about.
+
+**Each man is named by surname**, which is `surname` — the helper the summary
+table's opponent cell and the feed's Upcoming bar already name a starter with.
+The head is two names either side of a `vs` on one line, and it is the
+*pairing* being read there: `Crow-Armstrong vs Pfaadt` is a sentence where two
+full names are two labels. The whole name is not lost — the dialog's own title
+carries the batter's in full, both blocks carry theirs as a `title`, the
+headshot's tooltip and accessible name are the full name (a tooltip and a
+screen reader are the two places where nothing is being fitted onto a line),
+and either man's page is one press away.
+
+**The hand comes off the season roster where the play does not carry it.** A
+plate appearance has `stand` and `pThrows`; a *batter faced* has only the
+batter's, so a pitcher-side head would otherwise draw no hand for the man whose
+outing it is, and an old cached day has neither. `useHandedness` is the map the
+whole app reads a hand off, keyed by person — so the block asks it rather than
+being threaded a hand from four call sites, and falls back to `Batter` or
+`Pitcher` only where even that has nothing to say.
+
+**The batter's id comes from the caller, not from the wire.** A
+`PlateAppearance` names the pitcher (`pitcherId`, `pitcherName`) and nobody
+else, because it is always read as *one man's* — it hangs off the
+`PlayerReport` whose day it is, on all three surfaces that draw this card
+(`FeedAtBat`, `FeedLiveEntry`, `GameBlock`), and all three have `report.id` in
+hand at the point the card is written. So `batterId` is a prop beside `name`,
+which has come from the caller for exactly the same reason since the card grew
+a dialog. Adding a field to the plate appearance instead would have meant every
+stored day carrying a batter it already knows and a cache version to fill it.
+
+**The door is `PlayerDoorContext`**, new here and the third of its kind after
+`TeamDoorContext` and `GameDoorContext`, argued the same way and for the same
+shape of caller: this head is a leaf inside a `Modal` inside a card inside a
+`map`, drawn from three trees, and only one of the three has `openPlayer` in
+hand where the card is written. Threaded as an optional prop it would be four
+signatures and four chances to forget it, and a forgotten one does not fail —
+it silently stops being a link on one surface out of three. It carries a
+**key** rather than an id, `openPlayer`'s own signature, because a two-way
+player is two pages in this app.
+
+**Null outside the provider draws plain text**, the rule every other door
+keeps: a press that does nothing is worse than no press. The same test covers a
+name off the wire with no id.
+
+**What happens when a name is pressed, measured in a browser at 1000×900.**
+From a game's Plays tab, `player=pitcher-701542` replaces `game=` — the two
+page params being mutually exclusive — so the dialog goes with the page it was
+opened on and the reader lands on Will Warren. From the **feed**, where there
+is no page to replace, the player page opens *over* the dialog: the page is not
+inert, the dialog behind it is, focus is inside `.details-view`, and one press
+of Escape closes the page and leaves the at-bat where it was — a second closes
+that. Exactly one thing per press, at a depth the ladder had not been driven to
+before.
+
+**Drawn at 1000 and at 390, and the layout took two passes.** At 1000 the head
+is 800px and the two men were in opposite corners of it with a two-character
+`vs` marooned between — the `space-between` fault the main tab strip records,
+one box down — so both halves pack toward the middle (`flex-end` on each, which
+on the mirrored half is its left edge). The tracks were `1fr auto 1fr` with it,
+to put the head's axis at the middle of the box rather than at the middle of the
+longer name, and **that cost a name**: an equal column is an equal *share*, and
+two names are never equal. At 390 the head is 332px, so each man had 150 and
+`Crow-Armstrong` needs 157 with his circle and gap — measured, it drew as
+`Crow-Armstr…` while `Pfaadt` left 50px of his own share empty beside it.
+Content-sized tracks with the row centered give the long name the room the short
+one is not using: **157, 13, 91** in a 332px head, nothing clipped, and the pair
+still reads as centered because it now *is* rather than because the two halves
+happened to balance. The main strip's own lesson, one box down again.
+
+A hairline closes the head, so the description below starts a statement rather
+than running on from two names.
+
+**Almost nothing above it, and the air it has goes inside.** The dialog body
+already pays 12px above this head, so the 10px top padding it shipped with put
+**22px between the title bar and the two faces** — a head floating in the box
+rather than heading it. 2px measures **14 above the faces**, which is the head
+sitting at the top of the box.
+
+**The rule spans the box, and that is what settles the space under it.** It
+stopped 12px short of each edge and read as an underline belonging to the two
+names rather than as a divider between two registers of the dialog. It bleeds
+now — `margin-inline` out by `--table-bleed` and `padding-inline` back in, the
+same pair every wide table in this app takes through the box that holds it, and
+**`.app-dialog-body` declares that token as its own 12px** exactly as `.app`
+(22), the player-page overlay (16) and the full-page table box (12) declare
+theirs. Measured at 1000: the head runs 101→899 where the body runs 101→899,
+and the description still starts at 113.
+
+The gap beneath it then wanted **less**, not more. It was 9px flat (`.pa-des`'s
+own margin) while the rule was inset, and read as a line drawn under a sentence;
+it went to 19 for one commit, which read as a gap. **11** is what it is —
+`margin-bottom: 2px` on top of that 9 — the air belonging between the faces and
+the rule (10px of padding inside) rather than between the rule and the sentence.
+A divider that reaches both edges is already a divider and does not need
+distance to prove it.
+
+**The circle is folded onto `.feed-photo`** rather than restyled — a 40px round
+headshot that is a button into a man's page is one object, and this is that
+object two boxes further in. The role rings stay the feed's alone: a dialog
+head has no live role to draw.
+
+**And the row that opens it dropped the pitcher's first name too.**
+`.pa-pitcher` read `vs Chris Bassitt (RHP)`; it reads `vs Bassitt (RHP)` now,
+through the same `surname`. The row is one line carrying an inning glyph, a base
+diamond, an outcome badge, an RBI mark, the contact figures and a bat speed, and
+a man named one way in the row and another in the box it opens would be two
+readings of one name a press apart.
+
+### The pitcher's side of the same at-bat draws the same head
+
+**A batter faced is that at-bat read from the mound**, and its dialog
+(`.faced-detail`, inside an inning's own box) opened straight onto the
+description with nothing saying who threw it — true of every row in the list,
+which is exactly the argument for saying it once at the head of each box rather
+than nowhere.
+
+**`PlayMatchup` takes two men rather than a `PlateAppearance`**, which is what
+makes that possible: one implementation and two adapters, the rule
+`categoryValue.ts` states for a figure applied to a block. A `FacedBatter`
+names the batter where a `PlateAppearance` names the pitcher — each side
+carries the *other* man, because each is always read as one man's — so the
+missing half comes from the caller either way. On the pitcher's side that is
+`InningsList`, which already takes `pitcherId` and `pitcherName` for the inning
+dialog's own heading and now passes both a rung further in, through
+`InningBlock` and `InningRows`. His hand needs nothing threaded: the head asks
+the season roster.
+
+Without the shared component the two dialogs for one at-bat would be two heads
+that agree today.
+
+**Driven at 1000**: feed → an outing → `Innings` → the 9th → `Luis Torrens —
+Strikeout · Bot 9`, whose head reads `Torrens (RHB) vs Megill (RHP)` with both
+faces and both presses. The stack is four deep there — the outing page (46),
+the inning dialog (47), the batter faced (48) and the player page a press opens
+over all of them (50) — and Escape unwinds it **one box per press, top down**:
+page, faced, inning, outing.
