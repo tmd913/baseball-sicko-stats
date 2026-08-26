@@ -1275,6 +1275,14 @@ pulled warm nightly by `warmer.ts`:
   for a **batter**, the opposing club's announced or projected *starter* and how
   that man has actually pitched. A named pitcher is a far sharper answer than a
   club average and it is the one a reader would give.
+
+  **A pitcher's *win* reads more of the same blobs and no new one** — see *A win
+  is not a rate* below. It needs the whole game rather than the lineup he faces,
+  so it also takes: the opposing **starter** off the season board (the batter
+  half's own read, asked of the other club), **both bullpens** off that board's
+  relief rows, and **both offenses** off `getTeamHitting(id, 'season')`'s
+  **road** cut — which is a field of a blob `buildContext` already holds and had
+  simply never read. Nothing was added to the four.
 - **Which way each of them swings** — `bats`/`throws` off `getSeasonPlayers`, for
   the platoon.
 - **Whether he is playing at all, and how often when he is** — the per-day
@@ -1638,6 +1646,183 @@ against team 12's `3.11 / 1.142`, and the tallies follow — `4-2-2 → 5-3-2` a
 `2-4-2 → 3-5-2`, one of the two new categories to each side, which is what
 those figures say. **422ms cold and 1.5ms warm**, unchanged.
 
+### A win is not a rate
+
+**The figure this replaces was `wins / starts × inverse(oppOffense)`** — his own
+rate off the board, nudged by how the lineup he faces has been hitting. Measured
+out of sample it is **worse than having no model at all**, and the reason is not
+subtle: *a win is not something a pitcher does.* It is something that happens to
+him when his club outscores the other one while he is the pitcher of record, and
+**his club's runs are not on his line anywhere**. Two identical pitchers on the
+Dodgers and the Rockies have wildly different win rates; last year's rate carries
+last year's club, last year's bullpen and last year's luck into a projection
+about next Tuesday.
+
+So a win is decomposed into the two questions it is actually made of:
+
+```
+  P(win) = P(he takes a decision) × P(his club wins the game)
+```
+
+The first is about **him** — how deep he goes, and how often that is deep enough
+— and is the half his own record genuinely knows. The second is about **the
+game**, and is the half his own record knows nothing about.
+
+**The decomposition is exact, not an approximation, and the board says so.**
+Starters take a decision in **65.2%** of starts and **49.25%** of those decisions
+are wins. Half. A starter's decisions split down the middle league-wide, which is
+precisely what *"the second term is the club's win probability"* predicts — and
+`0.652 × 0.5 = 0.326` against the **0.3265** wins per start the same board shows.
+The relief side answers the same way: a **12.6%** decision rate, **51.1%** wins.
+
+#### Measured, out of sample, on 2,242 starts
+
+Walk-forward over four windows — stats through a cutoff, scored on the starts
+*after* it, so nothing in a prediction has seen its own outcome. Every start
+whose pitcher had 3+ behind him, cutoffs from 2026-05-15 to 2026-08-15. Skill is
+Brier against predicting every start at the league rate; **slope** is actual on
+predicted over eight buckets, where 1.0 is perfectly scaled and below it is
+overconfident.
+
+| | mean | slope | skill | 5th–95th |
+| --- | --- | --- | --- | --- |
+| the league's flat rate | .3225 | — | −0.08% | .318–.327 |
+| **old** `W/GS × inverse(opp)` | .3438 | **0.248** | **−9.15%** | .107–.636 |
+| new, matchup blind (`wp = .5`) | .3193 | 0.883 | +0.66% | .227–.379 |
+| **new** | .3212 | 0.763 | **+1.30%** | .204–.432 |
+
+(actual: **.3127**.)
+
+**The old model's deciles are the whole argument.** Its most-favored eighth of
+starts was projected at **.652** and won at **.358**; its least-favored eighth was
+projected at **.091** and won at **.254**. It has real spread and the spread is
+*noise* — a slope of 0.248 means three quarters of what it claimed to know it did
+not know — and a model can be worse than a constant only by being confidently
+wrong. The new one runs .199 → .432 across the same eight against an actual
+.246 → .390.
+
+**Both halves earn their place.** Holding the matchup at an even game and letting
+only depth speak gets +0.66%; putting the matchup back doubles it to +1.30%.
+
+**A narrower spread is the finding, not a compromise.** One baseball game is close
+to a coin flip and a starter is on the mound for five and a half innings of it, so
+the honest range for one start is about a fifth of a win wide rather than half a
+win. Most of the constants below are regressions whose only job is to stop the
+model claiming more than it knows.
+
+#### The win probability, and the four things in it
+
+`gameWinProb` pairs each club's bats with the *other* club's arms, runs both
+through **Pythagenpat** (`RS^x / (RS^x + RA^x)`, `x = (RS + RA)^0.287` — the
+familiar ~1.83 arrived at rather than assumed), adds the home edge and clamps to
+`[0.28, 0.72]`.
+
+- **The two starters** (`starterProfile`) — how much of the game each covers and
+  how many runs he gives up over it, as **runs allowed and FIP averaged**: what
+  happened, and what happened without the defense and the sequencing. Out of
+  sample the pair beats each alone (0.93% against 0.91% and 0.81%). An unknown
+  starter is *the league's* starter, not nobody.
+- **The two bullpens** (`BULLPEN_REGRESS_OUTS`) — 44.5% of the innings, and worth
+  0.67% → 1.29% of skill on game outcomes. **The bullpen is the worse half of the
+  staff this season**, which is not the folk assumption: relievers **4.675 R/9**
+  against starters' **4.419**. So a short outing is read as the cost it is.
+- **The two offenses** (`OFFENSE_REGRESS_GAMES`) — road runs per game, regressed
+  at 90 road games and clamped. **This is the weakest of the four and it is
+  stated as one:** unregressed it *costs* skill (0.53% against 0.76% for no
+  offense at all, slope collapsing to 0.603) and only this setting pays. Team
+  offense measured as **OPS** was tried and is worse at every regression, an OPS
+  ratio raised to the measured runs elasticity of 2.449 being a longer chain to
+  what the road cut states directly.
+
+  **The road cut is a talent index, not a venue prediction** — it is applied to
+  every game alike, home and away, and is used only because it is the cut with a
+  club's *own* ballpark subtracted out of it. The obvious objection (*they play
+  at home half the time*) was measured, and splitting by venue is the worst
+  option on the board:
+
+  | offense measure | slope | skill |
+  | --- | --- | --- |
+  | **road R/G** (shipped) | 0.751 | **1.30%** |
+  | overall R/G | 0.732 | 1.19% |
+  | home R/G at home, road R/G away | 0.631 | 0.95% |
+  | no offense term at all | 0.786 | 1.16% |
+
+  Venue-splitting halves the sample to ~33 games a side, and most of what a
+  home/road gap holds is **home-field advantage** — which this model already
+  carries as `HOME_EDGE`. It double-counts the one real effect and buys noise for
+  the rest. **And a park matters far less to a win probability than to a run
+  total**: it inflates both sides, so `f^x` divides out of Pythagenpat and only
+  the exponent moves — a **30%** park swing takes a .603 win probability to .611.
+  That is what makes a park-neutral offense the right input here rather than a
+  lazy one. What the road cut is *not* is perfectly neutral: a club never visits
+  its own park and a schedule is division-weighted, and it is 66 games where the
+  season is 132 — half the reason the regression is as heavy as it is.
+- **Home field** (`HOME_EDGE`) — **.5277** over 1,988 games, carried as a flat
+  shift because *the runs do not hold it*: home clubs scored 4.492 a game against
+  4.443, an edge Pythagenpat turns into .502 and not .528.
+
+#### The five-inning rule, measured instead of declared
+
+The old code carried a binary: `startsGame && !starterView` — his season record
+is not a majority of starts — **zeroed his projected wins outright**. That is
+exactly right for Bryan King (50 appearances, *one* start) and catastrophic for
+Erick Fedde (28 appearances, **12** starts) and Sean Manaea (27 and 13), both of
+whom are in somebody's rotation and both of whom the live board projected at
+**exactly 0.000 wins per start**.
+
+Fitted instead, over MLB's own starter-only split — 3,871 starts by the 344 men
+with 3+ of them, each half weighted by starts:
+
+```
+  W per start  =  0.01560 × outs  +  0.06630
+  L per start  =  0.00129 × outs  +  0.30235
+```
+
+| outs in the outing | 4 | 9 | 14.76 (league) | 16.6 | 19 |
+| --- | --- | --- | --- | --- | --- |
+| W per start | .129 | .207 | .296 | .325 | .363 |
+| **L per start** | **.308** | **.313** | **.321** | **.324** | **.327** |
+| decisions | .436 | .521 | .618 | .649 | .690 |
+| W share of them | .295 | .397 | .478 | **.501** | .526 |
+
+**A loss is flat in depth and a win is not** — .308 at four outs against .327 at
+nineteen, essentially constant, while the chance of the *win* nearly triples. That
+is the five-inning rule and nothing else. And **at 16.6 outs the W share is
+.501**: for a pitcher going as deep as a normal starter, *P(decision is a win)*
+really is his club's win probability with nothing left over, which is the model's
+central claim arriving from a second direction.
+
+**The known cost, stated plainly:** a *pure* opener is over-credited about .13
+wins a start, the fit's short end being contaminated (a man whose starts average
+four outs is usually a bulk arm with one long start in the sample). The
+alternative on offer was a rule exactly right on 338 of 3,871 starts that zeroes a
+rotation starter's whole season.
+
+#### Measured on the live board
+
+`?view=research&pos=SP&bproj=1`, 2026-08-26 to 09-01 — 156 men, 192 starts:
+
+| | old | new |
+| --- | --- | --- |
+| W per start | .3443 | **.2901** |
+| spread over one start | .00 – **2.10** | .10 – .50 |
+| men projected at exactly 0 wins | **10** | 0 |
+
+(MLB's own W/GS this season: **.2891**.) The old model projected **José Urquidy
+at 2.10 wins from a single start** — 2 wins in 1 start on his record, divided by
+nothing — and ten men at zero. Among established starters the new figure moves
+with the fixture and nothing else: Parker Messick against Seth Lugo **.50** and
+Lugo against Messick **.20**, Gage Jump against **Jacob deGrom .20**.
+
+**Saves and holds are deliberately not moved onto this** and keep the inverse
+multiplier. A save needs a win *and* a lead inside three runs, and a club that
+wins more also wins by more, so the two pull against each other — the relationship
+is nothing like the linear one a win has, and nothing here measures it.
+
+**Nothing is versioned by it.** No blob in this file is written to disk and the
+wire shape is unchanged; the client change is one paragraph of `ProjectionNote`
+(**JS 744.31 → 745.47 kB, gzip 219.43 → 219.86; CSS unchanged**).
+
 ### What it deliberately does not do
 
 - **It does not project today's games that are already under way.** A `live` or
@@ -1690,8 +1875,24 @@ those figures say. **422ms cold and 1.5ms warm**, unchanged.
 - **It does not adjust a pitcher's outs.** A tough lineup shortens an outing, and
   putting that in would move the *denominator* of every rate as well as its
   numerator — a projection that got worse in a way nobody could see. He pitches as
-  long as he has been pitching. **Wins take the inverse multiplier**, being the one
-  thing on a pitcher's line that moves the other way from runs.
+  long as he has been pitching. ~~**Wins take the inverse multiplier**, being the
+  one thing on a pitcher's line that moves the other way from runs.~~ *Superseded
+  — a win is no longer a rate off his line at all; see* **A win is not a rate**
+  *below.*
+- **It does not read MLB's starter-only split**, and that is the one input this
+  file has actively wanted and gone without. `stats=statSplits&sitCodes=sp` over
+  the whole sport is **one** request and 344 rows, and it carries every pitcher's
+  line *as a starter* — which is the exact quantity the majority test
+  (`gs × 2 > games`) exists to approximate and gets wrong on every swingman in
+  baseball. It would settle three things at once: the decision rate off his
+  starts rather than his appearances, `outsPer` off his starts (the fault the
+  Bryan King and Adrian Houser notes above are both records of), and the
+  starter/reliever role question the file currently answers by majority vote.
+  It stayed out because *nothing here adds an upstream* is the rule the whole
+  context is built to, and adding one wants a cache blob, a version, a warmer
+  entry and a failure path. **The fits in `DECISION_BASE` were taken off it
+  once, by hand, and pinned as constants** — which is the compromise, and it is
+  the same one `PLATOON_SAME` and `FIP_CONSTANT` already are.
 - **It is not a probability.** One expected value per category, no distribution and
   no interval, which the key on screen says in as many words.
 
@@ -1956,11 +2157,25 @@ pitcher's record, and the rule is about the outing rather than about the man.**
 - **A starter must complete five innings to be credited with the win.** An
   opener — a reliever's workload on the day he happens to start — cannot
   qualify, and the wins on his record were earned in relief where no such rule
-  applies. Zeroed in that case alone (`!starterView`), because a genuine
+  applies. ~~Zeroed in that case alone (`!starterView`), because a genuine
   starter's rate is `wins / starts` off his own record and **already** carries
   how often he goes the five; docking him again would charge him twice for one
-  fact.
-- **A loss is the one decision he can still take**, so it keeps its rate.
+  fact.~~
+- ~~**A loss is the one decision he can still take**, so it keeps its rate.~~
+
+  **Both bullets are superseded, and the reasoning was right about the rule and
+  wrong about the test.** The rule is real and the measurement in *A win is not a
+  rate* above shows it plainly — a loss is flat in outing length and a win nearly
+  triples across it. What `!starterView` could not do was tell an **opener** from
+  a **swingman**: it fired on Bryan King (50 appearances, one start) and equally
+  on Erick Fedde (28 appearances, **twelve** starts, in a rotation right now),
+  and zeroed the second man's wins for a whole season. It is now a fitted curve
+  in `outsPer` with no cliff in it — King's 3.1 outs read .420 decisions at a
+  −.157 tilt and Fedde's 14.4 read .612 at −.021 — so the rule survives as a
+  slope and the two men are told apart by the one number that actually separates
+  them. The table below was measured under the old rule and is left as it was
+  taken; King's `W` is now **0.14** rather than 0, which is the over-credit the
+  new note states as its known cost.
 
 This is why an opener is worth so much less than either of the things he
 resembles, and the seat ordering sees it *through the projection* rather than

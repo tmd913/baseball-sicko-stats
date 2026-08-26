@@ -177,6 +177,20 @@ export function ProjectionNote({
         one adjustment changes a figure by more than 20%.
       </p>
       <p>
+        <b>A pitcher&rsquo;s wins come off the game rather than off his record.</b> Nobody wins a
+        game on his own, so a win here is how often he pitches deep enough to be the man of
+        record, times how likely his club is to win that particular game — and that second half
+        is built out of the four things that decide it: <b>the arm the other club is starting</b>,{' '}
+        <b>how both line-ups have been scoring</b>, both bullpens, and who is at home. Facing an
+        ace in front of a good offense is a start he is a good deal less likely to win, and the
+        same start at home against a thin rotation is one he is more likely to win, whatever his
+        won-lost record happens to say. Losses follow the same reading the other way round.{' '}
+        <b>The spread is narrower than it looks like it should be</b>, and that is deliberate: one
+        baseball game is close to a coin toss, and a starter is on the mound for about half of
+        it. Saves and holds are not adjusted this way — a save needs a win <i>and</i> a close one,
+        and the two pull against each other.
+      </p>
+      <p>
         <b>What it cannot know is what happens next.</b> A game already under way counts as it
         stands, nobody is projected into a game his club has not got, and nobody is projected
         back off the injured list however close a return looks. This is one likely outcome

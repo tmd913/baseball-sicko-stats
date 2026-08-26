@@ -99,6 +99,7 @@ import type {
   ResearchRow,
   RotationProjection,
   ScheduleGame,
+  TeamHitting,
   TeamHittingSplit,
   WatchPlayer,
 } from './types.js';
@@ -508,6 +509,290 @@ const MIN_BF_FOR_ADJUST = 100;
  *  for a pitcher's xwOBA-against when the board cannot supply a mean. */
 const LEAGUE_WOBA = 0.3238;
 
+/**
+ * ---------------------------------------------------------------------------
+ * **A pitcher's win, which used to be his own past wins and is now the game.**
+ * ---------------------------------------------------------------------------
+ *
+ * The figure this replaces was `wins / starts × inverse(oppOffense)`: his own
+ * rate, nudged by how the lineup he faces has been hitting. **Measured out of
+ * sample it is worse than no model at all** — see the table below — and the
+ * reason is not subtle. A win is not something a pitcher does; it is something
+ * that happens to him when his club outscores the other one while he is the
+ * pitcher of record, and *his club's runs are not on his line anywhere*. Two
+ * identical pitchers on the Dodgers and the Rockies have wildly different win
+ * rates, and last year's rate carries last year's club, last year's bullpen and
+ * last year's luck into a projection about next Tuesday.
+ *
+ * **So a win is decomposed into the two questions it is actually made of:**
+ *
+ * ```
+ *   P(win) = P(he takes a decision) × P(his club wins the game)
+ * ```
+ *
+ * The first is about **him** — how deep he goes, which is his job and his
+ * durability, and is the half his own record genuinely knows. The second is
+ * about **the game** — his club's bats, his club's bullpen, the man opposite
+ * him, and the lineup that man's club sends up — and is the half his own record
+ * knows nothing about.
+ *
+ * **The decomposition is exact, not an approximation, and the board says so.**
+ * Measured on this season's pitching board: starters take a decision in
+ * **65.2%** of starts, and **49.25%** of those decisions are wins. Half. A
+ * starter's decisions split down the middle league-wide, which is precisely
+ * what "the second term is the club's win probability" predicts — and
+ * `0.652 × 0.5 = 0.326` against the **0.3265** wins per start the same board
+ * actually shows. The relief side answers the same way: a **12.6%** decision
+ * rate, **51.1%** of them wins.
+ *
+ * ### Measured, out of sample, on 2,242 starts
+ *
+ * Walk-forward over four windows — stats through a cutoff, scored on the starts
+ * *after* it, so nothing in the prediction has seen its own outcome. Every
+ * start whose pitcher had 3+ starts behind him, four cutoffs from 2026-05-15 to
+ * 2026-08-15. Skill is Brier score against predicting every start at the league
+ * rate; slope is the regression of actual win rate on predicted over eight
+ * buckets, where **1.0 is perfectly scaled and below it is overconfident**.
+ *
+ * | | mean | slope | skill | 5th–95th |
+ * | --- | --- | --- | --- | --- |
+ * | the league's flat rate | .3225 | — | −0.08% | .318–.327 |
+ * | **old** `W/GS × inverse(opp)` | .3438 | **0.248** | **−9.15%** | .107–.636 |
+ * | **new** | .3304 | **1.020** | **+0.89%** | .257–.405 |
+ *
+ * (actual: **.3127**.)
+ *
+ * **The old model's deciles are the whole argument.** Its most-favored eighth of
+ * starts was projected at **.652** and won at **.358**; its least-favored eighth
+ * was projected at **.091** and won at **.254**. It has real spread and the
+ * spread is noise — a slope of 0.248 means three quarters of what it claimed to
+ * know it did not know — and a model can be worse than a constant only by being
+ * confidently wrong. The new one runs .256 → .406 across the same eight buckets
+ * against an actual .229 → .383: a narrower claim, and one the season keeps.
+ *
+ * **A narrower spread is the finding, not a compromise.** A single baseball game
+ * is close to a coin flip and a starter is on the mound for five and a half
+ * innings of it; the honest range for one start is about a fifth of a win wide,
+ * not half a win. Everything below is the arithmetic that gets that range right,
+ * and most of the constants in it are regressions whose whole job is to stop the
+ * model claiming more than it knows.
+ */
+
+/**
+ * **How much of a decision rate is real.** Regressed toward what his *depth*
+ * predicts (below) at this many starts.
+ *
+ * Measured on the season board over the 174 starters with 8+ starts: the
+ * observed variance of the per-man rate is **0.01395**, of which binomial noise
+ * accounts for **0.01164** — so the true spread is a standard deviation of
+ * **0.048**, and `p(1−p) / σ²true` puts the shrinkage constant at **98 starts**.
+ * A pitcher 22 starts into a season therefore keeps 22/120 of his own figure.
+ *
+ * That is a lot of shrinkage and it is the measurement's answer rather than
+ * caution: most of what looks like a durable difference in decision rate is a
+ * season's worth of coin flips. What survives it is real — and it is very
+ * largely *depth* (the correlation between decision rate and outs per start is
+ * **0.482**), which is why the thing he is regressed toward is a function of
+ * how long he goes rather than a flat league number.
+ *
+ * The relief constant is the same calculation on the 265 relievers with 20+
+ * appearances: observed **0.00579**, noise **0.00271**, true sd **0.0555**, and
+ * **36 appearances**. A reliever's usage pattern is more his own than a
+ * starter's depth is, which is why his is the shorter of the two.
+ */
+const DECISION_REGRESS_STARTS = 98;
+const DECISION_REGRESS_APPS = 36;
+
+/**
+ * **What a start's decision looks like as a function of how long it lasts**, and
+ * it is the five-inning rule arriving as a measurement instead of as a cliff.
+ *
+ * A starter must complete **five innings** to be credited with a win and there
+ * is no such rule for a loss, so the two halves of a decision behave completely
+ * differently in depth — and they do, unmistakably. Measured over MLB's own
+ * starter-only split for this season (`sitCodes=sp`), **3,871 starts** by the
+ * 344 men with 3+ of them, each half fitted separately and weighted by starts:
+ *
+ * ```
+ *   W per start  =  0.01560 × outs  +  0.06630
+ *   L per start  =  0.00129 × outs  +  0.30235
+ * ```
+ *
+ * | outs in the outing | 4 | 9 | 14.76 (league) | 16.6 | 19 |
+ * | --- | --- | --- | --- | --- | --- |
+ * | W per start | .129 | .207 | .296 | .325 | .363 |
+ * | **L per start** | **.308** | **.313** | **.321** | **.324** | **.327** |
+ * | decisions | .436 | .521 | .618 | .649 | .690 |
+ * | W share of them | .295 | .397 | .478 | **.501** | .526 |
+ *
+ * **A loss is flat and a win is not.** A starter who leaves behind takes the
+ * loss whatever inning he left in — .308 at four outs against .327 at nineteen,
+ * essentially a constant — while his chance of taking the *win* nearly triples
+ * across the same range. That is the five-inning rule and nothing else, and it
+ * is the whole reason an opener is worth so much less than a starter.
+ *
+ * **At 16.6 outs — a real rotation start — the W share of decisions is .501.**
+ * Half. Which is the claim the entire win model rests on (see the block above
+ * `DECISION_REGRESS_STARTS`) arriving from a second direction: for a pitcher who
+ * goes as deep as a normal starter goes, *P(decision is a win)* really is his
+ * club's probability of winning the game, with nothing left over. The tilt is
+ * what is left over for everybody else, and it is measured as a deviation from
+ * that half rather than assumed to be zero.
+ *
+ * **This replaces a binary rule that was breaking on swingmen.** The rule read
+ * `startsGame && !starterView` — his season record is not a majority of starts —
+ * and zeroed his projected wins outright. That is exactly right for Bryan King
+ * (50 appearances, **one** start) and catastrophic for Erick Fedde (28
+ * appearances, **12** starts, 173 outs in them) and Sean Manaea (27 and 13),
+ * both of whom are in somebody's rotation right now and both of whom the live
+ * board projected at **exactly 0.000 wins per start**. The fit has no cliff to
+ * fall off: Fedde's starts average 14.4 outs and read .612 decisions at a −.021
+ * tilt, King's outings average 3.1 and read .420 at −.157.
+ *
+ * **The known cost, stated plainly: a *pure* opener is over-credited.** A man
+ * who throws one inning and hands over cannot win, ever, and this gives him
+ * about .13 wins a start. The fit's short end is contaminated — a pitcher whose
+ * starts *average* four outs is usually a bulk arm with one long start in the
+ * sample, not an opener with fifteen identical ones — so the honest reading is
+ * that the curve is right through the middle, where nearly every projected start
+ * lives, and soft at an end holding 338 of 3,871 starts. The alternative on
+ * offer was a rule that is exactly right on those 338 and zeroes a rotation
+ * starter's whole season, which is not a trade worth making.
+ *
+ * **Both fits come from one request** — `stats=statSplits&sitCodes=sp` over the
+ * whole sport, 344 rows — and it is **not** a request this file makes. The
+ * constants are the fit; the upstream stayed out, which is the rule every input
+ * to `buildContext` is held to. See *What it deliberately does not do* for what
+ * reading it live would buy.
+ */
+const DECISION_PER_OUT = 0.01689;
+const DECISION_BASE = 0.36865;
+const WIN_TILT_PER_OUT = 0.01199;
+const WIN_TILT_BASE = -0.19442;
+
+/** What a start of this length is worth as a decision, and how far its winning
+ *  half sits from the even split — see the block above. Both are clamped to
+ *  the range the fit was measured over, a linear fit having no opinion about
+ *  the 40-out outing an unguarded `outs / gs` can produce. */
+const decisionFromDepth = (outsPerOuting: number): number =>
+  Math.min(0.95, Math.max(0.05, DECISION_BASE + DECISION_PER_OUT * outsPerOuting));
+const winTiltFromDepth = (outsPerOuting: number): number =>
+  Math.min(0.2, Math.max(-0.25, WIN_TILT_BASE + WIN_TILT_PER_OUT * outsPerOuting));
+
+/**
+ * **A club's bats, as a road runs-per-game ratio**, regressed toward the league
+ * at this many road games and then clamped like every other adjustment.
+ *
+ * **It is a talent index, not a venue prediction, and it is applied to every
+ * game the same way** — a club's home games and its road games alike. Nothing
+ * here supposes anybody is playing away from home; the road cut is used because
+ * it is the one cut of a club's hitting with *its own ballpark subtracted out of
+ * it*. A club's overall runs per game carries Coors or Petco inside the number,
+ * and that number is then applied to its road games too, which is the park
+ * talking on the fifty per cent of the schedule where it is not there.
+ * `getTeamHitting(id, 'season').away` is the cut that answers, and
+ * `buildContext` already has that blob in hand — no read of its own.
+ *
+ * **Splitting by venue was measured and is the worst of the three**, which is
+ * the answer to the obvious objection (*they play at home half the time*). Over
+ * the same 2,242 out-of-sample starts: road **1.30%** skill, overall R/G
+ * **1.19%**, and *home R/G at home and road R/G away* **0.95%** — worse than
+ * dropping team offense altogether (1.16%). It halves the sample to about 33
+ * games a side, and most of what a home/road gap contains is **home-field
+ * advantage**, which this model already carries as a term of its own
+ * (`HOME_EDGE`). So it double-counts the one real effect and buys noise for the
+ * rest.
+ *
+ * **And the park matters far less to a win probability than to a run total**,
+ * because it inflates *both* sides and very nearly cancels in the ratio: with
+ * `RS` and `RA` both scaled by `f`, the `f^x` divides out of Pythagenpat and
+ * only the exponent moves. A **30%** park swing takes a .603 win probability to
+ * .611. This is a model of who wins, not of how many runs score, and that is the
+ * property that makes a park-neutral offense the right input rather than a
+ * lazy one.
+ *
+ * **What the road cut is not is perfectly neutral**, and that is worth saying: a
+ * club never visits its own park, and a schedule is division-weighted, so the
+ * average park a club plays in on the road is not quite the league's average
+ * park. It is also 66 games where the whole season is 132 — which is half the
+ * reason the regression below is as heavy as it is.
+ *
+ * **Ninety games is heavy and it is earned.** Each club has about 66 road games
+ * at this point in the season, so the regression leaves 42% of its own figure —
+ * road runs per game runs .597 wide across the thirty clubs and comes out of
+ * this at **0.919 to 1.111**. Swept out of sample against the pitcher-win
+ * target, an unregressed offense term *costs* skill (0.53% against 0.76% for no
+ * offense at all, its slope collapsing to 0.603) and this one is the only
+ * setting that pays: **0.89% against 0.76%**.
+ *
+ * **That is a small return and it is stated as one.** Team offense is the
+ * weakest of the four inputs to the win probability — the true spread between
+ * major-league lineups is narrow, and a half-season measurement of it is mostly
+ * noise. It is in because it is genuinely predictive once shrunk this far and
+ * because it is free; it is shrunk this far because at any lighter setting it
+ * makes the projection worse. **Team offense measured as OPS was tried and is
+ * worse than runs at every regression** — an OPS ratio raised to the measured
+ * runs elasticity of 2.449 (r = 0.895 across the thirty clubs) is a longer
+ * inferential chain to the same quantity the road cut states directly.
+ */
+const OFFENSE_REGRESS_GAMES = 90;
+
+/**
+ * **A club's bullpen covers 44.5% of its innings and is worth knowing about.**
+ * Its runs per out, regressed toward the league's own relief rate at 900 outs —
+ * 300 innings, against the ~450 a bullpen throws by late August, so it keeps a
+ * third of its own.
+ *
+ * Out of sample this is the second-largest gain in the model after the opposing
+ * starter: adding it moves skill from 0.67% to 1.29% on game outcomes. The
+ * sweep is flat either side of 900 (400 and 900 are within 0.03 points of each
+ * other) which is what a constant that is not fitting noise looks like.
+ *
+ * **And the bullpen is the worse half of the staff this season, which is not the
+ * folk assumption.** Measured: relievers **4.675 R/9** against starters'
+ * **4.419**, a relief ratio to the league of **1.0314** and a starting one of
+ * **0.9749**. So a start that ends in the fifth hands the game to an arm that
+ * gives up more, and the model reads a short outing as the cost it is.
+ */
+const BULLPEN_REGRESS_OUTS = 900;
+
+/**
+ * **The home club's edge**, added to its win probability and subtracted from the
+ * visitor's.
+ *
+ * Measured over the **1,988** completed games of this season to 2026-08-25: the
+ * home club won **1,049**, a **.5277** rate. It is carried as a flat shift
+ * rather than through the run model because the runs do not hold it — home
+ * clubs scored **4.492** a game against **4.443**, an edge of 1.1% that
+ * Pythagenpat turns into a win probability of .502 and not .528. Whatever the
+ * rest of home advantage is, it is not run scoring, so it is added where it is
+ * observed instead of derived from somewhere it isn't.
+ */
+const HOME_EDGE = 0.028;
+
+/**
+ * **Pythagenpat**, which turns two expected run totals into a win probability:
+ * `RS^x / (RS^x + RA^x)` with `x = (RS + RA)^0.287`. At the league's own
+ * 4.47 runs a side that exponent is 1.875, which is the familiar Pythagorean
+ * ~1.83 arrived at rather than assumed — and unlike a fixed exponent it stays
+ * right for a 2-run game and a 12-run one, which is the whole reason a
+ * *matchup* model wants this form.
+ */
+const PYTHAG_POWER = 0.287;
+
+/**
+ * **How far from even a single game's win probability may be projected.**
+ *
+ * `±0.22`, so `[0.28, 0.72]`. It binds on very little after the three
+ * regressions above have run — the out-of-sample sweep is flat between ±0.16
+ * and ±0.28 — and it is here for the same reason `ADJ_CLAMP` is: a ratio of two
+ * measured figures has no bound, and one pitcher with four good starts should
+ * not be able to hand his club a 90% game. The most lopsided fixture a
+ * major-league season actually produces is about three to one.
+ */
+const WIN_PROB_CLAMP = 0.22;
+
+
 // ---- The wire ---------------------------------------------------------------
 
 /** What one side is expected to finish the matchup period on. */
@@ -754,10 +1039,26 @@ function projectBatter(
 }
 
 /**
+ * **One chance at the ball**, and the two things about it a projection needs.
+ *
+ * `mult` is what `mults` was — the opposing lineup's strength against his hand,
+ * damped and clamped, one entry per start or per club game. `winProb` is the
+ * club's own probability of winning that game (`gameWinProb`), which the rate
+ * multiplier cannot stand in for: the two point in opposite directions on a
+ * pitcher's line and are built from different things, a soft lineup being one
+ * he gives up fewer runs to *and* one his own bats may have nothing to say
+ * about.
+ */
+interface PitchChance {
+  mult: number;
+  winProb: number;
+}
+
+/**
  * **One pitcher's expected line over his remaining appearances.**
  *
- * A **starter** is projected per *start* — `mults` is one multiplier per start
- * his rotation slot or his club's own announcement puts him in — and a
+ * A **starter** is projected per *start* — `chances` is one entry per start his
+ * rotation slot or his club's own announcement puts him in — and a
  * **reliever** per *club game*, each worth `appearanceShare` of an outing,
  * which is how often he has actually been used. Both are per **out**
  * underneath, because outs are what a pitcher's rates are over and what ERA and
@@ -769,13 +1070,21 @@ function projectBatter(
  * numerator, so a projection would get worse in a way that is hard to see. He
  * pitches as long as he has been pitching.
  *
- * **Wins move the other way from runs**, so they take the inverse multiplier: a
- * start against a weak lineup is a start he is more likely to win.
+ * **A win and a loss are not on that rate scale at all.** They come off
+ * `chances[i].winProb` — the club's own probability of winning that game, built
+ * from both lineups, both bullpens and both starters — times how often he takes
+ * a decision. See the block above `DECISION_REGRESS_STARTS` for why, and for
+ * the out-of-sample table showing what the old `wins / starts × inverse(opp)`
+ * was doing. **A save and a hold still take the inverse multiplier**, and
+ * deliberately: a save needs a win *and* a lead inside three runs, and a club
+ * that wins more also wins by more, so the two pull against each other and the
+ * relationship is nothing like the linear one a win has. Nothing here measures
+ * that, so nothing here claims it.
  */
 function projectPitcher(
   row: ResearchRow,
   recent: ResearchRow | null,
-  mults: number[],
+  chances: PitchChance[],
   starterView: boolean,
   into: Bucket,
   /**
@@ -803,12 +1112,12 @@ function projectPitcher(
    */
   startsGame = false,
   /**
-   * **How much of an appearance each entry in `mults` is worth**, and it is
+   * **How much of an appearance each entry in `chances` is worth**, and it is
    * `projectBatter`'s `playShare` arriving on the pitching side.
    *
-   * A starter passes the default 1: `mults` is one entry per *turn*, and a turn
-   * is a whole outing. A **reliever** passes his appearance rate, `mults` being
-   * one entry per club game — because he is not in a whole game, he is in about
+   * A starter passes the default 1: `chances` is one entry per *turn*, and a
+   * turn is a whole outing. A **reliever** passes his appearance rate, `chances`
+   * being one entry per club game — because he is not in a whole game, he is in about
    * two fifths of one, and which two fifths nobody knows. So every remaining
    * game contributes its own share, which is the arithmetic a batter's line has
    * always been built on and the one `pitcherCandidate` one screen down has
@@ -832,12 +1141,20 @@ function projectPitcher(
    *  pulled toward — see `OUTING_REGRESS_APPS`. Three outs is an inning, the
    *  fallback for a caller with no pool to read it off. */
   reliefOuts = 3,
+  /**
+   * **The league's own relief decision rate and win tilt**, which a thin relief
+   * record is pulled toward. Off the season board rather than pinned, for the
+   * reason `Pools.rpDecisionRate` gives; the defaults are this season's measured
+   * figures, for a caller with no pool to read them off. A **start** needs
+   * nothing here — it is pulled toward `decisionFromDepth(outsPer)`.
+   */
+  decisions: { rp: number; tilt: number } = { rp: 0.126, tilt: 0.011 },
 ): void {
   const outs = num(row.outs);
   const games = num(row.games);
   const gs = num(row.gamesStarted);
   const denom = starterView ? gs : games;
-  if (outs <= 0 || denom <= 0 || mults.length === 0 || appearanceShare <= 0) return;
+  if (outs <= 0 || denom <= 0 || chances.length === 0 || appearanceShare <= 0) return;
 
   const w = recentWeight(num(recent?.outs), RECENT_FULL_OUTS);
   const roleKey = baselineRole(row);
@@ -925,14 +1242,51 @@ function projectPitcher(
   const tbfRate = per('battersFaced', row.battersFaced, recent?.battersFaced);
   // Per appearance rather than per out — a decision and a save are things that
   // happen to an outing, not to an inning.
-  // A loss is the one decision an opener can still take, so it keeps his rate.
-  const wPer = startsGame && !starterView ? 0 : num(row.wins) / denom;
-  const lPer = num(row.losses) / denom;
   const svPer = startsGame ? 0 : num(row.saves) / denom;
   const hdPer = startsGame ? 0 : num(row.holds) / denom;
 
-  for (const m of mults) {
+  /**
+   * **How often he is the pitcher of record**, which is the half of a win his
+   * own line genuinely knows: how deep he goes, and how often that is deep
+   * enough. Regressed hard toward the rate an outing of *his length* produces,
+   * most of the spread around it being noise — see `DECISION_REGRESS_STARTS` for
+   * the variance decomposition, and `DECISION_BASE` for the fit.
+   *
+   * **The baseline is a function of `outsPer` rather than a flat league
+   * number**, and that is what carries the five-inning rule. A man starting the
+   * game is on the starter curve whatever his season record looks like — which
+   * is the swingman fix — and a man relieving is on his own role's rate, an
+   * appearance in the seventh being a different kind of event from a start
+   * however long either lasts.
+   */
+  const onStarterCurve = startsGame || starterView;
+  const decRate = onStarterCurve
+    ? regress(
+        (num(row.wins) + num(row.losses)) / denom,
+        decisionFromDepth(outsPer),
+        denom,
+        DECISION_REGRESS_STARTS,
+      )
+    : regress((num(row.wins) + num(row.losses)) / denom, decisions.rp, denom, DECISION_REGRESS_APPS);
+  /**
+   * **How far his decisions sit from the even split**, which for a starter is
+   * the five-inning rule and for a reliever is the small standing tilt toward
+   * the win a bullpen has (`Pools.rpWinTilt`). A deep starter's tilt is
+   * essentially zero, which is the measurement that says his decisions really do
+   * follow his club's win probability and nothing else.
+   */
+  const tilt = onStarterCurve ? winTiltFromDepth(outsPer) : decisions.tilt;
+
+  for (const { mult: m, winProb } of chances) {
     const km = inverse(m);
+    // **The two halves, multiplied**, and they are the whole of a projected win.
+    // `winShare` is the club's chance of winning this particular game; a loss is
+    // its complement, so `W + L` over the span is exactly `decisions × chances`
+    // however the matchups fall — which is the property that makes the pair
+    // consistent with each other and with his record.
+    const winShare = Math.min(0.95, Math.max(0.05, winProb + tilt));
+    const wPer = decRate * winShare;
+    const lPer = decRate * (1 - winShare);
     // **His outing scaled by how often he is in one**, which is `projectBatter`'s
     // `paPerGame * playShare` on this side of the ball: every rate below is per
     // out, so scaling the outs scales the whole line and nothing else has to
@@ -950,8 +1304,8 @@ function projectPitcher(
     add(into, PIT.er, erRate * o * m);
     add(into, PIT.r, rRate * o * m);
     add(into, PIT.k, kRate * o * km);
-    add(into, PIT.w, wPer * km * appearanceShare);
-    add(into, PIT.l, lPer * m * appearanceShare);
+    add(into, PIT.w, wPer * appearanceShare);
+    add(into, PIT.l, lPer * appearanceShare);
     add(into, PIT.sv, svPer * km * appearanceShare);
     add(into, PIT.hd, hdPer * km * appearanceShare);
     add(into, PIT.svhd, (svPer + hdPer) * km * appearanceShare);
@@ -989,6 +1343,42 @@ interface Pools {
    *  position, pitchers by role, both with the whole population as fallback. */
   batBase: Baselines;
   pitBase: Baselines;
+
+  /**
+   * **The run environment the win model is a ratio against**, all four measured
+   * off boards `buildContext` already holds rather than declared. This season:
+   * `leagueRunsPerOut` **0.16790** (4.533 a nine), `leagueFip` **4.219**,
+   * `spOutsShare` **0.5555**, `spRunRatio` **0.9749**, `bullpenRunRatio`
+   * **1.0314** — see `starterProfile` and `gameWinProb`.
+   */
+  leagueRunsPerOut: number;
+  leagueFip: number;
+  /** The league's starter, for a game whose starter is not named and for a man
+   *  whose own record cannot say. */
+  spOutsShare: number;
+  spRunRatio: number;
+  bullpenRunRatio: number;
+  /** Club id → its bullpen's runs per out against the league's, regressed at
+   *  `BULLPEN_REGRESS_OUTS`. The league figure where a club has none. */
+  bullpen: Map<number, number>;
+  /** Club id → its bats, as a regressed and clamped road runs-per-game ratio.
+   *  See `OFFENSE_REGRESS_GAMES` for why the road cut and why so heavily. */
+  offense: Map<number, number>;
+  /** The league's own `(W + L)` per **relief appearance** — what a thin relief
+   *  decision record is pulled toward. Measured off the board rather than pinned
+   *  so it survives a season rollover: **0.1263** this year. A *start* is pulled
+   *  toward what its own length predicts instead, which is a curve rather than a
+   *  number — see `DECISION_BASE`. */
+  rpDecisionRate: number;
+  /**
+   * **What share of a reliever's decisions are wins, over and above his club's
+   * own win probability.** Measured **0.5105** against a starter's **0.4925**:
+   * a starter's decisions split down the middle, and a reliever's tilt very
+   * slightly to the win — a blown save that the club then wins is a relief win,
+   * and a home club's walk-off is always one. Carried as the shift it is
+   * measured as rather than as a multiplier, which would break at the ends.
+   */
+  rpWinTilt: number;
 }
 
 /** The counting fields a batter's projection is built out of, which are exactly
@@ -1190,6 +1580,237 @@ function pitcherGameMult(pools: Pools, pitcherId: number, oppTeamId: number | nu
   const ops = dec(line?.ops);
   if (ops === null || pools.leagueTeamOps <= 0) return 1;
   return clampAdj(ops / pools.leagueTeamOps);
+}
+
+/**
+ * **A starter as the win model sees him**: how much of the game he covers, and
+ * how many runs he gives up over it against the league's own rate.
+ *
+ * **Two estimators of the same quantity, averaged**, because they fail in
+ * opposite directions. Runs allowed per out is what actually happens and carries
+ * the defense behind him and the sequencing luck in front of him; FIP is what he
+ * did without either, and is blind to the difference between a pitcher who
+ * strands runners and one who does not. Out of sample the pair beats each of
+ * them alone — 0.93% skill against 0.91% for runs and 0.81% for FIP — and the
+ * gap between the three is small enough that the reason to take the average is
+ * that it is the least wrong when either input is having a bad season, not that
+ * it won a bake-off.
+ *
+ * Both are regressed at `REGRESS_OUTS`, the same 150 the rest of this file's
+ * per-out rates take, and both are expressed as a ratio to the league so the
+ * scales cancel — `row.fip` is on the earned-run scale and runs per out is not,
+ * and neither ever meets the other except as a ratio to its own league mean.
+ *
+ * **An unknown man is the league's starter, not nobody.** A game past the three
+ * days probables are named for, a rookie with no record, a swingman whose outs
+ * did not come out of starts (`gs × 2 <= games`, the same majority test
+ * `projectOnePitcher` applies) — all take `spOutsShare` and `spRunRatio`, which
+ * is the honest default and the one that leaves the win probability where the
+ * rest of the matchup puts it. This is the file's own rule that *a join fails to
+ * null, never to a guess*, read on the other side: the guess here would be to
+ * let an unnamed starter make his club worse.
+ */
+function starterProfile(pools: Pools, id: number | null): { share: number; ratio: number } {
+  const league = { share: pools.spOutsShare, ratio: pools.spRunRatio };
+  if (id === null) return league;
+  const row = pools.pitSeason.get(id);
+  if (!row) return league;
+  const outs = num(row.outs);
+  const gs = num(row.gamesStarted);
+  if (outs <= 0 || gs <= 0 || gs * 2 <= num(row.games)) return league;
+  const lg = pools.leagueRunsPerOut;
+  const byRuns = regress(num(row.runs) / outs, lg, outs, REGRESS_OUTS) / lg;
+  const fip = typeof row.fip === 'number' && Number.isFinite(row.fip) ? row.fip : null;
+  const byFip =
+    fip === null || pools.leagueFip <= 0
+      ? byRuns
+      : regress(fip / pools.leagueFip, 1, outs, REGRESS_OUTS);
+  return {
+    // Capped at the whole game: a complete game is 27 outs and a projection that
+    // read more would hand the bullpen a negative share of it.
+    share: Math.min(1, outs / gs / 27),
+    ratio: (byRuns + byFip) / 2,
+  };
+}
+
+/**
+ * **What one side is expected to score**, in runs: the league's own game, scaled
+ * by the bats doing the scoring and by the staff they are scoring against.
+ *
+ * The staff is one number made of two — the starter over his share of the game
+ * and the bullpen over the rest — which is what makes an outing's *length* part
+ * of a win projection rather than only its quality. A five-inning start against
+ * a bad bullpen and a seven-inning start against the same one are different
+ * games, and this is where that difference lives.
+ */
+function sideRuns(
+  pools: Pools,
+  offense: number,
+  sp: { share: number; ratio: number },
+  bullpenOf: number,
+): number {
+  const staff = sp.share * sp.ratio + (1 - sp.share) * bullpenOf;
+  return pools.leagueRunsPerOut * 27 * offense * staff;
+}
+
+/**
+ * **How likely one club is to win one game** — the second half of a pitcher's
+ * win, and the half his own record knows nothing about. See the block above
+ * `DECISION_REGRESS_STARTS` for the decomposition and the out-of-sample table.
+ *
+ * Four measured inputs and a home-field constant, and **every one of the four is
+ * already in this context**: both clubs' bats (`offense`, the road cut), both
+ * clubs' bullpens (`bullpen`), and the two men starting (`starterProfile` off
+ * the season board). Nothing here fetches anything.
+ *
+ * `mySpId` is the man starting for the side being asked about — **the pitcher
+ * himself where he is the one starting, and his club's own named starter where
+ * he is a reliever**, because a reliever's win rides on a game his rotation is
+ * pitching and not on his one inning of it.
+ */
+function gameWinProb(
+  pools: Pools,
+  myTeamId: number,
+  oppTeamId: number,
+  mySpId: number | null,
+  oppSpId: number | null,
+  home: boolean,
+): number {
+  const mySp = starterProfile(pools, mySpId);
+  const oppSp = starterProfile(pools, oppSpId);
+  const myPen = pools.bullpen.get(myTeamId) ?? pools.bullpenRunRatio;
+  const oppPen = pools.bullpen.get(oppTeamId) ?? pools.bullpenRunRatio;
+  // What his club scores is the opposing staff's problem, and what it allows is
+  // the opposing lineup's — so each side's runs pair one club's bats with the
+  // other club's arms, which is the one thing this arithmetic must not get
+  // backwards.
+  const rs = sideRuns(pools, pools.offense.get(myTeamId) ?? 1, oppSp, oppPen);
+  const ra = sideRuns(pools, pools.offense.get(oppTeamId) ?? 1, mySp, myPen);
+  if (!(rs > 0) || !(ra > 0)) return 0.5;
+  const x = Math.pow(Math.max(1, rs + ra), PYTHAG_POWER);
+  const wp = Math.pow(rs, x) / (Math.pow(rs, x) + Math.pow(ra, x)) + (home ? HOME_EDGE : -HOME_EDGE);
+  if (!Number.isFinite(wp)) return 0.5;
+  return Math.min(0.5 + WIN_PROB_CLAMP, Math.max(0.5 - WIN_PROB_CLAMP, wp));
+}
+
+/**
+ * **The league's own run environment, measured off the season pitching board
+ * rather than pinned**, which is the rule every other figure in `Pools` follows
+ * and matters more here than usual: these are the denominators the whole win
+ * model is a ratio against, so a constant that drifted a season out of date
+ * would tilt every projected win in the same direction at once.
+ *
+ * Measured this season: **0.16790** runs an out (4.533 a nine), an outs-weighted
+ * league FIP of **4.219**, starters throwing **55.55%** of the outs at
+ * **0.9749** of the league rate and the bullpen the rest at **1.0314**,
+ * and a reliever's decision rate of **0.1263** at a win tilt of **+0.011** —
+ * see `Pools.rpWinTilt`. A *starter's* decision rate is not here: it is a
+ * function of how long his outing is rather than a league constant, and lives
+ * in `decisionFromDepth`.
+ *
+ * **`row.fip` is null under three innings and on any row a failed league-rates
+ * read cost it**, so the mean is taken over the rows that have one and weighted
+ * by their outs. A board with no FIP at all leaves `leagueFip` at 0, which
+ * `starterProfile` reads as "no FIP half" and falls back to runs allowed alone —
+ * *a failure costs its own column, never the request*.
+ */
+function runEnvironment(rows: ResearchRow[]): {
+  leagueRunsPerOut: number;
+  leagueFip: number;
+  spOutsShare: number;
+  spRunRatio: number;
+  bullpenRunRatio: number;
+  rpDecisionRate: number;
+  rpWinTilt: number;
+} {
+  let outs = 0;
+  let runs = 0;
+  let spOuts = 0;
+  let spRuns = 0;
+  let fipOuts = 0;
+  let fipSum = 0;
+  let rpApps = 0;
+  let rpDec = 0;
+  let rpWins = 0;
+  for (const r of rows) {
+    const o = num(r.outs);
+    outs += o;
+    runs += num(r.runs);
+    if (typeof r.fip === 'number' && Number.isFinite(r.fip) && o > 0) {
+      fipOuts += o;
+      fipSum += r.fip * o;
+    }
+    // The same majority test the rest of the file uses for who is a starter.
+    if (num(r.gamesStarted) * 2 > num(r.games)) {
+      spOuts += o;
+      spRuns += num(r.runs);
+    } else {
+      rpApps += num(r.games);
+      rpDec += num(r.wins) + num(r.losses);
+      rpWins += num(r.wins);
+    }
+  }
+  const rpo = outs > 0 ? runs / outs : 0.168;
+  const rpOuts = outs - spOuts;
+  return {
+    leagueRunsPerOut: rpo,
+    leagueFip: fipOuts > 0 ? fipSum / fipOuts : 0,
+    spOutsShare: outs > 0 && spOuts > 0 ? spOuts / outs : 0.555,
+    spRunRatio: spOuts > 0 && rpo > 0 ? spRuns / spOuts / rpo : 1,
+    bullpenRunRatio: rpOuts > 0 && rpo > 0 ? (runs - spRuns) / rpOuts / rpo : 1,
+    rpDecisionRate: rpApps > 0 ? rpDec / rpApps : 0.126,
+    // Half of a decision is a win by construction; anything a reliever's share
+    // is over that half is the tilt, and it is a shift rather than a ratio for
+    // the reason `Pools.rpWinTilt` gives.
+    rpWinTilt: rpDec > 0 ? rpWins / rpDec - 0.5 : 0.011,
+  };
+}
+
+/** A club's bullpen against the league's, off the season board — every pitcher
+ *  filed to the club whose relief majority he is, regressed at
+ *  `BULLPEN_REGRESS_OUTS`. */
+function bullpenRatios(rows: ResearchRow[], leagueRunsPerOut: number, leagueRatio: number): Map<number, number> {
+  const acc = new Map<number, { outs: number; runs: number }>();
+  for (const r of rows) {
+    if (r.teamId === null) continue;
+    // The same majority test the rest of the file uses, read the other way: a
+    // man who mostly starts is not part of his club's bullpen.
+    if (num(r.gamesStarted) * 2 > num(r.games)) continue;
+    const e = acc.get(r.teamId) ?? { outs: 0, runs: 0 };
+    e.outs += num(r.outs);
+    e.runs += num(r.runs);
+    acc.set(r.teamId, e);
+  }
+  const out = new Map<number, number>();
+  const base = leagueRunsPerOut * leagueRatio;
+  for (const [id, e] of acc) {
+    if (e.outs <= 0) continue;
+    out.set(id, regress(e.runs / e.outs, base, e.outs, BULLPEN_REGRESS_OUTS) / leagueRunsPerOut);
+  }
+  return out;
+}
+
+/** A club's bats against the league's, as a regressed and clamped ratio of road
+ *  runs per game — see `OFFENSE_REGRESS_GAMES` for why the road cut. */
+function offenseRatios(boards: Map<number, TeamHitting>): Map<number, number> {
+  let runs = 0;
+  let games = 0;
+  for (const t of boards.values()) {
+    const road = t.away?.all;
+    if (!road) continue;
+    runs += num(road.runs);
+    games += num(road.games);
+  }
+  const out = new Map<number, number>();
+  if (games <= 0 || runs <= 0) return out;
+  const league = runs / games;
+  for (const [id, t] of boards) {
+    const road = t.away?.all;
+    const g = num(road?.games);
+    if (!road || g <= 0) continue;
+    out.set(id, clampAdj(regress(num(road.runs) / g, league, g, OFFENSE_REGRESS_GAMES) / league));
+  }
+  return out;
 }
 
 /** The mean of a board's own `all` OPS, so a ratio against it is a ratio within
@@ -1664,7 +2285,29 @@ function projectOnePitcher(
   const row = pools.pitSeason.get(id);
   if (!row || row.teamId === null) return { starts: 0, reliefGames: 0, placed: false };
   const games = chancesOf(ctx.remaining.get(row.teamId) ?? [], allow, onlyPk);
-  const oppOf = (g: ScheduleGame): number => (g.homeId === row.teamId ? g.awayId : g.homeId);
+  const mine = row.teamId;
+  const oppOf = (g: ScheduleGame): number => (g.homeId === mine ? g.awayId : g.homeId);
+  /** Who is starting a given game for a given club — the same `ctx.starters` map
+   *  `projectOneBatter` reads, asked of either side. Null where the game is past
+   *  the days probables are named for and no rotation slot reaches it. */
+  const startingFor = (g: ScheduleGame, club: number): number | null =>
+    [...(ctx.starters.get(g.gamePk) ?? [])].find((sid) => pools.pitSeason.get(sid)?.teamId === club) ??
+    null;
+  /**
+   * **One chance**, with the club's own chance of winning it beside the rate
+   * multiplier — see `PitchChance`. `mySp` is the man on the mound for *his*
+   * club: himself on a day he starts, and his rotation's own starter on a day he
+   * relieves, because a reliever's win rides on the game his club is playing and
+   * not on the inning he is in.
+   */
+  const chanceIn = (g: ScheduleGame, mySp: number | null): PitchChance => {
+    const opp = oppOf(g);
+    return {
+      mult: pitcherGameMult(pools, id, opp),
+      winProb: gameWinProb(pools, mine, opp, mySp, startingFor(g, opp), g.homeId === mine),
+    };
+  };
+  const decisions = { rp: pools.rpDecisionRate, tilt: pools.rpWinTilt };
   // His own turns: every remaining game he is named for or projected into.
   const his = games.filter((g) => ctx.starters.get(g.gamePk)?.has(id) === true);
   // **The role says when he pitches; his own record says how much.** Two
@@ -1683,19 +2326,21 @@ function projectOnePitcher(
   // appearance on the day he starts — under his real workload, and by a long
   // way the safer of the two directions to be wrong in.
   if (currentRole(ctx, id, row, pools.pitRecent.get(id) ?? null, row.teamId) === 'starter') {
-    const mults = his.map((g) => pitcherGameMult(pools, id, oppOf(g)));
+    const chances = his.map((g) => chanceIn(g, id));
     const startsAreHisRecord = num(row.gamesStarted) * 2 > num(row.games);
     projectPitcher(
       row,
       pools.pitRecent.get(id) ?? null,
-      mults,
+      chances,
       startsAreHisRecord,
       into,
       true,
       1,
       pools.pitBase,
+      undefined,
+      decisions,
     );
-    return { starts: mults.length, reliefGames: 0, placed: true };
+    return { starts: chances.length, reliefGames: 0, placed: true };
   }
   // A reliever's chances are his club's games times how often he has actually
   // been used — `playShareOf`'s own figure, which reads the last thirty days
@@ -1713,19 +2358,20 @@ function projectOnePitcher(
   // arm and `Math.round(0.4)` is 0 — and threw the fraction away on every
   // longer one besides. See `projectPitcher`'s `appearanceShare`.
   const rate = playShareOf(ctx, 'pitcher', id, row.teamId, row, pools.pitRecent.get(id) ?? null);
-  const mults = games.map((g) => pitcherGameMult(pools, id, oppOf(g)));
+  const chances = games.map((g) => chanceIn(g, startingFor(g, mine)));
   projectPitcher(
     row,
     pools.pitRecent.get(id) ?? null,
-    mults,
+    chances,
     false,
     into,
     false,
     rate,
     pools.pitBase,
     pools.rpOutsPerApp,
+    decisions,
   );
-  return { starts: 0, reliefGames: mults.length * rate, placed: true };
+  return { starts: 0, reliefGames: chances.length * rate, placed: true };
 }
 
 
@@ -2352,9 +2998,14 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
   }
   const seasonHitting = new Map<number, TeamHittingSplit>();
   const clubGames = new Map<number, number>();
+  // …and the whole season blob, whose **road** cut is what the win model's
+  // offense ratio is built from — see `OFFENSE_REGRESS_GAMES`. It is the same
+  // object `seasonHitting` is a field of, so this costs nothing but a reference.
+  const seasonBoards = new Map<number, TeamHitting>();
   for (const [id, v] of seasonSplits) {
     if (!v) continue;
     seasonHitting.set(id, v.all);
+    seasonBoards.set(id, v);
     const g = v.all.all?.games;
     if (typeof g === 'number' && g > 0) clubGames.set(id, g);
   }
@@ -2366,7 +3017,11 @@ async function buildContext(from: string, to: string): Promise<ProjectionContext
     if (p.throws) throws.set(p.id, p.throws);
   }
 
+  const run = runEnvironment(pitSeason.rows);
   const pools: Pools = {
+    ...run,
+    bullpen: bullpenRatios(pitSeason.rows, run.leagueRunsPerOut, run.bullpenRunRatio),
+    offense: offenseRatios(seasonBoards),
     batSeason: byId(batSeason.rows),
     batRecent: byId(batRecent.rows),
     pitSeason: byId(pitSeason.rows),
