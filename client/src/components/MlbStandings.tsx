@@ -125,11 +125,29 @@ function columnsFor(group: StandingsGroup): Column[] {
     });
   }
   cols.push(
+    // **The three run columns straight after the race**, which is the one place
+    // on this board where the order is an argument rather than a habit. `W`,
+    // `L`, `PCT` and `GB` are the standing; `RS`, `RA` and `DIFF` are the
+    // nearest thing to a reason for it, and a differential read beside the
+    // record it produced is a different column from one read after eight
+    // columns of splits. They led to `STRK` before, which put a five-game
+    // streak between a club's record and its run differential — the two figures
+    // a reader compares clubs on — and left the run columns adrift in the
+    // middle of the board.
+    { key: 'rs', label: 'RS', title: 'Runs scored', value: (t) => String(t.runsScored) },
+    { key: 'ra', label: 'RA', title: 'Runs allowed', value: (t) => String(t.runsAllowed) },
+    {
+      key: 'diff',
+      label: 'DIFF',
+      title: 'Run differential',
+      value: (t) => diffCell(t.runDiff).text,
+      className: (t) => diffCell(t.runDiff).className,
+    },
+    // **The run-of-games cuts together**, coarsest last: the streak, the last
+    // ten, the last thirty, and then the season's two halves. They are one
+    // reading — *how has this club been going* — and a reader comparing them
+    // wants them adjacent rather than separated by three columns of runs.
     { key: 'strk', label: 'STRK', title: 'Current run of wins or losses', value: (t) => t.streak ?? '—' },
-    // **The four run-of-games cuts together**, coarsest last: the last ten, the
-    // last thirty, and then the season's two halves. They are one reading — *how
-    // has this club been going* — and a reader comparing them wants them
-    // adjacent rather than separated by six columns of runs and splits.
     { key: 'l10', label: 'L10', title: 'Record in the last ten games', value: (t) => rec(t.lastTen) },
     { key: 'l30', label: 'L30', title: 'Record in the last thirty games', value: (t) => rec(t.lastThirty) },
     {
@@ -143,15 +161,6 @@ function columnsFor(group: StandingsGroup): Column[] {
       label: '2nd Half',
       title: 'Record since the All-Star break',
       value: (t) => rec(t.secondHalf),
-    },
-    { key: 'rs', label: 'RS', title: 'Runs scored', value: (t) => String(t.runsScored) },
-    { key: 'ra', label: 'RA', title: 'Runs allowed', value: (t) => String(t.runsAllowed) },
-    {
-      key: 'diff',
-      label: 'DIFF',
-      title: 'Run differential',
-      value: (t) => diffCell(t.runDiff).text,
-      className: (t) => diffCell(t.runDiff).className,
     },
     { key: 'home', label: 'HOME', title: 'Record at home', value: (t) => rec(t.home) },
     { key: 'away', label: 'AWAY', title: 'Record on the road', value: (t) => rec(t.away) },

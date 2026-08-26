@@ -425,6 +425,7 @@ export function LiveEntry({
           pa={pa}
           gamePk={game.gamePk}
           name={report.name}
+          batterId={report.id}
           showVideo={false}
         />
       )}
@@ -495,7 +496,13 @@ function FeedAtBat({
         )}
         <FeedScore game={game} away={pa.awayScore} home={pa.homeScore} />
       </div>
-      <PlateAppearanceCard pa={pa} gamePk={game.gamePk} name={report.name} showVideo={false} />
+      <PlateAppearanceCard
+        pa={pa}
+        gamePk={game.gamePk}
+        name={report.name}
+        batterId={report.id}
+        showVideo={false}
+      />
       {pa.playId && <InlineVideoClip playId={pa.playId} gamePk={game.gamePk} />}
     </div>
   );

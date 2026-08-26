@@ -2233,3 +2233,69 @@ Verified in the running app. Batter, from a roster cell: `upcoming-sp` →
 loanDepot park. Batter, from a Schedule row: the same order with *Ethan Pecko ·
 RHP · starting for HOU · projected*. Pitcher, from a Schedule row: *Aaron Nola ·
 RHP · PHI's starter, his counterpart* over T-Mobile Park and the PHI lineup.
+
+### The at-bat dialog names both men, and both are doors
+
+**A plate appearance is one man against another, and its dialog said so in nine
+characters of shorthand.** `.pa-hand` was a single 11px line at the head of the
+box — `LHB vs Chris Bassitt (RHP)` — which named the *pitcher* and left the
+batter to be inferred from the feed header the card sat under. On a dialog
+opened from a game's Plays tab or from a player card's game block there is no
+such header in view, and the man whose at-bat it is was nowhere in the box at
+all except in the dialog's own title. Neither name was a press.
+
+**It is a matchup head now**: the batter's headshot, his name and his hand, the
+word `vs`, and the pitcher's the same way — his block mirrored so the two faces
+sit either side of the word rather than both to the left of their names. Both
+names and both headshots open the man's page. Nothing is lost: `LHB` and `RHP`
+are the same two facts `.pa-hand` carried, split between the two men they are
+each about, and where MLB names no hand the sub-line falls back to `Batter` or
+`Pitcher` so the block never stops saying which of the two it is.
+
+**The batter's id comes from the caller, not from the wire.** A
+`PlateAppearance` names the pitcher (`pitcherId`, `pitcherName`) and nobody
+else, because it is always read as *one man's* — it hangs off the
+`PlayerReport` whose day it is, on all three surfaces that draw this card
+(`FeedAtBat`, `FeedLiveEntry`, `GameBlock`), and all three have `report.id` in
+hand at the point the card is written. So `batterId` is a prop beside `name`,
+which has come from the caller for exactly the same reason since the card grew
+a dialog. Adding a field to the plate appearance instead would have meant every
+stored day carrying a batter it already knows and a cache version to fill it.
+
+**The door is `PlayerDoorContext`**, new here and the third of its kind after
+`TeamDoorContext` and `GameDoorContext`, argued the same way and for the same
+shape of caller: this head is a leaf inside a `Modal` inside a card inside a
+`map`, drawn from three trees, and only one of the three has `openPlayer` in
+hand where the card is written. Threaded as an optional prop it would be four
+signatures and four chances to forget it, and a forgotten one does not fail —
+it silently stops being a link on one surface out of three. It carries a
+**key** rather than an id, `openPlayer`'s own signature, because a two-way
+player is two pages in this app.
+
+**Null outside the provider draws plain text**, the rule every other door
+keeps: a press that does nothing is worse than no press. The same test covers a
+name off the wire with no id.
+
+**What happens when a name is pressed, measured in a browser at 1000×900.**
+From a game's Plays tab, `player=pitcher-701542` replaces `game=` — the two
+page params being mutually exclusive — so the dialog goes with the page it was
+opened on and the reader lands on Will Warren. From the **feed**, where there
+is no page to replace, the player page opens *over* the dialog: the page is not
+inert, the dialog behind it is, focus is inside `.details-view`, and one press
+of Escape closes the page and leaves the at-bat where it was — a second closes
+that. Exactly one thing per press, at a depth the ladder had not been driven to
+before.
+
+**Drawn at 1000 and at 390.** At 1000 the head is 800px and the two men were in
+opposite corners of it with a two-character `vs` marooned between — the
+`space-between` fault the main tab strip records, one box down — so both halves
+pack toward the middle (`flex-end` on each, which on the mirrored half is its
+left edge) and a long name grows outward into the slack instead. At 390 the two
+blocks are 150px each in a 332px head and fill it. A hairline closes the head,
+so the description below starts a statement rather than running on from two
+names.
+
+**The circle is folded onto `.feed-photo`** rather than restyled — a 40px round
+headshot that is a button into a man's page is one object, and this is that
+object two boxes further in. The role rings stay the feed's alone: a dialog
+head has no live role to draw.

@@ -104,6 +104,7 @@ import {
   HandednessContext,
   GameDoorContext,
   ParkFactorsContext,
+  PlayerDoorContext,
   TeamDoorContext,
   RecentNewsContext,
   useDelayedFlag,
@@ -8695,6 +8696,14 @@ export default function App() {
         exclusion with the other two pages and the one step of memory back are
         both enforced. */}
     <GameDoorContext.Provider value={openGame}>
+    {/* …and the one door into a player's page, which is the same argument a
+        third time: the caller is the at-bat dialog's matchup head, a leaf
+        inside a dialog inside a card inside a `map`, drawn from the feed's
+        stream, a player card's game block and the game page's Plays tab.
+        `openPlayer` is the same function every row, name and headshot in this
+        app already opens a man through — this only puts it where a leaf can
+        reach it. */}
+    <PlayerDoorContext.Provider value={openPlayer}>
     <div
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
@@ -10316,6 +10325,7 @@ export default function App() {
         />
       )}
     </div>
+    </PlayerDoorContext.Provider>
     </GameDoorContext.Provider>
     </TeamDoorContext.Provider>
     </ParkFactorsContext.Provider>

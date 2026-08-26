@@ -400,6 +400,32 @@ every width, zero overflow on all five, and the strip's outer edges flush with
 the row at both ends.** The row is 36–37px throughout, which is what it was with
 three tabs and with four.
 
+**And the first two of those numbers were the next fault.** `space-between`
+gives the row's slack to the gaps, and on a wide window that is most of the
+window: at 1440 the strip is 1396px holding 398px of tabs, so the four gaps
+measured **249, 250, 249, 250** — `Overview` in the top-left corner of the page,
+`MLB` in the top-right, and a quarter of the window between any two words. A row
+of five spread that far stops reading as one control: the eye has to cross the
+page to compare two of its options, and the strip reads as five separate things
+pinned to the chrome rather than as the app's tab row.
+
+**`.main-tabs` takes a `max-width: 860px` and centers.** 860 is not a number
+picked for this strip — it is the app's own wide reading column, what
+`.details-arsenal`, `.outing-tab` and `.news-tab` are capped at, and what
+`.details-tabs` (the strip this one is modelled on, one tier down) sits over on
+the outing page. Where two things genuinely are the same measure they share it,
+which is the *fold, don't restyle* rule read the way round this strip's own note
+already reads it about `.view-switch`. Centered, because the tools row and the
+date bar's face directly under it are: the three are one band and a band has one
+center line.
+
+**Re-measured, gaps at each width: 1920 115/116, 1280 115/116, 904 115/116, 900
+114/115, 640 64/65.** The cap engages at exactly 904 — 860 plus the app's two
+22px gutters — so every width the old table measured at 900 and below draws
+precisely the strip it drew before, phones included, `max-width` on a
+`width: 100%` box being a ceiling and nothing else. Above it the strip is 860
+wide wherever the window is, and the tabs stay a row.
+
 The padding gives way twice on the way down and the type once (14px → 8px
 padding at 640, 13px type and 5px at 430, 2px at 340), because with
 `space-between` the row's own slack is the first thing spent: five words come to

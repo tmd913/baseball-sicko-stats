@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
+import { playerKey } from '../types';
 import { api } from '../api';
-import { contactHighlight, eventLabel, finalSwingBatSpeed, outcomeKind } from '../lib';
+import { contactHighlight, eventLabel, finalSwingBatSpeed, headshotUrl, outcomeKind } from '../lib';
+import { usePlayerDoor } from '../hooks';
 import { PlaySituation } from './BaseDiamond';
 import { ClipVideo } from './ClipVideo';
 import { Modal } from './Modal';
@@ -220,13 +222,25 @@ export function PlateAppearanceCard({
   pa,
   gamePk,
   name,
+  batterId,
   showVideo = true,
 }: {
   pa: PlateAppearance;
   gamePk: number;
-  /** Whose at-bat, for the dialog's heading — the row itself sits under a
-   *  header that has already said it. */
+  /** Whose at-bat, for the dialog's heading and the batter half of its matchup
+   *  head — the row itself sits under a header that has already said it. */
   name?: string;
+  /**
+   * **His MLB id, which the plate appearance itself does not carry.**
+   *
+   * It names the pitcher (`pitcherId`, `pitcherName`) and nobody else, because
+   * a `PlateAppearance` is always read as *one man's* — it hangs off the
+   * `PlayerReport` whose day it is, on all three surfaces that draw this card.
+   * So the batter comes from the caller, which is where `name` has always come
+   * from and for exactly the same reason, rather than being added to a field on
+   * the wire that every stored day would then have to be re-fetched to fill.
+   */
+  batterId?: number;
   // When false, the dialog omits the (button-triggered) clip: the feed draws
   // the clip directly under the item, so the play is already watchable there
   // and a second copy in the box would be the same video twice.
@@ -273,7 +287,13 @@ export function PlateAppearanceCard({
           className="play-detail-box"
           onClose={() => setOpen(false)}
         >
-          <PlateAppearanceDetail pa={pa} gamePk={gamePk} showVideo={showVideo} />
+          <PlateAppearanceDetail
+            pa={pa}
+            gamePk={gamePk}
+            name={name}
+            batterId={batterId}
+            showVideo={showVideo}
+          />
         </Modal>
       )}
     </div>
@@ -281,8 +301,132 @@ export function PlateAppearanceCard({
 }
 
 /**
- * What the card's accordion used to hold, unchanged: the handedness line, the
- * description, the batted ball, the pitch table and the strike zone.
+ * One of the two men in the matchup head — his headshot, his name and what hand
+ * he does it with, as a door into his page.
+ *
+ * **A door only where there is something behind it**, which is two tests and
+ * not one: an id (a name off the wire with no id is nobody this app can open)
+ * and a door in context (nothing outside `App`'s provider has one). Either
+ * missing and the block is the same block drawn as plain text, which is the
+ * rule `OpponentPress` and the MLB news list already keep — a press that does
+ * nothing is worse than no press.
+ *
+ * **The headshot and the name are two presses, not one**, exactly as a roster
+ * row and a feed item draw them: the circle and the word each open the page,
+ * and a reader who aims at either has hit it.
+ *
+ * The hand line is the whole of what the dialog's old `pa-hand` row said
+ * (`LHB vs Chris Bassitt (RHP)`), split between the two men it was about. Where
+ * MLB names no hand — which happens on an old cached day — the sub-line falls
+ * back to the role, so the block never loses the one word that says which of
+ * the two this is.
+ */
+function PaMan({
+  id,
+  name,
+  hand,
+  role,
+}: {
+  id: number | null;
+  name: string;
+  /** `L`/`R` off the plate appearance, or null. */
+  hand: string | null;
+  role: 'batter' | 'pitcher';
+}) {
+  const door = usePlayerDoor();
+  const [failed, setFailed] = useState(false);
+  const open = door && id !== null ? () => door(playerKey({ id, kind: role })) : null;
+  const sub = hand ? `${hand}H${role === 'batter' ? 'B' : 'P'}` : role === 'batter' ? 'Batter' : 'Pitcher';
+  const photo =
+    failed || id === null ? (
+      <div className="pa-mu-photo pa-mu-photo-empty" aria-hidden="true" />
+    ) : (
+      <img
+        className="pa-mu-photo"
+        src={headshotUrl(id)}
+        alt={name}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  return (
+    <span className={`pa-mu-man pa-mu-${role}`}>
+      {open ? (
+        <button
+          type="button"
+          className="pa-mu-photo-link"
+          title={`${name} — Statcast details`}
+          aria-label={`${name} — Statcast details`}
+          onClick={open}
+        >
+          {photo}
+        </button>
+      ) : (
+        photo
+      )}
+      <span className="pa-mu-id">
+        {open ? (
+          <button type="button" className="pa-mu-name pa-mu-press" onClick={open}>
+            {name}
+          </button>
+        ) : (
+          <span className="pa-mu-name">{name}</span>
+        )}
+        <span className="pa-mu-hand">{sub}</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * **Who faced whom**, at the head of the dialog: the batter, the pitcher, and
+ * each one's face and page.
+ *
+ * **It replaces the `pa-hand` line**, which said the same facts in nine
+ * characters of shorthand and one name (`LHB vs Chris Bassitt (RHP)`) and made
+ * only the *pitcher* nameable — the batter being, on the feed, the man whose
+ * header the item sat under, and on a dialog opened from anywhere else, nobody
+ * at all. A plate appearance is one man against another and this is the one
+ * place in the app that draws it as such; a reader who has just watched a clip
+ * of it wants the man who threw it as much as the man who hit it, and until now
+ * the pitcher's name here was text and his page was three navigations away.
+ *
+ * The pitcher's block is **mirrored** — name then face, reading inward — so the
+ * two headshots sit either side of the `vs` rather than both to the left of
+ * their names, which is the arrangement that says *these two are facing each
+ * other* rather than *here are two players in a list*.
+ */
+function PaMatchup({
+  pa,
+  name,
+  batterId,
+}: {
+  pa: PlateAppearance;
+  name?: string;
+  batterId?: number;
+}) {
+  const batter = name ? (
+    <PaMan id={batterId ?? null} name={name} hand={pa.stand} role="batter" />
+  ) : null;
+  const pitcher = pa.pitcherName ? (
+    <PaMan id={pa.pitcherId} name={pa.pitcherName} hand={pa.pThrows} role="pitcher" />
+  ) : null;
+  // Nothing to say and no box to say it in — the card's own rule for an absent
+  // foot, one dialog up.
+  if (!batter && !pitcher) return null;
+  return (
+    <div className="pa-matchup">
+      {batter}
+      {batter && pitcher && <span className="pa-mu-vs">vs</span>}
+      {pitcher}
+    </div>
+  );
+}
+
+/**
+ * What the card's accordion used to hold: the matchup head (which was a line of
+ * handedness shorthand), the description, the batted ball, the pitch table and
+ * the strike zone.
  *
  * Its own component rather than inlined into the dialog, because the pitch
  * table and the zone share a hover/tap highlight and that state belongs to the
@@ -292,10 +436,14 @@ export function PlateAppearanceCard({
 function PlateAppearanceDetail({
   pa,
   gamePk,
+  name,
+  batterId,
   showVideo,
 }: {
   pa: PlateAppearance;
   gamePk: number;
+  name?: string;
+  batterId?: number;
   showVideo: boolean;
 }) {
   const [activePitch, setActivePitch] = useState<number | null>(null);
@@ -305,15 +453,7 @@ function PlateAppearanceDetail({
   const contact = contactHighlight(pa);
   return (
     <div className="pa-detail">
-      {(pa.pitcherName || (pa.stand && pa.pThrows)) && (
-        <div className="pa-hand">
-          {pa.pitcherName
-            ? `${pa.stand ? `${pa.stand}HB ` : ''}vs ${pa.pitcherName}${
-                pa.pThrows ? ` (${pa.pThrows}HP)` : ''
-              }`
-            : `${pa.stand}HB vs ${pa.pThrows}HP`}
-        </div>
-      )}
+      <PaMatchup pa={pa} name={name} batterId={batterId} />
 
       <div className="pa-body">
         <div className="pa-main">

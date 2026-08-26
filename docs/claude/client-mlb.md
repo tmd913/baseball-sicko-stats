@@ -133,6 +133,53 @@ whole card is a `<button>`.
 - **No line score and no box.** Both are on the game's own page. Nine columns of
   runs across fifteen cards is that page at a resolution nobody can read.
 
+### A live card says who is in the middle of it
+
+Two things a card being *watched* is being watched for, and it had neither: who
+is pitching to whom, and who is on base. The slot the probables leave at first
+pitch stayed empty for the whole of a game — so on a fifteen-game Tuesday the
+nine finals each carried a decisions line and the six live cards carried
+nothing, holding the height the grid stretched them to with the one register
+that changes by the pitch blank. `2 out` in the head was the whole of what the
+board said about a game in progress.
+
+- **The foot carries `P {pitcher} vs AB {batter}`** and takes the probables'
+  own slot, which is the whole argument for putting it there: that slot already
+  means *the pitching matchup on this card*, and before first pitch the two
+  announced starters are what it is. Once somebody is on the mound, the man
+  there and the man facing him are the same fact **measured** rather than
+  promised — the card's own reason for dropping the probables, answered instead
+  of merely obeyed. `P` and `AB` are the vocabulary the final line already
+  reads in (`W`, `L`, `S`): a role, then who. Two bare names either side of a
+  `vs` would read as the two clubs' starters, which is exactly what the line
+  means one state earlier and no longer means here.
+- **`DUE` between halves.** MLB swaps its `offense` and `defense` blocks on the
+  third out, so a board on `Middle 6` carries the *bottom's* pitcher and its
+  leadoff man — a true and useful pair that nobody is yet batting against.
+  `Top`/`Bottom` is the half being played; anything else is the gap, and the
+  mark says so rather than claiming an at-bat.
+- **The situation is drawn, not said.** `2 out` in words was half of what a live
+  card is watched for, and the half the next pitch already implies. It is
+  `BaseDiamond` now — the feed's own glyph, runners filled and outs as two dots
+  — which says the count and who is on it in one mark. `.mlb-game-outs` went
+  with the words.
+- **Neither is a new read.** All three facts ride on the `linescore` hydration
+  the half-inning already comes from. What they cost is recorded in
+  `mlbScoreboard.ts`: 8,646 → 13,506 bytes on a finished day and 11,627 →
+  18,790 on a live one, nearly all of it `fields=` being a **flat** name filter
+  — `first`/`second`/`third` are the runners on one block and three infielders
+  on the other, so asking for the bases asks for the whole defensive alignment.
+  There is no per-path form to ask more narrowly.
+
+**Measured, and the bundle**: JS **740,536 → 742,162** raw and **216,355 →
+216,749** gzipped; CSS **190,883 → 191,885** and **34,022 → 34,179**. That
+covers this change and the two beside it in the same commit — the at-bat
+dialog's matchup head and the tab strip's cap.
+- **Null on anything not being played**, and that gate is the `probablePitcher`
+  fault read from the other end: MLB keeps sending a whole `offense`/`defense`
+  block hours after a game is over, which on a `Final` card would draw a live
+  matchup under a final score.
+
 `.mlb-games` is `repeat(auto-fill, minmax(300px, 1fr))` — 300 being the
 narrowest a card can be and hold a club's full name, its record and a two-digit
 score on one line — collapsing to one column below 430.
@@ -193,6 +240,17 @@ board that is always the season, which is what a standings page is.
 sixteen types and stop at `lastTen`, and `date=` gives the standings *as of* a
 day rather than the record *since* one. They come out of the season's own
 schedule, walked once, by the machinery the windowed board used to use.
+
+**`RS`, `RA` and `DIFF` sit straight after the race**, which is the one place
+on this board where the column order is an argument rather than a habit. `W`,
+`L`, `PCT` and `GB` are the standing; the three run columns are the nearest
+thing to a *reason* for it, and a differential read beside the record it
+produced is a different column from one read after eight columns of splits.
+They were after `STRK`, which put a five-game streak between the two figures a
+reader actually compares clubs on and left the runs adrift in the middle of the
+board. `STRK` loses nothing by the move: it joins `L10`, `L30` and the two
+halves, which are all one reading — *how has this club been going lately* — and
+are better for being adjacent.
 
 **`L30` is thirty games, not thirty days**, because it stands beside `L10` and
 that one is games. Two columns an inch apart, one counting games and one

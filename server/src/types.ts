@@ -2104,6 +2104,31 @@ export interface MlbScoreboardGame {
   inning: number | null;
   inningState: string | null;
   outs: number | null;
+  /**
+   * **Who is at the plate, who is on the mound, and who is on base** — the
+   * three facts a scoreboard card is being watched for, and all three are on
+   * the same `linescore` hydration the half-inning already comes from
+   * (`offense.batter`, `defense.pitcher`, `offense.first`/`second`/`third`).
+   * Measured: they cost nothing beyond the `fields=` names, the read staying at
+   * ~11KB for a fifteen-game day.
+   *
+   * **Null on anything not being played**, and that gate is not cosmetic: MLB
+   * goes on sending a whole `offense`/`defense` block on a game that finished
+   * three hours ago — the last man to bat, the last man to pitch — which on a
+   * `Final` card would be a live matchup drawn under a final score. It is the
+   * `probablePitcher` fault read from the other end.
+   *
+   * **Between halves the pair is the half about to be played.** MLB swaps
+   * `offense` and `defense` the moment an inning's third out is made, so a
+   * board on `Middle 6` carries the pitcher and the leadoff man of the bottom —
+   * measured on 2026-08-25, where a `Middle 6` game read `P Clay Holmes` with
+   * the other club's batter beside him and the bases cleared. The card says
+   * `DUE` rather than `AB` there, which is the only thing that would otherwise
+   * be a claim about a fact.
+   */
+  bases: BaseState | null;
+  atBat: { id: number; name: string } | null;
+  onMound: { id: number; name: string } | null;
   /** The ballpark, for the card's second line. */
   venue: string | null;
   /** Which game of the series this is, and how many there are — `Game 2 of 3`.

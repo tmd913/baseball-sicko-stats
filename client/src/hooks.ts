@@ -353,6 +353,36 @@ export function usePreviewDoor(): ((t: PreviewTarget) => void) | null {
 }
 
 /**
+ * **The one door into a player's page**, and the club door's and the game
+ * door's exact sibling — `App::openPlayer` and nothing else, which is the
+ * function that puts away whatever page is open, remembers it for the way back,
+ * and opens the man.
+ *
+ * A context rather than a prop for the reason those two are: the caller is a
+ * leaf. The at-bat dialog's matchup head is inside a `Modal` inside a card
+ * inside a `map`, drawn from three different trees — the feed's stream, a
+ * player card's game block and the game page's Plays tab — and only one of the
+ * three has the door in hand at the point the card is written. Threaded as an
+ * optional prop it would be four signatures and four chances for a call site to
+ * forget it, and a forgotten one does not fail: it silently stops being a link
+ * on one surface out of three.
+ *
+ * **It takes a key, not an id**, which is `openPlayer`'s own signature: a
+ * two-way player is two rows in this app and `batter-660271` is a different
+ * page from `pitcher-660271`. `playerKey` in `types.ts` is what builds one.
+ *
+ * Null outside the provider, and every caller draws plain text rather than a
+ * door that does nothing — the rule `useTeamDoor`'s callers already keep.
+ */
+export type PlayerDoor = (key: string) => void;
+
+export const PlayerDoorContext = createContext<PlayerDoor | null>(null);
+
+export function usePlayerDoor(): PlayerDoor | null {
+  return useContext(PlayerDoorContext);
+}
+
+/**
  * **The one door into a club's page.**
  *
  * `App::openTeam` and nothing else — the function that puts away whatever
