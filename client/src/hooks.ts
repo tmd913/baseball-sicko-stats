@@ -606,17 +606,45 @@ function budgetSticky(el: HTMLElement, height: number): void {
 export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | null>, RefObject<number>] {
   const ref = useRef<T>(null);
   const height = useRef(0);
+  /** Height *plus* the bar's bottom margin — see the note beside it below.
+   *  Seeded at -1 rather than 0 so the first sync publishes even a 0. */
+  const chromeSpace = useRef(-1);
   const sync = useCallback(() => {
     const el = ref.current;
     // Before the computed read below, which is what decides whether this bar
     // counts: the answer depends on the attribute this stamps.
     if (el) budgetSticky(el, el.getBoundingClientRect().height);
-    const pinned = el && getComputedStyle(el).position === 'sticky';
+    // **`fixed` counts as pinned, and it is the chrome's own answer now** — see
+    // `.app-chrome`, which is fixed rather than sticky because a sticky bar went
+    // unpainted for a frame after every view swap on iOS. The test is still
+    // *what the stylesheet says* rather than a second copy of the rules that
+    // decide it; what changed is that there are two spellings of yes. A bar that
+    // is more pinned than sticky must not read as a bar that stood down.
+    const pos = el && getComputedStyle(el).position;
+    const pinned = pos === 'sticky' || pos === 'fixed';
     // **Rounded down, never to nearest** — see `usePublishedHeight`, which is
     // the same measurement and the same reason: this number is the `top` the
     // date bar below is held at, so it has to be *at most* this bar's own
     // height or the two are a hairline apart with the page running through it.
-    const h = pinned ? Math.floor(el.getBoundingClientRect().height) : 0;
+    const h = el && pinned ? Math.floor(el.getBoundingClientRect().height) : 0;
+    // **The space the bar took in flow**, which is its height plus whatever
+    // bottom margin it is carrying on this view — 14px on the Overview, 0 on
+    // every view that puts a `.view-tools` row under it. A fixed box's margins
+    // move nothing, so `.app` has to give that whole number back and not just
+    // the height, or the Overview's first block comes up 14px. Measured rather
+    // than declared for the reason the height is: it is a function of which view
+    // is on screen, and there is no one number to declare.
+    //
+    // **Two properties rather than one**, because they answer different
+    // questions: `--chrome-h` is how far down the *window* the bar reaches (what
+    // the date bar pins under and what a scroll has to clear), and this is how
+    // much of the *page* it stopped occupying. They differ by that margin.
+    const gap = el ? Math.round(parseFloat(getComputedStyle(el).marginBottom)) || 0 : 0;
+    const space = h ? h + gap : 0;
+    if (space !== chromeSpace.current) {
+      chromeSpace.current = space;
+      document.documentElement.style.setProperty('--chrome-space', `${space}px`);
+    }
     if (h === height.current) return;
     height.current = h;
     document.documentElement.style.setProperty('--chrome-h', `${h}px`);
