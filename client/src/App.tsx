@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api } from './api';
 import { SignOutButton, Splash } from './auth';
 import { playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
-import { STANDARD_5X5 } from './categoryValue';
+import { projectedRowValue, STANDARD_5X5 } from './categoryValue';
 import type {
   BoardProjection,
   EspnOwnership,
@@ -165,8 +165,14 @@ import LeagueMatchupView, {
 } from './components/LeagueMatchup';
 import { MatchupBarsKey, MatchupCard, matchupLens } from './components/MatchupCard';
 import LeagueTeam from './components/LeagueTeam';
-import OverviewView, { TRENDING_TOP } from './components/OverviewView';
-import type { TrendingBoard, TrendingPlayer } from './components/OverviewView';
+import OverviewView, { TRENDING_CARD_WINDOWS, TRENDING_TOP } from './components/OverviewView';
+import type {
+  RailBoard,
+  TrendingBoard,
+  TrendingPlayer,
+  ValuePlayer,
+  ValueRail,
+} from './components/OverviewView';
 import type { MatchupReading } from './components/LeagueMatchup';
 import type { LeagueTab } from './components/LeagueView';
 import MlbView, { MLB_TABS } from './components/MlbView';
@@ -6146,7 +6152,13 @@ export default function App() {
   const trending = useMemo<TrendingBoard | null>(() => {
     const day = rosterTrend?.find((w) => w.window === 1);
     if (!day || !ownedIds || knownPlayers.length === 0) return null;
-    const rows: (TrendingPlayer & { seat: keyof TrendingBoard })[] = [];
+    // The windows the card draws, of the five the ownership read carries — see
+    // `TRENDING_CARD_WINDOWS`. Found once rather than per player, the list being
+    // five entries and the loop below six hundred.
+    const windows = TRENDING_CARD_WINDOWS.map((w) => rosterTrend?.find((x) => x.window === w)).filter(
+      (w): w is NonNullable<typeof w> => w != null,
+    );
+    const rows: (TrendingPlayer & { seat: keyof TrendingBoard; delta: number })[] = [];
     for (const p of knownPlayers) {
       const delta = day.delta.get(p.id);
       // Absent is flat and `null` is withheld — `rosterTrends`' own two
@@ -6154,6 +6166,12 @@ export default function App() {
       if (delta == null || delta <= 0) continue;
       // Rostered by anybody in this league is rostered — see the note above.
       if (ownedIds.has(p.id)) continue;
+      // **A window with no baseline is left off, not filled with a nought.**
+      // `rosterTrends` keeps those two absences apart on the research board and
+      // the card reads them the same way — an em dash where the server could
+      // not measure the span, and where ESPN has no roster % for the man at all.
+      const deltas: Partial<Record<TrendWindow, number | null>> = {};
+      for (const w of windows) deltas[w.window] = w.delta.get(p.id) ?? null;
       const espnPositions = eligibility?.get(p.id) ?? null;
       const seat: keyof TrendingBoard =
         p.kind === 'batter'
@@ -6179,6 +6197,11 @@ export default function App() {
         position: espnPositions?.join('/') || p.position || '',
         kind: p.kind,
         rosterPct: rosterPct?.get(p.id) ?? null,
+        // **The card prints three windows and is sorted on one**, so the row
+        // carries both: `deltas` is what is drawn and `delta` is the one-day
+        // move the list is ranked by, which the filter above has already
+        // established is a positive number.
+        deltas,
         delta,
         seat,
       });
@@ -6195,6 +6218,163 @@ export default function App() {
     // the block says nothing rather than drawing three empty rows.
     return board.batters.length || board.starters.length || board.relievers.length ? board : null;
   }, [rosterTrend, rosterPct, knownPlayers, eligibility, teamById, ownedIds]);
+
+  /**
+   * **The days the matchup has left**, which is what the value rail is drawn
+   * over — today through the last day of the period, or null once there is
+   * nothing left of it.
+   *
+   * **Today rather than tomorrow**, and that is the whole reason it is not
+   * `matchupWindow` itself: a manager reading this at nine in the morning has
+   * every one of today's games still to come, and dropping the day he is
+   * standing in would be the rail's single most useful column missing. The
+   * server clamps a start backwards of today forward for exactly this reason
+   * (`BoardProjection.start`), so a period already under way needs no arithmetic
+   * here beyond the max — and one that has not begun keeps its own first day.
+   *
+   * **Null past the end of the period**, where every day is played and there is
+   * nothing to project: the rail is absent rather than a rail of noughts, and
+   * `next` is deliberately not read for it. A projection of the matchup that
+   * has not started is a different reading with a different heading, and the
+   * roster's own Schedule view records the same decision about a `Next matchup`
+   * pill.
+   */
+  const valueSpan = useMemo(() => {
+    if (!matchupWindow) return null;
+    if (matchupWindow.end < today) return null;
+    return { start: matchupWindow.start > today ? matchupWindow.start : today, end: matchupWindow.end };
+  }, [matchupWindow, today]);
+
+  /**
+   * **The two projected boards the value rail is built from** — the whole
+   * league's batters and pitchers over those days, which is the same read the
+   * research board's projected lens makes and the same server cache behind it.
+   *
+   * **A composition, not a data source**, which is this page's own rule: no new
+   * endpoint, no new cache, no version bumped. Measured against the running
+   * server, warm: 58KB gzipped for the batters and 57 for the pitchers, both
+   * answering in under 30ms — the board is cached per kind and span and served
+   * to everyone alike, so a reader who has opened the lens has already paid for
+   * this and one who has not is warming it for himself.
+   *
+   * **It is not on the boot gate.** `App` holds the frame behind the `Splash`
+   * until the roster, the report and the league status have answered; this is
+   * not one of those, and a rail at the foot of the page is not worth a page
+   * that waits for it. The block is absent until it lands and then appears
+   * whole, which is what every other read on this page does.
+   *
+   * **Sequence-numbered**, the standing rule: a reader crossing a matchup
+   * boundary at 3am, or a league connecting late, has two of these in flight and
+   * only the newest may write. And the mark is set *before* the request rather
+   * than in an effect cleanup — the trap this codebase has recorded four times.
+   */
+  const [valueBoards, setValueBoards] = useState<{
+    span: { start: string; end: string };
+    batters: ResearchRow[];
+    pitchers: ResearchRow[];
+  } | null>(null);
+  const valueReadSeq = useRef(0);
+  useEffect(() => {
+    if (!espnConnected || !valueSpan) {
+      setValueBoards(null);
+      return;
+    }
+    const seq = ++valueReadSeq.current;
+    const { start, end } = valueSpan;
+    void Promise.all([
+      api.boardProjection('batter', start, end),
+      api.boardProjection('pitcher', start, end),
+    ])
+      .then(([b, p]) => {
+        if (seq !== valueReadSeq.current) return;
+        setValueBoards({ span: { start, end }, batters: b.rows, pitchers: p.rows });
+      })
+      .catch(() => {
+        // **A failure costs its own rail, never the page.** Every other block
+        // here is standing already, and a rail nobody can see is the honest
+        // shape of a projection that did not answer.
+        if (seq === valueReadSeq.current) setValueBoards(null);
+      });
+  }, [espnConnected, valueSpan]);
+
+  /**
+   * **Who is worth the most over the days the matchup has left** — the
+   * Overview's High Value rail, in the same three rows of ten the Trending rail
+   * takes and by the same rules.
+   *
+   * **The figure is `categoryValue.ts` over the span undivided**, which is
+   * exactly what the research board's `VAL` column prints and is scored against
+   * `scoringCategories` — the reader's own league, or the standard 5×5 without
+   * one. Six games of a good hitter outscore three of an equal one, and *who
+   * will give me the most this week* is the question a rail like this is read
+   * for. It is therefore not comparable to the day cards' `+1.4`, which is a
+   * single day.
+   *
+   * **Free agents only, and a null `ownedIds` draws nothing rather than
+   * everything** — both the Trending rail's rules, and for the Trending rail's
+   * reasons. A rail of the best players in baseball is a rail of men nobody can
+   * have; and a list that silently claims every player is available is the
+   * failure the research board names in as many words.
+   *
+   * **A row with no value is not on it.** `projectedRowValue` is null where the
+   * league scores nothing this can compute on his side of the ball, and a rail
+   * ranked on a figure has nothing to say about a player who has not got one.
+   * Nor is a row with no game to play: the board sends every man in the league
+   * and most of them will sit for part of a week, so `games` is the test that a
+   * projection exists at all — the same `0`-is-not-a-measurement reading the
+   * lens's own `Games` column takes.
+   *
+   * **The seat is ESPN's eligibility first and the row's own `starter` second**,
+   * where the Trending rail can only fall back to `starters`. The projected row
+   * carries the server's own definition of a starter, so a pitcher ESPN cannot
+   * be joined to is placed by the board rather than guessed at.
+   */
+  const highValue = useMemo<ValueRail | null>(() => {
+    if (!valueBoards || !ownedIds) return null;
+    const rows: (ValuePlayer & { seat: keyof RailBoard<ValuePlayer> })[] = [];
+    for (const r of [...valueBoards.batters, ...valueBoards.pitchers]) {
+      if (ownedIds.has(r.id)) continue;
+      if (!r.games) continue;
+      const value = projectedRowValue(r, scoringCategories);
+      if (value === null) continue;
+      const espnPositions = eligibility?.get(r.id) ?? null;
+      const seat: keyof RailBoard<ValuePlayer> =
+        r.kind === 'batter'
+          ? 'batters'
+          : espnPositions
+            ? espnPositions.includes('SP')
+              ? 'starters'
+              : 'relievers'
+            : r.starter
+              ? 'starters'
+              : 'relievers';
+      rows.push({
+        id: r.id,
+        name: r.name,
+        // The board already sends the abbreviation, where the season roster
+        // sends the club's full name — hence no `teamById` lookup here and one
+        // in `trending` above.
+        team: r.team,
+        position: espnPositions?.join('/') || r.position || '',
+        kind: r.kind,
+        rosterPct: rosterPct?.get(r.id) ?? null,
+        value,
+        games: r.games,
+        seat,
+      });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    const take = (seat: keyof RailBoard<ValuePlayer>): ValuePlayer[] =>
+      rows.filter((r) => r.seat === seat).slice(0, TRENDING_TOP);
+    const board = {
+      batters: take('batters'),
+      starters: take('starters'),
+      relievers: take('relievers'),
+    };
+    return board.batters.length || board.starters.length || board.relievers.length
+      ? { board, through: valueBoards.span.end }
+      : null;
+  }, [valueBoards, ownedIds, eligibility, rosterPct, scoringCategories]);
 
   /** Every player the season roster can place — what decides whether a league
    *  news row's name is a door, `openLeaguePlayer` below being the door itself
@@ -9400,6 +9580,8 @@ export default function App() {
           knownPlayers={knownPlayers}
           /* Who the league is picking up — see `trending`. */
           trending={trending}
+          /* …and who the projection likes for the rest of the week. */
+          highValue={highValue}
           dates={overviewDates}
           onOpenPlayer={openLeaguePlayer}
           onSeeDay={openOverviewDay}

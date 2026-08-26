@@ -22097,7 +22097,15 @@ html[data-theme='light'] .league-table thead th {
    and ten of them would squeeze to fit rather than overflow. */
 .trend-card {
   flex: none;
-  width: 116px;
+  /* **128px, where it was 116**, and the twelve pixels are the three moves the
+     card carries now in place of one figure. Measured at 11px tabular, the
+     widest cell on the live rail is `+13.8` at **34.5px**; a third of the old
+     card's 98px of content, less the 3px gaps, is 30.7. At 128 the column is
+     **34.7px** and no cell on the rail overflows one — measured across all
+     sixty, with nothing on a card ellipsized either. The same twelve pixels go
+     to the name and the `CLUB \u00b7 POS` line under it, which the block's own
+     note records as ellipsizing at the old width. */
+  width: 128px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -22165,5 +22173,66 @@ html[data-theme='light'] .league-table thead th {
 .trend-card-pct {
   font-size: 10px;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The three windows on a trending card ------------------------------- */
+/* **One figure became three**, because one was the wrong number to be alone
+   with: a four-point move overnight is a different player depending on whether
+   the week behind it reads `+4` or `+20`, and a single figure cannot tell them
+   apart. A grid rather than a flex row so the three columns are equal whatever
+   is in them — a card whose `1D` is `+0.4` and whose `7D` is `\u221212.4` would
+   otherwise put its labels at three different places and the rail would read as
+   ten different cards. */
+.trend-wins {
+  margin-top: 4px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 3px;
+}
+.trend-win {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+/* The span, over the move it names — the same small-uppercase-label-over-a-
+   figure the day cards' category line and `TOP PERFORMERS` already are. */
+.trend-win-lab {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+/* **Colored by direction, and monochrome where there is none.** Color is spent
+   on state, and rising and falling are the state — the research board's own two
+   colors for the same fact (`.research-trend-up`/`-down`), so a reader who has
+   learned them on a 44-column board reads them here without being told. A flat
+   `0.0` and an em dash take neither: a move of nothing is not a direction, and
+   an absence is not a fall. */
+.trend-win-val {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.trend-win-val.is-up {
+  color: var(--hit);
+}
+.trend-win-val.is-down {
+  color: var(--strikeout);
+}
+/* **The value rail's figure, and it is deliberately not `.trend-card-delta`.**
+   That one is green because every card on its rail is a riser — a state. This
+   is a ranking figure: it is already the reason the card is where it is on the
+   rail, and a color scale down a row of ten would be the ranking said twice.
+   Monochrome for the same reason `.ov-perf-val` is, and at the same size and
+   weight, so the one arithmetic reads as one figure on both blocks. */
+.trend-card-val {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
