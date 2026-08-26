@@ -11,6 +11,8 @@ import type {
   EspnTransactions,
   EspnRoster,
   EspnProjection,
+  EspnMatchup,
+  EspnMatchupSide,
   EspnScoreboard,
   EspnStatus,
   LeagueNews,
@@ -156,7 +158,13 @@ import LeagueView, {
   boardProjectable,
   showingProjected,
 } from './components/LeagueView';
-import LeagueMatchupView, { MatchupButton, SummaryToggle } from './components/LeagueMatchup';
+import LeagueMatchupView, {
+  MatchupButton,
+  OpponentToggle,
+  SummaryToggle,
+} from './components/LeagueMatchup';
+import { MatchupBarsKey, MatchupCard, matchupLens } from './components/MatchupCard';
+import LeagueTeam from './components/LeagueTeam';
 import OverviewView, { TRENDING_TOP } from './components/OverviewView';
 import type { TrendingBoard, TrendingPlayer } from './components/OverviewView';
 import type { MatchupReading } from './components/LeagueMatchup';
@@ -1095,6 +1103,58 @@ export default function App() {
   const [rosterSummary, setRosterSummary] = useState<boolean>(
     () => initialParams.get('rsum') === '1',
   );
+  /**
+   * **The matchup's own comparison card, in the Roster view** — this week's two
+   * teams category by category, in place of the date bar and the table.
+   *
+   * It was a **page** and it is a reading. The `Matchup` button opened the
+   * overlay every other door opens (`mup=`, a Back row, the body pinned), which
+   * is right for a matchup a reader *picked* — a Scoreboard card, a Rankings
+   * row, the Overview's card, any of the league's ten — and wrong for their
+   * own. There is exactly one of that, they are already on the page whose
+   * numbers it is about, and covering that page to show it put the two readings
+   * of one week (*what my players did*, *what that came to against him*) a
+   * screen apart with a Back button between them. So it is the first of the
+   * Roster's readings, and the overlay is left standing for the three doors
+   * that genuinely name a matchup — see `MatchupButton` in `LeagueMatchup.tsx`.
+   *
+   * **`rmup=1`**, by the rule `rproj=1` and `rsum=1` follow: it decides what is
+   * on screen, so a link that leaves it out describes a different page. `mup=`
+   * is the *overlay's* and stays that, which is this app's standing "two params
+   * must never mean two things" read from the other side — one names a matchup
+   * to open over whatever is behind it, the other says the Roster is on its
+   * comparison, and a link is read before anything on screen can say which.
+   *
+   * **Mutually exclusive with `rosterOpp`**, which is the pair's one rule: the
+   * card is about both managers and neither side's table, so it and a switch
+   * that says *whose rows these are* cannot both be lit. Neither lit is your own
+   * table, the run's own shape.
+   */
+  const [rosterMatchup, setRosterMatchup] = useState<boolean>(
+    () => initialParams.get('rmup') === '1',
+  );
+  /**
+   * **The whole Roster view, read for this week's opponent.**
+   *
+   * Not a lens over the table but a switch under it: the rows are his, and every
+   * control on the page goes on meaning what it meant — `Feed`, `Schedule`,
+   * `Projected`, `Summary`, the date bar, hide-injured, and a name that opens
+   * the player page. That is the whole of what it is for; it replaces crossing
+   * an overlay and a strip of three tabs to reach a page whose controls were a
+   * second set that had to agree with the ones behind it.
+   *
+   * **`opp=1`**, and in the URL for a stronger reason than the lenses beside it:
+   * it decides *whose players the page is about*, which is not a cut of the same
+   * data but different data entirely — a link that dropped it would show the
+   * recipient their own roster under a sentence about somebody else's.
+   *
+   * **It survives the Roster ↔ Feed crossing and nothing else.** Those two are
+   * one page (`isRosterView`), and which manager you are reading is not a fact
+   * about the table or the stream; crossing the *view* tabs is a leaving, and a
+   * lens is put away when its page leaves the screen — the rule `rproj=1`,
+   * `proj=1` and `rankproj=1` all follow. See the reset effect below.
+   */
+  const [rosterOpp, setRosterOpp] = useState<boolean>(() => initialParams.get('opp') === '1');
   const [rosterProjection, setRosterProjection] = useState<RosterProjection | null>(null);
   const [rosterProjLoading, setRosterProjLoading] = useState(false);
   /* **`beforeProjection` is gone.** It held the range the reader was on when
@@ -2365,11 +2425,19 @@ export default function App() {
    * None can collide: the app's other params are `preset`, `start`, `end`,
    * `player`, `expanded`, `view`, `kind`, `sim`, `hideil`, `sched`, `roster`,
    * `pos`, `cols`, `inc`, `scope`, `watch`, `win`, `help`, `mp`, `league`,
-   * `plays`, `newplays`, `oldest`, `noldest`, `proj`, `rproj` and `rsum`. (The
-   * last seven were missing from this list while it still claimed to be the
-   * whole of it — a list that is checked by reading it has to be complete or it
-   * checks nothing, which is also why `rsum` was added to it in the same breath
-   * as the reading it names.)
+   * `plays`, `newplays`, `oldest`, `noldest`, `proj`, `rproj`, `rsum`, `rmup`
+   * and `opp`. (Seven of those were missing from this list while it still
+   * claimed to be the whole of it — a list that is checked by reading it has to
+   * be complete or it checks nothing, which is why `rsum` was added to it in
+   * the same breath as the reading it names, and `rmup` and `opp` in the same
+   * breath as theirs.)
+   *
+   * **`rmup=` is the near-collision worth naming.** It is the *Roster's*
+   * comparison card and `mup=` is the overlay, and they are one letter apart
+   * because they are one idea apart: the overlay can carry any of the league's
+   * ten matchups and this one is always the reader's own. Two params rather
+   * than one value of one, for the reason `lspan=` is not `win=` — a link is
+   * read before anything on screen can say which surface wrote it.
    *
    * **`mup=` is absent for the reader's own matchup**, which is a *rule* rather
    * than a value — the same reasoning that keeps a date preset in the URL as
@@ -2404,8 +2472,8 @@ export default function App() {
    * app's other params are `preset`, `start`, `end`, `player`, `expanded`, `view`,
    * `kind`, `sim`, `hideil`, `sched`, `roster`, `pos`, `cols`, `inc`, `scope`,
    * `watch`, `win`, `help`, `mp`, `league`, `plays`, `newplays`, `oldest`,
-   * `noldest`, `proj`, `rproj`, `rsum`, `rankproj`, `cut`, `lt`, `mup`, `mt`,
-   * `mr`, `lspan`, `lwk`, `team`, `tside` and `game`.
+   * `noldest`, `proj`, `rproj`, `rsum`, `rmup`, `opp`, `rankproj`, `cut`, `lt`,
+   * `mup`, `mt`, `mr`, `lspan`, `lwk`, `team`, `tside` and `game`.
    *
    * **`mday=` is a day and `preset=` is not consulted for it.** The Scoreboard
    * carries its own day for the reason the Roster and the Feed carry their own
@@ -2563,7 +2631,15 @@ export default function App() {
    * board landed.
    */
   const projLensPage =
-    matchupPageOpen || (view === 'league' && leagueTab === 'scoreboard');
+    matchupPageOpen ||
+    (view === 'league' && leagueTab === 'scoreboard') ||
+    /* **And the Roster's own comparison card**, which is the third surface the
+       lens can be on and the same card as the first: it draws `MatchupCard`
+       with the same `projected` flag and the same `projection`, so the read,
+       the URL and the put-it-away rule all have to see it. Written into this one
+       test rather than beside each of the three, which is what this constant is
+       for. */
+    (view === 'summary' && rosterMatchup);
   const [rankSpan, setRankSpan] = useState<EspnRankSpan>(() => {
     const raw = initialParams.get('lspan');
     // **`matchup` is the default**, which is the week a manager opens this tab
@@ -2597,7 +2673,7 @@ export default function App() {
    * `end`, `player`, `view`, `kind`, `sim`, `hideil`, `starters`, `sched`,
    * `turn`, `plays`, `newplays`, `roster`, `pos`, `cols`, `inc`, `scope`, `watch`,
    * `win`, `help`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `proj`, `rproj`, `rsum`,
-   * `rankproj`, `league`.
+   * `rmup`, `opp`, `rankproj`, `league`.
    *
    * **A week is a range and is honestly one**, which is where it parts from a
    * date preset: `Week 12` is a fact about the league's calendar rather than a
@@ -2984,10 +3060,11 @@ export default function App() {
   );
 
   useEffect(() => {
-    // **Two surfaces read it** — the matchup page and the board it is opened
-    // from — and nobody else does, so a reader who never presses `Projected` on
-    // either never pays for four league-wide boards joined against every roster
-    // in the league. See `projLensPage`.
+    // **Three surfaces read it** — the matchup page, the board it is opened
+    // from, and the Roster's own `Matchup` reading — and nobody else does, so a
+    // reader who never presses `Projected` on one of them never pays for four
+    // league-wide boards joined against every roster in the league. See
+    // `projLensPage`, which is the one test all three go through.
     if (!projected || !projLensPage || !espnConnected) {
       // **Cleared on the way out, not only on the way in.** Turning the lens off
       // while a read is in flight discards its answer — and a flag left true is
@@ -3193,9 +3270,14 @@ export default function App() {
     // Scoreboard tab is**: it draws the same card off the same board, so a page
     // left open through an evening would otherwise show a week that stopped
     // moving at the moment it was opened.
+    // **And the Roster's `Matchup` reading is on this list for the same reason
+    // the Overview's block is**: it draws the same card off the same board, so a
+    // roster left open through an evening would otherwise show a week that
+    // stopped moving at the moment the button was pressed.
     if (
       ((view === 'league' && leagueTab === 'scoreboard') ||
         view === 'overview' ||
+        (view === 'summary' && rosterMatchup) ||
         matchupId != null) &&
       scoreboardLive
     ) {
@@ -3236,6 +3318,7 @@ export default function App() {
     view,
     leagueTab,
     matchupId,
+    rosterMatchup,
     scoreboardLive,
     rankSpanLive,
     matchupPeriod,
@@ -4360,7 +4443,29 @@ export default function App() {
     // player to be a cut *of* would name a lens that is not in force, which is
     // the rule `proj=` and `mt=` already follow.
     if (detailsKey && statsCut) p.set('cut', statsCut);
-    if (view !== 'summary') p.set('view', view);
+    /**
+     * **Written on every view, `summary` included** — where it used to be
+     * omitted as the default.
+     *
+     * The convention it followed is the app's own and is right for a *tab*: the
+     * first one is the one you land on, so `lt=scoreboard` and `mlb=scoreboard`
+     * are written and their defaults are not. What broke it is that `summary`
+     * stopped being the view a bare URL lands on. A connected reader's bare URL
+     * opens the **Overview** (`wantOverview`, which is `!has('view')` and says
+     * so in as many words: *a link that names one is a link that means it,
+     * `view=summary` included*), so the Roster's own URL was the one page in the
+     * app whose query string did not describe it — and a reload from the Roster
+     * read as a bare URL and moved the reader to the Overview.
+     *
+     * Reported as exactly that: *reloading no longer stays on the Roster tab.*
+     * The two halves had been consistent while `summary` was both the omitted
+     * default and the landing page; the Overview took the second half and the
+     * first was left where it was.
+     *
+     * Old links are unaffected in both directions — one with no `view=` still
+     * means *the league decides*, and one naming a view still means it.
+     */
+    p.set('view', view);
     // Only meaningful on the research view, and 'batters' is its default.
     if (view === 'research' && researchPos !== 'batters') p.set('pos', researchPos);
     // Likewise, with the whole season as the default. A window is the one page
@@ -4533,6 +4638,16 @@ export default function App() {
     // being the absence of the param. `rsum` because `proj`/`rproj` already show
     // what happens when one word has to mean two surfaces — see `rosterSummary`.
     if (rosterSummary) p.set('rsum', '1');
+    // …and the two that are not readings of *your* table: the comparison card in
+    // place of it, and the whole page read for the other manager. `rmup` rather
+    // than `mup`, which names the overlay and can carry any of the league's ten
+    // matchups — one param meaning two things in two places is the trap `rproj`
+    // exists to avoid, stated a third time. Scoped to nothing, like `rproj` and
+    // `rsum` beside them: the reset below is what keeps them off a link copied
+    // from another view, rather than a gate here that would let state and query
+    // string disagree.
+    if (rosterMatchup) p.set('rmup', '1');
+    if (rosterOpp) p.set('opp', '1');
     if (rosterSource === 'fantasy') p.set('roster', 'fantasy');
     if (helpOpen) p.set('help', '1');
     window.history.replaceState(null, '', `?${p.toString()}`);
@@ -4573,6 +4688,8 @@ export default function App() {
     boardRange,
     rosterProjected,
     rosterSummary,
+    rosterMatchup,
+    rosterOpp,
     rosterSource,
     helpOpen,
     playFilter,
@@ -4933,6 +5050,82 @@ export default function App() {
   ]);
 
   /**
+   * **My own row on this period's board** — the one the board says carries my
+   * team, which is what every surface about *my* week is drawn from.
+   *
+   * **One find rather than three.** This was two searches of the same array a
+   * thousand lines apart (`myMatchupId` for the door, and the Overview's own for
+   * the opponent) and is now the row itself, with the id and the other manager
+   * read off it below. Two copies of *which row is mine* are two chances for a
+   * button and the page it opens to disagree about the answer.
+   *
+   * Null means the board holds no row carrying this team at all — a period this
+   * manager is simply not in. **A bye is not that case**: ESPN publishes one as
+   * an ordinary matchup with no away side, so it is found here like any other,
+   * and what tells the two apart is `away`.
+   */
+  const myMatchup = useMemo(() => {
+    const me = scoreboard?.myTeamId;
+    if (!scoreboard || me == null) return null;
+    return scoreboard.matchups.find((x) => x.home.teamId === me || x.away?.teamId === me) ?? null;
+  }, [scoreboard]);
+  /** Its id — what `mup=` carries and what the overlay is opened on. */
+  const myMatchupId = myMatchup?.id ?? null;
+  /**
+   * **The comparison the Roster's `Matchup` reading draws**, which is my own row
+   * only where it has **two sides**.
+   *
+   * A bye is the case this excludes and the reason the test is here rather than
+   * at the draw site: `MatchupCard` is a comparison, and a card of one team
+   * would be a page whose whole content is the line the Scoreboard already
+   * draws. It is the same non-null the `Opponent` switch is drawn on, so on a
+   * bye week the run is four readings and neither of the two that are about
+   * somebody else — which is the honest answer to *there is nobody else*.
+   */
+  const myComparison = myMatchup?.away ? myMatchup : null;
+  /**
+   * **Who this manager is playing this week** — the other side of his own
+   * matchup, or null.
+   *
+   * Null on all three of the ways there can be nobody: no board yet, no matchup
+   * for this manager this period, and a **bye**, where his matchup has one side
+   * in it. Every surface that draws him is gated on this being non-null, so each
+   * of the three is answered by there being no section and no button rather than
+   * by a heading over a message.
+   *
+   * **Three readers, and it was named for the first of them.** The Overview's
+   * foot is one — three of his days beside three of yours — the Roster's
+   * `Opponent` switch is the second, which reads the whole view for him, and the
+   * third is the foot of his day cards, which is a door onto that switch.
+   */
+  const myOpponent = useMemo(() => {
+    const me = scoreboard?.myTeamId;
+    if (!myComparison || me == null) return null;
+    const otherId =
+      myComparison.home.teamId === me
+        ? (myComparison.away as EspnMatchupSide).teamId
+        : myComparison.home.teamId;
+    const team = scoreboard?.teams.find((t) => t.id === otherId);
+    return { teamId: otherId, name: team?.name ?? `Team ${otherId}` };
+  }, [myComparison, scoreboard]);
+
+  /**
+   * **Whose team the two roster views are drawing** — the reader's own, or this
+   * week's opponent where the `Opponent` switch is on.
+   *
+   * One id in one place, because five things downstream have to agree about it:
+   * the report, the projection, the slot chips, the lineups the starters
+   * divider reads, and the sentence the empty state prints. A second answer
+   * anywhere is a page drawing one manager's rows under another's arithmetic.
+   *
+   * Null is *the reader's own*, which is what `fantasyTeamId` already means and
+   * so needs no third state — the switch falls back to it wherever there is no
+   * opponent to name (no league, no board yet, a bye), which is also exactly
+   * where `OpponentToggle` is not drawn.
+   */
+  const rosterViewTeamId = rosterOpp && myOpponent ? myOpponent.teamId : fantasyTeamId;
+
+  /**
    * **The roster's projection**, read on the first press of `Projected` and
    * whenever the days, the roster or which list it is change.
    *
@@ -4950,6 +5143,9 @@ export default function App() {
    * window already fails in.
    */
   const projRead = useRef(0);
+  /** **Which team the projection in hand was read for** — see where it is
+   *  written, and `opponentPage`, which is its one reader. */
+  const rosterProjectionTeam = useRef<number | null>(null);
   const loadRosterProjection = useCallback(
     (quiet = false) => {
       // Sequence-numbered rather than canceled per run, which the poll below is
@@ -4958,10 +5154,26 @@ export default function App() {
       // rule is the app's own, that only the newest may write.
       const seq = ++projRead.current;
       if (!quiet) setRosterProjLoading(true);
+      const forTeam = rosterViewTeamId;
       return api
-        .rosterProjection(start, end, usingFantasy ? 'fantasy' : 'watchlist', fantasyTeamId)
+        /* **Whichever team the views are drawing**, which is the reader's own
+           unless `Opponent` is on — see `rosterViewTeamId`. Every parameter this
+           takes is one `/api/report` takes and both are handed the same id, so
+           the lines the lens draws describe the rows beside them. */
+        .rosterProjection(start, end, usingFantasy ? 'fantasy' : 'watchlist', rosterViewTeamId)
         .then((p) => {
-          if (seq === projRead.current) setRosterProjection(p);
+          if (seq !== projRead.current) return;
+          // **Whose answer this is, recorded with it.** The `Opponent` switch
+          // changes which team the lens is read for, and the read that was in
+          // flight when it was pressed is about the other one; a projection
+          // drawn over the wrong roster is one manager's rows under another's
+          // estimates, which is the fault `LeagueTeam`'s own team projection
+          // guards against on the matchup page in the same two lines. A ref
+          // rather than state: it is read at draw time beside the answer it
+          // describes, and a second render to carry it would be a render to say
+          // what the answer already knows.
+          rosterProjectionTeam.current = forTeam;
+          setRosterProjection(p);
         })
         .catch((e: Error) => {
           if (seq === projRead.current) console.error('reading the roster projection failed:', e.message);
@@ -4970,7 +5182,7 @@ export default function App() {
           if (seq === projRead.current && !quiet) setRosterProjLoading(false);
         });
     },
-    [start, end, usingFantasy, fantasyTeamId],
+    [start, end, usingFantasy, rosterViewTeamId],
   );
 
   useEffect(() => {
@@ -5171,28 +5383,6 @@ export default function App() {
     [usingFantasy],
   );
 
-  /**
-   * **Who the Overview's foot is about** — the other side of this week's
-   * matchup, or null.
-   *
-   * Null on all three of the ways there can be nobody: no board yet, no matchup
-   * for this manager this period, and a **bye**, where `mine` is a matchup with
-   * one side in it. The section is drawn on this being non-null, so each of the
-   * three is answered by there being no section rather than by a heading over a
-   * message.
-   */
-  const overviewOpponent = useMemo(() => {
-    const me = scoreboard?.myTeamId;
-    if (!scoreboard || me == null) return null;
-    const m = scoreboard.matchups.find(
-      (x) => x.home.teamId === me || x.away?.teamId === me,
-    );
-    if (!m || !m.away) return null;
-    const otherId = m.home.teamId === me ? m.away.teamId : m.home.teamId;
-    const team = scoreboard.teams.find((t) => t.id === otherId);
-    return { teamId: otherId, name: team?.name ?? `Team ${otherId}` };
-  }, [scoreboard]);
-
   useEffect(() => {
     if (view !== 'overview') return;
     // The same two waits every other roster read makes, and for the same
@@ -5268,7 +5458,7 @@ export default function App() {
    * eight reads can be in flight at once here and only the newest of each may
    * write.
    */
-  const overviewOppId = overviewOpponent?.teamId ?? null;
+  const overviewOppId = myOpponent?.teamId ?? null;
   useEffect(() => {
     if (view !== 'overview' || overviewOppId == null || !usingFantasy) return;
     setOvOppFired(true);
@@ -5473,7 +5663,19 @@ export default function App() {
    * pointing at, and on this commit that is still the view being left.
    */
   const openOverviewDay = useCallback(
-    (date: string) => {
+    /**
+     * `opponent` is which of the page's two carousels the press came from — the
+     * reader's own days, or the foot of the block about whoever he is playing.
+     * It decides one thing and decides it here rather than in the component:
+     * whose table the day opens on. See `rosterOpp`.
+     *
+     * **Set rather than left alone in both directions.** A press on your own
+     * card must clear the switch and a press on his must set it — the door
+     * names whose day it is, and a Tuesday that arrived on the wrong roster
+     * because the switch happened to be lit is the fault the opponent block's
+     * foot was withheld for until there was a switch at all.
+     */
+    (date: string, opponent = false) => {
       const label = date === today ? 'Today' : date < today ? 'Yesterday' : 'Tomorrow';
       const days = { start: date, end: date, preset: label };
       // Before the state below, for the reason the projected toggle states: the
@@ -5482,6 +5684,10 @@ export default function App() {
       setView('summary');
       setScheduleSpan(null);
       setRosterSummary(false);
+      // The comparison card is not a table and this door opens one, so it goes
+      // off with the other readings the press is not asking for.
+      setRosterMatchup(false);
+      setRosterOpp(opponent);
       if (date > today) {
         setRanges((prev) => ({ ...prev, projected: days }));
         setRosterProjected(true);
@@ -5491,6 +5697,13 @@ export default function App() {
       }
     },
     [today],
+  );
+  /** The same door, bound to the opponent — the foot of the Overview's second
+   *  carousel. Null with nobody to read, which is `myOpponent`'s own three-way
+   *  absence and what keeps that foot off a card with no page behind it. */
+  const openOverviewOppDay = useCallback(
+    (date: string) => openOverviewDay(date, true),
+    [openOverviewDay],
   );
 
   /**
@@ -5745,6 +5958,37 @@ export default function App() {
     if (view === 'summary') return;
     setRosterProjected((on) => (on ? false : on));
     setRosterSummary((on) => (on ? false : on));
+    /* **And the comparison card, which is the table's reading and not the
+       stream's.** It replaces the table, so it is one of the readings this
+       effect has always been about — crossing to the Feed puts it away exactly
+       as it puts the other two away, and every press that turns it on brings
+       the view back to `summary` first (see `matchupButton`), so this never
+       fires against a reader who is still looking at it. */
+    setRosterMatchup((on) => (on ? false : on));
+  }, [view]);
+
+  /**
+   * **The `Opponent` switch is put away one tier out**, and the difference from
+   * the three above is the whole of what it is.
+   *
+   * Those are readings of the *table*, so the Feed is a leaving for them. This
+   * is *whose players the page is about*, which the table and the stream answer
+   * equally well — a reader crossing to his opponent's feed has not stopped
+   * reading his opponent — so `Roster ↔ Feed` is a sub-selection inside one
+   * page and not a leaving, the same distinction the Rankings span strip is
+   * argued on. Crossing the **view tabs** is the leaving, and there the app's
+   * standing rule applies unchanged: a page opens on the reader's own roster
+   * unless a link says otherwise.
+   *
+   * **Navigation only, never a load.** `view` is seeded synchronously from the
+   * URL, so an inbound `?view=summary&opp=1` is already on its own surface on
+   * the first render and nothing fires. And a page opened *over* the roster —
+   * a player, a club, a game, a matchup — leaves `view` where it is, so none of
+   * them costs the switch.
+   */
+  useEffect(() => {
+    if (isRosterView(view)) return;
+    setRosterOpp((on) => (on ? false : on));
   }, [view]);
 
   /**
@@ -6844,25 +7088,6 @@ export default function App() {
    * there is more of itself to swipe to.
    */
   /**
-   * **My own matchup this period**, which is the whole subject of the `Matchup`
-   * tab — the board is what says which of its rows is mine (`myTeamId` against
-   * each side), so the tab has no subject until it lands.
-   *
-   * Null means the board holds no row carrying this team at all, which the tab
-   * has to answer for itself. **A bye is not that case** — ESPN publishes one
-   * as an ordinary matchup with no away side, so it is found here like any
-   * other and the page draws its own bye head, which is the honest answer and
-   * one this app already had. What is left for the empty state is a period this
-   * manager is simply not in.
-   */
-  const myMatchupId = useMemo(() => {
-    const me = scoreboard?.myTeamId;
-    if (!scoreboard || me == null) return null;
-    const m = scoreboard.matchups.find((x) => x.home.teamId === me || x.away?.teamId === me);
-    return m ? m.id : null;
-  }, [scoreboard]);
-
-  /**
    * **An old `?view=matchup` link, answered.** That param named the reader's own
    * week without naming a matchup, so the id has to come off the board — and
    * this is the one place in the app that turns a *want* into a `mup=`.
@@ -7353,32 +7578,108 @@ export default function App() {
 
 
   /**
-   * **The door onto this week's matchup, first in the readings run.**
+   * **This week's matchup, in place of the table — first in the readings run.**
    *
-   * It was the `Matchup` tab (see `mainTab`) and is a button here, opening the
-   * same page a Scoreboard card opens — over the view, with a Back row and
-   * Escape — rather than a page of the app. `setMatchupTeam(null)` with it, for
-   * the reason the Scoreboard's own door does it: the button names the matchup
-   * and nothing more, so it opens on the Summary in the middle rather than on
-   * whichever side an `mt=` link or an earlier press from the Rankings tab left
-   * named.
+   * It was the `Matchup` tab (see `mainTab`), then a **door** onto the overlay a
+   * Scoreboard card opens, and it is a reading now. The argument that took it
+   * out of the tab row is the one that has taken it out of the overlay: a page
+   * you open and come back from is right for a matchup you *picked*, and the
+   * reader's own week is not picked — there is one of it, they are already on
+   * the page whose numbers it is about, and covering that page put *what my
+   * players did* and *what that came to* a screen apart. So the press swaps the
+   * date bar and the table for the comparison card (`rosterMatchup`), and the
+   * overlay is left standing for the three doors that genuinely name a matchup:
+   * a Scoreboard card, a Rankings row, and the Overview's own card.
+   *
+   * **It clears `Opponent` and is cleared by it**, the pair's one rule: the card
+   * is about both managers and neither side's table, so the two cannot both be
+   * lit. It does *not* clear the four readings beside it — those are about the
+   * table it is standing in front of, and a reader who was on `Projected` when
+   * they pressed this is still on it when they press it again.
+   *
+   * **And it comes back to the table first**, exactly as `Schedule` and
+   * `Summary` do from the stream: the run is four wide and one deep, and a card
+   * drawn over the Feed would be a reading of a page nobody is on.
    *
    * **Drawn only once the board has answered with a matchup of the reader's
-   * own**, which is what the three empty states the tab used to carry have
-   * become. A button drawn on trust, pressed, and then answered with *no
-   * league* / *no board yet* / *no row for your team* is a control that promised
-   * something it could not do; `myMatchupId` is null in all three cases and the
-   * button is simply not there. The board is read on this view for exactly this
-   * — see `needsScoreboard`.
+   * own that has two sides in it**, which is what the three empty states the tab
+   * used to carry have become, plus a fourth. A button drawn on trust, pressed,
+   * and then answered with *no league* / *no board yet* / *no row for your team*
+   * is a control that promised something it could not do — and the fourth is a
+   * **bye**, which as a *page* had an answer (the overlay draws a bye head and
+   * that manager's roster) and as a *card* has none, a comparison of one team
+   * being the line the Scoreboard already draws. `myComparison` is null in all
+   * four and the button is simply not there, which is also exactly where
+   * `Opponent` beside it is not drawn: on a bye week there is nobody else, and
+   * the run says so by being four readings of your own rows. The board is read
+   * on this view for exactly this — see `needsScoreboard`.
    */
   const matchupButton =
-    myMatchupId !== null ? (
+    myComparison !== null ? (
       <MatchupButton
-        onOpen={() => {
-          setMatchupId(myMatchupId);
-          setMatchupTeam(null);
+        on={rosterMatchup}
+        onToggle={() => {
+          if (rosterMatchup) {
+            setRosterMatchup(false);
+            return;
+          }
+          if (view !== 'summary') setView('summary');
+          setRosterOpp(false);
+          /* **And the three readings of the table go off with it**, which is
+             the run's own rule and not a tidying: they are departures from the
+             plain table, one at a time, and this replaces the table outright.
+             Left on, `Summary` sat lit beside a lit `Matchup` over a card it
+             was not a reading of — measured on the live league, `Matchup,
+             Summary` in the row — which is exactly what this app forbids a
+             control from claiming. `FeedToggle` clears the same three for the
+             same reason one button along, and coming back lands on the plain
+             table the way coming back from the stream does. */
+          setScheduleSpan(null);
+          setRosterProjected(false);
+          setRosterSummary(false);
+          setRosterMatchup(true);
         }}
-        title="This week's matchup — the two teams category by category, and either roster"
+        title={
+          rosterMatchup
+            ? 'Back to your own table'
+            : "This week's matchup — the two teams category by category, in place of the table"
+        }
+      />
+    ) : null;
+
+  /**
+   * **The whole page, read for this week's opponent** — the second control in
+   * this run that is not about your own rows, and the one that retires the
+   * matchup page's two team pages as the only way to reach a leaguemate's.
+   *
+   * Everything else on the page goes on meaning what it meant: the same table,
+   * the same stream, the same days, `Schedule`, `Projected`, `Summary`,
+   * hide-injured and the player pages. That is the whole of it — see
+   * `rosterOpp`, and `rosterViewTeamId`, which is the one place the id lives.
+   *
+   * **Drawn only where there is somebody to read**, which is `myOpponent`'s own
+   * three-way null: no league, no board yet, and a **bye**. The bye is the case
+   * worth naming — a manager with a week and no opponent in it — and the honest
+   * answer is a run without this button rather than a button that opens an
+   * empty page. It is the same rule `matchupButton` above follows off
+   * `myComparison`, and the two are deliberately the **same** test read two
+   * ways: a bye has a matchup and no opponent, so neither a comparison nor a
+   * second roster exists to draw, and both controls go rather than one of them
+   * standing over an answer the other has already declined to give.
+   */
+  const opponentToggle =
+    myOpponent !== null ? (
+      <OpponentToggle
+        on={rosterOpp}
+        onToggle={() => {
+          setRosterMatchup(false);
+          setRosterOpp((on) => !on);
+        }}
+        title={
+          rosterOpp
+            ? 'Back to your own roster'
+            : `Read this page for ${myOpponent.name} — the same table, stream, days and readings, his players`
+        }
       />
     ) : null;
 
@@ -7551,10 +7852,13 @@ export default function App() {
           {leagueRankProjected}
           {rosterTools && (
             <>
-              {/* **Out of the table entirely, and so ahead of the four that stay
-                  in it** — this week's opponent as a page over this one. See
-                  `matchupButton`. */}
+              {/* **The two that are not readings of your own table, and so ahead
+                  of the four that are**: this week's matchup in place of it, and
+                  the whole page read for the other manager. They exclude each
+                  other and neither lit is your own rows — see `matchupButton`
+                  and `opponentToggle`. */}
               {matchupButton}
+              {opponentToggle}
               {/* The day as it happened, in place of the table — see `feedToggle`. */}
               {feedToggle}
               {/* The days ahead, in place of the stat columns — see `scheduleControl`. */}
@@ -7737,6 +8041,38 @@ export default function App() {
   );
 
   /**
+   * **The comparison card's own matchup**, and the week face that stands where
+   * the date bar does.
+   *
+   * The card is drawn only with a board holding a row of the reader's own with
+   * **two sides** in it. A bye has one, and `MatchupCard` is written for the
+   * comparison rather than for a single team — the matchup page answers a bye
+   * with a head of its own and that manager's roster, which is a page and not a
+   * card. Here the honest answer is simpler: the reading is not offered, so the
+   * three ways there can be no card (no league, no board yet, no row) and the
+   * fourth (a bye) all end in the same place — the plain table, and the button
+   * either absent (`myMatchupId`) or pressed to nothing.
+   */
+  const rosterMatchupRow = rosterMatchup ? myComparison : null;
+  /** The board's teams by id — the same map `LeagueMatchupView` builds for the
+   *  same card, and built here only while the card is on screen. */
+  const rosterMatchupTeams = useMemo(
+    () => new Map((scoreboard?.teams ?? []).map((t) => [t.id, t])),
+    [scoreboard],
+  );
+  /**
+   * **Whether the comparison is actually on screen**, which is the test every
+   * branch below reads rather than `rosterMatchup` itself.
+   *
+   * The flag says the reader pressed the button; this says there is a card to
+   * draw. (`matchupReading` is taken — it is the *matchup page's* own reading,
+   * `mr=` in the URL — which is why this is `matchupCardOn`.) They part for exactly one frame — a `?rmup=1` link landing before the
+   * board has — and in that frame the page is the plain table with its own
+   * dates, which is a better answer than a viewport-tall column emptied of both.
+   */
+  const matchupCardOn = rosterMatchup && rosterMatchupRow !== null;
+
+  /**
    * **The table's reading takes the tools row and the dates into its own
    * pane**, and this is the one test that decides it.
    *
@@ -7758,7 +8094,21 @@ export default function App() {
    * a roster page with no dates on it, which is exactly the state the full-page
    * mode's own rule forbids.
    */
-  const tableTakesChrome = view === 'summary' && !editMode && viewCards.length > 0;
+  /* **And two more tests than it had, one for each of the readings that are not
+     your own table.** The comparison card is not a table at all — it scrolls the
+     page, so there is no pane to put the rows in and `.app.summary-mode` is off
+     for it above. The `Opponent` switch *is* a table and takes the pane exactly
+     as your own does, but `viewCards` is the wrong list to ask: those are the
+     reader's rows, so a manager whose own hide-injured filter had emptied his
+     table would have his opponent's dates and tools thrown back into the page.
+     `LeagueTeam` draws `chrome` in every one of its branches, the empty and
+     failed ones included, so there is always a pane or a message to hand them
+     to — which is the same bargain `leagueTakesChrome` makes below. */
+  const tableTakesChrome =
+    view === 'summary' &&
+    !editMode &&
+    !matchupCardOn &&
+    (rosterOpp || viewCards.length > 0);
   /** The two rows, as the pane's own first children — see `tableTakesChrome`. */
   const paneChrome = tableTakesChrome ? (
     <>
@@ -7766,6 +8116,132 @@ export default function App() {
       {showRosterViews && dateBar}
     </>
   ) : null;
+
+  /**
+   * **The week the card's figures are of, in the date bar's place.**
+   *
+   * The bar's job on this page is to say *which days these numbers cover*, and
+   * on this reading the days are not the reader's to move: they are the fantasy
+   * week's, and the card is summed over them. So the row states them and offers
+   * nothing — which is exactly what the `Summary` lens's bar already does one
+   * reading over (`fixed`, no arrows, a `<div>` face), taken one step further
+   * because here there is no range to draw a bar around at all.
+   *
+   * **It is the matchup page's own head, minus the Back row** — `.mup-week` and
+   * its three spans, so a reader who has opened a matchup card from the
+   * Scoreboard sees the identical line over the identical card. `wideRange` is
+   * the app's one date face, which is what keeps this row and the roster's own
+   * bar from printing a live period's first day two different ways.
+   *
+   * **And the bars key rides with it**, which is where the matchup page puts it
+   * too and for the page's own reason: what it explains is ten category rows the
+   * reader is still going down, so it belongs in the chrome above them rather
+   * than in the card that scrolls away. `Projected` replaces `Live` rather than
+   * joining it — the tag says what the figures on the card *are*, and two of
+   * them would be the page claiming to be both.
+   */
+  const matchupFace =
+    rosterMatchupRow && scoreboard ? (
+      <div className="rmup-head">
+        <span className="mup-week">
+          <span className="mup-week-n">Week {scoreboard.matchupPeriod}</span>
+          {scoreboard.start &&
+            (() => {
+              /* The observed span truncates at today for a live week, which is
+                 right for figures that are what has happened and a lie over
+                 figures that reach the end of it — so the projection's own last
+                 day is printed while the lens is on. The Scoreboard's head and
+                 the matchup page's do the same thing with the same two fields,
+                 so no two of the three can print different weeks over the same
+                 numbers. */
+              const proj = matchupLens(scoreboard, rosterMatchupRow, projection, projected)
+                .showingProj;
+              const endDay = (proj ? projection?.end : null) ?? scoreboard.end;
+              return (
+                <>
+                  {endDay && (
+                    <span className="mup-week-dates">
+                      {wideRange(scoreboard.start as string, endDay)}
+                    </span>
+                  )}
+                  <span
+                    className={`lg-state${
+                      proj ? ' lg-state-proj' : scoreboard.live ? ' lg-state-live' : ''
+                    }`}
+                  >
+                    {proj ? 'Projected' : scoreboard.live ? 'Live' : 'Final'}
+                  </span>
+                </>
+              );
+            })()}
+        </span>
+        {scoreboard.format !== 'h2h-points' && (
+          <MatchupBarsKey categories={scoreboard.categories.length} />
+        )}
+      </div>
+    ) : null;
+  /**
+   * **This week's opponent's roster and feed, drawn as this very page.**
+   *
+   * `LeagueTeam` is the component the matchup page's two team pages are made of,
+   * and it is `SummaryTable` and `LiveFeed` over a `PlayerReport[]` of the
+   * app's own shape — which is the whole reason the `Opponent` switch is a
+   * switch rather than a door. One component, three callers now (two sides of a
+   * matchup, and this), so a leaguemate's row cannot come to read differently
+   * from the row beside it.
+   *
+   * **Every control on the page keeps its meaning**, and the props are the list
+   * of them: the days are the ones the bar says, the reading is which of the two
+   * roster views is on, `startersOnly` is the `Summary` lens, `schedule` is the
+   * Schedule view's index, `projection` is the projected lens (read for *his*
+   * team — see `rosterViewTeamId`), `hideInjured` is the settings menu's, and
+   * the play pills are the feed's own.
+   *
+   * **The projection is gated on the team it was read for**, which `LeagueTeam`
+   * cannot check for itself: the read is App's and fires on `rosterViewTeamId`,
+   * so for one commit after the switch is pressed the answer in hand is about
+   * the other manager. Drawn straight, that is one roster's rows under the
+   * other's estimates — the same fault the matchup page's own team projection
+   * guards against by holding the team it was read for beside it, which is what
+   * `rosterProjectionTeam` is.
+   *
+   * Keyed on the team, so crossing to him and back is a fresh page rather than
+   * one manager's rows standing under the other's name while the read is out —
+   * the matchup page's own rule for the same component.
+   */
+  const opponentPage =
+    rosterOpp && myOpponent ? (
+      <LeagueTeam
+        key={myOpponent.teamId}
+        teamId={myOpponent.teamId}
+        team={rosterMatchupTeams.get(myOpponent.teamId)}
+        start={start}
+        end={end}
+        reading={view === 'feed' ? 'feed' : 'roster'}
+        startersOnly={rosterSummary}
+        hideInjured={hideInjured}
+        lens={feedLens}
+        onLens={selectFeedLens}
+        schedule={view === 'summary' ? scheduleIndex : null}
+        projection={
+          view === 'summary' &&
+          rosterProjected &&
+          rosterProjectionTeam.current === myOpponent.teamId
+            ? rosterProjection
+            : null
+        }
+        onOpenDetails={openPlayer}
+        /* **The pane's chrome on the table reading and nothing on the stream's**,
+           which is App's own split stated from the other side: the table is a
+           fixed-height column whose pane owns the scroll, so the bar and the
+           header row have to stick against the same scrollport; the stream
+           scrolls the page and the two rows are drawn above it up in the render
+           (`!tableTakesChrome`). Handing them down twice would draw two of
+           each. */
+        chrome={view === 'summary' ? paneChrome : undefined}
+      />
+    ) : null;
+
   /**
    * **And the Rankings tab takes the tools row into its own pane for the
    * identical reason.** `.app.league-rank-mode` is the same viewport-tall flex
@@ -7982,7 +8458,9 @@ export default function App() {
       /* `summary-mode` is the fixed-height flex column the table needs, and
          the edit screen is a long scrolling list that must not be trapped in
          one — it took this page over when Edit moved off the Games view. */
-      className={`app${view === 'summary' && !editMode ? ' summary-mode' : ''}${
+      className={`app${
+        view === 'summary' && !editMode && !matchupCardOn ? ' summary-mode' : ''
+      }${
         view === 'research' ? ' research-mode' : ''
       }${
         /* `matchup-mode` stood here and is gone with the tab it existed for.
@@ -8704,7 +9182,15 @@ export default function App() {
           arrangement: the tools row in the flow, the bar sticky under the
           pinned chrome. */}
       {!tableTakesChrome && !leagueTakesChrome && viewTools}
-      {!tableTakesChrome && isRosterView(view) && showRosterViews && dateBar}
+      {/* **The days, or the week they are not the reader's to pick.** On the
+          `Matchup` reading the card is summed over the fantasy week and there is
+          nothing here to step, so the bar's place is taken by a row that states
+          it — see `matchupFace`. One or the other, never both: two rows naming
+          two spans over one card is the state this must not be in. */}
+      {!tableTakesChrome &&
+        isRosterView(view) &&
+        showRosterViews &&
+        (matchupCardOn ? matchupFace : dateBar)}
 
       {/* `!usingFantasy`, because this block is about the *saved* list and in
           fantasy mode the views are not reading it: a user with an ESPN team
@@ -8852,7 +9338,34 @@ export default function App() {
           /* The same board the League page draws, and the same one the Roster's
              own `Matchup` button is found on — one read, three doors. */
           board={scoreboard}
+          /**
+           * **This card is the reader's own week, so it opens where the reader's
+           * own week lives** — the Roster view's `Matchup` reading, which is the
+           * identical `MatchupCard` off the identical board.
+           *
+           * It opened the overlay, which is what the Scoreboard's cards and the
+           * Rankings' rows still do and is right for them: those name **any** of
+           * the league's ten, so the reader has picked a subject and a page they
+           * come back from is the shape for it. This one can only ever name one
+           * — the block is drawn on `mine` — so covering the page to show it was
+           * a popup for a card the app could simply *be* on.
+           *
+           * **A bye still opens the overlay**, and that is the one branch rather
+           * than an inconsistency: a bye has a *page* (its own head over that
+           * manager's roster and feed) and no *card*, a comparison of one team
+           * being the line this very block already draws. The Roster's reading
+           * is the card, so it is not offered there either — see `myComparison`.
+           */
           onOpenMatchup={(id) => {
+            if (myComparison?.id === id) {
+              setView('summary');
+              setRosterOpp(false);
+              setScheduleSpan(null);
+              setRosterProjected(false);
+              setRosterSummary(false);
+              setRosterMatchup(true);
+              return;
+            }
             // A card names the matchup and nothing more, so it opens on the
             // Summary in the middle — the same press the Scoreboard's cards make.
             setMatchupId(id);
@@ -8875,7 +9388,7 @@ export default function App() {
           oppLoadingYesterday={ovOppYesterdayLoading}
           oppLoadingTomorrow={ovOppTomorrowLoading}
           oppLoadingTodayProjection={ovOppTodayProjLoading}
-          opponentName={usingFantasy ? overviewOpponent?.name ?? null : null}
+          opponentName={usingFantasy ? myOpponent?.name ?? null : null}
           todayLineup={ovToday?.lineup ?? null}
           yesterdayLineup={ovYesterday?.lineup ?? null}
           loadingToday={ovTodayLoading}
@@ -8890,6 +9403,7 @@ export default function App() {
           dates={overviewDates}
           onOpenPlayer={openLeaguePlayer}
           onSeeDay={openOverviewDay}
+          onSeeOppDay={myOpponent ? openOverviewOppDay : null}
           connected={espnConnected}
           /* Whether every read behind this page has answered — see
              `overviewSettled` above, which is the one thing the view is not
@@ -9103,6 +9617,36 @@ export default function App() {
           <div className="content-layout">
             {editPage}
           </div>
+        ) : matchupCardOn ? (
+          /* **The comparison, in place of the table** — the same card the
+             matchup page's middle reading draws and the same one a Scoreboard
+             press opens, off the same board and under the same lens. See
+             `MatchupCard.tsx`.
+
+             `matchupCardOn` rather than `rosterMatchup` is what makes the two
+             branches below it the fallback: a bye and a board that has not
+             landed both leave nothing to draw, and there the page is the plain
+             table with its own dates rather than an empty state that would be
+             wrong a moment later. */
+          <MatchupCard
+            board={scoreboard as EspnScoreboard}
+            matchup={rosterMatchupRow as EspnMatchup}
+            teams={rosterMatchupTeams}
+            projection={projection}
+            projected={projected}
+            projectionLoading={projLoading}
+            onProjected={setProjected}
+            /* Already in hand: the transactions feed is read once on boot for a
+               connected reader, for the dot on the Fantasy pill, so the Moves
+               section costs this page no read of its own. */
+            transactions={transactions}
+            onOpenPlayer={openLeaguePlayer}
+          />
+        ) : opponentPage ? (
+          /* **His table, where yours would be** — see `opponentPage`, which is
+             the same `LeagueTeam` the matchup page's two team pages are and
+             takes the pane chrome the same way this branch does. */
+          opponentPage
         ) : (
         viewCards.length > 0 && (
           <SummaryTable
@@ -9117,8 +9661,19 @@ export default function App() {
             schedule={scheduleIndex}
             /* Null while the lens is off *and* while its one read is still
                out, so the report's own figures stand until the projection can
-               be added to them. */
-            projection={rosterProjected ? rosterProjection : null}
+               be added to them.
+
+               **And while the answer in hand is about the other manager**, which
+               is what the `Opponent` switch made possible: the read fires on
+               `rosterViewTeamId`, so for one commit after crossing back the
+               projection is his. Drawn straight, that is his estimates on your
+               rows — the same fault `opponentPage` guards against from the other
+               side, and one ref answers both. */
+            projection={
+              rosterProjected && rosterProjectionTeam.current === fantasyTeamId
+                ? rosterProjection
+                : null
+            }
             /* Who sits above the `Total` row, which is a divider inside the
                table now rather than a pinned foot — see `starterKeys` and
                `SummaryTable.tsx::splitStarters`. */
@@ -9159,6 +9714,13 @@ export default function App() {
           />
         )
         )
+      ) : opponentPage ? (
+        /* **His stream, where yours would be.** `LeagueTeam` draws the play
+           pills itself, at the head of the feed and inside the same guard as it
+           — which is why `feedFilterPills` is not rendered beside this: a row of
+           pills over an empty page would be a control over nothing, and that
+           component's two empty states already name their own cause. */
+        opponentPage
       ) : (
         viewCards.length > 0 && (
           <>

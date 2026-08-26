@@ -293,6 +293,118 @@ page-body overflow.
 gzipped) — 0.42KB and 0.03KB raw, 0.16KB over the wire between them, for one
 derived boolean, two latches, a gate and one `padding-top`.
 
+#### And `See the day` is drawn on them now
+
+*(This reverses the paragraph above it, which is left as written because what
+changed is not the button.)*
+
+That paragraph said: *the door it opens is the Roster view, which is yours — a
+press promising somebody else's Tuesday and delivering your own would be worse
+than no press at all*. Every word of it was true, and it was an argument about
+the **destination** rather than about the card. The Roster view has an
+`Opponent` switch now (**Client — the Roster view**, *This week's matchup, and
+this week's opponent*), so the destination can be about him: the same table, the
+same day, his players. The foot that could not be drawn is the foot this block
+most wanted — a card that says his Tuesday came to 5 runs and two homers, with a
+press that answers *which of his men*.
+
+**The same button and the same `onSeeDay`; what differs is where it lands.**
+`onSeeOppDay` is a prop of its own rather than a flag on the first one, because
+the two are different destinations and the page that owns a destination is
+`App.tsx`: one callback taking *whose* would put half a navigation decision in
+the component that only knows which card was pressed. It is null where the app
+cannot offer it, which is `myOpponent`'s own three-way absence — so the foot is
+drawn on his cards exactly when there is a page behind it, and `onSeeDay`'s
+nullability goes on doing the job it was written for.
+
+**The door sets the switch in both directions**, which is the half that makes it
+safe: `openOverviewDay(date, opponent)` writes `rosterOpp` rather than leaving
+it, so a press on your own card clears it and a press on his sets it. A Tuesday
+that arrived on the wrong roster because the switch happened to be lit is
+precisely the fault the foot was withheld for.
+
+**Its `title` names him rather than the categories.** On your own cards that
+tooltip carries which set the ranking was made over, which is the more useful
+fact there and is also on the `Top Performers` heading; here the useful fact is
+*whose page this opens*. `seeDayTitle` is the one optional prop that goes down
+to `DayBlock` for it, and it reads `Read Baldy's Bozos’ roster over this day` —
+through `lib.ts::possessive`, because half this league's names end in an `s` and
+`Baldy's Bozos’s` reads as a typo. That function was `LeagueTeam.tsx`'s own,
+where it put a team name in a slot chip's title; it is in `lib.ts` now for
+`wideRange`'s reason one function along — a second caller.
+
+**Driven at 1200 on the live league.** Both carousels draw **three** feet each;
+the reader's three read `See the day` with the categories in the tooltip, his
+three read `See the day` with
+`Read Baldy's Bozos’ roster over this day`. Pressing his `TODAY` foot lands on
+`?preset=Today&view=summary&opp=1&roster=fantasy`, with the **Roster** tab
+active, `Opponent` lit, the bar on `TODAY · Tue, Aug 25` and **28** of his rows
+in the table.
+
+### The card opens the Roster's reading, and stops marking itself
+
+**Two changes to the one card at the head of this page**, and both come from the
+same fact about it: it is the reader's **own** matchup and can never be
+anybody else's.
+
+**It opened the overlay and now opens the Roster view's `Matchup` reading** —
+the identical `MatchupCard` off the identical board, in place of the roster
+table (**Client — the Roster view**, *This week's matchup, and this week's
+opponent*). The overlay is right where the reader has **picked** a subject: the
+Scoreboard's cards and the Rankings' rows can name any of the league's ten, so a
+page you come back from is the shape for it. This block is drawn on `mine`, so
+there is one subject and the reader has picked nothing; covering the page to
+show it was a popup for a card the app can simply *be* on. Driven: a press goes
+to `?preset=Today&view=summary&rmup=1&roster=fantasy`, **Roster** active, the
+card in the page and no `.mup-view` anywhere.
+
+**A bye still opens the overlay**, which is a branch rather than an
+inconsistency: a bye has a *page* — its own head over that manager's roster and
+feed — and no *card*, a comparison of one team being the line this block already
+draws. The Roster's reading is the card, so it does not offer one either, and
+`myComparison` is the single test both sides read.
+
+**And the card no longer marks itself as the reader's own.** `mineTag` is
+`markMine` now and governs the accent border with the label. That prop already
+suppressed the `Your matchup` tag here on the rule that *a mark which would be
+on every row marks nothing*; what it left was the border, on the stated grounds
+that it costs no space and carries the statement into a screenshot. Costing no
+space is not the test — **marking one row among others** is, and on a page with
+one card there are no others, so an accent border reads as a state the card is
+*in* rather than as which card it is. Measured after: `class="lg-matchup"` with
+no `lg-mine`, border `rgb(70, 65, 90)` (the plain `--border`), and no
+`.lg-mine-tag` on the page. The Scoreboard's ten are untouched — they pass the
+default.
+
+### `Top Performers` sits off the category line
+
+**The label was flush on the twenty figures above it.** Measured at 1200 on a
+live card, the block's rhythm is 8px between every pair of children — head →
+categories 8, list → foot 8 — and this one pair was **0**, so a heading whose
+whole job is to say *what the three rows under it are* read as the last line of
+the thing above it.
+
+**14 above against the list's 8 below**, deliberately unequal: at 8/8 a label is
+equidistant from the thing it names and the thing it does not. 14 is the app's
+own second interval — the chrome's gap, `.app`'s own padding — rather than a
+number invented for this card. Measured at 1200 and 390: gap above **0 → 14**,
+gap below **8** unchanged and page-body overflow 0. The card grows by the 14 —
+**354 → 368px at 1200**, and 370 at 390, where the carousel stretches its three
+to one height and the tallest of them sets it.
+
+**The rule was written three times and only the third one was doing anything.**
+`.ov-perfs-head`'s six declarations appeared **twice** in the top-performers
+section — byte-identical, each under its own copy of the same comment — and a
+third time in the trending block, where `.trend-row-head` folded onto it by
+restating them in a shared selector list. A later single-class rule wins on
+source order, so `margin: 0` down there beat anything written up here: the top
+margin was put in the first copy and **measured no change**, which is how the
+duplication was found. The fold stands and is where the shape lives; the two
+copies are gone, and the one thing that is this label's alone and not the rail's
+— the gap — is declared immediately after it. It is the trap
+`.date-row .date-presets` and the narrow-screen blocks already record, arrived at
+from a third direction.
+
 ### The page arrives all at once, or not at all
 
 **Nine reads answer over about a second, and the page used to draw each of them
@@ -616,6 +728,10 @@ the label is what says *which* of ten cards is yours; here there is exactly one
 card and it is yours by construction. `MatchupCard` grew a `mineTag` prop for
 it — the accent border stays either way, costing no space and carrying the
 statement into a screenshot.
+
+*(The last sentence is superseded: the prop is `markMine` and the border goes
+with the label. See* The card opens the Roster's reading, and stops marking
+itself *above, which is where the reversal is argued.)*
 
 ### The foot is one control, and it is drawn as one
 

@@ -23,8 +23,8 @@ is gated on a connected ESPN league. Four references, split by surface.
   **Scoreboard** tab whose cards are the door to a matchup.
 
 - **Read `docs/claude/client-league-matchup.md`** before editing
-  `LeagueMatchup.tsx`, `LeagueTeam.tsx`, `MatchupSeriesChart.tsx` or
-  `Projection.tsx` — the matchup as a page over the view: the Summary's
+  `LeagueMatchup.tsx`, `MatchupCard.tsx`, `LeagueTeam.tsx`,
+  `MatchupSeriesChart.tsx` or `Projection.tsx` — the matchup as a page over the view: the Summary's
   categories down the middle, the bar scale and the whole-matchup meter, the
   Projected toggle (this page's alone), the acquisitions and moves, the
   day-by-day category chart, and the two team pages, which are the app's own
@@ -44,4 +44,7 @@ is gated on a connected ESPN league. Four references, split by surface.
 
 `sicko-espn` for every read behind this page and for `STAT_META`. `sicko-mlb`
 for the tab beside it, which is the *actual* league.
-`sicko-roster` and `sicko-feed`, which a team page draws.
+`sicko-roster` and `sicko-feed`, which a team page draws — and which draw
+*this* surface back: the Roster view has its own `Matchup` reading (the same
+`MatchupCard`) and an `Opponent` switch (the same `LeagueTeam`), so a change to
+either component wants both documents.

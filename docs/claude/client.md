@@ -150,6 +150,15 @@ they say about the page — one component, `myMatchupId`, a bye being an ordinar
 matchup — is unchanged and is why the change is as small as it is; what has gone
 is the second **drawing** of it.)*
 
+*(And the button no longer opens the overlay: it is a **reading** of the Roster
+view, drawing the comparison card in place of the table. The strip is still
+three, this section's argument about what a tab is for is unchanged and is what
+took it out; what has changed is where it leads. A bye no longer draws it at
+all, a comparison of one team having nothing to compare. See **Client — the
+Roster view**, *This week's matchup, and this week's opponent*, and note that
+what `matchupPageOpen` names below is the **overlay**, which the other three
+doors still open.)*
+
 **Roster · Research · League**, and `Matchup` is the first control in the
 Roster's own tools row. The argument that made it a tab is the one that takes it
 away again: a tab says *which page of the app you are on*, and this week's
@@ -294,6 +303,35 @@ of the view tabs — the same rule, written about *a lens* rather than about the
 projection, and this one moves the days as hard as that one does. Not drawn at
 all where `matchupDays` is null, which is one test for three cases: no league, no
 window yet, and a period whose first day is still ahead.
+
+### `view=summary` is written out, because a bare URL no longer means it
+
+**A reload from the Roster landed on the Overview**, which is what it was told to
+do and not what anybody wanted. Reported in as many words: *reloading no longer
+stays on the Roster tab.*
+
+Two rules had been consistent and one of them moved. `view=` followed the app's
+own tab convention — the first tab is the one you land on, so its value is the
+omitted default, exactly as `lt=scoreboard` and `mlb=scoreboard` are written and
+their defaults are not. And `wantOverview` is `!initialParams.has('view')`, which
+says in as many words that *a link that names one is a link that means it,
+`view=summary` included*. Both were right while `summary` was **both** the
+omitted default and the page a bare URL landed on. The section above took the
+second half and left the first where it was, so the Roster's own URL became the
+one page in the app whose query string did not describe it — and a reload read as
+a bare URL.
+
+So the writer is unconditional: `p.set('view', view)`. The convention it drops is
+a convention about **tabs whose default is the landing page**, which this one
+stopped being; it still holds for the three that are. Old links are unaffected in
+both directions — one with no `view=` still means *the league decides*, one
+naming a view still means it.
+
+**Driven on the live app**: a bare `/` lands on `Overview` and writes
+`?preset=Today&view=overview&roster=fantasy`; the Roster writes
+`…&view=summary&roster=fantasy` and a reload of exactly that string comes back to
+**Roster**; and `?…&opp=1` and `?…&rmup=1` each open on the Roster's own reading
+of them rather than on the Overview.
 
 ### The boot gate: nothing is drawn until the app knows what it is drawing
 

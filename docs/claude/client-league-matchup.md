@@ -1633,6 +1633,64 @@ eye already is, and here there is no second column so it read as a word adrift
 which in a 12-team league's first playoff round is eight of the ten cards,
 leaving it off would put his own team out of reach entirely.
 
+### The card is a component, and the button is a reading
+
+*(This supersedes the section below it in one respect — where the `Matchup`
+button leads — and nothing else. Everything that section says about the page
+**itself** is unchanged, and the page is still what a Scoreboard card, a
+Rankings row and the Overview's card open.)*
+
+**The comparison is `components/MatchupCard.tsx` now**, lifted whole out of this
+file: the two heads, the meter, the categories down the middle, the bar scale
+(`categorySpread`, `barShare`), the category winner (`winnerOf`), the
+`Projected` toggle at the foot of them, the acquisitions and the moves
+(`movesFor`, `MovesColumn`), and the day-by-day chart a category row opens. It
+had one drawing and now has two — the Roster view's own `Matchup` reading draws
+it where its table would be — which is the point at which this repo extracts
+rather than copies, the rule that made `SummaryTable`, `DateBar`,
+`ScheduleToggle` and `BackButton` one component apiece.
+
+**What stayed behind is the page's furniture**: the Back row, the week face, the
+strip of three, the team pages, and the bye head. That split is the same one the
+component's own note makes — the card is the comparison, and everything else on
+this page is *how you got to it*.
+
+**Two things cross the boundary and both are exported with the card.**
+`matchupLens` answers *is the card drawing the projection*, which this page's
+head needs for its `Projected` tag: two copies of that test are two chances for
+a tag to stand over figures that are not projected, and the tag and the figures
+now come from one answer. `MatchupBarsKey` is the panel, because it is drawn
+**outside** the card on both surfaces — in this page's pinned band and beside
+the Roster's week face — for the reason stated where it is placed: what it
+explains is ten rows the reader is still going down, and a key inside a card
+that scrolls has gone by the time it is wanted.
+
+**What this page lost is a computation, not a behavior.** `shown` — the matchup
+under the lens — is gone from here; the two sides it reads are the matchup's
+own, because the only readers left up here are the strip, the bye head and the
+acquisition cells beside it, and every one of them wants the live figures.
+(`asProjected` preserves team ids by construction, so the strip was never
+affected; the acquisitions are the case that matters, and that function keeps
+them off the projected side precisely because a manager's moves are a fact about
+the period so far.) `projectable` went with the toggle it gated, which is inside
+the card now — `matchupProjectable` is where that test lives.
+
+**Re-driven from the Scoreboard, unchanged**: a card opens `mup=119` at
+1200 × 900, the pinned band **114px** with the bars key in it, the card **896px**,
+the strip `BOZO · Matchup · B&T`, ten category rows, `R` opening
+`Runs — week 20` with its chart, one press of Escape closing that chart and
+leaving the matchup standing, and the `BOZO` tab drawing his 28 rows in
+`roster-mode`.
+
+**And the `Matchup` button on the Roster is a reading rather than a door**,
+which is the section below read one step further and is argued where it lands —
+see **Client — the Roster view**, *This week's matchup, and this week's
+opponent*. In one line: a page you open and come back from is right for a
+matchup you **picked**, and the reader's own week is not picked. The two team
+pages this page carries are likewise no longer the only way to a leaguemate's
+roster — the Roster view has an `Opponent` switch, which draws `LeagueTeam` in
+place of its own table.
+
 ### The tab is a button on the Roster, and there is one drawing again
 
 *(This supersedes the whole section below, which is left as written — it is the

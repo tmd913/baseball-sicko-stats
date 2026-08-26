@@ -408,7 +408,7 @@ export function MatchupCard({
   format,
   live,
   projected = false,
-  mineTag = true,
+  markMine = true,
   onOpen,
 }: {
   matchup: EspnMatchup;
@@ -423,17 +423,24 @@ export function MatchupCard({
    *  "so far" about a total that reaches the end of the week. */
   projected?: boolean;
   /**
-   * **Whether to draw the `Your matchup` label at all.**
+   * **Whether this card is marked as the reader's own at all** — the
+   * `Your matchup` label and the accent border alike.
    *
-   * True on a board, where the card is one of ten and the label is what says
+   * True on a board, where the card is one of ten and the mark is what says
    * *which*. False where the card is the only one on the page — the Overview
    * draws the reader's own matchup and nothing else — because a mark that would
    * be on every row marks nothing, which is the same rule that suppresses the
    * roster baseball on a board that is only your roster and the padlock on
-   * `Other Rosters` alone. The accent border stays either way: it costs no
-   * space and it is what carries the statement into a screenshot.
+   * `Other Rosters` alone.
+   *
+   * **The border used to stay either way**, on the grounds that it costs no
+   * space and carries the statement into a screenshot. That is the half this
+   * reverses: costing no space is not the test — *marking one row among others*
+   * is, and on a page with one card there are no others, so an accent border
+   * reads as a state the card is in rather than as which card it is. One prop
+   * for one question, which is why it is `markMine` and no longer `mineTag`.
    */
-  mineTag?: boolean;
+  markMine?: boolean;
   onOpen: (id: number) => void;
 }) {
   const { home, away } = matchup;
@@ -497,7 +504,7 @@ export function MatchupCard({
 
   return (
     <div
-      className={`lg-matchup${away ? '' : ' lg-bye'}${mine ? ' lg-mine' : ''}${
+      className={`lg-matchup${away ? '' : ' lg-bye'}${mine && markMine ? ' lg-mine' : ''}${
         projected ? ' lg-proj' : ''
       }`}
       role="button"
@@ -511,7 +518,7 @@ export function MatchupCard({
         }
       }}
     >
-      {mine && mineTag && <div className="lg-mine-tag">Your matchup</div>}
+      {mine && markMine && <div className="lg-mine-tag">Your matchup</div>}
       {sides.map((side) => {
         const team = teams.get(side.teamId);
         return (
