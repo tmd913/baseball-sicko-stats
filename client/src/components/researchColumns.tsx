@@ -1234,6 +1234,32 @@ export function withColumn(kind: PlayerKind, keys: string[], key: string): strin
   return [...keys.slice(0, before), key, ...keys.slice(before)];
 }
 
+/**
+ * `withColumn` against the **lens's** vocabulary — the same insertion rule and
+ * the same reason it exists, one reading over.
+ *
+ * Its caller is the Overview's `See more` card, which lands the board sorted on
+ * a column and so has to be sure that column is on the table: **a sort naming a
+ * hidden column silently falls back to the board's default**
+ * (`ResearchTable::sortableKey`), which would put the reader on a board ordered
+ * by something other than the rail they pressed. Written here rather than in
+ * `App` because the canonical order it inserts against is this file's.
+ */
+export function withProjectedColumn(
+  kind: PlayerKind,
+  oneDay: boolean,
+  keys: string[],
+  key: string,
+): string[] {
+  if (keys.includes(key)) return keys;
+  const canonical = projectedColumns(kind, oneDay).map((c) => c.key);
+  const at = canonical.indexOf(key);
+  if (at === -1) return keys;
+  const before = keys.findIndex((k) => canonical.indexOf(k) > at);
+  if (before === -1) return [...keys, key];
+  return [...keys.slice(0, before), key, ...keys.slice(before)];
+}
+
 /** The column the board opens on: the players with the most work behind them,
  *  so the table lands on names worth reading rather than the alphabet. */
 export const DEFAULT_SORT: Record<PlayerKind, string> = { batter: 'pa', pitcher: 'ip' };

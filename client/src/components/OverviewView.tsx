@@ -718,6 +718,10 @@ export interface RailBoard<T> {
   relievers: T[];
 }
 
+/** Which of the three rows — the seat, which is also what the `See more` card
+ *  hands back, the research board's position pill being a function of it. */
+export type RailSeat = keyof RailBoard<RailPlayer>;
+
 /**
  * The trending rail, and **the window it was ranked on** — which is a choice
  * now rather than a fact.
@@ -770,7 +774,7 @@ export const TRENDING_TOP = 10;
  */
 export const TRENDING_CARD_WINDOWS = [1, 3, 7] as const;
 
-const RAIL_ROWS: { key: keyof RailBoard<RailPlayer>; label: string }[] = [
+const RAIL_ROWS: { key: RailSeat; label: string }[] = [
   { key: 'batters', label: 'Batters' },
   { key: 'starters', label: 'Starting Pitchers' },
   { key: 'relievers', label: 'Relievers' },
@@ -876,17 +880,80 @@ function TrendDeltas({
   );
 }
 
+/**
+ * **The last card in every row, and the only one that is not a player.**
+ *
+ * A rail is ten men and the board it is drawn from is six hundred, so the rail
+ * has always had an eleventh answer it could not give: *and who else*. The
+ * research board is where that question is answered — it is the same
+ * population, the same free-agent cut and the same figure in a column — and
+ * reaching it meant crossing to the tab, finding the position pill, finding the
+ * column and sorting it, which is four presses to arrive at the list the reader
+ * is already looking the tail of.
+ *
+ * **At the end rather than at the head**, which is where the question is asked:
+ * a reader who wants more has scrolled the row to its end, and a door at the
+ * far end is the one thing a scrolling row can offer that a heading cannot —
+ * it is *found* by the gesture that produced the want.
+ *
+ * **It is the same box as a card**, not a link in the margin: it sits in the
+ * flex row, takes the same width and the same border, and scrolls with the ten
+ * ahead of it. What it does not take is a face — there is nobody on it — so the
+ * circle is an arrow at the size the headshot is, which is what keeps the row's
+ * baseline and its height the same on the card that has no player.
+ */
+function SeeMoreCard({
+  seat,
+  by,
+  onSeeMore,
+}: {
+  seat: RailSeat;
+  /** What the board will be sorted on, in the tab's own words — `the move over
+   *  the last 3 days`, `projected value through Sep 6`. The switch's note says
+   *  the same thing above the rail, so the door and the heading cannot come to
+   *  describe two different boards. */
+  by: string;
+  onSeeMore: (seat: RailSeat) => void;
+}) {
+  const where =
+    seat === 'batters' ? 'batters' : seat === 'starters' ? 'starting pitchers' : 'relievers';
+  return (
+    <button
+      type="button"
+      className="trend-card trend-more"
+      onClick={() => onSeeMore(seat)}
+      title={`Open the research board on free-agent ${where}, sorted by ${by}`}
+    >
+      <span className="trend-more-arrow" aria-hidden="true">
+        →
+      </span>
+      <span className="trend-card-name">See more</span>
+      <span className="trend-card-meta">on the board</span>
+    </button>
+  );
+}
+
 /** The three seat rows of one rail. The section around them is the spotlight's,
  *  which is why this draws no heading: the two rails are two readings of one
  *  block now rather than two blocks. */
 function RailRows<T extends RailPlayer>({
   board,
   figure,
+  sortedBy,
   onOpenPlayer,
+  onSeeMore,
 }: {
   board: RailBoard<T>;
   figure: (p: T) => ReactNode;
+  /** What the board behind the `See more` card is sorted on, in words — the
+   *  active tab's own, so the door and the heading agree by construction. */
+  sortedBy: string;
   onOpenPlayer: (id: number) => void;
+  /** Null where there is no board to open — a reader with no league has no
+   *  rails at all, so this is really the Overview being drawn somewhere that
+   *  cannot navigate. A door with nothing behind it is drawn as nothing, the
+   *  rule every other door in this app keeps. */
+  onSeeMore: ((seat: RailSeat) => void) | null;
 }) {
   return (
     <>
@@ -906,6 +973,7 @@ function RailRows<T extends RailPlayer>({
                   {figure(p)}
                 </RailCard>
               ))}
+              {onSeeMore && <SeeMoreCard seat={r.key} by={sortedBy} onSeeMore={onSeeMore} />}
             </div>
           </div>
         </div>
@@ -1011,6 +1079,7 @@ function SpotlightSection({
   onTab,
   onWindow,
   onOpenPlayer,
+  onSeeMore,
 }: {
   trending: TrendingRail | null;
   highValue: ValueRail | null;
@@ -1018,14 +1087,22 @@ function SpotlightSection({
   onTab: (tab: SpotlightTab) => void;
   onWindow: (w: TrendWindow) => void;
   onOpenPlayer: (id: number) => void;
+  /** The door at the end of every row — see `SeeMoreCard`. It is handed the
+   *  **active** rail rather than reading `tab`, which is not always the rail on
+   *  screen: a `?spot=value` that arrives before the value rail falls back, and
+   *  a door that opened the board on a reading the page is not showing would be
+   *  the same fault the fallback exists to prevent. */
+  onSeeMore: ((rail: SpotlightTab, seat: RailSeat) => void) | null;
 }) {
-  const tabs: { key: SpotlightTab; label: string; note: string; title: string }[] = [];
+  const tabs: { key: SpotlightTab; label: string; note: string; title: string; sortedBy: string }[] =
+    [];
   if (trending) {
     tabs.push({
       key: 'trending',
       label: 'Trending',
       note: `added most in the last ${spanWords(trending.window)}`,
       title: `Who the league has been picking up over the last ${spanWords(trending.window)} — free agents only`,
+      sortedBy: `the move over the last ${spanWords(trending.window)}`,
     });
   }
   if (highValue) {
@@ -1035,6 +1112,7 @@ function SpotlightSection({
       note: `most projected value through ${prettyDate(highValue.through)}`,
       title:
         'Who is worth the most over the days this matchup has left, in the categories your league scores — free agents only',
+      sortedBy: `projected value through ${prettyDate(highValue.through)}`,
     });
   }
   if (tabs.length === 0) return null;
@@ -1104,12 +1182,20 @@ function SpotlightSection({
         )}
       </div>
       {active.key === 'value' && highValue ? (
-        <RailRows board={highValue.board} figure={valueFigure} onOpenPlayer={onOpenPlayer} />
+        <RailRows
+          board={highValue.board}
+          figure={valueFigure}
+          sortedBy={active.sortedBy}
+          onOpenPlayer={onOpenPlayer}
+          onSeeMore={onSeeMore && ((seat) => onSeeMore('value', seat))}
+        />
       ) : trending ? (
         <RailRows
           board={trending.board}
           figure={(p) => trendingFigure(p, trending.window)}
+          sortedBy={active.sortedBy}
           onOpenPlayer={onOpenPlayer}
+          onSeeMore={onSeeMore && ((seat) => onSeeMore('trending', seat))}
         />
       ) : null}
     </section>
@@ -1327,6 +1413,7 @@ export default function OverviewView({
   spotlight,
   onSpotlight,
   onSpotWindow,
+  onSeeMore,
   dates,
   onOpenPlayer,
   onSeeDay,
@@ -1353,6 +1440,10 @@ export default function OverviewView({
   /** …and the window the trending rail is ranked on. The value in force rides on
    *  `trending` itself, this being the one that was asked for. */
   onSpotWindow: (w: TrendWindow) => void;
+  /** The door at the end of every rail row: the research board, on this seat's
+   *  position pill, free agents only, sorted on the column the rail is ranked
+   *  by. See `SeeMoreCard`, and `App::openSpotlightBoard` for what it sets. */
+  onSeeMore: ((rail: SpotlightTab, seat: RailSeat) => void) | null;
   /** The three reads. Null means *not answered yet*; an empty array means
    *  *answered, and there is nobody* — the two are drawn differently and the
    *  distinction is the whole of why these are nullable. */
@@ -1846,6 +1937,7 @@ export default function OverviewView({
         onTab={onSpotlight}
         onWindow={onSpotWindow}
         onOpenPlayer={onOpenPlayer}
+        onSeeMore={onSeeMore}
       />
     </div>
   );

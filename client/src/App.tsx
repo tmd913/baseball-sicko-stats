@@ -61,6 +61,7 @@ import { LiveFeed, FEED_PAGE_SIZE, newPlays } from './components/LiveFeed';
 import { SummaryTable } from './components/SummaryTable';
 import {
   ResearchTable,
+  DEFAULT_INCLUDE,
   freshResearchUi,
   includeParam,
   isDefaultColumns,
@@ -75,6 +76,13 @@ import {
   toResearchWindow,
 } from './components/ResearchTable';
 import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
+import {
+  defaultColumnKeys,
+  projectedColumnKeys,
+  trendKey,
+  withColumn,
+  withProjectedColumn,
+} from './components/researchColumns';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
@@ -169,6 +177,7 @@ import LeagueTeam from './components/LeagueTeam';
 import OverviewView, { TRENDING_CARD_WINDOWS, TRENDING_TOP } from './components/OverviewView';
 import type {
   RailBoard,
+  RailSeat,
   SpotlightTab,
   TrendingPlayer,
   TrendingRail,
@@ -5765,6 +5774,7 @@ export default function App() {
     [openOverviewDay],
   );
 
+
   /**
    * **Turning the lens on moves the reader to the days it is about**, the rule
    * the Roster's own toggle states in full one function down: a projection over
@@ -6437,6 +6447,98 @@ export default function App() {
       ? { board, through: valueBoards.span.end }
       : null;
   }, [valueBoards, ownedIds, eligibility, rosterPct, scoringCategories]);
+
+  /**
+   * **The `See more` card at the end of a spotlight row** — the research board,
+   * set to the reading the rail is a top ten of.
+   *
+   * A rail is ten men off a board of six hundred, and reaching the rest of them
+   * was four presses: the tab, the position pill, the Columns dialog for the
+   * window the rail was ranked on, and the header to sort it. This is that,
+   * done. Six things are set and each of them is *what the rail is*, not a
+   * tidying-up:
+   *
+   * - **The view and the reading.** `research`, on the player board rather than
+   *   the clubs (`board=teams` is thirty rows and has no roster % at all), with
+   *   the Schedule mode off — that mode replaces the stat columns with days,
+   *   and this door is about a column.
+   * - **The position pill**, off the seat the card was in. It is the one thing
+   *   that makes the board the *row* the reader pressed rather than the block.
+   * - **Free agents only**, which is what both rails are and what the board's
+   *   own default already is. **Set locally rather than through
+   *   `setResearchInclude`, so nothing is written to the reader's record**: the
+   *   door is stating a reading for this errand, and a saved preference changed
+   *   by a press nobody made on the buttons that own it is exactly the kind of
+   *   quiet write this app declines to make. The touched ref goes up with it,
+   *   or a late `/api/prefs` would put the reader's own set back over the top.
+   * - **The lens and its span, on the value rail.** `VAL` exists only under the
+   *   projected reading, and the span is `valueSpan` — the very days the rail
+   *   was drawn over, so the figure on the board is the figure on the card
+   *   rather than a second projection over a different week.
+   * - **The sort**, on the rail's own column, descending — the trend column for
+   *   whichever window the switch is on, `projValue` for the value rail.
+   * - **That column made visible**, and this one is not cosmetic: **a sort
+   *   naming a column the table has not got silently falls back to the board's
+   *   default** (`ResearchTable::sortableKey`). Four of the five trend windows
+   *   are `DEFAULT_OFF`, so a rail ranked on `1D` or `3D` would land on a board
+   *   ordered by `Ros%` and look like the door had done nothing. `withColumn`
+   *   puts it at its canonical place among whatever the reader has on, and the
+   *   write is local for the same reason the include's is.
+   *
+   * **What it deliberately leaves alone is the reader's own work**: a search, a
+   * stat filter, a `Starting` day set. Those are authored, they are visible on
+   * the board with a count line that says how many rows they left, and clearing
+   * them would be a door destroying something to make room for itself. The
+   * paging is not authored and does go back to the first page.
+   */
+  const openSpotlightBoard = useCallback(
+    (rail: SpotlightTab, seat: RailSeat) => {
+      const kind: PlayerKind = seat === 'batters' ? 'batter' : 'pitcher';
+      setView('research');
+      setResearchTeams(false);
+      setResearchPos(seat === 'batters' ? 'batters' : seat === 'starters' ? 'SP' : 'RP');
+      setScheduleSpan(null);
+      researchIncludeTouched.current = true;
+      setResearchIncludeState({ ...DEFAULT_INCLUDE });
+      const projected = rail === 'value' && valueSpan !== null;
+      const sortKey = projected ? 'projValue' : trendKey(trending?.window ?? 7);
+      if (projected && valueSpan) {
+        setBoardRange({ ...valueSpan, preset: null });
+        setResearchProjected(true);
+        const oneDay = valueSpan.start === valueSpan.end;
+        setProjCols((prev) => {
+          const current = prev[kind] ?? projectedColumnKeys(kind, oneDay);
+          // **Nothing is written where the column is already on**, which is the
+          // difference between a door that turns a column on and one that pins
+          // today's defaults into the reader's record. An absent entry means
+          // *follow the defaults as they change*; seeding it with a copy of
+          // them would freeze that, and `isDefault…Columns` would start
+          // answering false for a set nobody had touched.
+          if (current.includes(sortKey)) return prev;
+          return { ...prev, [kind]: withProjectedColumn(kind, oneDay, current, sortKey) };
+        });
+      } else {
+        setResearchProjected(false);
+        setResearchCols((prev) => {
+          const current = prev[kind] ?? defaultColumnKeys(kind);
+          // See the note in the branch above: untouched stays untouched, which
+          // on this side means the door pins a list only for `1D`, `3D`, `15D`
+          // and `30D` — the four windows `DEFAULT_OFF` holds back — and leaves
+          // `7D`, which is on every board already, writing nothing at all.
+          if (current.includes(sortKey)) return prev;
+          return { ...prev, [kind]: withColumn(kind, current, sortKey) };
+        });
+      }
+      setResearchUi((prev) => ({
+        ...prev,
+        boards: { ...prev.boards, [kind]: { ...prev.boards[kind], sortKey, sortAsc: false } },
+        // The first page again — `freshResearchUi` is where the number lives,
+        // so this cannot come to disagree with the board a reader opens cold.
+        shown: freshResearchUi().shown,
+      }));
+    },
+    [trending, valueSpan],
+  );
 
   /** Every player the season roster can place — what decides whether a league
    *  news row's name is a door, `openLeaguePlayer` below being the door itself
@@ -9657,6 +9759,9 @@ export default function App() {
           spotlight={spotlightTab}
           onSpotlight={setSpotlightTab}
           onSpotWindow={setSpotWindow}
+          /* …and the door at the end of every row, into the board the rail is a
+             top ten of. See `openSpotlightBoard`. */
+          onSeeMore={openSpotlightBoard}
           dates={overviewDates}
           onOpenPlayer={openLeaguePlayer}
           onSeeDay={openOverviewDay}

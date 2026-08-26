@@ -22340,6 +22340,47 @@ html[data-theme='light'] .league-table thead th {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* ---- The `See more` card ----
+   The eleventh card in every rail row, and the only one that is not a player:
+   the door into the research board this rail is a top ten of.
+
+   **It is a `.trend-card` with two rules added, not a card of its own.** It
+   sits in the same flex row, takes the same 144px and the same border, and
+   scrolls with the ten ahead of it — anything else would be a control docked
+   beside a row that scrolls out from under it. What differs is that there is
+   nobody on it, so the 46px circle the headshot occupies is an arrow at the
+   same size: the row's height and the baseline of the name line under it are
+   the card's by construction rather than by a measured floor.
+
+   **Centered, and the whole box is the accent's.** A door at the end of a list
+   of people has to read as a different *kind* of thing at a glance or it is an
+   eleventh player with a strange face; the tint is the same
+   `color-mix` the hover state of every card in this row already uses, held
+   permanently, which is what says *pressable and not one of these* without
+   spending a hue on it. */
+.trend-more {
+  justify-content: center;
+  gap: 4px;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.trend-more .trend-card-name {
+  color: var(--accent);
+}
+/* The arrow stands where a face does — see the note above. `line-height: 1` and
+   the fixed box are what keep it from riding on the font's own leading, which
+   would put the two lines under it a pixel or two off the cards beside it. */
+.trend-more-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-2));
+  color: var(--accent);
+  font-size: 20px;
+  line-height: 1;
+}
 .trend-card-face {
   width: 46px;
   height: 46px;
