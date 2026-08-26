@@ -2299,3 +2299,13 @@ names.
 headshot that is a button into a man's page is one object, and this is that
 object two boxes further in. The role rings stay the feed's alone: a dialog
 head has no live role to draw.
+
+**And the row that opens it dropped the pitcher's first name.** `.pa-pitcher`
+read `vs Chris Bassitt (RHP)`; it reads `vs Bassitt (RHP)` now, through
+`surname` — the same helper the summary table's opponent cell and the feed's
+Upcoming bar already name a starter with, and for the same reason. The row is
+one line carrying an inning glyph, a base diamond, an outcome badge, an RBI
+mark, the contact figures and a bat speed, and a pitcher is referred to by
+surname anyway. Nothing is lost by it now that the full name is at the head of
+the box the row opens, beside his face — which is the half of this change that
+makes the other half free.

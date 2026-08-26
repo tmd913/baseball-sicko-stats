@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { playerKey } from '../types';
 import { api } from '../api';
-import { contactHighlight, eventLabel, finalSwingBatSpeed, headshotUrl, outcomeKind } from '../lib';
+import {
+  contactHighlight,
+  eventLabel,
+  finalSwingBatSpeed,
+  headshotUrl,
+  outcomeKind,
+  surname,
+} from '../lib';
 import { usePlayerDoor } from '../hooks';
 import { PlaySituation } from './BaseDiamond';
 import { ClipVideo } from './ClipVideo';
@@ -268,9 +275,16 @@ export function PlateAppearanceCard({
         />
         <span className={`pa-badge kind-${kind}`}>{eventLabel(pa.event)}</span>
         {pa.rbi > 0 && <span className="pa-rbi">{pa.rbi} RBI</span>}
+        {/* **The surname alone**, which is the rule every other place in this app
+            names a pitcher beside a matchup already follows — the summary
+            table's opponent cell and the feed's Upcoming bar both read
+            `surname`. The row is a single line holding an inning glyph, a
+            badge, an RBI mark, the contact figures and a bat speed, and a
+            pitcher is referred to by surname anyway; the full name is in the
+            dialog this row opens, at the head of it, beside his face. */}
         {pa.pitcherName && (
           <span className="pa-pitcher">
-            vs {pa.pitcherName}
+            vs {surname(pa.pitcherName)}
             {pa.pThrows ? ` (${pa.pThrows}HP)` : ''}
           </span>
         )}
