@@ -22418,9 +22418,29 @@ html[data-theme='light'] .league-table thead th {
 }
 /* …and the level it moved from, which is the context that says whether four
    points is a pickup nobody had or a man half the league already owns. Muted,
-   because it is not the reading. */
+   because it is not the reading.
+
+   **11px and 6px clear of the box above it, where it was 10px and 2.** It is
+   the one line on the card that is a *sentence* — `5.6 G · 1% rostered` is two
+   facts and a separator, where `.trend-card-meta`'s `BOS · RP` above it is a
+   label — and it was set a point smaller than the figures it explains while
+   sitting on the card's flex `gap` alone, 2px under the ruled box, close enough
+   to read as the bottom edge of it rather than as a line of its own. The 4px
+   margin is what separates the two; both rails draw this one selector, so the
+   cards stay the same height as each other and nothing moves under the switch
+   — measured at 1100px and at 390px, the card goes 167px → 172 on *both* rails
+   and every line on it is 13px tall, so none of them wrapped.
+
+   **It still fits on one line, with 9px to spare.** The line is the only text
+   on the card without `white-space: nowrap`, so a wrap would cost that one card
+   13px and break the row's rhythm rather than being clipped: measured, the
+   widest live line is `10.6 G · 14% rostered` at **116.8px** in the card's
+   126px of content, and the widest the rail can produce — two decimal digits of
+   games against a roster share that stays low, these being free agents — is
+   inside that. */
 .trend-card-pct {
-  font-size: 10px;
+  margin-top: 4px;
+  font-size: 11px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -22586,9 +22606,17 @@ html[data-theme='light'] .league-table thead th {
    is a ranking figure: it is already the reason the card is where it is on the
    rail, and a color scale down a row of ten would be the ranking said twice.
    Monochrome for the same reason `.ov-perf-val` is, and at the same size and
-   weight, so the one arithmetic reads as one figure on both blocks. */
+   weight, so the one arithmetic reads as one figure on both blocks.
+
+   **13px, which is what makes that last sentence true** — it said *the same
+   size* while standing at 15 against the day cards' 13, and the gap showed on
+   the rail: the figure was four points over the `11 G · 6% rostered` under it
+   and two over the name at the top of the card, which made the number the
+   loudest thing on a block whose ordering already says which card is best. The
+   pinned `line-height` below is what lets it move at all without the cards
+   moving — the row is 18px tall whatever is set in it. */
 .trend-card-val {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   color: var(--text);
   font-variant-numeric: tabular-nums;
