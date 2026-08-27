@@ -40,7 +40,6 @@ import type {
   TeamHitting,
   TeamHittingWindow,
   TeamInfo,
-  LeagueNews,
   MlbScoreboard,
   MlbStandings,
   TeamGameResult,
@@ -1000,11 +999,6 @@ export const api = {
    *  three columns that replaced that control are on the board itself. */
   async mlbStandings(): Promise<MlbStandings> {
     return request('/api/mlb/standings');
-  },
-  /** The league's news, newest first — off the sweep the research board's news
-   *  marks already pay for, so this costs no upstream of its own. */
-  async mlbNews(): Promise<LeagueNews> {
-    return request('/api/mlb/news');
   },
 
   async video(playId: string, gamePk: number): Promise<string> {

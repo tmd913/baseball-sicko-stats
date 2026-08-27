@@ -16,8 +16,9 @@ watchlist — and the app's answer to a reader who has done none of it was an
 empty roster and a six-hundred-row research board.
 
 The MLB view is the page that works on the first visit. It needs no watchlist,
-no league and no connection, and its three tabs are the three questions anybody
-opening a baseball app has. So it is drawn unconditionally, where Overview and
+no league and no connection, and its tabs are the questions anybody opening a
+baseball app has. (There were three and there are two — see *News, and why there
+is no longer one*.) So it is drawn unconditionally, where Overview and
 Fantasy are drawn only for a connected reader.
 
 **Last, because the row runs from the page closest to the reader to the page
@@ -35,7 +36,7 @@ link already shared.
 
 ---
 
-## The three tabs
+## The two tabs
 
 `MLB_TABS` in `MlbView.tsx`, drawn in the app's `.view-tools` row rather than on
 the page, exactly as the Fantasy page's own three are and for the same reason:
@@ -46,8 +47,9 @@ control rather than as one tier down of the same one. `.lg-tabs` and
 object.
 
 **No `ScrollRow` and no overflow arrows on this strip**, unlike the Fantasy
-page's: three short words (`Scoreboard · Standings · News`) measure 255px and
-fit a 320px phone, where that page's three do not.
+page's: three short words (`Scoreboard · Standings · News`) measured 255px and
+fit a 320px phone, where that page's three do not. At two they fit with room to
+spare, so nothing about the strip changed when the third went.
 
 Which tab is open is `mlb=` in the URL, `scoreboard` being the default and
 omitted.
@@ -337,47 +339,50 @@ and it would take the zebra stripe.
 
 Every row is a door into the club's page.
 
-## News
+## News, and why there is no longer one
 
-The league's **ten biggest stories**, not its feed.
+**The third tab was `News`** — the league's ten biggest stories, ranked on the
+server off the same sweep the research board's news marks already paid for. It
+drew `NewsList`, the player page's own list, with one slot filled (`owner`, who
+the row was about). It is **gone**, and this section is kept as the record of
+what it was and why it went.
 
-It is `NewsList` — the player page's own list — with one slot filled: `owner`,
-which draws who the row is about. That is the only thing a league feed needs and
-a player page cannot want, his name there being the page it is on. Two lists
-that merely resemble each other are two lists that will one day disagree about
-what a row is.
+**It was removed because a league-wide feed is the least personal thing this app
+draws.** The news a reader of this app acts on is the news about *his own
+players*, and two surfaces already put that in front of him at the moment he is
+looking at that man: the roster's news mark, and the player page's News tab.
+This tab was a second, worse place to find a subset of the same sweep — worse
+because it could only ever show ten of ~970 notes, and because reaching it meant
+leaving the page where the decision was being made.
 
-**It was the whole feed.** 973 items over seven days (measured) is not news but
-an inbox — most of it a desk noting that a man went 2-for-4 — so the ranking
-went in, on the server, where the corpus is. The payload went from **354KB to
-3.6KB** with it, and the filter pills and the `Show more` went with the feed: a
-source filter over ten rows narrows ten rows.
+**What went with it**, so nothing is left orphaned: `MlbNews.tsx`, the
+`/api/mlb/news` route, `recentNews.ts::getLeagueNews` and the whole ranking that
+served it (`TOP_STORIES`, `MLB_KINDS`, `EVENTS`, `eventWeight` — the
+kind-of-event table, the graded recency and the chatter proxy), the
+`LeagueNews`/`LeagueNewsItem` pair on both sides of the wire, `NewsList`'s
+`owner` slot and its one caller, `App`'s `knownIds` set, and the `.mlb-news*`
+block in the stylesheet. *A field nobody reads is a field nobody misses* —
+applied here to about 350 lines. Measured: **JS 745.47 → 743.39 kB (gzip 219.86
+→ 219.29), CSS 192.53 → 192.13 kB (gzip 34.30 → 34.24).**
 
-How a story's size is decided — the kind-of-event table, the graded recency, the
-chatter proxy, one story per player, and the prominence signal that is
-deliberately not modeled — is in `server/src/recentNews.ts`, beside the sweep it
-reads.
+**`recentNews.ts` is untouched and still sweeps.** `getRecentNews` — the news
+mark on every board — was always its first reader and is now its only one again.
+Two things it gained for the second reader are **deliberately kept**: the
+seven-day reach (`NEWS_DAYS`), because that is also what makes the *player*
+page's News tab reach back a week rather than to Tuesday, and the stored shape
+(`news-recent-v2.json` holds the notes, not the reduced map), because reducing
+it back would re-introduce the very v1 shape that version was bumped away from.
+Both say so where they are declared.
 
-**The name is a door only where there is something behind it.** A row's player
-is an exact MLB id, but the player page needs the season roster to know whether
-he is a batter or a pitcher, so a man it cannot place is a name and not a press.
-
-The list is centered at the reading column with `width: 100%` beside the auto
-margin — the recorded trap that an auto margin on the cross axis suppresses a
-flex item's stretch.
-
-**No foot.** A paragraph said which ten of how many these were, where they came
-from and what was left out — true, and the page explaining itself to a reader
-who is reading headlines. What it was protecting against is a reader wondering
-whether ten is all there is, and the tab's own name answers that better than a
-sentence under the fold. The empty state still names its cause, which is the one
-case where words are all there is.
+**`mlb=news` in an old link falls back to the Scoreboard** rather than emptying
+the view — the app's standing rule for a value it does not recognize, and
+checked in the running app rather than assumed.
 
 ---
 
 ## State
 
-Four params, all in the URL because all four decide what data is on screen:
+Three params, all in the URL because all three decide what data is on screen:
 
 | param | what | default (omitted) |
 | --- | --- | --- |
@@ -386,6 +391,8 @@ Four params, all in the URL because all four decide what data is on screen:
 | `mgrp` | the Standings' grouping | `division` |
 
 There was a fourth, `mspan=`, and it went with the span control it named.
+`mlb=news` was a fourth *value* of the first and went with its tab; an old link
+carrying it falls back to the Scoreboard rather than emptying the view.
 
 `mgrp` is scoped to the Standings tab rather than to the view: a grouping with
 no standings to be about would name a reading that is not in force, the rule
@@ -399,26 +406,27 @@ can say which view wrote it.
 
 One per tab, each read on its first open and kept — the rule the Fantasy page's
 three and the player page's nine follow. What differs is what can change
-afterwards, and only one of the three can:
+afterwards, and only one of the two can:
 
 - the **Scoreboard** re-reads when the day changes, and polls on `LIVE_POLL_MS`
   while the board holds a game being played or still to start. Gated on the tab
   as well as the view, unlike the league poll: nothing off this page draws a
   mark from this board;
 - the **Standings** are read once — one board, and the grouping is a re-grouping
-  of rows already in hand rather than a fetch;
-- the **News** is read once. It is a thirty-minute sweep on the server, so a
-  poll would be the same answer at a cost.
+  of rows already in hand rather than a fetch.
+
+There was a third read, the News, and it went with its tab.
 
 The board **sequence-checks its own answers** against the day the reader is on —
 a ref, so the loader is not rebuilt every time the date moves. Two presses of an
-arrow are two reads in flight. The other two need no such check: neither has a
+arrow are two reads in flight. The Standings need no such check: they have no
 control that can supersede a read.
 
 ## Related
 
-`sicko-server` for the three routes and the two modules behind them
-(`mlbScoreboard.ts`, `mlbStandings.ts`, and `recentNews.ts`'s second reader).
+`sicko-server` for the two routes and the two modules behind them
+(`mlbScoreboard.ts` and `mlbStandings.ts`; `recentNews.ts` no longer has a
+reader on this page).
 `sicko-game-page` for the page a card opens, `sicko-team-page` for the page a
 standings row opens, `sicko-client` for the date bar and the loading rules,
 `sicko-player-page` for `NewsList` itself.

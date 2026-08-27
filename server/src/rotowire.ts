@@ -330,6 +330,10 @@ export async function fetchRotowireNews(path: string, mlbId: number): Promise<Ne
       date,
       headline,
       summary: body,
+      // **Filled by `news.ts`, not here.** RotoWire's own player page publishes
+      // the lede and stops; the rest of the note is CBS's copy of it, joined on
+      // this headline one level up. See `cbs.ts`.
+      full: null,
       // RotoWire's own word for what the note is about: the body part it files
       // an injury note under, which says more in four characters than any
       // label this app could invent, and `Report` for everything else.

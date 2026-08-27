@@ -13,7 +13,7 @@ import { getBatterLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
 import { getProjectedStarts } from './projectedStarts.js';
 import { getPlayerNews } from './news.js';
-import { getLeagueNews, getRecentNews } from './recentNews.js';
+import { getRecentNews } from './recentNews.js';
 import { getMlbScoreboard } from './mlbScoreboard.js';
 import { getMlbStandings } from './mlbStandings.js';
 import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js';
@@ -2282,28 +2282,6 @@ app.get(
   requireUser,
   asyncRoute(async (_req, res) => {
     res.json(await getMlbStandings());
-  }),
-);
-
-/**
- * **The league's news, newest first** — the News tab.
- *
- * **No sweep of its own.** It is the second reader of the one `/api/statuses`'
- * news mark already pays for: thirty RotoWire club pages and MLB's whole
- * transaction log, ~2MB, once per thirty minutes for the entire user base. A
- * feed with its own upstream would have been the same pages read twice for the
- * same items. See `recentNews.ts::getLeagueNews`.
- *
- * **Minor-league moves are not in it**, which is the one narrowing this route
- * makes that the mark does not — 73 of 216 transactions over three days name a
- * major-league club, and a feed of the whole organization is not what the tab
- * says it is.
- */
-app.get(
-  '/api/mlb/news',
-  requireUser,
-  asyncRoute(async (_req, res) => {
-    res.json(await getLeagueNews());
   }),
 );
 

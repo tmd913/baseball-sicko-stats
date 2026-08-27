@@ -1,23 +1,28 @@
-import type { LeagueNews, MlbScoreboard, MlbStandings } from '../types';
+import type { MlbScoreboard, MlbStandings } from '../types';
 import type { DatePreset } from './DateControls';
 import MlbScoreboardTab from './MlbScoreboard';
 import MlbStandingsTab from './MlbStandings';
 import type { StandingsGroup } from './MlbStandings';
-import MlbNewsTab from './MlbNews';
 
 /**
  * The MLB view — the one page in this app that is about **baseball** rather
  * than about a roster or a fantasy league.
  *
- * **Three tabs, because they are three questions**, which is `LeagueView`'s own
- * shape one tier over and is deliberately the same shape:
+ * **Two tabs, because they are two questions:**
  *
  *  1. **Scoreboard** — every game on one day, each a door into its own page.
  *     *What happened.*
  *  2. **Standings** — where the thirty clubs are, and how they have been going.
  *     *Who is any good.*
- *  3. **News** — every note and every move across the league, newest first.
- *     *What is going on.*
+ *
+ * **There were three**, and the third was `News` — the league's ten biggest
+ * stories, ranked on the server. It is gone, and the reasoning it was added
+ * under is the reasoning that removed it: a league-wide feed is the *least*
+ * personal thing this app draws, and the news a reader of this app actually
+ * acts on is the news about **his own players**, which the roster's news mark
+ * and the player page's News tab already put in front of him at the moment he
+ * is looking at that man. The tab was a second, worse place to find a subset of
+ * the same sweep. `recentNews.ts` is untouched and still answers both of those.
  *
  * **It is last in the main tab row and it is drawn for everybody.** Last
  * because the order of that row is how close a page is to the reader — his
@@ -38,9 +43,9 @@ import MlbNewsTab from './MlbNews';
  * only thing on this page that moves by the minute. See `App.tsx`.
  */
 
-export type MlbTab = 'scoreboard' | 'standings' | 'news';
+export type MlbTab = 'scoreboard' | 'standings';
 
-/** The three pages of the MLB view.
+/** The two pages of the MLB view.
  *
  * **Exported, because the strip that draws them is not this component's** —
  * the app already has a row for exactly this statement (`.view-tools`, which
@@ -50,7 +55,6 @@ export type MlbTab = 'scoreboard' | 'standings' | 'news';
 export const MLB_TABS: { tab: MlbTab; label: string; title: string }[] = [
   { tab: 'scoreboard', label: 'Scoreboard', title: "One day's games, and a door into each" },
   { tab: 'standings', label: 'Standings', title: 'Where the thirty clubs stand' },
-  { tab: 'news', label: 'News', title: 'Every note and every move across the league' },
 ];
 
 export default function MlbView({
@@ -73,11 +77,6 @@ export default function MlbView({
   standingsLoading,
   standingsError,
   onOpenTeam,
-  news,
-  newsLoading,
-  newsError,
-  knownIds,
-  onOpenPlayer,
 }: {
   tab: MlbTab;
   board: MlbScoreboard | null;
@@ -98,13 +97,6 @@ export default function MlbView({
   standingsLoading: boolean;
   standingsError: string | null;
   onOpenTeam: (teamId: number) => void;
-  news: LeagueNews | null;
-  newsLoading: boolean;
-  newsError: string | null;
-  /** The MLB ids the season roster can place — what decides whether a news
-   *  row's name is a door. See `MlbNews.tsx`. */
-  knownIds: Set<number>;
-  onOpenPlayer: (mlbId: number) => void;
 }) {
   return (
     <div className="mlb-view">
@@ -116,14 +108,6 @@ export default function MlbView({
           loading={standingsLoading}
           error={standingsError}
           onOpenTeam={onOpenTeam}
-        />
-      ) : tab === 'news' ? (
-        <MlbNewsTab
-          news={news}
-          loading={newsLoading}
-          error={newsError}
-          known={knownIds}
-          onOpenPlayer={onOpenPlayer}
         />
       ) : (
         <MlbScoreboardTab

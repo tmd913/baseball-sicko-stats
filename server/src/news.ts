@@ -1,6 +1,7 @@
 import type { NewsItem, PlayerNews } from './types.js';
 import { addDays, baseballToday } from './etDate.js';
 import { getRotowireNews } from './rotowire.js';
+import { getCbsBodies, newsKey, type CbsNote } from './cbs.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
@@ -146,6 +147,9 @@ async function fetchTransactions(playerId: number): Promise<NewsItem[]> {
       date,
       headline: text,
       summary: null,
+      // A transaction is one line of official record with no second half to
+      // have — the enrichment below is about RotoWire's notes and nothing else.
+      full: null,
       kind: t.typeDesc ?? null,
     });
   }
@@ -233,6 +237,20 @@ function withoutRestated(transactions: NewsItem[], reports: NewsItem[]): NewsIte
   });
 }
 
+/**
+ * **How much longer a CBS body has to be before it is worth a press.**
+ *
+ * Forty characters — about a clause. Under it the two texts are the same note
+ * with different whitespace or a trailing source credit, and an expansion that
+ * reveals a line the reader is already looking at is worse than no expansion:
+ * *a mark that would be on every row marks nothing*, and one that opens onto
+ * nothing is the version of that fault a reader actually notices. Measured on
+ * the notes that do differ, the gain is 300-700 characters — a whole analysis
+ * paragraph — so nothing real sits near this threshold and it is a guard rather
+ * than a tuning knob.
+ */
+const FULL_MIN_GAIN = 40;
+
 // ---- The two, merged --------------------------------------------------
 
 /**
@@ -249,7 +267,7 @@ export async function getPlayerNews(playerId: number): Promise<PlayerNews> {
   const hit = playerCache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.news;
 
-  const [transactions, reports] = await Promise.all([
+  const [transactions, reports, bodies] = await Promise.all([
     fetchTransactions(playerId).catch((err) => {
       console.error('player transactions fetch failed:', err);
       return [] as NewsItem[];
@@ -258,13 +276,46 @@ export async function getPlayerNews(playerId: number): Promise<PlayerNews> {
       console.error('player rotowire news fetch failed:', err);
       return [] as NewsItem[];
     }),
+    // **The long form of the notes above, where CBS has the player.** A third
+    // upstream in the same `Promise.all` and with the same `catch`, which is
+    // this file's own rule read exactly: a dead CBS costs every note its
+    // analysis paragraph and costs the list nothing else — the reader sees
+    // precisely the page he saw before this existed. See `cbs.ts` for why this
+    // enriches RotoWire's list rather than replacing it.
+    getCbsBodies(playerId).catch((err) => {
+      console.error('player cbs bodies fetch failed:', err);
+      return new Map<string, CbsNote>();
+    }),
   ]);
+
+  /**
+   * **Joined on the headline**, which is what the two sources share — the same
+   * desk writes both. `newsKey` carries the one way they spell it differently
+   * (CBS files a note under the club and the man) and the measurement that
+   * found it. A note CBS does not have keeps `full: null` and draws as it
+   * always has.
+   *
+   * **Longer, not merely present.** A note whose lede *is* the whole note comes
+   * back from CBS as a body equal to the summary we already show, and offering
+   * a reader an expansion that reveals the text under his eyes is the dead
+   * affordance this app's own rule forbids. So the body has to beat the summary
+   * it would replace, and by enough to be a second thought rather than a
+   * difference in whitespace.
+   */
+  const enriched = reports.map((item) => {
+    const note = bodies.get(newsKey(item.headline, false));
+    if (!note) return item;
+    const summary = item.summary ?? '';
+    return note.body.length > summary.length + FULL_MIN_GAIN
+      ? { ...item, full: note.body }
+      : item;
+  });
 
   // Reports lead the transactions they share a day with: `cmpDate` answers 0
   // for two rows dated to the same day, `sort` is stable, so the concat order
   // *is* the same-day order — and a note that reads like a sentence belongs
   // above the roster move it describes rather than under it.
-  const items = [...reports, ...withoutRestated(transactions, reports)].sort((a, b) =>
+  const items = [...enriched, ...withoutRestated(transactions, reports)].sort((a, b) =>
     cmpDate(b.date, a.date),
   );
   const news: PlayerNews = { items };

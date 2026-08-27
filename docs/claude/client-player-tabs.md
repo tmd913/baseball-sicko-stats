@@ -54,6 +54,106 @@ and its pointer, hover tint and focus ring are gone from the stylesheet, and
 left. Nothing on this list looks pressable, which is the rule that class was
 written to state and which is now true of the whole of it rather than half.
 
+*Superseded in one particular, and the argument above is the reason it could
+be:* **a row with more of the note in it is a press again — see* The analysis
+was behind a wall, and CBS republishes it *below.** What that section does not
+undo is either bullet: the press still opens **into** the row rather than out of
+it, and there is still no link off this page to anywhere.
+
+### The analysis was behind a wall, and CBS republishes it
+
+**The paragraph above is the whole setup.** RotoWire's note has two halves — the
+lede that says what happened and the analysis that says what it means — and its
+own player page publishes the first and sells the second (*"Subscribe now to
+instantly reveal our take on this news."*, on six of seven notes when the scrape
+was written). That is why the link went: what it opened onto was a wall.
+
+**CBS Sports publishes the whole note, and it is the same note.** Every item in
+its "Fantasy News" carries the byline `Rotowire` — the same desk, the same
+words, republished entire. So this is not a second source and nothing here is a
+second opinion; it is *the rest of the row already on screen*. Measured on Jake
+Bauers, 2026-08-26:
+
+| | RotoWire | CBS |
+| --- | --- | --- |
+| notes per player | up to **7** | **20** |
+| body | headline + lede | headline + **lede and analysis** |
+| stamp | a day (`August 14, 2026`) | an instant (`2026-08-26 20:21:51 GMT`) |
+
+`server/src/cbs.ts` carries the probe table, the index and the join. The two
+things worth knowing here are **why RotoWire is still the list** and **what the
+row does now**.
+
+**RotoWire is still the list because CBS cannot address most of the league.** It
+publishes no player list; the only place it enumerates anybody is one roster
+page per club, and those pages are the **26-man active roster** — Pivetta,
+Strider, Woodruff and Gallen appear nowhere on their club's page, and injured
+players are exactly who a News tab is opened for. Its league-wide injuries page
+recovers 275 of them and it is *still* not close:
+
+| index | requests | bytes | MLB ids matched | batter board | pitcher board |
+| --- | --- | --- | --- | --- | --- |
+| RotoWire | **2** | 629KB | **1,403** | **99.6%** | **99.8%** |
+| CBS | 31 | ~16MB | 966 | 74.3% | **64.9%** |
+
+CBS brings **one** player RotoWire does not have, against **470** RotoWire has
+that CBS does not. Switching wholesale would have blanked this tab for roughly
+one pitcher in three to gain one man. So the shape is the measurement's answer
+rather than a hedge: RotoWire is the list, CBS is the long form of the rows it
+already has, and a player CBS cannot address reads exactly as he did before.
+
+**The row is a press exactly where there is more to read.** `NewsItem.full` is
+set only where CBS's body genuinely beats the summary already on screen — by
+`FULL_MIN_GAIN` (40 characters, about a clause), so a note whose lede *is* the
+whole note offers nothing. No `full`, no press, no `MORE`: the affordance is
+never dead, which is the same rule the removed link was judged by and the reason
+that judgement is quoted above. Pressing **replaces** the summary with the full
+body rather than appending to it — the full body opens with the same lede, so
+drawing both would print that sentence twice.
+
+`.news-press` is folded onto `.news-static` through a selector list rather than
+restyled, the two being the same box; what it adds is only what being a control
+costs (`font-family: inherit`, not `font: inherit` — the shorthand resets
+`font-size`), and its hover is scoped to `@media (hover: hover)` because a
+full-width row in a scrolling list has no pointer to move away on a touch
+device. `:focus-visible` is not scoped.
+
+**Both surfaces, not just this tab.** The Overview's one-row preview passes
+`summaries` too, so the same note reads the same way in both places — which is
+the rule this component was split for.
+
+**Measured in the browser**, Shohei Ohtani's News tab on 2026-08-26: **8 rows,
+5 presses, 3 static**, `aria-expanded` toggling, and the expanded row drawing
+the lede, a blank line, and the analysis paragraph RotoWire withholds. Across
+four watchlist players the enrichment reaches **4 of 11, 5 of 8, 6 of 7 and 4 of
+7** rows — the misses being transactions (no analysis to have) and notes older
+than CBS's twenty-item window.
+
+**Two faults were found by driving it and are worth keeping written down**,
+because both compiled and both looked fine until the text was read back:
+
+- **The headlines do not match, and the join silently found nothing.** CBS files
+  a note under the club and the man — `Brewers' Jake Bauers: Out again
+  Wednesday, managing shin splints` against RotoWire's `Out again Wednesday,
+  managing shin splints`. **0 of 7** joined on the raw string; 7 of 7 join once
+  the first `": "` and everything before it comes off the **CBS side only**. Not
+  both sides, deliberately: a RotoWire headline with a colon of its own
+  (`Injury update: out a week`) arrives at CBS as `Brewers' … : Injury update:
+  out a week`, and cutting the first colon on that side alone leaves both
+  holding the same string. `newsKey` carries it.
+- **The paragraph break has to come from the markup, not the text.** CBS serves
+  that node two ways — as plain text with a literal blank line (what a saved
+  sample showed) and as `<p>` elements with annotation spans (what the live page
+  returned). Stripping tags without putting a break back ran *"…Sentinel
+  reports."* and *"Bauers was believed…"* together into one 953-character
+  sentence with no space at the seam.
+
+**Nothing is versioned by it.** `news.ts` still caches per player in memory
+alone on 30 minutes and writes no blob; what is new on disk is `cbs-index-v1.json`,
+the reduced id map, on the RotoWire index's own 6-hour window. The CBS fetch is
+a third branch of the same `Promise.all` with the same `catch`, so a dead CBS
+costs every note its analysis paragraph and costs the list nothing else.
+
 **What a row still says is where it came from**, in the pill and in the class
 (`news-rotowire` / `news-mlb`): a desk's report and the official record are
 different kinds of claim, and levelling them would be the section pretending it

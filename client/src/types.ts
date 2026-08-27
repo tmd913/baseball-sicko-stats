@@ -316,6 +316,27 @@ export interface NewsItem {
   date: string;
   headline: string;
   summary: string | null;
+  /**
+   * **The whole note, where anything has more of it than the summary above.**
+   *
+   * A RotoWire note has two halves — the lede that says what happened and the
+   * analysis that says what it means — and RotoWire's own player page publishes
+   * only the first. CBS republishes the same desk's note entire, and this is
+   * that: lede and analysis, `\n\n` between them. See `server/src/cbs.ts` for
+   * why CBS is an enrichment of RotoWire's list rather than a source beside it.
+   *
+   * **Null is the ordinary case and means "this is all there is"** — a
+   * transaction has no analysis to have, and CBS can address about two thirds
+   * of the pitching board. The client draws no affordance where this is null,
+   * which is the rule that a press with nothing behind it is worse than no
+   * press: the row is expandable exactly where there is something to expand
+   * into.
+   *
+   * Set only where it is genuinely **longer** than `summary`, not merely
+   * present — a note whose lede is the whole note would otherwise offer a
+   * reader an expansion that reveals the text he is already looking at.
+   */
+  full: string | null;
   kind: string | null;
 }
 
@@ -2897,48 +2918,3 @@ export interface MlbStandings {
   fetchedAt: number;
 }
 
-/**
- * One item on the league's news feed.
- *
- * **A `NewsItem` with the player it is about**, which is the whole difference
- * between this and a player's own tab: there the player is the page and the
- * item needs no owner, here 1,100 items are on one list and a row that cannot
- * say who it is about is a row nobody can use.
- */
-export interface LeagueNewsItem extends NewsItem {
-  /** MLB id, **or null where the note could not be joined to one** — the
-   *  join-to-null rule, which here costs the row its door into a player's page
-   *  and nothing else. */
-  playerId: number | null;
-  /** As the source names him, which is what the row prints: RotoWire's own
-   *  spelling on a note, MLB's on a transaction. Null on neither in practice,
-   *  and typed nullable because a shape change upstream must empty a field
-   *  rather than invent one. */
-  playerName: string | null;
-  /** The club the source files him under — `Tampa Bay Rays`. Null on a
-   *  transaction that names no MLB club. */
-  team: string | null;
-  /** His position as the source gives it — `P`, `1B`. RotoWire only. */
-  position: string | null;
-}
-
-/**
- * **The league's biggest stories**, as `/api/mlb/news` answers it — ranked
- * rather than merely dated, and short.
- *
- * It was the whole feed, ~970 items and 354KB of wire, and that is not news but
- * an inbox: nine hundred of them are a desk noting that a man went 2-for-4.
- * `recentNews.ts::getLeagueNews` carries how a story's size is decided and what
- * it deliberately does not model.
- */
-export interface LeagueNews {
-  /** Biggest first, one per player, at most ten. */
-  items: LeagueNewsItem[];
-  /** How many days back the sweep reaches, so the foot can say so rather than
-   *  leaving a reader to wonder whether the list simply stopped. */
-  days: number;
-  /** How many notes the ten were picked out of — the same honesty one field
-   *  over, and the one number that says this is a *selection*. */
-  considered: number;
-  fetchedAt: number;
-}
