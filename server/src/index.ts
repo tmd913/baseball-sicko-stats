@@ -84,6 +84,23 @@ import {
   setResearchInclude,
   setRosterSource,
   setWatchlisted,
+  addList,
+  addSearch,
+  deleteList,
+  deleteSearch,
+  getActiveListId,
+  getLists,
+  getSearches,
+  renameList,
+  resolveShare,
+  setActiveList,
+  setItemSharing,
+  updateSearch,
+  MAX_BOARD_BYTES,
+  MAX_LISTS,
+  MAX_LIST_KEYS,
+  MAX_NAME_LEN,
+  MAX_SEARCHES,
   upsertLeague,
 } from './store.js';
 import type { EspnLeague, LeagueRecord } from './store.js';
@@ -320,6 +337,286 @@ app.put(
       return;
     }
     res.json({ keys: await setWatchlisted(userId(req), key, on) });
+  }),
+);
+
+// ---- The named lists, the saved searches, and sharing either ----------
+//
+// **One family of routes, because it is one idea twice.** A watchlist is a
+// saved set of players and a search is a saved reading of the board; both are
+// named, renamed, deleted and shared by the same gestures, so they share their
+// shape, their caps and their share codes. What differs is the payload, and
+// that is one field.
+//
+// The **board** on a search is stored and returned untouched — see
+// `SavedSearch`, where the reasoning is: the client owns that vocabulary, the
+// route owns the envelope. So what is checked here is a name that is a name and
+// a board that is an object of a sane size, and nothing about what is in it.
+
+/** A name a person typed: present, not blank, and not a paragraph. Trimmed on
+ *  the way in, so ` Closers ` and `Closers` are one name rather than two. */
+function readName(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const name = v.trim();
+  if (!name || name.length > MAX_NAME_LEN) return null;
+  return name;
+}
+
+/** A search's `board`: a plain object, and small enough that thirty of them
+ *  cannot make somebody's whole record unwritable (see `MAX_BOARD_BYTES`). */
+function readBoard(v: unknown): Record<string, unknown> | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  if (JSON.stringify(v).length > MAX_BOARD_BYTES) return null;
+  return v as Record<string, unknown>;
+}
+
+/**
+ * A share code: 16 URL-safe characters of randomness, the length
+ * `mintInviteCode` uses and for the same reason — holding one is the whole of
+ * the authorisation to read the thing, so guessing one must not be a way into
+ * somebody's saved state.
+ */
+function mintShareCode(): string {
+  return randomBytes(12).toString('base64url');
+}
+
+/** Everything the research board needs to draw its own two controls: the lists,
+ *  which one is active, and the saved searches. One read rather than three,
+ *  because they are one item on the record and the board wants all of them the
+ *  moment it opens. */
+app.get(
+  '/api/research/lists',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const id = userId(req);
+    const [lists, searches, activeId] = await Promise.all([
+      getLists(id),
+      getSearches(id),
+      getActiveListId(id),
+    ]);
+    res.json({ lists, searches, activeId });
+  }),
+);
+
+/**
+ * Add a list — optionally **with its players already on it**, which is what
+ * copying a shared one is.
+ *
+ * The keys are part of the create rather than a run of stars afterwards, and
+ * that is not an optimization. The whole user record is **one item behind one
+ * version guard**, so thirty `PUT /api/watch` calls fired at a copied list are
+ * thirty conflicting writes against one version, of which `mutate` replays one
+ * each — measured, copying a two-player list that way landed **one** of the two
+ * and put it on the wrong list, the activate having been a separate request the
+ * stars raced. One write cannot race itself.
+ */
+app.post(
+  '/api/research/lists',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { name: rawName, keys: rawKeys } = (req.body ?? {}) as {
+      name?: unknown;
+      keys?: unknown;
+    };
+    const name = readName(rawName);
+    if (!name) {
+      res.status(400).json({ error: `name must be 1-${MAX_NAME_LEN} characters` });
+      return;
+    }
+    // Shape-checked against the same pattern the star's own route uses, and
+    // capped: a list is a set of player keys and nothing else may be written
+    // into one by a client that has decided otherwise.
+    const keys = Array.isArray(rawKeys)
+      ? rawKeys.filter((k): k is string => typeof k === 'string' && WATCH_KEY_RE.test(k))
+      : [];
+    if (keys.length > MAX_LIST_KEYS) {
+      res.status(400).json({ error: `A watchlist holds at most ${MAX_LIST_KEYS} players.` });
+      return;
+    }
+    const before = await getLists(userId(req));
+    if (before.length >= MAX_LISTS) {
+      res.status(409).json({ error: `You can keep at most ${MAX_LISTS} watchlists.` });
+      return;
+    }
+    const { lists, id } = await addList(userId(req), name, keys);
+    res.json({ lists, id });
+  }),
+);
+
+/**
+ * Which list the star writes to. A `null` clears the choice back to the first
+ * list, the convention every preference here follows.
+ *
+ * **Declared before `/lists/:listId`, and it has to be.** Express matches in
+ * declaration order, so with the parameterised route first this one is never
+ * reached — `PUT /api/research/lists/active` binds `listId` to the literal
+ * string `active` and is answered by the *rename* handler, which then rejects
+ * the body for having no `name` on it. Found exactly that way: setting the
+ * active list came back `400 name must be 1-60 characters`, an error from a
+ * route nobody had called. A literal segment that shares a prefix with a
+ * parameter must lead.
+ */
+app.put(
+  '/api/research/lists/active',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { listId } = (req.body ?? {}) as { listId?: unknown };
+    if (listId !== null && typeof listId !== 'string') {
+      res.status(400).json({ error: 'listId must be a string or null' });
+      return;
+    }
+    await setActiveList(userId(req), listId);
+    res.json({ activeId: await getActiveListId(userId(req)) });
+  }),
+);
+
+app.put(
+  '/api/research/lists/:listId',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const name = readName((req.body as { name?: unknown } | undefined)?.name);
+    if (!name) {
+      res.status(400).json({ error: `name must be 1-${MAX_NAME_LEN} characters` });
+      return;
+    }
+    res.json({ lists: await renameList(userId(req), String(req.params.listId), name) });
+  }),
+);
+
+app.delete(
+  '/api/research/lists/:listId',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    // Deleting the active list is allowed and needs no special case: the
+    // preference then names nothing, and `activeList` falls back to the first —
+    // which is why that fallback is a rule rather than a guard.
+    res.json({ lists: await deleteList(userId(req), String(req.params.listId)) });
+  }),
+);
+
+app.post(
+  '/api/research/searches',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { name: rawName, board: rawBoard } = (req.body ?? {}) as {
+      name?: unknown;
+      board?: unknown;
+    };
+    const name = readName(rawName);
+    const board = readBoard(rawBoard);
+    if (!name) {
+      res.status(400).json({ error: `name must be 1-${MAX_NAME_LEN} characters` });
+      return;
+    }
+    if (!board) {
+      res.status(400).json({ error: 'board must be an object under 8KB' });
+      return;
+    }
+    const before = await getSearches(userId(req));
+    if (before.length >= MAX_SEARCHES) {
+      res.status(409).json({ error: `You can keep at most ${MAX_SEARCHES} saved searches.` });
+      return;
+    }
+    const { searches, id } = await addSearch(userId(req), name, board);
+    res.json({ searches, id });
+  }),
+);
+
+/** Rename a search, point it at the board as it stands, or both — an omitted
+ *  field is left alone, which is what lets a rename not disturb the reading. */
+app.put(
+  '/api/research/searches/:searchId',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { name: rawName, board: rawBoard } = (req.body ?? {}) as {
+      name?: unknown;
+      board?: unknown;
+    };
+    const patch: { name?: string; board?: Record<string, unknown> } = {};
+    if (rawName !== undefined) {
+      const name = readName(rawName);
+      if (!name) {
+        res.status(400).json({ error: `name must be 1-${MAX_NAME_LEN} characters` });
+        return;
+      }
+      patch.name = name;
+    }
+    if (rawBoard !== undefined) {
+      const board = readBoard(rawBoard);
+      if (!board) {
+        res.status(400).json({ error: 'board must be an object under 8KB' });
+        return;
+      }
+      patch.board = board;
+    }
+    res.json({ searches: await updateSearch(userId(req), String(req.params.searchId), patch) });
+  }),
+);
+
+app.delete(
+  '/api/research/searches/:searchId',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    res.json({ searches: await deleteSearch(userId(req), String(req.params.searchId)) });
+  }),
+);
+
+/**
+ * Share one, or stop sharing it. Answers with the code, or null when off.
+ *
+ * Idempotent when turning it on: a second press hands back the code already
+ * minted rather than replacing it, so pressing Share twice does not quietly
+ * invalidate the link somebody was given last week.
+ */
+app.put(
+  '/api/research/share',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { kind, id, enabled } = (req.body ?? {}) as {
+      kind?: unknown;
+      id?: unknown;
+      enabled?: unknown;
+    };
+    if (kind !== 'list' && kind !== 'search') {
+      res.status(400).json({ error: "kind must be 'list' or 'search'" });
+      return;
+    }
+    if (typeof id !== 'string' || !id) {
+      res.status(400).json({ error: 'id is required' });
+      return;
+    }
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be a boolean' });
+      return;
+    }
+    const code = await setItemSharing(userId(req), kind, id, enabled, mintShareCode);
+    if (code === null && enabled) {
+      res.status(404).json({ error: 'No such list or search.' });
+      return;
+    }
+    res.json({ code });
+  }),
+);
+
+/**
+ * Open a shared list or search by its code — **the owner's current copy**, not
+ * a snapshot taken when the link was made. See the note on `SHARE_KEY` for why
+ * a live reference is the right thing for both of these.
+ *
+ * One message for "never existed", "revoked" and "deleted since", the reasoning
+ * `/api/espn/join` states: which of the three it is tells a stranger holding a
+ * guessed code something about whether they are close.
+ */
+app.get(
+  '/api/research/shared/:code',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const shared = await resolveShare(String(req.params.code), userId(req));
+    if (!shared) {
+      res.status(404).json({ error: 'That shared link is no longer valid.', code: 'share-gone' });
+      return;
+    }
+    res.json(shared);
   }),
 );
 

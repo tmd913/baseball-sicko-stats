@@ -1427,6 +1427,82 @@ export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'
 /** How many at-bats (or batters faced) the `last100` cut looks back over. */
 export const RECENT_CUT_SIZE = 100;
 
+/**
+ * **A named list of players followed on the research board**, of which there
+ * may be several. Mirrors `server/src/store.ts` by hand, like everything here.
+ *
+ * `id` rather than the name is what everything references, because a list can
+ * be renamed and every reference to one would otherwise break on a corrected
+ * typo. `keys` are `playerKey` strings, newest first.
+ */
+export interface SavedList {
+  id: string;
+  name: string;
+  keys: string[];
+  /** Present when the list is shared — the code its link carries. Absent is
+   *  not shared, and revoking removes it here and on the server together. */
+  shareCode?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * **A named reading of the research board** — which rows, in which order, under
+ * which columns.
+ *
+ * `board` is `ResearchSearchBoard` (see `ResearchTable.tsx`, which owns that
+ * vocabulary) and is **opaque to the server**, which stores and returns it
+ * untouched. So adding a column or a filter operator needs no server change,
+ * and a search saved by a newer build is narrowed by an older one rather than
+ * rejected.
+ */
+export interface SavedSearch {
+  id: string;
+  name: string;
+  board: Record<string, unknown>;
+  shareCode?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A list or a search **as somebody else's**, resolved from a share code.
+ *
+ * A **live reference** rather than a snapshot: it is the owner's current copy,
+ * so a shared watchlist goes on being true. Nobody's name travels with it — the
+ * app knows its users by Cognito sub and email, and an email is not a thing to
+ * hand to whoever holds a link — so the chrome says *shared* and does not say
+ * *whose*.
+ *
+ * `mine` is true when the reader asking is the person who shared it, which is
+ * what keeps the "you are reading somebody else's" chrome off your own link.
+ */
+/**
+ * **How many of each a user may keep** — mirrored by hand from
+ * `server/src/store.ts`, like everything in this file.
+ *
+ * The server is where these are *enforced* (the whole user record is one
+ * DynamoDB item with a hard 400KB ceiling, and an uncapped list of searches on
+ * a shared item is a way to make somebody's roster unwritable). They are
+ * mirrored here so the control can say *why* the Add button has gone before the
+ * reader presses it and gets a 409 — a limit explained is a limit; a limit
+ * discovered is a bug.
+ *
+ * If these drift, the client's copy is only ever a **label**: the server
+ * refuses either way, and the failure is a console line rather than lost data.
+ */
+export const MAX_LISTS = 20;
+export const MAX_SEARCHES = 30;
+
+export interface SharedItem {
+  kind: 'list' | 'search';
+  code: string;
+  name: string;
+  keys?: string[];
+  board?: Record<string, unknown>;
+  mine: boolean;
+}
+
 export interface ResearchRow {
   id: number;
   name: string;
@@ -1707,6 +1783,11 @@ export interface UserPrefs {
    *  default, and a density this build does not know is read as the default
    *  rather than as an error. */
   percentileDensity?: string;
+  /** Which of the user's watchlists the board's star writes to and its
+   *  Watchlist button unions on. A preference and not a URL parameter: the
+   *  active list is a fact about the person, where a **shared** list is a
+   *  transient thing a link hands you (`wl=`). Absent means the first list. */
+  activeWatchlistId?: string;
   /** Read the roster views off the ESPN fantasy team rather than the saved
    *  list. The one preference here that stores **both** its values, so absent
    *  means *unspecified* rather than the saved list — which is still what an

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton, Splash } from './auth';
-import { PLAYER_CUTS, playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
+import {
+  MAX_LISTS,
+  MAX_SEARCHES,
+  PLAYER_CUTS,
+  playerKey,
+  RESEARCH_WINDOWS,
+  SPLIT_CUTS,
+} from './types';
 import { projectedRowValue, projectedRowValuePerGame, STANDARD_5X5 } from './categoryValue';
 import type {
   BoardProjection,
@@ -30,6 +37,9 @@ import type {
   SeasonPlayer,
   ParkFactor,
   PlayerCut,
+  SavedList,
+  SavedSearch,
+  SharedItem,
   SplitCut,
   TeamInfo,
   TrendWindow,
@@ -64,6 +74,9 @@ import {
   DEFAULT_INCLUDE,
   freshResearchUi,
   includeParam,
+  includeKeys,
+  boardStateFor,
+  readSearchBoard,
   isDefaultColumns,
   isDefaultInclude,
   isDefaultProjectedColumns,
@@ -75,7 +88,12 @@ import {
   toProjectedColumnKeys,
   toResearchWindow,
 } from './components/ResearchTable';
-import type { ResearchInclude, ResearchPos, ResearchUi } from './components/ResearchTable';
+import type {
+  ResearchInclude,
+  ResearchPos,
+  ResearchSearchBoard,
+  ResearchUi,
+} from './components/ResearchTable';
 import {
   defaultColumnKeys,
   projectedColumnKeys,
@@ -588,7 +606,30 @@ export default function App() {
    * every row it could mark, so a name saved beside the key would only be a
    * second and staler copy of one the leaderboard already carries.
    */
-  const [watchlistKeys, setWatchlistKeys] = useState<Set<string>>(() => new Set());
+  /**
+   * **The named lists, and which of them is active** — what the watchlist has
+   * become.
+   *
+   * `watchlistKeys` used to be state of its own, read off `/api/watch`. It is
+   * now **derived**, and that is the point rather than a tidy-up: the star, the
+   * Watchlist button's count and the union on the board all have to mean the
+   * *active* list, and three readers of one number is exactly where a stale
+   * copy hides. Switching lists is now one `setActiveListId` and every one of
+   * the three follows.
+   */
+  const [lists, setLists] = useState<SavedList[]>([]);
+  const [searches, setSearches] = useState<SavedSearch[]>([]);
+  const [activeListId, setActiveListIdState] = useState<string>('');
+  /** Resolved rather than trusted, the same rule the server applies: an id
+   *  naming a list that has gone falls back to the first, and `listsOf`
+   *  guarantees there is a first. Null only before the boot read lands. */
+  const activeList = useMemo(
+    () => lists.find((l) => l.id === activeListId) ?? lists[0] ?? null,
+    [lists, activeListId],
+  );
+  /** **The reader's own list, always** — what the star on a row reflects and
+   *  writes to, whether or not somebody else's list is being shown over it. */
+  const watchlistKeys = useMemo(() => new Set(activeList?.keys ?? []), [activeList]);
   const [error, setError] = useState<string | null>(null);
   // The player whose details view (percentile rankings) is open, seeded from the
   // URL so a shared/reloaded link reopens it once that player's report loads.
@@ -1936,9 +1977,42 @@ export default function App() {
   const [researchInclude, setResearchIncludeState] = useState<ResearchInclude>(() =>
     toResearchInclude(initialParams.get('inc'), initialParams.get('scope')),
   );
+  /**
+   * **The share code this page was opened on**, if any — `wl=` for a watchlist,
+   * `rs=` for a search.
+   *
+   * Read from `initialParams` (the URL as it arrived) rather than from the live
+   * query, and held as state so that *dismissing* one is a state change rather
+   * than a reload: pressing `Stop showing it` clears this, the URL sync drops
+   * the param, and the board goes back to the reader's own. Which is the same
+   * shape every lens in this app has — put away by the reader, not by a
+   * navigation.
+   *
+   * A link carrying **both** takes the watchlist, which is the older and
+   * simpler of the two and the one a hand-made URL is likelier to mean; the app
+   * already resolves `player`/`team`/`game` the same way, oldest first, on the
+   * same reasoning that falling back beats emptying the view.
+   */
+  const [sharedLink, setSharedLink] = useState<{ code: string; param: 'wl' | 'rs' } | null>(
+    () => {
+      const wl = initialParams.get('wl');
+      if (wl) return { code: wl, param: 'wl' };
+      const rs = initialParams.get('rs');
+      return rs ? { code: rs, param: 'rs' } : null;
+    },
+  );
+  /** **Which param it came in on is kept beside the code**, so the URL sync can
+   *  write the link back before the read that would tell it which kind of thing
+   *  the code opens. Without it a reload during that round trip would drop the
+   *  param and lose the link. */
+  const sharedCodeFromUrl = sharedLink?.code ?? null;
   const watchlistFromUrl = initialParams.get('watch') === '1';
   const [researchWatchlist, setResearchWatchlistState] = useState(watchlistFromUrl);
   const researchIncludeTouched = useRef(false);
+  /** As `researchIncludeTouched`, for the Watchlist button: a shared list
+   *  arriving turns it on **locally**, and this is what stops a late
+   *  `/api/prefs` putting the reader's own answer back over the top. */
+  const researchWatchlistTouched = useRef(false);
   // One PUT for the pair, because the server holds them as one control set —
   // and because either of them changing means re-reading who is on the board,
   // so the client has both to hand whenever one moves.
@@ -4602,6 +4676,12 @@ export default function App() {
     // view reports on. Off is the absence of the param, so a link can only ever
     // turn it on and a saved preference has something to fill in.
     if (view === 'research' && researchWatchlist) p.set('watch', '1');
+    /* **A shared list or search, under the key it arrived on.** Scoped to the
+       research view for the reason every lens here is: a code with no board to
+       be a lens *of* would name a reading that is not in force. Written off
+       `sharedLink` rather than off the resolved item, so a reload while the
+       resolve is still out keeps the link. */
+    if (view === 'research' && sharedLink) p.set(sharedLink.param, sharedLink.code);
     // The column set of the board on screen, and only once it differs from that
     // board's defaults — otherwise every link would carry twenty stat keys to
     // say "the usual". `pos=` is what tells a reader which board they describe.
@@ -4787,6 +4867,7 @@ export default function App() {
     gamePagePk,
     statsCut,
     pctCut,
+    sharedLink,
     view,
     researchPos,
     researchWindow,
@@ -5015,54 +5096,482 @@ export default function App() {
 
 
   /**
-   * The watchlist, read once on boot beside the roster — it decides whether a
-   * board row's star is filled, and a first render that got that wrong would
-   * then correct itself under the reader's eye.
+   * **The named lists and the saved searches, read once on boot** — and this is
+   * the read that used to be `api.watchlist()`.
+   *
+   * One request rather than two, because they are one item on the record and
+   * the answer to *what is on the watchlist* is now *what is on the active
+   * list*: the keys the star reads are `lists[activeId].keys`, so asking for
+   * them separately would be asking the same item twice and giving the two
+   * answers a chance to disagree. It decides whether a board row's star is
+   * filled, and a first render that got that wrong would correct itself under
+   * the reader's eye.
    *
    * A failure is logged rather than bannered, the rule the preferences follow:
-   * the board opens with nobody starred, which is exactly what a user who has
-   * never watchlisted anyone sees.
+   * the board opens with nobody starred and no saved searches, which is exactly
+   * what a user who has never made either sees.
    */
   useEffect(() => {
     let canceled = false;
     api
-      .watchlist()
-      .then((keys) => {
-        if (!canceled) setWatchlistKeys(new Set(keys));
+      .researchLists()
+      .then((d) => {
+        if (canceled) return;
+        setLists(d.lists);
+        setSearches(d.searches);
+        setActiveListIdState(d.activeId);
       })
-      .catch((e: Error) => console.error('watchlist unavailable:', e.message));
+      .catch((e: Error) => console.error('watchlists unavailable:', e.message));
     return () => {
       canceled = true;
     };
   }, []);
 
   /**
-   * Star a player, or unstar him. Applied **optimistically** and reconciled
-   * with the server's answer: this is a mark on a row in a table of six hundred
-   * of them, and a press that waits a round trip to fill in reads as a press
-   * that missed. A failure puts it back and says so in the console — nothing
-   * here is worth a banner over the board it sits on.
+   * **A shared list or search, resolved from the link that carried it.**
+   *
+   * `wl=` and `rs=` are the two, and they are separate keys for the app's own
+   * reason that two params must never mean two things: one is a set of players
+   * and the other is a reading of the board, and a link is read before anything
+   * on screen can say which. Both are read **once**, from the URL as it
+   * arrived, and neither is ever written back by this effect — the URL sync
+   * owns writing them.
+   *
+   * **Nothing of the reader's is touched to get here.** A shared thing lives in
+   * this state and in the URL, and in no preference and on no record; that is
+   * the whole of what makes "opening somebody's link must not disturb your own"
+   * a property of the design rather than something to remember. Taking a copy
+   * is the reader's own act (`saveSharedAsMine`).
+   *
+   * A code that no longer resolves — revoked, deleted, never valid — leaves the
+   * board exactly as it would have been and says so in the console rather than
+   * over the table. The server deliberately does not distinguish the three (see
+   * the route), so there is nothing more honest to print.
    */
-  const toggleWatchlisted = useCallback((key: string, on: boolean) => {
-    setWatchlistKeys((prev) => {
-      const next = new Set(prev);
-      if (on) next.add(key);
-      else next.delete(key);
-      return next;
-    });
+  const [shared, setShared] = useState<SharedItem | null>(null);
+  const [sharedSaving, setSharedSaving] = useState(false);
+  const sharedReq = useRef<string | null>(null);
+  useEffect(() => {
+    const code = sharedCodeFromUrl;
+    if (!code) {
+      setShared(null);
+      return;
+    }
+    // The mark is the code, so a *different* link re-resolves and the same one
+    // never asks twice. Not a cleanup flag: the rule this app has found four
+    // times is that an effect teardown must not unmark a read in flight.
+    if (sharedReq.current === code) return;
+    sharedReq.current = code;
     api
-      .setWatchlisted(key, on)
-      .then((keys) => setWatchlistKeys(new Set(keys)))
+      .sharedResearchItem(code)
+      .then((item) => {
+        if (sharedReq.current !== code) return;
+        setShared(item);
+        // A shared **watchlist** arrives to be looked at, so the button that
+        // puts a watchlist on the board goes on. Set locally rather than
+        // through `setResearchWatchlist`, so a link does not write to the
+        // reader's record — the same care `openSpotlightBoard` takes with the
+        // include set, and for the same reason.
+        if (item.kind === 'list') {
+          researchWatchlistTouched.current = true;
+          setResearchWatchlistState(true);
+        }
+        // A shared **search** is a reading, so it is applied — once, here,
+        // rather than left as a thing the reader has to press.
+        if (item.kind === 'search') applySearchBoard(item.board);
+      })
       .catch((e: Error) => {
-        console.error('saving watchlist failed:', e.message);
-        setWatchlistKeys((prev) => {
-          const back = new Set(prev);
-          if (on) back.delete(key);
-          else back.add(key);
-          return back;
-        });
+        if (sharedReq.current !== code) return;
+        console.error('shared link unavailable:', e.message);
+        sharedReq.current = null; // a retry is a reload, and this allows one
       });
+    // `applySearchBoard` is stable and the rest are refs; the code is the whole
+    // of what this depends on.
+     
+  }, [sharedCodeFromUrl]);
+
+  /**
+   * Star a player, or unstar him — **on the active list**, which is the only
+   * list a press on a row has room to be about.
+   *
+   * Applied **optimistically** and reconciled with the server's answer: this is
+   * a mark on a row in a table of six hundred of them, and a press that waits a
+   * round trip to fill in reads as a press that missed. A failure puts it back
+   * and says so in the console — nothing here is worth a banner over the board
+   * it sits on.
+   *
+   * The optimistic edit is now to `lists` rather than to a set of keys, because
+   * the set is derived from it; the reconciliation writes the server's keys
+   * back into the same list. Both are keyed on the id resolved at press time,
+   * so a list switched *while* a star is in flight cannot land the answer on
+   * the wrong list.
+   */
+  const patchList = useCallback((id: string, keys: string[]) => {
+    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, keys } : l)));
   }, []);
+
+  const toggleWatchlisted = useCallback(
+    (key: string, on: boolean) => {
+      const id = activeList?.id;
+      if (!id) return;
+      const before = activeList.keys;
+      const after = on ? [key, ...before.filter((k) => k !== key)] : before.filter((k) => k !== key);
+      patchList(id, after);
+      api
+        .setWatchlisted(key, on)
+        .then((keys) => patchList(id, keys))
+        .catch((e: Error) => {
+          console.error('saving watchlist failed:', e.message);
+          patchList(id, before);
+        });
+    },
+    [activeList, patchList],
+  );
+
+  // ---- The named lists, and the searches saved off this board ----------
+  //
+  // **Every mutation replaces the whole collection with the server's answer**,
+  // rather than patching the one row it touched. The lists are a dozen items at
+  // most, so the difference is not a cost — and a patch is where two tabs come
+  // to disagree about what somebody owns. The star above is the one exception,
+  // and it earns it: it is pressed on a row in a table of six hundred and has
+  // to draw before the round trip.
+
+  const setActiveListId = useCallback((id: string) => {
+    setActiveListIdState(id);
+    api
+      .setActiveList(id)
+      .then((d) => setActiveListIdState(d.activeId))
+      .catch((e: Error) => console.error('saving the active watchlist failed:', e.message));
+  }, []);
+
+  const createList = useCallback((name: string) => {
+    api
+      .addList(name)
+      .then((d) => {
+        setLists(d.lists);
+        // **Made active on creation**, which is the only reading of the gesture
+        // that is not a trap: somebody who has just named a list is about to
+        // put players on it, and leaving the star pointed at the old one means
+        // the next three stars go somewhere they will have to be found and
+        // moved. The chooser is right there to change it back.
+        setActiveListIdState(d.id);
+        void api.setActiveList(d.id).catch(() => undefined);
+      })
+      .catch((e: Error) => console.error('adding a watchlist failed:', e.message));
+  }, []);
+
+  const renameList = useCallback((id: string, name: string) => {
+    api
+      .renameList(id, name)
+      .then((d) => setLists(d.lists))
+      .catch((e: Error) => console.error('renaming a watchlist failed:', e.message));
+  }, []);
+
+  const deleteList = useCallback((id: string) => {
+    api
+      .deleteList(id)
+      .then((d) => {
+        setLists(d.lists);
+        // The server falls the active choice back to the first list when the
+        // one it named goes; ask rather than guess, so the two cannot disagree
+        // about which list the next star lands on.
+        void api
+          .setActiveList(null)
+          .then((r) => setActiveListIdState(r.activeId))
+          .catch(() => undefined);
+      })
+      .catch((e: Error) => console.error('deleting a watchlist failed:', e.message));
+  }, []);
+
+  /**
+   * **The board as a saved search would remember it** — see
+   * `ResearchSearchBoard`, which sets out what is in it and what deliberately
+   * is not.
+   *
+   * A function of the current state rather than a memo, because it is read at
+   * the moment somebody presses Save and never rendered: a memo would be
+   * recomputed on every keystroke in the name search for a value nothing is
+   * watching.
+   */
+  const snapshotBoard = useCallback((): ResearchSearchBoard => {
+    const kind = researchKindFor(researchPos);
+    const board = researchUi.boards[boardStateFor(kind, researchTeams)];
+    return {
+      v: 1,
+      pos: researchPos,
+      window: researchWindow,
+      include: includeKeys(researchInclude),
+      watchlist: researchWatchlist,
+      teams: researchTeams,
+      projected: researchProjected,
+      cols: (researchProjected ? projCols : researchCols)[kind] ?? null,
+      sortKey: board.sortKey,
+      sortAsc: board.sortAsc,
+      filters: board.filters,
+      text: board.search,
+    };
+  }, [
+    researchPos,
+    researchWindow,
+    researchInclude,
+    researchWatchlist,
+    researchTeams,
+    researchProjected,
+    researchCols,
+    projCols,
+    researchUi,
+  ]);
+
+  /**
+   * **Apply a saved reading to the board.**
+   *
+   * The same shape `openSpotlightBoard` has and one important difference:
+   * that door deliberately leaves the reader's own work alone (a search, a
+   * filter, a day set), because it is a *door* — it opens the board at a place.
+   * This one replaces all of it, because that is what a saved search **is**:
+   * somebody built a reading and named it, and applying it while keeping
+   * yesterday's four filters would produce a board that is neither.
+   *
+   * **Nothing here writes to the record**, which matters most for the shared
+   * case: the include set and the watchlist button are set locally with their
+   * touched refs raised, exactly as `openSpotlightBoard` sets the include set,
+   * so opening somebody's link cannot quietly become your saved default. The
+   * columns are the one thing that does persist, and deliberately — a column
+   * set is what the picker writes and what the reader expects to still be there
+   * tomorrow.
+   */
+  const applySearchBoard = useCallback(
+    (raw: unknown) => {
+      const b = readSearchBoard(raw);
+      if (!b) return;
+      const kind = researchKindFor(b.pos);
+      setView('research');
+      setResearchTeams(b.teams);
+      setResearchPos(b.pos);
+      setResearchWindow(b.window);
+      setScheduleSpan(null);
+      setResearchProjected(b.projected);
+      researchIncludeTouched.current = true;
+      setResearchIncludeState(fromIncludeKeys(b.include));
+      researchWatchlistTouched.current = true;
+      setResearchWatchlistState(b.watchlist);
+      if (b.cols) {
+        const write = b.projected ? setProjCols : setResearchCols;
+        write((prev) => ({ ...prev, [kind]: b.cols as string[] }));
+      }
+      setResearchUi((prev) => ({
+        ...prev,
+        boards: {
+          ...prev.boards,
+          [boardStateFor(kind, b.teams)]: {
+            search: b.text,
+            sortKey: b.sortKey,
+            sortAsc: b.sortAsc,
+            filters: b.filters,
+          },
+        },
+        // The first page again — a reading applied is a board to be read from
+        // the top, and `freshResearchUi` is where that number lives so this
+        // cannot come to disagree with a board opened cold.
+        shown: freshResearchUi().shown,
+      }));
+    },
+    [],
+  );
+
+  const applySearch = useCallback(
+    (sv: SavedSearch) => applySearchBoard(sv.board),
+    [applySearchBoard],
+  );
+
+  const saveSearch = useCallback(
+    (name: string) => {
+      api
+        .addSearch(name, snapshotBoard() as unknown as Record<string, unknown>)
+        .then((d) => setSearches(d.searches))
+        .catch((e: Error) => console.error('saving a search failed:', e.message));
+    },
+    [snapshotBoard],
+  );
+
+  const replaceSearch = useCallback(
+    (id: string) => {
+      api
+        .updateSearch(id, { board: snapshotBoard() as unknown as Record<string, unknown> })
+        .then((d) => setSearches(d.searches))
+        .catch((e: Error) => console.error('updating a search failed:', e.message));
+    },
+    [snapshotBoard],
+  );
+
+  const renameSearch = useCallback((id: string, name: string) => {
+    api
+      .updateSearch(id, { name })
+      .then((d) => setSearches(d.searches))
+      .catch((e: Error) => console.error('renaming a search failed:', e.message));
+  }, []);
+
+  const deleteSearch = useCallback((id: string) => {
+    api
+      .deleteSearch(id)
+      .then((d) => setSearches(d.searches))
+      .catch((e: Error) => console.error('deleting a search failed:', e.message));
+  }, []);
+
+  /**
+   * Share one, or stop. The **whole collection** comes back from the read that
+   * follows rather than being patched here, for the reason above — and it is a
+   * second round trip on purpose: the share route answers with the code alone,
+   * and re-reading is what puts the `shareCode` onto the row so the ⤴ mark and
+   * the link panel are drawn from stored state rather than from a local guess.
+   */
+  const shareResearchItem = useCallback(
+    (kind: 'list' | 'search', id: string, enabled: boolean) => {
+      api
+        .shareResearchItem(kind, id, enabled)
+        .then(() => api.researchLists())
+        .then((d) => {
+          setLists(d.lists);
+          setSearches(d.searches);
+        })
+        .catch((e: Error) => console.error('sharing failed:', e.message));
+    },
+    [],
+  );
+
+  /**
+   * **Take a copy of the shared thing.**
+   *
+   * A *copy*, which is the whole meaning of the offer: from here on it is the
+   * reader's, and it stops tracking the owner's. A shared list becomes a new
+   * list of theirs under the same name and is made active; a shared search
+   * becomes one of their searches, saved from the board it has already been
+   * applied to — which is the honest thing to save, since that board is what
+   * they have been looking at and may have adjusted.
+   *
+   * The notice goes away on success, because the thing it was about is now
+   * theirs and saying *shared* over it would be false.
+   */
+  const saveSharedAsMine = useCallback(() => {
+    if (!shared || sharedSaving) return;
+    setSharedSaving(true);
+    const done = () => {
+      setSharedSaving(false);
+      setSharedLink(null);
+      setShared(null);
+    };
+    if (shared.kind === 'list') {
+      // **The list and its players in one write, then the activate.** Both
+      // halves of that are the fix for a measured fault: copying a two-player
+      // list as a create plus a run of stars landed **one** of the two, and put
+      // it on the wrong list. The record is a single item behind a single
+      // version guard, so the stars raced each other; and the activate was a
+      // separate request the stars raced as well, so the ones that did land
+      // went to whichever list was still active. One write cannot race itself,
+      // and awaiting the activate is what makes the order a fact rather than a
+      // hope.
+      api
+        .addList(shared.name, shared.keys ?? [])
+        .then((d) => {
+          setLists(d.lists);
+          setActiveListIdState(d.id);
+          return api.setActiveList(d.id);
+        })
+        .then((r) => {
+          setActiveListIdState(r.activeId);
+          done();
+        })
+        .catch((e: Error) => {
+          console.error('copying the shared watchlist failed:', e.message);
+          setSharedSaving(false);
+        });
+      return;
+    }
+    api
+      .addSearch(shared.name, snapshotBoard() as unknown as Record<string, unknown>)
+      .then((d) => {
+        setSearches(d.searches);
+        done();
+      })
+      .catch((e: Error) => {
+        console.error('copying the shared search failed:', e.message);
+        setSharedSaving(false);
+      });
+  }, [shared, sharedSaving, snapshotBoard]);
+
+  /** Put the shared thing away — the lens rule, worked by hand. The URL sync
+   *  drops the param on the next tick, so the link is gone from the address bar
+   *  as well as from the board. */
+  const dismissShared = useCallback(() => {
+    setSharedLink(null);
+    setShared(null);
+    sharedReq.current = null;
+  }, []);
+
+  /**
+   * **What the board's Watchlist button actually unions** — a shared list when
+   * one is in force, and otherwise the reader's own active list.
+   *
+   * The one place the two diverge, and it is deliberately *not* the star (see
+   * `ownWatchlistKeys` on the board's props): the union and the count are about
+   * the list on screen, and the star is about the list you own.
+   */
+  const boardWatchlistKeys = useMemo(
+    () =>
+      shared?.kind === 'list' && shared.keys ? new Set(shared.keys) : watchlistKeys,
+    [shared, watchlistKeys],
+  );
+
+  /** Everything the board's two saved-thing controls need, in one object — see
+   *  `SavedControls`, which says why it is one rather than fifteen props. */
+  const savedControls = useMemo(
+    () => ({
+      lists,
+      searches,
+      activeListId: activeList?.id ?? '',
+      maxLists: MAX_LISTS,
+      maxSearches: MAX_SEARCHES,
+      shared,
+      sharedSaving,
+      /* The list on the **board** — a shared one when it is showing, and
+         otherwise the reader's own active list. The star is a different
+         question and reads `activeList` directly; see `ownWatchlistKeys`. */
+      watchlistName:
+        shared?.kind === 'list' ? shared.name : (activeList?.name ?? ''),
+      onPickList: setActiveListId,
+      onCreateList: createList,
+      onRenameList: renameList,
+      onDeleteList: deleteList,
+      onApplySearch: applySearch,
+      onSaveSearch: saveSearch,
+      onReplaceSearch: replaceSearch,
+      onRenameSearch: renameSearch,
+      onDeleteSearch: deleteSearch,
+      onShare: shareResearchItem,
+      onSaveSharedAsMine: saveSharedAsMine,
+      onDismissShared: dismissShared,
+    }),
+    [
+      lists,
+      searches,
+      activeList,
+      shared,
+      sharedSaving,
+      setActiveListId,
+      createList,
+      renameList,
+      deleteList,
+      applySearch,
+      saveSearch,
+      replaceSearch,
+      renameSearch,
+      deleteSearch,
+      shareResearchItem,
+      saveSharedAsMine,
+      dismissShared,
+    ],
+  );
 
   /**
    * The sequence number is what `loadFantasyRoster` carries and is here for the
@@ -5970,6 +6479,31 @@ export default function App() {
    * branch of its own: a projection is a line per man, so a board of thirty
    * clubs is exactly as far from the lens's subject as the Feed is.
    */
+  /**
+   * **And a shared link is put away when the board leaves the screen**, which
+   * is the same rule one page over: a shared list or search is a lens on *this*
+   * board, so crossing to the Roster or the Feed puts it back to the reader's
+   * own — and takes the code out of the URL of every page that is not the
+   * board, which it had no business being in.
+   *
+   * A player's page is not a leaving, for the reason set out below: it is an
+   * overlay, `view` still names the board, and closing it comes back to the
+   * same table.
+   *
+   * **It is safe on the first render**, which is the thing this kind of effect
+   * gets wrong: `view` is seeded from the URL, and `shareLink` writes
+   * `view=research` into every link it makes — so an inbound link is already on
+   * the board before this runs and there is no window in which it discards the
+   * code it arrived with.
+   */
+  useEffect(() => {
+    if (view !== 'research') {
+      setSharedLink(null);
+      setShared(null);
+      sharedReq.current = null;
+    }
+  }, [view]);
+
   useEffect(() => {
     if (view !== 'research' || researchTeams) setResearchProjected(false);
   }, [view, researchTeams]);
@@ -10054,7 +10588,12 @@ export default function App() {
           espnError={espnError}
           onConnectEspn={openEspnSettings}
           rosterKeys={rosterKeys}
-          watchlistKeys={watchlistKeys}
+          watchlistKeys={boardWatchlistKeys}
+          /* The reader's **own** active list, which is what a row's star
+             reflects and writes to — never the shared one being shown over it.
+             See `ownWatchlistKeys` on the board's props. */
+          ownWatchlistKeys={watchlistKeys}
+          saved={savedControls}
           onWatchlistToggle={toggleWatchlisted}
           onOpenDetails={openPlayer}
           /* And the team reading's own door: a club row's cap logo and its name

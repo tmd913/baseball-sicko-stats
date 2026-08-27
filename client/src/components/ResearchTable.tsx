@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ScrollRow } from './TabStrip';
+import { ListsPanel, SavedButton, SearchesPanel, SharedNotice } from './ResearchLists';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
@@ -47,7 +48,10 @@ import type {
   ResearchIncludeKey,
   ResearchRow,
   ResearchWindow,
+  SavedList,
+  SavedSearch,
   ScheduleGame,
+  SharedItem,
   TrendWindow,
 } from '../types';
 import {
@@ -459,7 +463,9 @@ export type ResearchInclude = Record<ResearchIncludeKey, boolean>;
 /** The board as it opens. */
 export const DEFAULT_INCLUDE: ResearchInclude = { mine: false, others: false, fa: true };
 
-const includeKeys = (i: ResearchInclude): ResearchIncludeKey[] =>
+/** The set as a list of keys — exported because a **saved search** stores one
+ *  (see `ResearchSearchBoard`), and `fromIncludeKeys` beside it reads one back. */
+export const includeKeys = (i: ResearchInclude): ResearchIncludeKey[] =>
   RESEARCH_INCLUDE_KEYS.filter((k) => i[k]);
 
 export const fromIncludeKeys = (keys: ResearchIncludeKey[]): ResearchInclude => ({
@@ -613,6 +619,159 @@ export interface StatFilter {
 }
 
 const OP_LABEL: Record<Op, string> = { gte: '≥', lte: '≤' };
+
+/**
+ * **A saved search's payload: the whole of what decides what is on this board.**
+ *
+ * Eleven fields, and the test each one had to pass is *would a reader who saved
+ * this and came back tomorrow be surprised to find it different*. Which
+ * position, over which span, which ownership sets, with the watchlist on or
+ * off, the clubs board or the players one, measured or projected, which
+ * columns, sorted how, filtered how, searched for what — every one of those is
+ * something somebody deliberately set, and a "saved search" that dropped any of
+ * them would come back as a different board wearing the right name.
+ *
+ * **What is deliberately not here** is anything that is not a *reading*: the
+ * paging (`shown`), which panels were open, the half-typed condition in the
+ * filter builder. Those are where the reader had got to, not what they were
+ * looking at, and restoring them would be a saved search re-opening somebody's
+ * furniture.
+ *
+ * **`v` is a version and it is checked**, which is the one thing that makes
+ * this safe to store opaquely on the server. The board's vocabulary is the
+ * client's — see `SavedSearch` — so a search written by a newer build can name
+ * a position, a window or a filter operator this one has never heard of.
+ * `readSearchBoard` is where that is handled: every field is narrowed against
+ * what this build actually has, and one it cannot place falls back rather than
+ * being applied. The alternative is a saved search from next season silently
+ * putting the board into a state with no control able to undo it.
+ */
+export interface ResearchSearchBoard {
+  v: 1;
+  pos: ResearchPos;
+  window: ResearchWindow;
+  include: ResearchIncludeKey[];
+  watchlist: boolean;
+  teams: boolean;
+  projected: boolean;
+  /** The column keys, or null for "this board's defaults" — the same null the
+   *  saved preference uses, and it means the same thing: follow the defaults as
+   *  they change rather than being pinned to today's. */
+  cols: string[] | null;
+  sortKey: string | null;
+  sortAsc: boolean;
+  filters: StatFilter[];
+  /** The name search, which is `search` on `BoardState` and `text` here because
+   *  `search` on a thing called a *search* reads as the whole object. */
+  text: string;
+}
+
+const ALL_POSITIONS = new Set<string>(POSITIONS.map((p) => p.key));
+
+/**
+ * Narrow a stored board into one this build can actually apply.
+ *
+ * **Every field falls back rather than failing**, which is the app's standing
+ * rule for an unrecognized value arriving in a link, applied to a whole object:
+ * a search that names a position this build has dropped opens on `batters`
+ * rather than on nothing, and a filter naming a column that has gone is
+ * dropped while the rest of the search still applies. The only thing that
+ * returns null is a payload that is not a saved board at all — a wrong `v`, or
+ * an object with none of this shape — because there is no honest partial
+ * reading of that.
+ */
+export function readSearchBoard(raw: unknown): ResearchSearchBoard | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (r.v !== 1) return null;
+  const pos = typeof r.pos === 'string' && ALL_POSITIONS.has(r.pos) ? (r.pos as ResearchPos) : 'batters';
+  const window = (RESEARCH_WINDOWS as unknown[]).includes(r.window)
+    ? (r.window as ResearchWindow)
+    : 'season';
+  const include = Array.isArray(r.include)
+    ? (r.include.filter(
+        (k): k is ResearchIncludeKey => (RESEARCH_INCLUDE_KEYS as string[]).includes(k as string),
+      ))
+    : [];
+  const cols = Array.isArray(r.cols)
+    ? r.cols.filter((c): c is string => typeof c === 'string')
+    : null;
+  const filters = Array.isArray(r.filters)
+    ? r.filters.flatMap((f, i) => {
+        if (typeof f !== 'object' || f === null) return [];
+        const g = f as Record<string, unknown>;
+        if (typeof g.column !== 'string') return [];
+        if (g.op !== 'gte' && g.op !== 'lte') return [];
+        const value = Number(g.value);
+        if (!Number.isFinite(value)) return [];
+        const label = Number(g.label);
+        return [
+          {
+            // **Minted here rather than restored.** `StatFilter.id` is a React
+            // key and a handle for the chip's ✕, and two searches applied in
+            // one session would otherwise hand out the same ids twice. The
+            // index is enough — the list is rebuilt whole on every apply.
+            id: Date.now() + i,
+            column: g.column,
+            op: g.op,
+            value,
+            label: Number.isFinite(label) ? label : value,
+          } satisfies StatFilter,
+        ];
+      })
+    : [];
+  return {
+    v: 1,
+    pos,
+    window,
+    include,
+    watchlist: r.watchlist === true,
+    teams: r.teams === true,
+    projected: r.projected === true,
+    cols,
+    sortKey: typeof r.sortKey === 'string' ? r.sortKey : null,
+    sortAsc: r.sortAsc === true,
+    filters,
+    text: typeof r.text === 'string' ? r.text : '',
+  };
+}
+
+/**
+ * **Everything the board's two saved-thing controls need**, in one object.
+ *
+ * Held together rather than spread across the props for the reason a component
+ * gets a props object at all: this is one feature with one owner
+ * (`ResearchLists.tsx`), and `ResearchTable` does nothing with any of it but
+ * hand it on. Keeping it in one field means adding a gesture to that feature is
+ * a change in two files rather than four.
+ */
+export interface SavedControls {
+  lists: SavedList[];
+  searches: SavedSearch[];
+  activeListId: string;
+  maxLists: number;
+  maxSearches: number;
+  /** The shared list or search in force, or null — what draws the notice above
+   *  the board and what `Save as my own` copies. */
+  shared: SharedItem | null;
+  /** What the Watchlist button is called: the active list's name, or a shared
+   *  list's when one is showing. Empty before the boot read lands, which falls
+   *  the label back to the word it always was rather than to nothing. */
+  watchlistName: string;
+  sharedSaving: boolean;
+  onPickList: (id: string) => void;
+  onCreateList: (name: string) => void;
+  onRenameList: (id: string, name: string) => void;
+  onDeleteList: (id: string) => void;
+  onApplySearch: (search: SavedSearch) => void;
+  onSaveSearch: (name: string) => void;
+  onReplaceSearch: (id: string) => void;
+  onRenameSearch: (id: string, name: string) => void;
+  onDeleteSearch: (id: string) => void;
+  onShare: (kind: 'list' | 'search', id: string, enabled: boolean) => void;
+  onSaveSharedAsMine: () => void;
+  onDismissShared: () => void;
+}
 
 // ---- Component ------------------------------------------------------------
 
@@ -807,6 +966,26 @@ interface Props {
    *  by the app's player key, so a two-way player followed only as a pitcher is
    *  starred on the pitching board and not the batting one. */
   watchlistKeys: Set<string>;
+  /**
+   * **The reader's own active list**, which is what a row's star reflects and
+   * writes to — always, and whether or not somebody else's list is being shown
+   * over the top of it.
+   *
+   * A second set beside `watchlistKeys` because that one has three jobs (the
+   * union on the board, the count on the button, the star) and a **shared**
+   * list splits them: the first two are about the list on screen and the third
+   * is about the list you own. Marking a stranger's players starred while the
+   * press writes to your own list would be a control lying about what it does.
+   * Identical to `watchlistKeys` whenever nothing is shared, which is almost
+   * always.
+   */
+  ownWatchlistKeys: Set<string>;
+  /** The named lists, the saved searches and the shared-link chrome — one prop
+   *  object rather than fifteen flat ones, and the reason is that they are one
+   *  feature: every field is read by `ResearchLists.tsx` and by nothing else in
+   *  this file, so flattening them would be fifteen names in a signature that
+   *  already has sixty. */
+  saved: SavedControls;
   /** Put a player on the watchlist, or take him off. */
   onWatchlistToggle: (key: string, on: boolean) => void;
   /** Open the details overlay (percentiles, game log, season splits) for a row.
@@ -942,6 +1121,11 @@ export interface ResearchUi {
     filters: boolean;
     turns: boolean;
     columns: boolean;
+    /** The watchlist chooser and the saved searches — panels like the rest, and
+     *  held here for the reason the rest are: coming back to find one shut is
+     *  the same surprise as coming back to find it empty. */
+    lists: boolean;
+    searches: boolean;
     /** The projected lens's span picker — the days it is drawn over. Open is a
      *  fact about where you were, like the other three. */
     projected: boolean;
@@ -991,6 +1175,8 @@ export const freshResearchUi = (): ResearchUi => ({
     columns: false,
     projected: false,
     projCustom: false,
+    lists: false,
+    searches: false,
   },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
@@ -1135,6 +1321,8 @@ export function ResearchTable({
   onConnectEspn,
   rosterKeys,
   watchlistKeys,
+  ownWatchlistKeys,
+  saved,
   onWatchlistToggle,
   onOpenDetails,
   onOpenTeam,
@@ -1603,6 +1791,8 @@ export function ResearchTable({
     turns: turnsOpen,
     columns: columnsOpen,
     projected: projectedOpen,
+    lists: listsOpen,
+    searches: searchesOpen,
   } = ui.panels;
   /**
    * **The span in force came through the calendar** — it is not one of the
@@ -1738,7 +1928,15 @@ export function ResearchTable({
   const setPanel = (which: keyof ResearchUi['panels'], on: boolean) =>
     onUiChange((u) => {
       if (which === 'projCustom') return { ...u, panels: { ...u.panels, projCustom: on } };
-      const shut = { search: false, filters: false, turns: false, columns: false, projected: false };
+      const shut = {
+        search: false,
+        filters: false,
+        turns: false,
+        columns: false,
+        projected: false,
+        lists: false,
+        searches: false,
+      };
       const panels = { ...u.panels, ...(on ? shut : {}), [which]: on };
       // **The span picker's own door goes wherever its panel goes**, and that
       // is tested on the *result* rather than on which button was pressed —
@@ -2749,18 +2947,33 @@ export function ResearchTable({
    * of the league the table is*, which is exactly the argument the comment on
    * `.research-tools` already makes for keeping the span beside the position.
    */
+  const watchlistName = saved.watchlistName;
   const watchlistToggle = !teams ? (
     <button
       type="button"
       className={`research-toggle${includeWatchlist ? ' on' : ''}`}
       aria-pressed={includeWatchlist}
       onClick={() => onIncludeWatchlistChange(!includeWatchlist)}
-      title="Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there"
+      title={
+        watchlistName
+          ? `Also show the players on “${watchlistName}”, whoever owns them — the star on each row is what puts them there`
+          : 'Also show the players on your watchlist, whoever owns them — the star on each row is what puts them there'
+      }
     >
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
         <path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z" />
       </svg>
-      <span className="research-toggle-label">Watchlist</span>
+      {/* **The button names the list it is about**, which is the whole of what
+          the bar had to learn: with one list "Watchlist" said everything, and
+          with several it says which of them only by not saying. The default
+          list is *called* `Watchlist`, so a reader who never made a second one
+          sees exactly the button they always did — the rename is theirs to do
+          and the label follows it.
+
+          A shared list showing over the top of it takes the label too, because
+          that is the list on the board; the star still writes to the reader's
+          own, and the bar above the table is what says so. */}
+      <span className="research-toggle-label">{watchlistName || 'Watchlist'}</span>
       {watchlistCount > 0 && <span className="research-toggle-count">{watchlistCount}</span>}
     </button>
   ) : null;
@@ -2890,7 +3103,36 @@ export function ResearchTable({
               been swapped out is a setting lying about its own reach, which is
               the same argument that takes Columns and Ranks off the bar in
               schedule mode. */}
-          {watchlistToggle}
+          {/* **The toggle, wrapped in its chooser.** The button's job has not
+              changed — union the watchlist onto the board — and what is new is
+              that "the watchlist" now names one of several, so the caret beside
+              it is where that is said and changed. A split control rather than
+              one button doing both: pressing a button that both toggles a set
+              and opens a menu is a control the reader cannot aim.
+
+              Off the bar on the team reading with the include buttons it
+              composes with, and for the same reason: a watchlist is a list of
+              players and unioning players onto a board of clubs is not an
+              operation. */}
+          {teams ? (
+            watchlistToggle
+          ) : (
+            <div className="rl-split">
+              {watchlistToggle}
+              {/* **A caret, not a second word.** It read `Watchlist · Lists ▾`,
+                  which is two nouns for one thing: the half beside this one
+                  already names the list, so all this half has to say is *there
+                  are others*. Its accessible name comes from the `title`
+                  through `aria-label`, which is what `label` being absent
+                  arranges. */}
+              <SavedButton
+                title="Choose a watchlist, or rename, share and add one"
+                open={listsOpen}
+                onToggle={() => setPanel('lists', !listsOpen)}
+                className="rl-split-caret"
+              />
+            </div>
+          )}
           {!teams && (
           <div className="research-include" role="group" aria-label="Which players">
             {INCLUDE_ORDER.filter(
@@ -3222,6 +3464,27 @@ export function ResearchTable({
              * *rows* and a schedule of the shortstops with 300+ PA is exactly
              * the question this board is opened with.
              */}
+            {/* **Saved searches read last in the run**, after everything they
+                are made of. Search, Filters and Watchlist decide who is in the
+                table; Schedule decides what the table is about them; Columns
+                and Ranks decide how it is drawn — and this one is *all of them
+                at once, under a name*, so it belongs after the controls it
+                stands in for rather than among them.
+
+                Off the bar on the team reading, like the two below it and for
+                the same reason: a saved search names a position and an
+                ownership set, and a board of thirty clubs has neither, so a
+                reading applied there would be a control lying about its own
+                reach. */}
+            {!teams && (
+              <SavedButton
+                label="Searches"
+                title="Saved readings of this board — apply, save, share"
+                count={saved.searches.length}
+                open={searchesOpen}
+                onToggle={() => setPanel('searches', !searchesOpen)}
+              />
+            )}
             <ScheduleToggle
               on={scheduleSpan !== null}
               /* On with no index is the read still out — App holds the window
@@ -3495,6 +3758,38 @@ export function ResearchTable({
 
   const panels = (
     <>
+      {/* **The two saved-thing panels, in the head with the rest.** They were
+          written as popovers hanging off their buttons and that does not work
+          here: the control set is `.tool-scroll-box`, which scrolls
+          horizontally and therefore clips on **both** axes, so the panel
+          measured a perfectly ordinary 268×322 box and painted nothing at all.
+          The head is where a panel on this board goes; see the note above. */}
+      {listsOpen && !teams && (
+        <ListsPanel
+          lists={saved.lists}
+          activeId={saved.activeListId}
+          max={saved.maxLists}
+          onPick={saved.onPickList}
+          onCreate={saved.onCreateList}
+          onRename={saved.onRenameList}
+          onDelete={saved.onDeleteList}
+          onShare={(id: string, on: boolean) => saved.onShare('list', id, on)}
+        />
+      )}
+      {searchesOpen && !teams && (
+        <SearchesPanel
+          searches={saved.searches}
+          max={saved.maxSearches}
+          onApply={saved.onApplySearch}
+          onSave={saved.onSaveSearch}
+          onReplace={saved.onReplaceSearch}
+          onRename={saved.onRenameSearch}
+          onDelete={saved.onDeleteSearch}
+          onShare={(id: string, on: boolean) => saved.onShare('search', id, on)}
+          onClose={() => setPanel('searches', false)}
+        />
+      )}
+
       {searchOpen && (
         <div className="research-panel">
           <input
@@ -3913,6 +4208,24 @@ export function ResearchTable({
             </ScrollRow>
           </div>
           </div>
+
+          {/* **The bar that says you are reading somebody else's**, and it sits
+              here — under the controls, above the table — because that is where
+              the fact belongs: the board below it looks entirely ordinary, and
+              without this there is nothing on screen to say the rows came out
+              of a link. Inside the bar it would be a fourth run that is there
+              almost never; below the table it would be under six hundred rows.
+
+              It is not drawn on the team reading, where neither kind of shared
+              thing can be in force. */}
+          {saved.shared && !teams && (
+            <SharedNotice
+              shared={saved.shared}
+              saving={saved.sharedSaving}
+              onSaveAsMine={saved.onSaveSharedAsMine}
+              onDismiss={saved.onDismissShared}
+            />
+          )}
 
           {/* **A modal, where Search and Filters beside it are inline panels**
               — see `ColumnPicker.tsx` for why this one alone leaves the row,
@@ -4395,7 +4708,9 @@ export function ResearchTable({
                           so it always distinguishes the row it is on. */}
                       <PlayerNewsMark id={r.id} name={r.name} />
                       <WatchStar
-                        on={watchlistKeys.has(key)}
+                        /* **The reader's own list**, never the shared one —
+                           see `ownWatchlistKeys`. */
+                        on={ownWatchlistKeys.has(key)}
                         name={r.name}
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
