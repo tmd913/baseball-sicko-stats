@@ -686,142 +686,174 @@ already uses.
 **Bundle**: JS 745.79 → 762.13 kB raw, 219.89 → 224.42 gzipped; CSS 192.67 →
 198.16 raw, 34.32 → 35.16 gzipped.
 
-### Compare: the board transposed for two to six men
+### Compare: the board narrowed to a named set
 
-**The board answers *who out of six hundred*, and it answers it by scanning.**
-Forty columns across, one row per man — and the comparison a reader is actually
-making happens in their head, between two rows forty pixels apart. By the time
-the field is down to three names that is the wrong shape. `ComparePage.tsx` is
-the same numbers with the axes swapped: **one row per stat, one column per
-player**, which is the shape the player page's Stats tab already uses for one
-man across five spans.
+**It was a page, and a page was one table too many.** Two to six players opened
+a full-screen overlay — the board transposed, one row per stat and one column
+per man, with its own sticky header, its own scroller, its own percentile tab.
+Every one of those was a second implementation of something this board already
+had, and every column added here would have had to be added there.
 
-**It has no stat vocabulary of its own, and that is the whole design.** The rows
-are exactly the columns the reader has on, in their order, drawn by the same
-`Column.format` the board draws them with — so a number here and the same number
-on the board behind cannot disagree, and a column added to
-`researchColumns.tsx` appears here having been told nothing. The reader's own
-Columns picker is this page's picker. **The rows are handed in rather than
-fetched**, for the same reason: the board is holding them at whatever window,
-position and ownership sets are in force, and re-reading would be a second
-answer free to disagree with the one on screen — and would have to invent an
-opinion about which window a comparison is over.
+A comparison of three men is **the research board asked about three men**: the
+same columns, the same picker, the same sort, the same window, the same
+everything. So it is a **narrowing of the population** now, applied where the
+include buttons already narrow it, and the page is gone.
 
-**The leader in each row is lit, and `isRankable` is what decides whether the
-question is even askable.** That is `columnRanks.tsx`'s own test — the one that
-already decides whether the board may draw a percentile badge — so this needs no
-second opinion about which end is good: `Opp` holds words, `Ros%` and the trend
-columns are a fact about a *market* rather than about a player, `Start` is an
-ordinal, and launch angle and the GB/LD/FB split are "a profile, not a grade".
-Direction is `ascFirst` and nothing else, the field the sort arrows and the rank
-badges both read. A tie lights **every** player in it rather than the first,
-which would be an artifact of the order they were picked in; and a row where
-*all* of them are level lights none, the app's rule that a mark on every row
-marks nothing.
+**The narrowing overrides the ownership sets rather than composing with them.**
+The reader has named the players; a Free-Agents-only board that then dropped two
+of the three they picked would be a control quietly overruling a more specific
+instruction. `Compare` says *limit the board to these*, and it does.
 
-**A row nobody has a value in is dropped** — the same rule read sideways, the
-unit on a comparison being the row. It is common rather than exotic: the column
-set is one list for a whole board, so `W%` is team-only, `Opp` empties once the
-day's games are done, and `Ros%` and the trends are null with no ESPN league
-connected. Measured on three batters: **four of twenty-nine rows** were dashes
-all the way across.
+**One button, two states, because it is one thought.** Picking, it commits:
+`Compare these 3 →`. Committed, it is the way back: `Comparing 3 ✕`, lit. A second
+button for the second half would be a control only ever pressable in the state
+the first one is not. The commit step is necessary rather than incidental — a
+board that narrowed on the *first* tick would leave one row on screen and no way
+to tick a second.
 
-**The tick is a mode, not a column.** `WatchStar`'s own note records why: this
-is the app's widest table's *sticky* column, every pixel of it is a stat pushed
-off the right edge of a phone, and a control ahead of the name pushes every name
-along by its own width — which is why the star trails and takes 19px of a column
-that absorbs the table's slack. A tick on every row for a comparison nobody is
-making would be that cost paid all the time. Turned on it is folded onto the
-star's own selector — same square, same gutter, same baseline nudge — and it
-sits after it.
+**While narrowed, the ticks are the comparison.** They were the transient
+selection, and that left an inbound `?cmp=…` link — a reload, a board somebody
+was sent — showing three rows with **no tick on any of them**: the selection is
+not in the URL, so there was nothing to adjust. The board is handed
+`compareKeys` as its ticked set now and a press edits that. Only unticking is
+reachable there (every row on screen is in the set by construction), and
+dropping below two clears the narrowing rather than leaving a board of one man,
+which is not a comparison and is a state a reader cannot untick their way out
+of.
 
-**Six is the cap and the row refuses rather than rolling.** Dropping the oldest
-to make room would mean a seventh tick silently un-ticking a first the reader
-still wants, with nothing on screen to say which went. Full is
-**`aria-disabled`, not `disabled`**, because a disabled button shows no `title`
-and the title is the whole of the explanation: *Already comparing 6 players —
-untick one to add Fernando Tatis Jr.*
+### The color is how much better, by the league's own standards
 
-**`Compare` is two controls in one place.** Off, a toggle that turns the ticks
-on. On with fewer than two ticked, the same toggle wearing the count, which is
-what says *keep going*. On with two or more it grows a **separate** `Compare 3
-→` beside it, because a button that does one thing at two ticks and another at
-three is a control whose meaning changes under the reader. The second is the
-run's one *primary* control — everything else in the bar is a setting — so it
-takes the accent as a fill rather than as a tint.
+A comparison has to say *how much better*, and the honest measure of that is not
+the gap between the two men — two hitters on .252 and .251 are a whole range
+apart and level in every way that matters. It is the gap **by the league's own
+standards**, which is exactly what a percentile is.
 
-**A page, not a dialog**, and it joins `PageStep` for a reason that is not
-tidiness: another page can be opened *from* it. Pressing a name opens that man's
-page and `Back` has to come back to the comparison, which a dialog would have
-needed a route of its own to manage and which this gets from the stack all four
-pages already share. `cmp=` carries the keys, so a link describes exactly the
-page it opens, and it is the fourth of the exclusive set (player, then team,
-then game, then this, in the oldest-wins order a hand-made URL is resolved by).
-Dropping to fewer than two closes the page rather than drawing one column and
-calling it a comparison.
+So the tint is driven by `RankScale.of()` — the very scale `RankBadge` draws:
+0–100 with **100 at the good end**, direction already resolved off `ascFirst`,
+ranked within the qualified population. One point of batting average is about
+two points of percentile and draws almost nothing; sixty points is seventy and
+saturates. And because it is the same scale the badges use, the tint and the
+badge can never disagree about which end of a column is the good one.
 
-**The percentile tab is a second read rather than a second card.** The Stats tab
-is free; each percentile card is a Savant player-page scrape at ~1.07s cold, so
-six is six of the most expensive read this app makes. Lazy on first open, and
-the reads go out **together** — six in series is six seconds of an empty pane —
-with each caught into a null so one player's failure costs his own column and
-not the tab. It draws **Savant's summary card**, not this app's detailed one: a
-comparison is read across, so every metric costs N bars rather than one. And it
-is the same transpose again — one row per metric, three stacked bars under it,
-so the comparison is along the axis the reader is already looking down.
+**The midpoint is the group's own mean, not the league's 50th.** The question on
+this board is *which of these*: three men who are all excellent should not all
+read as hot, and three who are all poor should not all read as cold. Their mean
+is the line and the tint is how far each sits from it. A column where fewer than
+two of them have a value has no comparison to draw and is left alone, as is one
+where they are within a point of each other — this app's rule that a mark on
+every row marks nothing.
 
-**A surname is not the last word of a name.** `split(' ').pop()` reads *Fernando
-Tatis Jr.* as `Jr.`, and three bars labeled `Jr.` are three bars nobody can tell
-apart; a trailing suffix is kept with the name before it. Verified on the real
-row: `Tatis Jr.` beside `Bregman`.
+**The scale itself is the park board's**, `--park-hot` above the line and
+`--park-cold` below, at its own `MAX_TINT` — which is **imported rather than
+repeated**, being a *measured* number (the worst contrast across six themes at
+four caps) and therefore a thing that must be re-measured in one place when a
+palette moves. The yardstick is built from `population`, the whole board, and
+not from the narrowed rows: the standard must not change because the reader
+picked three men, which is the same care `ranks` takes one line up.
 
-**Driven, not compiled.** At 1200: the mode draws 50 ticks, three ticked gives
-`Compare 3 →`, and the page opens on `cmp=batter-608324,batter-683002,batter-691718`
-with **25 rows and 25 lit leaders** over three sticky-headed columns. The
-seventh tick refuses with its sentence, and turning the mode off drops the
-selection (a half-made list the reader cannot see is a thing that surprises them
-next time). A name opens `?player=batter-608324`; `Back` returns to
-`?cmp=…`; Escape from the comparison leaves to the board. At **390px**:
-`document.scrollWidth` 390 with the table scrolling inside its own
-`.cmp-wrap` (512 against a 358 client width), and the percentile rows turning to
-label-over-bars.
+**And the tooltip says in words what the color says in hue**, because identity
+never rests on hue here: *"Alex Bregman — Strikeout rate: 88th percentile of the
+Season board, 31 percentile points above the average of the players compared."*
 
-**And then the survey found four things the build had nothing to say about:**
+**Its ordinal is `ordinal()`'s, and it was a hardcoded `th`.** The sentence
+shipped as `${pct}th percentile`, which is right for 88 and wrong for the whole
+first, second and third of every ten — read off the live board it gave *"Games
+played: 3th percentile"* and *"Triples: 43th percentile"* on the very first row
+of a three-man comparison, the tooltip's first figure being the first thing the
+reader sees in it. `lib.ts` has carried `ordinal` since the lineup spot needed
+one, so this is a use of it rather than a fourth copy — and `columnRanks.tsx`,
+which draws the badge under the value, had a **second** implementation of the
+same eleven lines for the same reason ("so the badge's tooltip reads as a
+sentence"). Both read from `lib` now, one arithmetic for one figure, and the
+two tooltips on one cell can no longer disagree about what an ordinal is.
 
-- **The percentile tab was a bare list running the full window.** At 1440 that
-  is a **1,140px percentile track** — a bar so long the bubble's position stops
-  reading as a position. It is `.pct-card` with a modifier now, capped at
-  **880** and centered: 680 is too narrow for N bars per metric and 1,140 far
-  too wide. Measured after: card `x: 520, w: 880` at 1920, track 536.
-- **The surname column was a declared 88px**, which is a number about a font
-  this app does not choose — and wrong in both directions: `Crow-Armstrong`
-  truncated at 1440 with a thousand pixels of unused row beside it, while three
-  short names left 40px of every row empty. It is **measured at runtime** now
-  (`scrollWidth` off the widest name in place, which reports the full content
-  width even where `overflow: hidden` is clipping it), published as
-  `--cmp-who-w` and capped at 150. Measured: **98px, nothing truncated**, at
-  1920 through 390.
-- **The stats table filled the pane.** `min-width: 100%` made a three-man
-  comparison **1,888px wide at 1920** — three columns of ~600px each with one
-  number in the middle. It is `max-content` centered in a `safe center` flex
-  scroller now: **657px at 1920**, and at 390 it starts at `x: 16` and scrolls
-  inside its own box with the sticky stat column pinned (checked with
-  `elementFromPoint` after `scrollLeft: 200`). `safe` is load-bearing — a plain
-  `center` puts the first column off the left edge, unreachable, the moment the
-  table is wider than the pane.
-- **The columns were three different widths.** A `width` on a `th` is a
-  suggestion under `table-layout: auto`, so `Pete Crow-Armstrong` took its own
-  column to **189px against 148 and 170** and the numbers under the three lined
-  up with nothing. What fixes a column is a fixed box *inside* it: all three are
-  **183px** now, the same height, and a long name **wraps to two clamped lines
-  rather than ellipsizing** — truncating a player's name in a comparison of
-  three is the one thing that header must not do. The two-line box is reserved
-  either way, so a wrapped name does not make its own header taller than the
-  others. The ✕ came out of the flow while that was being done: as a flex
-  sibling it pushed the headshot-and-name block off-center by its own width.
+**Every word of the compare controls was written for the page, and the page is
+gone.** They shipped saying what the old overlay did rather than what the
+narrowing does, and a control that describes a thing that no longer happens is
+worse than one that says nothing:
 
-**Bundle**: Against the branch this stacks on: JS 762.13 → 775.60 kB raw,
-224.42 → 228.04 gzipped. CSS 198.16 → 202.78 raw, 35.16 → 35.98 gzipped.
+| where | was | is |
+| --- | --- | --- |
+| `Compare` toggle, off | *Tick up to 6 rows and line them up side by side* | *Tick up to 6 players, then narrow the board to just them* |
+| commit button | `Compare 3` — *Narrow the board to the 3 ticked players* | `Compare these 3` — *Narrow the board to the 3 players you have ticked* |
+| committed button | *Showing only these 3 — press to put the whole board back* | *Showing only the 3 you picked — press to bring the whole board back* |
+| a row's tick, unticked | *Compare Alex Bregman* | *Add Alex Bregman to the comparison* |
+| a row's tick, ticked | *Take Alex Bregman out of the comparison* | *Drop Alex Bregman from the comparison* |
+| a row's tick, full | *Already comparing 6 players — untick one to add X* | *6 players is the most you can compare — untick one to add X* |
+
+Three of those were **stale rather than clumsy** — "side by side" was the
+transposed page's geometry, and nothing is laid out side by side on a narrowed
+board. The tick's was **premature**: `Compare X` and `Already comparing 6` both
+claim a comparison that has not started, the ticks being a *selection* until the
+commit button is pressed, so they name the set being built instead. And
+`Compare 3` on the commit button read identically to the `Compare` toggle
+wearing its count of 3 immediately to its left — two adjacent controls with the
+same word and the same number, doing different things. `Compare these 3` is the
+one that acts on the set, and the demonstrative is what separates them.
+
+### The heat is a badge around the value, not a wash over the cell
+
+**A tinted cell is a *block*.** It runs the column's full width whatever the
+number in it is, so a narrowed board read as a checkerboard rather than as
+figures worth comparing — and it fought two things for the same ground: the
+zebra, and the sorted column's own tint.
+
+Round the figure it is `.pf-fig-val`, the park strip's own shape, which is where
+this app already draws a number wearing a hot/cold reading — so the two are
+**folded onto one rule** rather than given styles that agree today. What differs
+is the type: a park figure is a standalone number and sets its own 15px, where
+this one sits in a table whose columns are already sized, so it inherits. A
+negative inline margin claws its padding back off the cell's gutter, which is
+what keeps a badged column exactly as wide as an unbadged one — measured, no
+horizontal overflow at 1500 or 407 and the table is not re-laid out.
+
+It is drawn **whenever a comparison is in force, tint or no tint**: an untinted
+badge is invisible, and a box that appeared and vanished per column would step
+the numbers in and out down a row.
+
+**Which also retired a whole class of problem.** Tinting the cell meant painting
+over a ground that is *named* (`--cell-bg`, painted once by
+`.summary-table th, .summary-table td`, which the zebra and the sticky columns
+all feed), and doing that without stripping the striping took a flat
+`linear-gradient` — a `background-image`, so it layers over `background-color`
+— and a selector qualified to two classes and an element to outrank that
+shorthand's reset. Both were measured before they were believed: the computed
+`background-image` came back `none` on every cell while `--cmp-heat` was set
+correctly on all of them, and before that an absolutely-positioned `::before` at
+`z-index: -1` inside an `isolate`d cell — the textbook answer — did not paint at
+all. A badge has no such ground and takes the color directly. The zebra is
+untouched by construction now rather than by care: both grounds still alternate
+down a narrowed board.
+
+**The count line changes, because `3 of 3` says nothing.** A comparison *is* its
+own population, so the numerator and denominator are the same number by
+construction. What a reader wants there instead is what the color means, and
+that is what it says.
+
+Its **first** wording said it in one clause and lost the reader in it —
+*"color is each man's percentile against the Season board, next to the average
+of those compared"* asks a single sentence to carry the scale, the population
+*and* the midpoint, with "next to" doing the work of a comparison it never
+names, and it says nothing about which end is which. (It also spelled that first
+word the British way, on screen and in three comments and five lines of this
+file — the only such spelling the repo had; see `CLAUDE.md`.) It is two clauses now, in
+the order the reader needs them — what a badge measures, then which way each hue
+runs: *"Comparing **3** batters — each badge ranks that player on the Season
+board: warm is above the average of these 3, cool is below."*
+
+**Driven, not compiled.** At 1500, 900 and 407: the board narrows to exactly the
+3 ticked, **no page opens**, 69 of 78 badges carry a tint (the nine that do not
+are columns where fewer than two of them have a value, or where they are level),
+both zebra grounds survive underneath, the button reads `Comparing 3`, and there
+is no horizontal page overflow at any of them. With `Ranks` on, the badge and
+the percentile under it sit clear of each other — badge at `y: 353, h: 18`, rank
+at `y: 371` — and the rank's own number is not badged. An inbound `?cmp=…` link arrives with all three
+ticked; unticking takes the board 3 → 2, and again clears it back to 638 with
+`cmp` gone from the URL.
+
+**Bundle**: JS 776.65 → 770.86 kB raw, 228.30 → 227.04 gzipped; CSS 203.60 →
+200.42 raw, 36.15 → 35.56 gzipped — **a feature that removes more than it adds**,
+the page and its stylesheet being larger than the narrowing that replaced them.
 
 ### Six faults found by looking at it, and what each one turned out to be
 

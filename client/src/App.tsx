@@ -75,6 +75,7 @@ import {
   freshResearchUi,
   includeParam,
   includeKeys,
+  MAX_COMPARE,
   boardStateFor,
   readSearchBoard,
   isDefaultColumns,
@@ -95,7 +96,6 @@ import type {
   ResearchUi,
 } from './components/ResearchTable';
 import {
-  allColumns,
   defaultColumnKeys,
   projectedColumnKeys,
   trendKey,
@@ -104,8 +104,6 @@ import {
 } from './components/researchColumns';
 import { simulateLiveDay } from './simulate';
 import { PlayerDetails, DEFAULT_DENSITY, toDensity } from './components/PlayerDetails';
-import { ComparePage, MAX_COMPARE } from './components/ComparePage';
-import type { ComparePlayer } from './components/ComparePage';
 import type { PercentileDensity } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './components/DateControls';
@@ -157,19 +155,7 @@ import type { FantasySlot, GameDoor, GamePageTab, TeamDoor, TeamPageTab } from '
 type PageStep =
   | { kind: 'player'; key: string }
   | { kind: 'team'; id: number; tab: TeamPageTab | undefined }
-  | { kind: 'game'; gamePk: number; tab: GamePageTab | undefined }
-  /**
-   * **A comparison, which is a fourth page and not a dialog.**
-   *
-   * It earns a place in this union rather than a modal of its own because it is
-   * the same *kind* of thing the three above are: a full-screen page over a
-   * view, opened from a row, left by Back or Escape, and — crucially —
-   * **something another page can be opened from**. Pressing a name in a
-   * comparison opens that man's page, and Back from him has to come back to the
-   * comparison; a dialog would have had to grow a route of its own to manage
-   * that, where this gets it from the stack every other page already uses.
-   */
-  | { kind: 'compare'; keys: string[] };
+  | { kind: 'game'; gamePk: number; tab: GamePageTab | undefined };
 
 /**
  * A page, and **where the reader was standing on it** — the offset its own
@@ -671,24 +657,26 @@ export default function App() {
    * **Who is being compared** — `cmp=` in the URL, a comma-joined run of player
    * keys, and empty for no comparison.
    *
-   * A **page** rather than a lens or a dialog: it is exclusive with `player=`,
-   * `team=` and `game=` the way those three are with each other (see
-   * `showPage`, the one place that exclusion is enforced), it rides the same
-   * back-stack, and a link to one describes exactly the page it opens.
+   * **A narrowing of the research board, not a page.** It was a fourth
+   * full-screen page beside `player=`, `team=` and `game=`, and that was one
+   * table too many: a comparison of three men is the board *asked about three
+   * men* — the same columns, the same picker, the same sort, the same
+   * everything — so a second table somewhere else was a second place for all of
+   * that to be kept in step. It is a filter over the population now, applied
+   * where the include buttons already narrow it.
+   *
+   * Which makes it **which data the view shows**, so it stays in the URL and is
+   * scoped to the research view the way every other board parameter is. It is
+   * no longer exclusive with the three page params: a comparison can have a
+   * player's page open over it, and closing that page comes back to it.
    *
    * The keys carry the *kind* as well as the id (`batter-660271`), which is
    * what lets a comparison hold a two-way player as a batter without ambiguity
    * — the app's own key format, and the same thing the watchlist stores.
-   *
-   * Seeded from the URL like the three below it, and **last** in the
-   * oldest-parameter-wins order a hand-made link is resolved by: player, then
-   * team, then game, then this.
    */
-  const [compareKeys, setCompareKeys] = useState<string[]>(() => {
-    if (readKeys(initialParams.get('player'))[0]) return [];
-    if (initialParams.get('team') || initialParams.get('game')) return [];
-    return readKeys(initialParams.get('cmp')).slice(0, MAX_COMPARE);
-  });
+  const [compareKeys, setCompareKeys] = useState<string[]>(() =>
+    readKeys(initialParams.get('cmp')).slice(0, MAX_COMPARE),
+  );
   const [teamPageId, setTeamPageId] = useState<number | null>(() => {
     if (readKeys(initialParams.get('player'))[0]) return null;
     const raw = Number(initialParams.get('team'));
@@ -794,10 +782,6 @@ export default function App() {
   useEffect(() => {
     gamePkRef.current = gamePagePk;
   }, [gamePagePk]);
-  const compareKeysRef = useRef<string[]>([]);
-  useEffect(() => {
-    compareKeysRef.current = compareKeys;
-  }, [compareKeys]);
   /**
    * **The tab the club's page is actually showing**, which `teamPageTab` above
    * is not: that one is the tab a *door* named, and the page's key is built from
@@ -835,9 +819,6 @@ export default function App() {
     if (gamePkRef.current !== null) {
       return step({ kind: 'game', gamePk: gamePkRef.current, tab: gameTabRef.current });
     }
-    if (compareKeysRef.current.length > 0) {
-      return step({ kind: 'compare', keys: compareKeysRef.current });
-    }
     return null;
   }, []);
   /** Put one page on screen and the other two away — the single place the three
@@ -849,7 +830,6 @@ export default function App() {
     setTeamPageTab(page?.kind === 'team' ? page.tab : undefined);
     setGamePagePk(page?.kind === 'game' ? page.gamePk : null);
     setGamePageTab(page?.kind === 'game' ? page.tab : undefined);
-    setCompareKeys(page?.kind === 'compare' ? page.keys : []);
     setBackScroll(page?.scroll);
   }, []);
   /** Open a page, remembering the one it was opened from. */
@@ -4423,6 +4403,10 @@ export default function App() {
     if (view !== 'research') {
       setCompareSel([]);
       setCompareOn(false);
+      // The narrowing goes with the mode — it is a lens on this board, and a
+      // `cmp=` in the URL of the Roster tab would claim a reading that tab has
+      // not got. The rule `bproj=1` and `cut=` already follow.
+      setCompareKeys([]);
     }
   }, [view]);
   /** Turning the mode off drops the selection with it: a half-made tick list
@@ -4432,17 +4416,51 @@ export default function App() {
     setCompareOn(on);
     if (!on) setCompareSel([]);
   }, []);
+  /**
+   * **While the board is narrowed, the ticks *are* the comparison.**
+   *
+   * They were the transient selection throughout, and that left an inbound
+   * `?cmp=…` link — a reload, a shared board — showing three rows with **no
+   * tick on any of them**: the selection is not in the URL, so there was
+   * nothing to adjust and the only way out was to clear the whole thing.
+   *
+   * So while comparing, the board is handed `compareKeys` as its ticked set and
+   * a press edits *that*. Only unticking is reachable there — every row on
+   * screen is in the set by construction — and dropping below two clears the
+   * narrowing rather than leaving a board of one man, which is not a comparison
+   * and is a state a reader cannot untick their way out of. What is left stays
+   * ticked, so the board comes back with the two survivors still picked.
+   */
   const toggleCompare = useCallback((key: string) => {
+    setCompareKeys((prev) => {
+      if (prev.length === 0) return prev;
+      const left = prev.filter((k) => k !== key);
+      if (left.length === prev.length) return prev;
+      setCompareSel(left);
+      return left.length >= 2 ? left : [];
+    });
     setCompareSel((prev) => {
+      if (compareKeysRef.current.length > 0) return prev;
       if (prev.includes(key)) return prev.filter((k) => k !== key);
       // **The cap refuses rather than rolls.** Dropping the oldest to make room
-      // would mean a sixth tick silently un-ticking a first the reader still
+      // would mean a seventh tick silently un-ticking a first the reader still
       // wants, with nothing on screen to say which went; the button says how
       // many are in and the row simply declines.
       if (prev.length >= MAX_COMPARE) return prev;
       return [...prev, key];
     });
   }, []);
+  /** `compareKeys` as the last commit left it, so `toggleCompare` can tell the
+   *  two states apart without taking it as a dependency — it is handed to six
+   *  hundred rows and would otherwise be a new function on every press. */
+  const compareKeysRef = useRef<string[]>([]);
+  useEffect(() => {
+    compareKeysRef.current = compareKeys;
+  }, [compareKeys]);
+
+  /** Put the whole board back, and keep the ticks: a reader who has finished
+   *  with one comparison is usually about to adjust it, not to start again. */
+  const clearCompare = useCallback(() => setCompareKeys([]), []);
 
   /** The measured board, decorated. */
   const researchRows = useMemo(
@@ -4450,50 +4468,6 @@ export default function App() {
     [decorateRows, research, researchCacheKey],
   );
 
-  /**
-   * **The comparison's players, built from the board the reader picked them
-   * on.**
-   *
-   * The rows are the ones already on screen — see `ComparePage`, which sets out
-   * why a comparison must not re-read them — so a man the current window has no
-   * line for arrives with a null row and dashes, rather than the page pretending
-   * to a number it has not got. He is still *in* the comparison, because taking
-   * him out silently would be the page disagreeing with the URL that named him.
-   */
-  const comparePlayers = useMemo<ComparePlayer[]>(() => {
-    if (compareKeys.length === 0) return [];
-    const byKey = new Map(researchRows.map((r) => [`${r.kind}-${r.id}`, r]));
-    return compareKeys.map((key) => {
-      const row = byKey.get(key) ?? null;
-      const [kind, rawId] = key.split('-');
-      const id = Number(rawId);
-      return {
-        key,
-        id,
-        kind: (kind === 'pitcher' ? 'pitcher' : 'batter') as PlayerKind,
-        // The board's spelling of his name where it has him, and the season
-        // roster's where it does not — the same fallback the header search's
-        // recent picks make, and a key with neither behind it prints as itself
-        // rather than as blank.
-        name: row?.name ?? seasonPlayers.find((p) => p.id === id)?.name ?? key,
-        row,
-      };
-    });
-  }, [compareKeys, researchRows, seasonPlayers]);
-
-  /** The columns the comparison draws, which are the board's own — the reader's
-   *  picker is this page's picker. Ordered by their saved list where there is
-   *  one, and by the board's defaults where there is not. */
-  const compareColumns = useMemo(() => {
-    if (compareKeys.length === 0) return [];
-    const kind = comparePlayers[0]?.kind ?? 'batter';
-    const all = new Map(allColumns(kind).map((c) => [c.key, c]));
-    const keys = researchCols[kind] ?? defaultColumnKeys(kind);
-    return keys.flatMap((k) => {
-      const col = all.get(k);
-      return col ? [col] : [];
-    });
-  }, [compareKeys, comparePlayers, researchCols]);
 
   /**
    * The projected board, decorated the same way and **only for the kind on
@@ -10739,15 +10713,24 @@ export default function App() {
              opens the page. `openPage` rather than `setCompareKeys`, so the
              board the reader came from is on the stack and `Back` returns to
              it. */
-          compareOn={compareOn}
+          /* Narrowed, the mode is on whatever the toggle says: the ticks are
+             how a reader drops somebody, and an inbound link arrives with the
+             narrowing and no mode. */
+          compareOn={compareOn || compareKeys.length > 0}
           onCompareModeChange={setCompareMode}
-          compareSelected={compareSel}
+          /* …and narrowed, the ticked set *is* the comparison — see
+             `toggleCompare`. */
+          compareSelected={compareKeys.length > 0 ? compareKeys : compareSel}
           onToggleCompare={toggleCompare}
           maxCompare={MAX_COMPARE}
+          /* Commit the ticked set: the board narrows to it. No page is
+             opened — see `compareKeys`, which is why. */
           onOpenCompare={() => {
             if (compareSel.length < 2) return;
-            openPage({ kind: 'compare', keys: compareSel });
+            setCompareKeys(compareSel);
           }}
+          compareKeys={compareKeys}
+          onClearCompare={clearCompare}
           watchlistKeys={boardWatchlistKeys}
           /* The reader's **own** active list, which is what a row's star
              reflects and writes to — never the shared one being shown over it.
@@ -11011,29 +10994,6 @@ export default function App() {
         />
       )}
 
-      {/* **The comparison**, the fourth of the exclusive set of pages — see
-          `PageStep`, where it is argued that this is a page rather than a
-          dialog. Opening a name inside it opens his own page *over* this one in
-          the stack sense: `openPlayer` pushes, so `Back` from him comes back to
-          the comparison he was opened from. */}
-      {comparePlayers.length > 0 && (
-        <ComparePage
-          players={comparePlayers}
-          columns={compareColumns}
-          onOpenPlayer={openPlayer}
-          /* Dropping the last two men leaves a comparison of one, which is not
-             one — so the page closes rather than drawing a table with a single
-             column and calling it a comparison. `closePage` is the same door
-             Back and Escape use, so a comparison emptied by hand lands where a
-             comparison left by hand lands. */
-          onDrop={(key) => {
-            const left = compareKeys.filter((k) => k !== key);
-            if (left.length < 2) closePage();
-            else setCompareKeys(left);
-          }}
-          onClose={closePage}
-        />
-      )}
 
       {detailsPlayer && (
         <PlayerDetails

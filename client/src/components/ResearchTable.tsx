@@ -1,6 +1,10 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { ScrollRow } from './TabStrip';
 import { ListsPanel, SavedButton, SearchesPanel, SharedNotice } from './ResearchLists';
+/* The measured contrast cap the park board's heat is capped at — imported
+   rather than repeated, so a palette change is re-measured once. */
+import { MAX_TINT } from './ParkFactors';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
@@ -57,6 +61,7 @@ import type {
 import {
   eligibleCodes,
   headshotUrl,
+  ordinal,
   positionCell,
   searchFold,
   statusCorner,
@@ -621,6 +626,20 @@ export interface StatFilter {
 const OP_LABEL: Record<Op, string> = { gte: '≥', lte: '≤' };
 
 /**
+ * **How many may be compared at once.**
+ *
+ * Six is where a phone stops being able to show a stat name and two numbers,
+ * and it is far past the two or three anybody actually lines up. The row
+ * declines past it rather than dropping the oldest to make room: a seventh tick
+ * silently un-ticking a first the reader still wants, with nothing on screen to
+ * say which went, is worse than a tick that does nothing and says why.
+ *
+ * Lives here rather than in a file of its own now that the comparison *is* this
+ * board — it was `ComparePage.tsx`'s, and that page is gone.
+ */
+export const MAX_COMPARE = 6;
+
+/**
  * **A saved search's payload: the whole of what decides what is on this board.**
  *
  * Eleven fields, and the test each one had to pass is *would a reader who saved
@@ -1000,7 +1019,21 @@ interface Props {
   /** How many may be ticked. The row declines past it rather than dropping the
    *  oldest to make room; the button says how many are in. */
   maxCompare: number;
+  /** Commit the ticked set — which **narrows this board to it** rather than
+   *  opening anything. */
   onOpenCompare: () => void;
+  /**
+   * **The committed set: the players this board is currently limited to**, or
+   * empty for the ordinary board.
+   *
+   * It is a narrowing and not a page. A comparison of three men is the research
+   * board asked about three men — the same columns, the same sort, the same
+   * picker, the same everything — so it is a *filter over the population*, in
+   * the place the include buttons already narrow it, rather than a second table
+   * somewhere else that has to be kept in step with this one.
+   */
+  compareKeys: string[];
+  onClearCompare: () => void;
   /** The named lists, the saved searches and the shared-link chrome — one prop
    *  object rather than fifteen flat ones, and the reason is that they are one
    *  feature: every field is read by `ResearchLists.tsx` and by nothing else in
@@ -1299,10 +1332,10 @@ function CompareTick({
       className={`research-tick${on ? ' on' : ''}${full ? ' is-full' : ''}`}
       title={
         on
-          ? `Take ${name} out of the comparison`
+          ? `Drop ${name} from the comparison`
           : full
-            ? `Already comparing ${max} players — untick one to add ${name}`
-            : `Compare ${name}`
+            ? `${max} players is the most you can compare — untick one to add ${name}`
+            : `Add ${name} to the comparison`
       }
       onClick={() => {
         if (!full) onToggle();
@@ -1420,6 +1453,8 @@ export function ResearchTable({
   onToggleCompare,
   maxCompare,
   onOpenCompare,
+  compareKeys,
+  onClearCompare,
   saved,
   onWatchlistToggle,
   onOpenDetails,
@@ -2168,6 +2203,9 @@ export function ResearchTable({
     () => (teams ? rows : boardPopulation(rows, kind)),
     [rows, kind, teams],
   );
+  /** Whether the board is narrowed to a named set. Never on the team reading —
+   *  a comparison is of players, and this board's rows are clubs. */
+  const comparing = !teams && compareKeys.length > 0;
   const boardRows = useMemo(() => {
     // **Nothing partitions thirty clubs.** The three include buttons are a
     // partition of *ownership* and the watchlist is a list of players; neither
@@ -2175,6 +2213,16 @@ export function ResearchTable({
     // reading (see `controls`). Every club is on the board, which is why the
     // count line reads `30 of 30` until a filter or the search narrows it.
     if (teams) return population;
+    // **A comparison overrides the ownership sets, and that is the point.** The
+    // reader has named the players; a Free-Agents-only board that then dropped
+    // two of the three men they picked would be a control quietly overruling a
+    // more specific instruction. So this narrowing is applied *instead of* the
+    // include filter rather than after it — the board is those players, full
+    // stop, which is what `Compare` says it does.
+    if (comparing) {
+      const wanted = new Set(compareKeys);
+      return population.filter((r) => wanted.has(`${r.kind}-${r.id}`));
+    }
     const byTrade = population;
     return byTrade.filter((r) => {
       const key = `${r.kind}-${r.id}`;
@@ -2184,7 +2232,18 @@ export function ResearchTable({
       if (!ownedIds) return false;
       return ownedIds.has(r.id) ? include.others : include.fa;
     });
-  }, [teams, population, include, includeWatchlist, rosterKeys, watchlistKeys, ownedIds, espnConnected]);
+  }, [
+    teams,
+    population,
+    comparing,
+    compareKeys,
+    include,
+    includeWatchlist,
+    rosterKeys,
+    watchlistKeys,
+    ownedIds,
+    espnConnected,
+  ]);
 
   /**
    * One yardstick per rankable column, over that population.
@@ -2212,6 +2271,120 @@ export function ResearchTable({
     () => (showRanks && !schedule && !projectedOn ? rankScales(columns, population) : null),
     [showRanks, columns, population, schedule, projectedOn],
   );
+
+  /**
+   * **The comparison's own scales, and they are the *same* scales the badges
+   * use.**
+   *
+   * A comparison has to say *how much better*, and the honest measure of that
+   * is not the gap between the two men — two hitters on .252 and .251 are a
+   * range apart and level in every way that matters. It is the gap **by the
+   * league's own standards**, which is exactly what a percentile is: `of()`
+   * returns 0–100 with **100 at the good end**, direction already resolved off
+   * `ascFirst`, ranked within the qualified population.
+   *
+   * So one point of batting average is about two points of percentile and
+   * draws almost nothing; sixty points is seventy and saturates. And because
+   * this is the very scale `RankBadge` draws, the tint and the badge can never
+   * disagree about which end of a column is the good one.
+   *
+   * Computed off `population` — the whole board — and **not** off the narrowed
+   * rows, which is the same care `ranks` takes one line up: the yardstick must
+   * not change because the reader picked three men. Only built while comparing,
+   * so an ordinary board pays nothing.
+   */
+  const compareScales = useMemo(
+    () => (comparing && !schedule && !projectedOn ? (ranks ?? rankScales(columns, population)) : null),
+    [comparing, ranks, columns, population, schedule, projectedOn],
+  );
+
+  /**
+   * **What the group is being measured against: its own mean percentile, per
+   * column.**
+   *
+   * The midpoint is the compared players' own average rather than the league's
+   * 50th, because the question on this board is *which of these* — three men
+   * who are all excellent should not all read as hot, and three who are all
+   * poor should not all read as cold. Their mean is the line, and the tint is
+   * how far each sits from it.
+   *
+   * A column where fewer than two of them have a value has no comparison to
+   * draw and is left out entirely.
+   */
+  const compareMids = useMemo(() => {
+    if (!compareScales) return null;
+    const mids = new Map<string, number>();
+    for (const col of columns) {
+      const scale = compareScales.get(col.key);
+      if (!scale) continue;
+      let sum = 0;
+      let n = 0;
+      for (const r of boardRows) {
+        const pct = scale.of(col.value(r));
+        if (pct !== null) {
+          sum += pct;
+          n += 1;
+        }
+      }
+      if (n >= 2) mids.set(col.key, sum / n);
+    }
+    return mids;
+  }, [compareScales, columns, boardRows]);
+
+  /**
+   * The tint on one cell — `ParkFactors`' own, which is where this pattern in
+   * this app lives: `--park-hot` above the line, `--park-cold` below, mixed
+   * into the cell's ground in proportion to the distance and capped at
+   * `MAX_TINT`. That cap is imported rather than repeated: it is a **measured**
+   * number (the worst contrast across the six themes at four caps), and a
+   * second copy of it is a second thing to re-measure when a palette moves.
+   *
+   * **A level column is left alone**, which is this app's rule that a mark on
+   * every row marks nothing: three men within a percentile point of each other
+   * are not distinguishable and three pale tints would claim they are.
+   */
+  /**
+   * **Why a cell is lit, in words** — because a color cannot say it, and this
+   * app's rule is that identity never rests on hue. It states the percentile
+   * and the group's line, which between them are the whole of the claim the
+   * tint makes.
+   */
+  const compareTitle = (col: Column, row: ResearchRow): string | undefined => {
+    const mid = compareMids?.get(col.key);
+    const scale = compareScales?.get(col.key);
+    if (mid === undefined || !scale) return undefined;
+    const pct = scale.of(col.value(row));
+    if (pct === null) return undefined;
+    const off = Math.round(pct - mid);
+    // `ordinal`, not a hardcoded `th`: the tooltip reads a percentile back as a
+    // sentence, and `3th`/`22th`/`43th` is the first thing a reader sees in it.
+    const where = `${row.name} — ${col.title}: ${ordinal(pct)} percentile of ${rankPopulationLabel}`;
+    if (Math.abs(off) < 1) return `${where}, level with the others compared.`;
+    return `${where}, ${Math.abs(off)} percentile points ${
+      off > 0 ? 'above' : 'below'
+    } the average of the players compared.`;
+  };
+
+  const compareTint = (col: Column, row: ResearchRow): CSSProperties | undefined => {
+    const mid = compareMids?.get(col.key);
+    const scale = compareScales?.get(col.key);
+    if (mid === undefined || !scale) return undefined;
+    const pct = scale.of(col.value(row));
+    if (pct === null) return undefined;
+    const off = pct - mid;
+    if (Math.abs(off) < 1) return undefined;
+    const frac = Math.min(1, Math.abs(off) / 50);
+    const hue = off > 0 ? 'var(--park-hot)' : 'var(--park-cold)';
+    // A plain `background`, because it lands on a **badge** rather than on the
+    // cell — see `.research-cmp-badge`. Tinting the cell meant layering over a
+    // ground that is *named* (`--cell-bg`) and carries the zebra, which took a
+    // gradient and a qualified selector to do without stripping it; a badge has
+    // no such ground and takes the color directly, the way the park strip's
+    // own figures do.
+    return {
+      background: `color-mix(in srgb, ${hue} ${Math.round(frac * MAX_TINT)}%, transparent)`,
+    };
+  };
   /** What a badge says it is ranked against — the board and the span, in
    *  words, since a 7-day percentile and a season one are different claims. */
   const rankPopulationLabel = `the ${windowLabel(statWindow)} board`;
@@ -3625,7 +3798,7 @@ export function ResearchTable({
                   title={
                     compareOn
                       ? 'Stop picking players to compare'
-                      : `Tick up to ${maxCompare} rows and line them up side by side`
+                      : `Tick up to ${maxCompare} players, then narrow the board to just them`
                   }
                   onClick={() => onCompareModeChange(!compareOn)}
                 >
@@ -3650,40 +3823,68 @@ export function ResearchTable({
                     <span className="research-toggle-count">{compareSelected.length}</span>
                   )}
                 </button>
-                {compareOn && compareSelected.length >= 2 && (
-                  /* **Its word is in a `.research-toggle-label`, and that is not
-                     decoration.** The condensed run hides every button's label
-                     by that class and squares what is left to 36px — so a bare
-                     text node here was a 36px box with `Compare 2 →` spilling
-                     out of it across the two buttons beside it. Measured in the
-                     condensed run at 407: `w: 36`, `scrollWidth` past its own
-                     `clientWidth`, the label painting over `Schedule`.
-
-                     The arrow is the **glyph** rather than part of the word, so
-                     it is what survives the condense: the run reads `⊥2 →`,
-                     which is the count and the way out of it. */
+                {/**
+                  * **One button, two states, because it is one thought.**
+                  *
+                  * Picking, it commits: `Compare 3 →`. Committed, it is the way
+                  * back: `Comparing 3 ✕`, lit, and pressing it puts the whole
+                  * board back. A second button for the second half would be a
+                  * control that is only ever pressable in the state the first
+                  * one is not.
+                  *
+                  * **Its word is in a `.research-toggle-label`, and that is not
+                  * decoration.** The condensed run hides every button's label by
+                  * that class and squares what is left to 36px — so a bare text
+                  * node here was a 36px box with `Compare 2 →` spilling out of
+                  * it across the two buttons beside it. Measured at 407: `w: 36`
+                  * with `scrollWidth` past its own `clientWidth`. The glyph is
+                  * what survives the condense, and it carries the state: an
+                  * arrow to go in, a ✕ to come out.
+                  */}
+                {(comparing || compareSelected.length >= 2) && (
                   <button
                     type="button"
-                    className="research-toggle research-compare-go"
-                    title={`Line up the ${compareSelected.length} ticked players side by side`}
-                    onClick={onOpenCompare}
+                    className={`research-toggle research-compare-go${comparing ? ' on' : ''}`}
+                    title={
+                      comparing
+                        ? `Showing only the ${compareKeys.length} you picked — press to bring the whole board back`
+                        : `Narrow the board to the ${compareSelected.length} players you have ticked`
+                    }
+                    onClick={comparing ? onClearCompare : onOpenCompare}
                   >
                     <span className="research-toggle-label">
-                      Compare {compareSelected.length}
+                      {comparing
+                        ? `Comparing ${compareKeys.length}`
+                        : `Compare these ${compareSelected.length}`}
                     </span>
-                    <svg
-                      viewBox="0 0 16 16"
-                      width="15"
-                      height="15"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M2.5 8h11M9.5 4l4 4-4 4" />
-                    </svg>
+                    {comparing ? (
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="15"
+                        height="15"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 4l8 8M12 4l-8 8" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="15"
+                        height="15"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M2.5 8h11M9.5 4l4 4-4 4" />
+                      </svg>
+                    )}
                   </button>
                 )}
               </div>
@@ -4638,6 +4839,21 @@ export function ResearchTable({
                 <LoadingLine>
                   {teams ? 'Reading the team leaderboard' : 'Reading the league leaderboard'}
                 </LoadingLine>
+              ) : comparing ? (
+                /* **`3 of 3` says nothing**, which is what the ordinary count
+                   line would read here: a comparison *is* its population, so
+                   the numerator and the denominator are the same number by
+                   construction. What a reader wants to know instead is what
+                   they are looking at and what the badges mean — the color
+                   is a claim about the league, and this is the sentence that
+                   states it. Two clauses, in the order the reader needs them:
+                   what the badge measures, then which way each hue runs. */
+                <>
+                  Comparing <strong>{visible.length}</strong>{' '}
+                  {kind === 'pitcher' ? 'pitchers' : 'batters'} — each badge ranks that player on{' '}
+                  {rankPopulationLabel}: warm is above the average of these {visible.length}, cool
+                  is below.
+                </>
               ) : (
                 `${visible.length} of ${boardRows.length} ${
                   teams ? 'clubs' : kind === 'pitcher' ? 'pitchers' : 'batters'
@@ -4945,9 +5161,30 @@ export function ResearchTable({
                         key={c.key}
                         className={`sum-num${activeSortKey === c.key ? ' research-sorted' : ''}${
                           c.cellClass ? ` ${c.cellClass(r) ?? ''}` : ''
-                        }`}
+                        }${comparing ? ' research-cmp-cell' : ''}`}
+                        title={comparing ? compareTitle(c, r) : undefined}
                       >
-                        {c.format(r)}
+                        {/* **The heat is a badge around the value, not a wash
+                            over the cell.** A tinted cell is a *block* — it runs
+                            the column's full width whatever the number in it is,
+                            so a table of them reads as a checkerboard rather
+                            than as figures worth comparing, and it fights the
+                            zebra and the sorted column's own tint for the same
+                            ground. Round the figure it is the park strip's own
+                            shape (`.pf-fig-val`), which is where this app
+                            already draws a number wearing a hot/cold reading.
+
+                            Drawn whenever a comparison is in force, tint or no
+                            tint: an untinted badge is invisible, and a box that
+                            appeared and vanished per column would step the
+                            numbers in and out down a row. */}
+                        {comparing ? (
+                          <span className="research-cmp-badge" style={compareTint(c, r)}>
+                            {c.format(r)}
+                          </span>
+                        ) : (
+                          c.format(r)
+                        )}
                         {/* …and the percentile under it, when the reader has
                             asked for one. A second line rather than something
                             beside the value, because this table cannot afford

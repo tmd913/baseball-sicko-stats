@@ -7816,7 +7816,13 @@ button.start-line:focus-visible {
    ground tinted to 30% is a number on a pale ground. The padding and the radius
    are what make it a chip at all; `min-width` stops a two-digit index drawing a
    visibly narrower one than a three-digit index beside it. */
-.pf-fig-val {
+/* A figure wearing a hot/cold reading — the park strip's, and the research
+   board's when it is comparing. Folded rather than restyled: they are the same
+   object doing the same job, a number in a tinted pill, and the two differ only
+   in the type they are set in. `background` is written inline on both, by
+   `heatStyle` here and by `compareTint` there. */
+.pf-fig-val,
+.research-cmp-badge {
   font-size: 15px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -7825,6 +7831,25 @@ button.start-line:focus-visible {
   padding: 1px 6px;
   border-radius: 6px;
   text-align: center;
+}
+/* **The board's takes its cell's type rather than declaring its own**, which is
+   the whole of what differs: a park figure is a standalone number in a strip
+   and sets its own 15px, where this one sits in a table whose columns are
+   already sized — and a badge that resized the number inside it would make a
+   comparison a different table from the board it narrowed.
+
+   `inline-block` so the padding and the radius apply at all (an inline box
+   takes horizontal padding and no vertical), and no `min-width`: three
+   characters is right for a park index and wrong for a column of `1`s. */
+.research-cmp-badge {
+  display: inline-block;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  min-width: 0;
+  /* Clawed back off the cell's own gutter, so a badged column is no wider than
+     an unbadged one and a comparison does not re-lay the table out. */
+  margin-inline: -4px;
 }
 
 /* The card, on the team page's Park tab. */
@@ -23348,318 +23373,8 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 
-/* The comparison page — the research board with its axes swapped.
-
-   **The table is `.stats-table`**, the app's own plain stat table, and it wears
-   that class in the markup: the padding, the `--row-gutter`, the zebra on even
-   rows, the sticky uppercase header and its `--panel-2` ground all come from
-   there. What is below is only what a *transposed* table needs and that one
-   does not — a sticky column on the **left** instead of a header on top alone,
-   a headshot in each header cell, and a value column that centers.
-
-   **Centered, and `safe` is the whole of why that is written this way.** The
-   table is content-width, so at 1920 it is ~650px inside a 1,888px pane and
-   belongs in the middle of it. A plain `center` would be right until the table
-   is *wider* than the pane, at which point flexbox centers the overflow in both
-   directions and puts the first column — the sticky stat names — off the left
-   edge, unreachable by scrolling. `safe` falls back to `start` in exactly that
-   case; the `flex-start` above it is what an engine without `safe` gets, and
-   losing the centering is the harmless half. */
-.cmp-wrap {
-  display: flex;
-  justify-content: flex-start;
-  justify-content: safe center;
-  overflow-x: auto;
-  overscroll-behavior-x: none;
-}
-/* **The Stats tab's own vertical scroller**, which is what the sticky header
-   sticks to. Mirrors `.details-view.gamelog-mode` one tab over — see
-   `ComparePage`, where the reasoning is, and that rule, which met this first. */
-.details-view.cmp-mode {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-bottom: 20px;
-}
-.details-view.cmp-mode > .details-chrome {
-  flex: none;
-  position: static;
-}
-.details-view.cmp-mode .cmp-wrap {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow: auto;
-  /* The block axis, here where the box actually has one — this pane *is* the
-     tab's vertical scroller now, and behind it is the overlay's own, so an
-     unbounded flick down the table would carry straight on into the page. */
-  overscroll-behavior-y: none;
-}
-.cmp-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.cmp-title-text {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* **Content-width, not pane-width.** `min-width: 100%` made a three-man
-   comparison 1,888px wide at 1920 — three columns of ~600px each with one
-   number in the middle of them, which is not a table so much as three numbers a
-   long way apart. At `max-content` the same comparison is ~650px and the pane
-   centers it; six players come to ~1,000, and anything past the pane scrolls
-   inside `.cmp-wrap` rather than the page. */
-.cmp-table {
-  border-collapse: separate;
-  border-spacing: 0;
-  width: max-content;
-}
-/* **The stat name is sticky**, and it is the whole point of the transpose: a
-   comparison is read *along a row*, which needs the row's own name on screen at
-   every horizontal offset. This is `.glog-date` read sideways — the game log's
-   own sticky first column — including the way it takes the zebra: a sticky cell
-   paints over the row behind it, so it has to carry that row's ground itself or
-   it shows as a pale stripe down the left of every other row. */
-.cmp-corner,
-.cmp-stat {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  text-align: left;
-}
-.cmp-stat {
-  background: var(--bg);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-}
-.cmp-table tbody tr:nth-child(even) th.cmp-stat {
-  background: var(--row-alt);
-}
-/* **The header outranks the sticky column, and it has to say so.** Both are
-   sticky and the shared `.stats-table thead th` rule gives the header
-   `z-index: 2` — the same as the column's — so the tie fell to DOM order and
-   `tbody` won: scrolled down, the stat names painted *over* the header, and
-   `HR` and `RBI` showed through where `Stat` should have been. Three for the
-   header row, four for the corner, which is sticky in both axes at once and so
-   has to clear the row it sits in as well as the column it heads. */
-/* **Qualified by the table and the element, and that is not decoration.** The
-   shared rule these override is `.stats-table thead th` — two classes and an
-   element — so a bare `.cmp-head` loses every declaration it makes to it, and
-   did: the header kept the shared `z-index: 2` and its 11px padding, which is
-   why raising it the first time changed nothing at all. Measured after that
-   attempt: `zIndex: "2"`, `paddingTop: "11px"`, and `elementFromPoint` over the
-   corner still answering `.cmp-stat`. */
-.cmp-table thead th.cmp-head,
-.cmp-table thead th.cmp-corner {
-  z-index: 3;
-}
-.cmp-table thead th.cmp-corner {
-  top: 0;
-  /* Sticky in both axes at once, so it has to clear the row it sits in as well
-     as the column it heads. */
-  z-index: 4;
-}
-.cmp-table thead th.cmp-head {
-  /* Room for a headshot, a name over two lines and a club line, where the
-     shared rule is written for one line of text. */
-  padding-top: 10px;
-  padding-bottom: 10px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.cmp-head-inner {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-.cmp-head-open {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  /* The number that decides the column — 128px is two lines of a long full name
-     at 12px/800, and every player column is this plus the cell's own padding.
-     A `width` on the `th` would not do it: under `table-layout: auto` that is a
-     *suggestion*, and the cell grows to whatever its content needs — measured,
-     `Pete Crow-Armstrong` took its column to 189px against 148 and 170 for the
-     two beside it, so a comparison of three had three different column widths
-     and the numbers under them lined up with nothing. */
-  width: 128px;
-  border: none;
-  background: none;
-  padding: 0;
-  /* `font-family` and not `font`: the shorthand resets `font-size`. */
-  font-family: inherit;
-  color: var(--text);
-  cursor: pointer;
-}
-.cmp-photo {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--bg);
-}
-/* **A name wraps rather than ellipsizing**, and its box is reserved either way.
-   Truncating a player's name in a comparison of three is the one thing this
-   header must not do — `Pete Crow-Armstr…` beside two whole names is a column
-   the reader cannot be sure of. Two lines, clamped, with the height of two
-   always reserved so the headers are the same height whether any of them
-   wrapped. */
-.cmp-head-name {
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
-  text-align: center;
-  max-width: 100%;
-  min-height: 2.4em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: normal;
-  color: var(--text);
-}
-.cmp-head-sub {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--faint);
-}
-@media (hover: hover) {
-  .cmp-head-open:hover .cmp-head-name {
-    color: var(--accent);
-  }
-}
-.cmp-head-open:focus-visible,
-.cmp-drop:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-/* **The ✕ is taken out of the flow.** As a flex sibling it pushed the
-   headshot-and-name block off-center by its own width, so a column's identity
-   sat left of the numbers under it. */
-.cmp-drop {
-  position: absolute;
-  top: -2px;
-  right: -4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: none;
-  color: var(--faint);
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1;
-  padding: 0;
-  cursor: pointer;
-}
-@media (hover: hover) {
-  .cmp-drop:hover {
-    color: var(--strikeout);
-    background: color-mix(in srgb, var(--strikeout) 14%, transparent);
-  }
-}
-.cmp-cell {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-/* **The leader is the number, and only the number.** It was a tinted cell as
-   well, and a tint is a *band* — on a row where two of three players have no
-   value it lit one cell of three, and down a column of thirty rows the tints
-   fell in a patchwork that read as a second, meaningless grouping. The accent
-   and the weight say the same thing in the place the reader is already looking.
-   Identity does not rest on hue: the number is bolder as well as bluer. */
-.cmp-cell.is-best {
-  color: var(--accent);
-  font-weight: 800;
-}
-.cmp-note {
-  margin: 0 0 12px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--faint);
-  text-align: center;
-}
-.cmp-pct-section {
-  margin-top: 16px;
-}
-.cmp-pct-section:first-of-type {
-  margin-top: 4px;
-}
-.cmp-pct-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border-faint, var(--border));
-}
-.cmp-pct-label {
-  flex: 0 0 128px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  padding-top: 2px;
-}
-.cmp-pct-bars {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-/* One bar per player, stacked — so the comparison is read down a short column
-   under one label rather than across a row of tracks the reader has to align by
-   eye. The surname leads each, since three tracks with no names on them is
-   three tracks nobody can tell apart. */
-.cmp-pct-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* **Measured at runtime, not declared** — see `PercentilesTab`, which reads the
-   widest surname's own `scrollWidth` and publishes it here. The fallback is
-   what applies for the one frame before that lands, and is deliberately a
-   little generous rather than exact. */
-.cmp-pct-who {
-  flex: 0 0 var(--cmp-who-w, 92px);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cmp-pct-bar .pct-track {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.cmp-pct-bar .pct-value {
-  flex: 0 0 46px;
-  text-align: right;
-}
-/* On a phone the label runs the full width and the bars sit under it: 128px of
-   label and a 72px name leaves a track too narrow for a bubble to sit in. */
-@media (max-width: 560px) {
-  .cmp-pct-row {
-    flex-direction: column;
-    gap: 4px;
-  }
-  .cmp-pct-label {
-    flex: none;
-  }
-  .cmp-pct-bars {
-    width: 100%;
-  }
-}
+/* The comparison's cells. The heat itself is on the **badge** around each value
+   (`.research-cmp-badge`, folded onto the park strip's own figure) rather than
+   on the cell — see `ResearchTable`, where that is argued. What is left for the
+   cell is nothing at all today; the class is kept because it is what the badge
+   is scoped by in the markup and what a future cell-level rule would hang on. */
