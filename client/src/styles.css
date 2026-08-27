@@ -6739,12 +6739,26 @@ button.start-line:focus-visible {
    two different heights (two pill switches and a badge) and on a phone the
    density switch drops under the cuts. The badge's `auto` margin pushes it to
    the far end on a wide row and is harmless on a wrapped one. */
+/* **The controls sit over the card, in the card's own column.**
+
+   They were a full-width flex row, so at 1440 they began at `x: 16` while the
+   card they control was a centered 680px block starting at `x: 380` — a run of
+   pills floating in 364px of empty space to the left of the thing they were
+   about. Measured: controls `x: 16, w: 1408` against a card at `x: 380, w: 680`.
+   The cap and the auto margins are the whole fix, and they are the card's own
+   two lines (`.pct-card`), so the two cannot come apart if that number moves.
+
+   Centered rather than left-aligned inside that column, because the card's own
+   head is centered and a control set hugging the left edge of a centered card
+   reads as a second, narrower column. */
 .pct-controls {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 10px;
+  max-width: 680px;
+  margin: 0 auto 12px;
 }
 /* Both switches are `.split-switch` — the same object the Stats tab's cut
    control is, folded rather than restyled. Two things are theirs alone here:
@@ -6754,28 +6768,59 @@ button.start-line:focus-visible {
 .pct-controls .split-switch {
   margin-bottom: 0;
 }
+/* **Shrink-wrapped, which is what stops a wrapped run stranding a pill.** As a
+   full-width box the six cuts wrapped at 390 with `Last 100 AB` alone on a
+   second line and 230px of empty track beside it — a box saying it had room it
+   was not using. Hugging its content, the two lines are the width of the pills
+   in them and the switch reads as one object that happens to be two rows tall. */
 .pct-cuts {
   flex-wrap: wrap;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
 }
-/* The badge to the far end, and reserved whether or not it is showing — see
-   `.stats-updating`, whose rules it shares. */
-.pct-controls .stats-updating {
-  margin-left: auto;
+/* A 20px slot at the end of the run, reserved whether or not it is showing.
+   Twenty rather than the Stats tab's 106px `Updating` pill because that one
+   wrapped: 415 + 157 of switches inside a 680px column leaves ~100, and a
+   wrapped badge cost the row a second line it never drew anything on. */
+.pct-updating {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+.pct-updating.is-idle {
+  visibility: hidden;
 }
 /* The sentence a cut card carries above its bars: what the population is, whose
    ranks these are, and how much of a season the line rests on. Muted and set
    small because it is a caveat rather than a heading — it has to be read once
    and then stop competing with thirty bars. */
 .pct-cut-note {
-  margin: 0 0 4px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--muted);
+  margin: 2px auto 10px;
+  /* Narrower than the card, so the sentence breaks where a caption should
+     rather than running the full width of the bars underneath it — two lines of
+     ~62 characters against one of ~110, which is the difference between a
+     caption and a paragraph. */
+  max-width: 46ch;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--faint);
   text-align: center;
+  text-wrap: balance;
 }
 .pct-cut-note strong {
+  color: var(--muted);
+  font-weight: 700;
+}
+/* The sample size is the one figure in that sentence a reader acts on — it is
+   the only guard against reading a hundredth percentile off thirty-four plate
+   appearances — so it is the one part set in the text color. */
+.pct-cut-note .pct-cut-sample {
   color: var(--text);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The percentile card: a fixed label column, a flexible plot, a value column. */
@@ -7014,8 +7059,14 @@ button.start-line:focus-visible {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+.pct-card-cut {
+  white-space: nowrap;
+}
 .pct-card-title {
   font-size: 18px;
+  /* Two lines of similar length rather than one full line and one word, which
+     is what a title this long does on a phone left to itself. */
+  text-wrap: balance;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--text);
