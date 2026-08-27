@@ -3581,6 +3581,25 @@ export function ResearchTable({
                 count={saved.searches.length}
                 open={searchesOpen}
                 onToggle={() => setPanel('searches', !searchesOpen)}
+                /* **A mark, because the condensed run is marks.** That run hides
+                   every label and squares the button; with no glyph this one
+                   collapsed to its own caret alone — a bare `⌄` in a row where
+                   Search is a magnifier and Filters a funnel. A bookmark is what
+                   a *saved* thing looks like, and it is distinct from both. */
+                glyph={
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 2.4h8a.6.6 0 0 1 .6.6v10.6L8 10.9l-4.6 2.7V3a.6.6 0 0 1 .6-.6Z" />
+                  </svg>
+                }
               />
             )}
             {/**
@@ -3632,13 +3651,39 @@ export function ResearchTable({
                   )}
                 </button>
                 {compareOn && compareSelected.length >= 2 && (
+                  /* **Its word is in a `.research-toggle-label`, and that is not
+                     decoration.** The condensed run hides every button's label
+                     by that class and squares what is left to 36px — so a bare
+                     text node here was a 36px box with `Compare 2 →` spilling
+                     out of it across the two buttons beside it. Measured in the
+                     condensed run at 407: `w: 36`, `scrollWidth` past its own
+                     `clientWidth`, the label painting over `Schedule`.
+
+                     The arrow is the **glyph** rather than part of the word, so
+                     it is what survives the condense: the run reads `⊥2 →`,
+                     which is the count and the way out of it. */
                   <button
                     type="button"
                     className="research-toggle research-compare-go"
                     title={`Line up the ${compareSelected.length} ticked players side by side`}
                     onClick={onOpenCompare}
                   >
-                    Compare {compareSelected.length} →
+                    <span className="research-toggle-label">
+                      Compare {compareSelected.length}
+                    </span>
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M2.5 8h11M9.5 4l4 4-4 4" />
+                    </svg>
                   </button>
                 )}
               </div>

@@ -741,8 +741,28 @@ so**, all of them geometry the build had nothing to say about:
   the card title broke as `— vs` / `LHP`, two half-thoughts, which a `nowrap`
   on the cut phrase and `text-wrap: balance` on the title fix together.
 
+**Then the controls were regrouped again, and the shape is the point.**
+`Summary | Detailed` **leads**, on a row of its own: how much of the card you
+want is the coarser question — it is true of every cut — and having it beside
+the cuts put the reader's *second* question first while a six-pill run and a
+two-pill run competed for one line. Under it the cuts sit in **the three groups
+they actually fall into**: `Season · Last 100 AB` is which *span*, `vs RHP · vs
+LHP` is which *arm*, `Home · Away` is which *park*. One run of six said nothing
+about what the six are, and a reader looking for the platoon split had to read
+all of them. They stay **one selection** — only ever one pill is lit across the
+three — which is what keeps them alternatives rather than three independent
+settings, and grouped `.split-switch`es are the board's own language for that.
+
+**Below 560 the three groups become one dropdown.** Three boxes are three lines
+on a card that is already the whole screen, and a `select` is one line with the
+same six choices — the swap the board's bar makes at 640 for its span and
+position runs, at the width this control needs it. The density stays a switch at
+every width: two pills fit anywhere, and a `select` holding two options is a
+control that hides one of them behind a press.
+
 **Bundle**: JS 745.79 → 749.03 kB raw, 219.89 → 220.93 gzipped; CSS 192.67 →
-193.40 raw, 34.32 → 34.45 gzipped.
+193.40 raw, 34.32 → 34.45 gzipped. (The regrouping and the comparison work
+that followed are measured on `main` in `client-research.md`.)
 
 ### The player page's Overview tab: the player as a summary page
 

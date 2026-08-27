@@ -823,6 +823,72 @@ label-over-bars.
 **Bundle**: Against the branch this stacks on: JS 762.13 → 775.60 kB raw,
 224.42 → 228.04 gzipped. CSS 198.16 → 202.78 raw, 35.16 → 35.98 gzipped.
 
+### Six faults found by looking at it, and what each one turned out to be
+
+Everything here was reported off a screenshot rather than a stack trace, and
+every one of them is a rule that was written correctly and then lost to
+something the build cannot see.
+
+**The condensed run overflowed, and it was a missing wrapper.** That run hides
+every button's word by `.research-toggle-label` and squares what is left to
+36px — so `Compare 3 →`, written as a bare text node, was a 36px box with an
+eleven-character label painting across the two buttons beside it. Measured at
+407: `w: 36`, `scrollWidth` past its own `clientWidth`. Its word is in a label
+now and the arrow is its **glyph**, so the run reads `⊥3 →` — the count and the
+way out of it.
+
+**Searches condensed to a bare caret**, having no mark of its own in a run where
+Search is a magnifier and Filters a funnel. It has a bookmark now, which is what
+a *saved* thing looks like — and the caret is hidden in that run on any button
+that has a glyph, since a 36px square is room for one mark and Search and
+Filters open panels there with no caret at all. The exception is the Watchlist
+split's second half, which is *nothing but* a caret.
+
+**A long list name took the panel off the side of the window.** `.rl-name` had
+`overflow: hidden; text-overflow: ellipsis; white-space: nowrap` and none of it
+was ever reached: a flex item's `min-width` is `auto` — *no smaller than your
+content* — so a 60-character name pushed its row wide through three nested flex
+levels. The fix is `min-width: 0` at each of them **and a definite width at the
+top**: `align-items: stretch` will not take an item below its own min-content
+size, so the run measured **524px inside a 420px panel** until `.rl-rows` got
+`width: 100%`, which resolves against a content box that *is* definite. Measured
+after: run and panel both 420 at 1400 and both 363 at 407, name clipped at each.
+
+**The row dividers read as a band, not a list.** Hairlines *between* rows meant
+the active row's tint ran into them top and bottom. Rows are outlined with air
+between them now — which is what every other pickable object in this app wears,
+and what lets the active one differ by its **border** as well as its fill.
+
+**The comparison's leader tint was a patchwork.** A tinted cell is a *band*: on
+a row where two of three players have no value it lit one cell of three, and
+down thirty rows the tints fell in a pattern that read as a second, meaningless
+grouping. The leader is the number now — accent *and* bolder, so identity does
+not rest on hue.
+
+**Its header did not stick, and then would not outrank the column.** Two faults
+in a row. `.cmp-wrap` scrolls sideways, and a box with `overflow-x: auto`
+computes `overflow-y: auto` too — so it *was* the nearest scrollport for the
+sticky header and never scrolled, so the header stuck to nothing. The Game Log
+tab met this first: the overlay becomes a fixed-height flex column for that tab
+alone (`.details-view.cmp-mode`, mirroring `.gamelog-mode`), and the table's own
+box is the only thing that moves. Then the header still lost to the sticky stat
+column — both at `z-index: 2` from the shared rule, the tie falling to DOM order
+— and **raising it changed nothing**, because `.cmp-head` is one class against
+`.stats-table thead th`'s two-and-an-element. Measured after that first attempt:
+`zIndex: "2"`, `paddingTop: "11px"`, `elementFromPoint` over the corner still
+answering `.cmp-stat | RBI`. Qualified as `.cmp-table thead th.cmp-head` it
+takes, and the corner answers `.cmp-corner | Stat`.
+
+**And the table is `.stats-table` outright**, not a lookalike — the padding, the
+`--row-gutter`, the zebra, the sticky uppercase header and its `--panel-2`
+ground all come from there, and what is written here is only what a *transposed*
+table needs: a sticky column on the left, a headshot in each header cell, a
+value column that centers.
+
+No horizontal page overflow at 1920, 768 or 407 on any of the five surfaces.
+**Bundle**: JS 775.60 → 776.65 kB raw, 228.04 → 228.30 gzipped; CSS 202.78 →
+203.60 raw, 35.98 → 36.15 gzipped.
+
 ### The page scrolls, and the head stays
 
 *(This supersedes the arrangement the section above describes — the band is no

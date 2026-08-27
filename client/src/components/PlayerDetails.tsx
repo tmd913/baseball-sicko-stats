@@ -121,6 +121,25 @@ export function toDensity(v: string | undefined): PercentileDensity {
   return PERCENTILE_DENSITIES.find((d) => d === v) ?? DEFAULT_DENSITY;
 }
 
+/**
+ * **The cuts, in the groups they fall into.**
+ *
+ * One run of six pills wrapped and stranded the last of them, and worse, said
+ * nothing about what the six *are*: `Season` and `Last 100 AB` are two spans,
+ * the two hands are one question and the two parks another. Three groups is
+ * how a reader looking for the platoon split finds it without reading all six.
+ *
+ * They remain **one selection** — only ever one pill is lit across the three —
+ * which is what keeps them alternatives rather than three independent
+ * settings. Grouped `.split-switch`es are the board's own language for this:
+ * its bar sets the span and the position in two boxes read as one sentence.
+ */
+const CUT_GROUPS: { key: string; cuts: (PlayerCut | null)[] }[] = [
+  { key: 'span', cuts: [null, 'last100'] },
+  { key: 'hand', cuts: ['vsr', 'vsl'] },
+  { key: 'park', cuts: ['home', 'away'] },
+];
+
 /** The unit `cutSample` is counted in, for the sentence under a cut card. */
 const sampleUnit = (isPitcher: boolean, n: number): string =>
   isPitcher ? (n === 1 ? 'batter faced' : 'batters faced') : n === 1 ? 'plate appearance' : 'plate appearances';
@@ -1932,35 +1951,13 @@ export function PlayerDetails({
           from the rows alone. */}
       {tab === 'percentiles' && data && !(data.cut == null && data.sections.length === 0) && (
         <div className="pct-controls">
-          {/* **Folded onto the Stats tab's cut control, not styled to match
-              it.** `.split-switch`/`.split-tab` is the same object doing the
-              same job one tab over — a row of pills naming which cut of a
-              season is on screen — and two rules that agree today are two rules
-              that will one day differ. The modifier carries the one thing that
-              is genuinely different here: this row has six pills where that one
-              has five, so it is allowed to wrap. */}
-          <div className="split-switch pct-cuts" role="tablist" aria-label="Split">
-            {([null, ...PLAYER_CUTS] as (PlayerCut | null)[]).map((c) => (
-              <button
-                key={c ?? 'all'}
-                type="button"
-                role="tab"
-                aria-selected={pctCut === c}
-                className={`split-tab${pctCut === c ? ' active' : ''}`}
-                onClick={() => onPctCutChange(c)}
-                title={
-                  c === null
-                    ? 'His whole season — the only card whose bars are Savant’s own'
-                    : `What he did ${cutOf(c, kind)}, placed among every qualified player’s full season`
-                }
-              >
-                {c === null ? 'Season' : CUT_LABEL[c][kind]}
-              </button>
-            ))}
-          </div>
-          {/* The density, on the same switch for the same reason — and beside
-              the cuts rather than under them, because the two are read
-              together: *which numbers*, then *how many of them*. */}
+          {/* **The density reads first, and it is a row of its own.**
+
+              It sat beside the cuts, which put the reader's *second* question
+              ahead of nothing and left a six-pill run and a two-pill run
+              competing for one line. How much of the card you want is the
+              coarser choice — it is true of every cut — so it leads, and the
+              cuts sit under it as a set of what that card can be about. */}
           <div className="split-switch pct-density" role="tablist" aria-label="Density">
             {PERCENTILE_DENSITIES.map((d) => (
               <button
@@ -1980,22 +1977,69 @@ export function PlayerDetails({
               </button>
             ))}
           </div>
-          {/* **The one mark a re-read is allowed to leave**, and it is a ball
-              rather than a labeled badge — which is the idiom the two other bar
-              controls that read something already use (`ScheduleControl` and
-              `TurnPicker` both swap their glyph for a `size="sm"` ball). It was
-              the Stats tab's `Updating` pill, and that is 106px: with 580px of
-              switches inside a 680px column it **wrapped to a second line**,
-              which cost the row 38px of permanently empty air above the card
-              and pushed the card down by it. Measured before → after: the
-              controls box **68px → 30px**.
 
-              Reserved either way, which is the rule that put it in this row
-              rather than in the card's head: `visibility` on a fixed 20px slot,
-              so a read landing cannot move a pill under the finger that just
-              pressed one. The words are for a screen reader alone — an
-              in-control mark is read by the control it is in, which is why
-              neither of the other two carries any. */}
+          {/* **The cuts, in the groups they actually fall into**, rather than as
+              one run of six pills that wrapped and stranded the last one.
+              `Season · Last 100 AB` is *which span*, the two hands are *which
+              arm*, and `Home · Away` is *which park* — three questions, and a
+              reader looking for the platoon split can now find it without
+              reading all six.
+
+              They remain **one selection**: only ever one pill is lit across the
+              three groups, which is what says the six are alternatives rather
+              than three independent settings. Grouped `.split-switch`es are the
+              board's own language for exactly this — its bar sets the span and
+              the position in two boxes that are read as one sentence. */}
+          <div className="pct-cuts" role="tablist" aria-label="Which cut of the season">
+            {CUT_GROUPS.map((group) => (
+              <div className="split-switch" key={group.key}>
+                {group.cuts.map((c) => (
+                  <button
+                    key={c ?? 'all'}
+                    type="button"
+                    role="tab"
+                    aria-selected={pctCut === c}
+                    className={`split-tab${pctCut === c ? ' active' : ''}`}
+                    onClick={() => onPctCutChange(c)}
+                    title={
+                      c === null
+                        ? 'His whole season — the only card whose bars are Savant’s own'
+                        : `What he did ${cutOf(c, kind)}, placed among every qualified player’s full season`
+                    }
+                  >
+                    {c === null ? 'Season' : CUT_LABEL[c][kind]}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* **And one dropdown where three boxes will not fit.** Below 560 the
+              three groups take three lines of a card that is already the whole
+              screen; a `select` is one line and the same six choices. It is the
+              swap the board's own bar makes at 640 for its span and position
+              runs, and for the same reason — eleven pills behind a horizontal
+              scroll is a control you have to drag through to find `SS`.
+
+              The density stays a switch at every width: two pills fit anywhere,
+              and a `select` holding two options is a control that hides one of
+              them behind a press. */}
+          <label className="pct-cut-select">
+            <span className="sr-only">Which cut of the season</span>
+            <select
+              value={pctCut ?? 'all'}
+              onChange={(e) =>
+                onPctCutChange(e.target.value === 'all' ? null : (e.target.value as PlayerCut))
+              }
+            >
+              <option value="all">Season</option>
+              {PLAYER_CUTS.map((c) => (
+                <option key={c} value={c}>
+                  {CUT_LABEL[c][kind]}
+                </option>
+              ))}
+            </select>
+          </label>
           <span
             className={`pct-updating${loading && data ? '' : ' is-idle'}`}
             role="status"

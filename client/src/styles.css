@@ -6769,16 +6769,70 @@ button.start-line:focus-visible {
 .pct-controls .split-switch {
   margin-bottom: 0;
 }
-/* **Shrink-wrapped, which is what stops a wrapped run stranding a pill.** As a
-   full-width box the six cuts wrapped at 390 with `Last 100 AB` alone on a
-   second line and 230px of empty track beside it — a box saying it had room it
-   was not using. Hugging its content, the two lines are the width of the pills
-   in them and the switch reads as one object that happens to be two rows tall. */
+/* **Three groups on one line, and one selection across them.** The six cuts
+   were a single box that wrapped and stranded `Last 100 AB` on a line of its
+   own; grouped, each box is the width of the two pills in it and the run reads
+   as *which span · which hand · which park*. The gap between groups is what
+   says they are separate questions; only one pill lit across all three is what
+   says they are one answer. */
 .pct-cuts {
-  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  width: fit-content;
-  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+.pct-cuts .split-switch {
+  margin-bottom: 0;
+}
+/* The mobile form of the same control — see the note beside it. Hidden above
+   the breakpoint, and the groups hidden below it, so exactly one of the two is
+   ever in the layout. */
+.pct-cut-select {
+  display: none;
+}
+.pct-cut-select select {
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 30px 0 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background:
+    /* The app's own caret, drawn rather than left to the UA's, so the control
+       reads as one of this bar's and not as a form field. */
+    linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 15px) calc(50% + 1px) /
+      5px 5px no-repeat,
+    linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 10px) calc(50% + 1px) /
+      5px 5px no-repeat,
+    var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.pct-cut-select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* **Below 560 the three groups are three lines**, on a card that is already the
+   whole screen — so they give way to the one dropdown holding the same six
+   choices. It is the swap the board's bar makes at 640 for its span and
+   position runs, at the width this control actually needs it. Placed after the
+   base rules it overrides, which a media query has to be: it adds no
+   specificity of its own. */
+@media (max-width: 560px) {
+  .pct-cuts {
+    display: none;
+  }
+  .pct-cut-select {
+    display: block;
+    width: 100%;
+    max-width: 320px;
+  }
 }
 /* A 20px slot at the end of the run, reserved whether or not it is showing.
    Twenty rather than the Stats tab's 106px `Updating` pill because that one
@@ -12897,6 +12951,16 @@ button.start-line:focus-visible {
 .research-condensed .research-toggle:has(.research-toggle-count) {
   width: auto;
   padding: 0 8px;
+}
+/* **The caret goes with the label**, on any button that has a mark of its own.
+   A 36px square is room for one glyph, and a bookmark with a chevron crowded
+   against it is two marks where the run carries one — and the chevron says
+   nothing here anyway: Search and Filters open panels in this run with no caret
+   at all. The exception is the Watchlist split's second half, which is *nothing
+   but* a caret (its first half carries the star), so hiding it would leave an
+   empty square. */
+.research-condensed .rl-btn-open:not(.rl-split-caret) .rl-caret {
+  display: none;
 }
 .research-condensed .research-include {
   gap: 4px;
@@ -22876,23 +22940,46 @@ html[data-theme='light'] .league-table thead th {
 .rl-head {
   margin: 0;
 }
+/* `min-width: 0` at every flex level between the panel and the name, or the
+   name's own cannot help: an item that is itself a flex container passes its
+   content's min-content width up unless told not to. See `.rl-name`. */
 .rl-rows {
   list-style: none;
   margin: 0;
   padding: 0;
+  /* **A definite width, which `align-items: stretch` alone does not give.**
+     Stretch will not take an item below its own min-content width, and a
+     `nowrap` name three flex levels down contributes its whole length to that —
+     so the run measured **524px inside a 420px panel** and hung off the side of
+     the window. `width: 100%` resolves against the panel's content box, which
+     *is* definite, and everything below can then shrink to it. `min-width: 0`
+     beside it is what lets each nested flex level pass that constraint on
+     rather than re-asserting its content's width. */
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  /* Hairlines between rows rather than gaps: a list of three names wants to
-     read as a list, and 2px of nothing between them read as three separate
-     controls. The first row's is suppressed so the run starts on its heading. */
-  gap: 0;
+  gap: 6px;
 }
-.rl-row + .rl-row {
-  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+/* **Outlined rows with air between them, not hairlines.** The dividers were a
+   rule *between* rows, so the active row's tint ran into them top and bottom
+   and the run read as one block with a lit band across it rather than as a list
+   of things you can pick. An outline is what every other pickable object in
+   this app wears — a chip, a toggle, a pill — and it is what lets the active
+   one differ by its *border* as well as its fill.
+
+   `overflow: hidden` is what makes the row's own radius clip what is inside it,
+   so a hover or a tint fills the box corner to corner instead of sitting a
+   pixel inside a rounded outline. */
+.rl-row {
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+  overflow: hidden;
 }
 .rl-row-main {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 2px;
 }
 /* The name is the press, and it is the whole row less the `⋯`. Flexible so the
@@ -22917,7 +23004,6 @@ html[data-theme='light'] .league-table thead th {
   font-size: 13px;
   font-weight: 700;
   text-align: left;
-  border-radius: var(--control-radius-inner);
   cursor: pointer;
 }
 @media (hover: hover) {
@@ -22949,10 +23035,13 @@ html[data-theme='light'] .league-table thead th {
 /* **The tint is on the row, not on the press.** Painted on `.rl-pick` it
    stopped 30px short of the row's right edge — the `⋯` sat outside its own
    row's highlight, which reads as a control that belongs to nothing. The
-   press's own hover stays on `.rl-pick`, that being the part that is pressable. */
-.rl-row.is-active .rl-row-main {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-radius: var(--control-radius-inner);
+   press's own hover stays on `.rl-pick`, that being the part that is pressable.
+
+   Now that a row is outlined, the active one differs by its **border** as well
+   as its fill, which is how a lit chip already reads in this bar. */
+.rl-row.is-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .rl-row.is-active .rl-pick {
   color: var(--accent);
@@ -22960,7 +23049,15 @@ html[data-theme='light'] .league-table thead th {
 .rl-row.is-active .rl-more {
   color: color-mix(in srgb, var(--accent) 75%, var(--faint));
 }
+/* **`min-width: 0` is what makes the ellipsis work at all.** A flex item's
+   `min-width` is `auto` — *no smaller than your content* — so a 60-character
+   list name refused to shrink, pushed `.rl-pick` and its row wide, and took the
+   panel past its own `max-width` and off the side of the window. The
+   `overflow`/`text-overflow` pair below was already here and was never reached.
+   Measured at 407 before the fix: the page scrolled horizontally and the note,
+   the input and the row's own `⋯` all ran off the right edge. */
 .rl-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -23005,7 +23102,6 @@ html[data-theme='light'] .league-table thead th {
   border: none;
   background: none;
   color: var(--faint);
-  border-radius: var(--control-radius-inner);
   cursor: pointer;
 }
 @media (hover: hover) {
@@ -23252,24 +23348,51 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 
-/* The comparison page. The scroller is the table's own, so the sticky stat
-   column has something to be sticky inside.
+/* The comparison page — the research board with its axes swapped.
+
+   **The table is `.stats-table`**, the app's own plain stat table, and it wears
+   that class in the markup: the padding, the `--row-gutter`, the zebra on even
+   rows, the sticky uppercase header and its `--panel-2` ground all come from
+   there. What is below is only what a *transposed* table needs and that one
+   does not — a sticky column on the **left** instead of a header on top alone,
+   a headshot in each header cell, and a value column that centers.
 
    **Centered, and `safe` is the whole of why that is written this way.** The
-   table is content-width (see `.cmp-table`), so at 1920 it is ~600px inside a
-   1,888px pane and belongs in the middle of it. A plain `center` would be
-   right until the table is *wider* than the pane, at which point flexbox
-   centers the overflow in both directions and puts the first column — the
-   sticky stat names — off the left edge, unreachable by scrolling. `safe`
-   falls back to `start` in exactly that case, which is the behavior a
-   scrolling table needs; the `flex-start` above it is what an engine without
-   `safe` gets, and losing the centering is the harmless half. */
+   table is content-width, so at 1920 it is ~650px inside a 1,888px pane and
+   belongs in the middle of it. A plain `center` would be right until the table
+   is *wider* than the pane, at which point flexbox centers the overflow in both
+   directions and puts the first column — the sticky stat names — off the left
+   edge, unreachable by scrolling. `safe` falls back to `start` in exactly that
+   case; the `flex-start` above it is what an engine without `safe` gets, and
+   losing the centering is the harmless half. */
 .cmp-wrap {
   display: flex;
   justify-content: flex-start;
   justify-content: safe center;
   overflow-x: auto;
   overscroll-behavior-x: none;
+}
+/* **The Stats tab's own vertical scroller**, which is what the sticky header
+   sticks to. Mirrors `.details-view.gamelog-mode` one tab over — see
+   `ComparePage`, where the reasoning is, and that rule, which met this first. */
+.details-view.cmp-mode {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 20px;
+}
+.details-view.cmp-mode > .details-chrome {
+  flex: none;
+  position: static;
+}
+.details-view.cmp-mode .cmp-wrap {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  /* The block axis, here where the box actually has one — this pane *is* the
+     tab's vertical scroller now, and behind it is the overlay's own, so an
+     unbounded flick down the table would carry straight on into the page. */
+  overscroll-behavior-y: none;
 }
 .cmp-title {
   display: flex;
@@ -23285,18 +23408,12 @@ html[data-theme='light'] .league-table thead th {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cmp-title-sub {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--faint);
-  flex: none;
-}
 /* **Content-width, not pane-width.** `min-width: 100%` made a three-man
    comparison 1,888px wide at 1920 — three columns of ~600px each with one
-   number in the middle of them, which is not a table so much as three numbers
-   a long way apart. At `max-content` the same comparison is ~600px and the
-   pane centers it; six players come to ~1,000, and anything past the pane
-   scrolls inside `.cmp-wrap` rather than the page. */
+   number in the middle of them, which is not a table so much as three numbers a
+   long way apart. At `max-content` the same comparison is ~650px and the pane
+   centers it; six players come to ~1,000, and anything past the pane scrolls
+   inside `.cmp-wrap` rather than the page. */
 .cmp-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -23304,62 +23421,58 @@ html[data-theme='light'] .league-table thead th {
 }
 /* **The stat name is sticky**, and it is the whole point of the transpose: a
    comparison is read *along a row*, which needs the row's own name on screen at
-   every horizontal offset. `--cell-bg` rather than an assigned background, the
-   app's rule for a cell whose ground is painted in more than one place. */
+   every horizontal offset. This is `.glog-date` read sideways — the game log's
+   own sticky first column — including the way it takes the zebra: a sticky cell
+   paints over the row behind it, so it has to carry that row's ground itself or
+   it shows as a pale stripe down the left of every other row. */
 .cmp-corner,
 .cmp-stat {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: var(--cell-bg, var(--panel));
   text-align: left;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.cmp-corner {
-  z-index: 3;
 }
 .cmp-stat {
-  padding: 7px 12px 7px 0;
+  background: var(--bg);
   font-size: 12px;
+  font-weight: 700;
   color: var(--muted);
 }
-.cmp-corner,
-.cmp-head {
-  position: sticky;
+.cmp-table tbody tr:nth-child(even) th.cmp-stat {
+  background: var(--row-alt);
+}
+/* **The header outranks the sticky column, and it has to say so.** Both are
+   sticky and the shared `.stats-table thead th` rule gives the header
+   `z-index: 2` — the same as the column's — so the tie fell to DOM order and
+   `tbody` won: scrolled down, the stat names painted *over* the header, and
+   `HR` and `RBI` showed through where `Stat` should have been. Three for the
+   header row, four for the corner, which is sticky in both axes at once and so
+   has to clear the row it sits in as well as the column it heads. */
+/* **Qualified by the table and the element, and that is not decoration.** The
+   shared rule these override is `.stats-table thead th` — two classes and an
+   element — so a bare `.cmp-head` loses every declaration it makes to it, and
+   did: the header kept the shared `z-index: 2` and its 11px padding, which is
+   why raising it the first time changed nothing at all. Measured after that
+   attempt: `zIndex: "2"`, `paddingTop: "11px"`, and `elementFromPoint` over the
+   corner still answering `.cmp-stat`. */
+.cmp-table thead th.cmp-head,
+.cmp-table thead th.cmp-corner {
+  z-index: 3;
+}
+.cmp-table thead th.cmp-corner {
   top: 0;
-  z-index: 2;
-  background: var(--cell-bg, var(--panel));
-  border-bottom: 1px solid var(--border);
+  /* Sticky in both axes at once, so it has to clear the row it sits in as well
+     as the column it heads. */
+  z-index: 4;
 }
-.cmp-corner {
-  padding: 8px 12px 8px 0;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--faint);
+.cmp-table thead th.cmp-head {
+  /* Room for a headshot, a name over two lines and a club line, where the
+     shared rule is written for one line of text. */
+  padding-top: 10px;
+  padding-bottom: 10px;
+  text-transform: none;
+  letter-spacing: 0;
 }
-/* **Every column exactly the same width, which `min-width` did not buy.** With
-   a minimum alone the widest name set its own column: `Pete Crow-Armstrong`
-   made the third column 30px wider than the two beside it, so a comparison of
-   three had three different column widths and the numbers under them did not
-   line up with anything. A fixed width is what makes a table of one row per
-   stat scannable down as well as across. 148px is two lines of a long full
-   name at 12px/800. */
-/* **Every column exactly the same width**, which a `width` on the `th` alone
-   does not buy: under `table-layout: auto` that is a *suggestion*, and the cell
-   grows to whatever its content needs — measured, `Pete Crow-Armstrong` took
-   its column to 189px against 148 and 170 for the two beside it, so a
-   comparison of three had three different column widths and the numbers under
-   them lined up with nothing. What actually fixes a column is a fixed box
-   *inside* it (`.cmp-head-open`), which leaves the cell nothing to grow for. */
-.cmp-head {
-  padding: 8px 10px;
-}
-/* **The ✕ is taken out of the flow.** As a flex sibling it pushed the
-   headshot-and-name block off-center by its own width, so a column's identity
-   sat left of the numbers under it. Absolute in the cell's corner, the block
-   centers in the whole column and the ✕ is where a dismiss belongs. */
 .cmp-head-inner {
   position: relative;
   display: flex;
@@ -23372,8 +23485,12 @@ html[data-theme='light'] .league-table thead th {
   align-items: center;
   gap: 3px;
   /* The number that decides the column — 128px is two lines of a long full name
-     at 12px/800, and every player column is this plus the cell's 20px of
-     padding. */
+     at 12px/800, and every player column is this plus the cell's own padding.
+     A `width` on the `th` would not do it: under `table-layout: auto` that is a
+     *suggestion*, and the cell grows to whatever its content needs — measured,
+     `Pete Crow-Armstrong` took its column to 189px against 148 and 170 for the
+     two beside it, so a comparison of three had three different column widths
+     and the numbers under them lined up with nothing. */
   width: 128px;
   border: none;
   background: none;
@@ -23390,12 +23507,12 @@ html[data-theme='light'] .league-table thead th {
   object-fit: cover;
   background: var(--bg);
 }
-/* **A name wraps rather than ellipsizing**, and its box is reserved either
-   way. Truncating a player's name in a comparison of three is the one thing
-   this header must not do — `Pete Crow-Armstr…` beside two whole names is a
-   column the reader cannot be sure of. Two lines, clamped, with the height of
-   two always reserved so the three headers are the same height whether any of
-   them wrapped. */
+/* **A name wraps rather than ellipsizing**, and its box is reserved either way.
+   Truncating a player's name in a comparison of three is the one thing this
+   header must not do — `Pete Crow-Armstr…` beside two whole names is a column
+   the reader cannot be sure of. Two lines, clamped, with the height of two
+   always reserved so the headers are the same height whether any of them
+   wrapped. */
 .cmp-head-name {
   font-size: 12px;
   font-weight: 800;
@@ -23407,6 +23524,8 @@ html[data-theme='light'] .league-table thead th {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  white-space: normal;
+  color: var(--text);
 }
 .cmp-head-sub {
   font-size: 10px;
@@ -23424,6 +23543,9 @@ html[data-theme='light'] .league-table thead th {
   outline-offset: 2px;
   border-radius: 6px;
 }
+/* **The ✕ is taken out of the flow.** As a flex sibling it pushed the
+   headshot-and-name block off-center by its own width, so a column's identity
+   sat left of the numbers under it. */
 .cmp-drop {
   position: absolute;
   top: -2px;
@@ -23450,26 +23572,18 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 .cmp-cell {
-  padding: 7px 10px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  border-bottom: 1px solid var(--border-faint, var(--border));
 }
-/* **The leader.** Bolder *and* tinted, so identity never rests on hue — the
-   app's rule wherever a mark carries meaning. A tint rather than a fill,
-   because a whole column of filled cells would out-shout the numbers it is
-   about. */
+/* **The leader is the number, and only the number.** It was a tinted cell as
+   well, and a tint is a *band* — on a row where two of three players have no
+   value it lit one cell of three, and down a column of thirty rows the tints
+   fell in a patchwork that read as a second, meaningless grouping. The accent
+   and the weight say the same thing in the place the reader is already looking.
+   Identity does not rest on hue: the number is bolder as well as bluer. */
 .cmp-cell.is-best {
   color: var(--accent);
   font-weight: 800;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-/* The compare card. `.pct-card`'s own shape — panel, border, radius, padding —
-   with two things widened for what it holds: a comparison carries N bars per
-   metric where a player's card carries one, so 680px is too narrow, and the
-   label column is a metric name rather than a stat abbreviation. */
-.pct-card--cmp {
-  max-width: 880px;
 }
 .cmp-note {
   margin: 0 0 12px;

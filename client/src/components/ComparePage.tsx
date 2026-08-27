@@ -576,6 +576,18 @@ export function ComparePage({
 
   return (
     <DetailsShell
+      /* **The Stats tab makes its own pane the scroller, and that is the whole
+         of why its header sticks.** `.cmp-wrap` scrolls sideways, and a box with
+         `overflow-x: auto` computes `overflow-y: auto` too — so it *is* the
+         nearest scrollport for a `position: sticky` header, and with no height
+         of its own it never scrolls, so the header never stuck to anything. The
+         Game Log tab met this first and answers it the same way: the overlay
+         becomes a fixed-height flex column for that tab alone, the chrome holds
+         its place, and the table's box is the only thing that moves.
+
+         The Percentile tab keeps the ordinary page scroll — it is a card, not a
+         table, and it has no header to hold. */
+      className={tab === 'stats' ? 'cmp-mode' : undefined}
       tab={tab}
       /* **What makes this a different page** — the set being compared. Changing
          it is a new page in the sense that matters here (the scroll goes back
@@ -586,9 +598,6 @@ export function ComparePage({
       head={
         <div className="cmp-title">
           <span className="cmp-title-text">{title}</span>
-          <span className="cmp-title-sub">
-            {players.length} of {MAX_COMPARE}
-          </span>
         </div>
       }
       tabs={
