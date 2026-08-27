@@ -686,6 +686,41 @@ already uses.
 **Bundle**: JS 745.79 → 762.13 kB raw, 219.89 → 224.42 gzipped; CSS 192.67 →
 198.16 raw, 34.32 → 35.16 gzipped.
 
+### An opened row is one object, and it was drawn as three
+
+The `⋯` drawer shipped with the row itself unlit, and the fault is the one the
+bullet above already records for the *active* row — one row down, and twice
+over. The only ground an open row had was `.rl-pick`'s hover tint, which is
+painted on the press: measured, **386px of the row's 420 and 34px of its 74**.
+So a row the reader had opened read as a lit strip with an unlit notch at one
+end — the `⋯` that opened it — and an unlit strip of chips below. Three pieces,
+for one press.
+
+The ground goes on `.rl-row`, the box that actually contains all three, and the
+hover stays on the press as a further step on top of it: a lit sub-target on a
+lit ground, which is what a hover is everywhere else in this app. It is
+`--text` at 5% rather than the accent, and it sits **before** the active row's
+rule at the same specificity so that where a row is both — a watchlist can be —
+the accent wins. *Open* is a disclosure; *active* is a fact about the board, and
+the one that says something about the board is the one that has to be legible.
+
+**And the drawer's padding is the row's own now, on all four sides.** It was
+`2px 8px 8px 16px`, the extra left inset written when these rows were divided by
+hairlines and a strip 8px in was how you said *this belongs to the row above,
+it is not the next one*. The rows are outlined boxes with 6px of air between
+them, so a drawer inside one cannot be read as the next row at all, and the
+inset was costing what it no longer bought: the chips began at **x=39 against
+the name's x=31**, indented from the name they act on, and sat **9px** off the
+right edge against **16** on the left. The 2px top was the worse half — 28px of
+chips 2px under a 34px name is one block, not a name with its actions under it.
+
+`8px` is `.rl-pick`'s own horizontal padding, so a chip's left edge lands on the
+name's. Measured after, at 1500: chips at **x=31**, the gap between the name row
+and the strip **2 → 8px**, and 9px under the strip against 9 above it. At 390 the
+four chips wrap to two lines, both starting at **31**, and there is no
+horizontal page overflow at either width. The rename and share drawers take the
+same padding, being the same box in two other states.
+
 ### Compare: the board narrowed to a named set
 
 **It was a page, and a page was one table too many.** Two to six players opened
@@ -1103,6 +1138,45 @@ shape, below.)*
     → 159.97 KB of CSS** (28.51 → 28.59) — 0.14KB and 0.61KB raw, 0.04KB and
     0.08KB over the wire, for a head, a measured height, a fold and the removal
     of a portal.
+
+### A board with no rows fills the window; a board with a few does not
+
+The pane is `flex: 0 1 auto`, and the reason is recorded twice in the stylesheet:
+with `flex: 1` a dozen rows sat in a bordered expanse reaching to the bottom of
+the screen, which reads as a table that has stopped scrolling. That rule is
+about a **table**. Applied to an empty state it says the opposite of what it
+means — there is no table to have stopped, and the pane shrinks to the card and
+ends in mid-page.
+
+**Measured at 1500×950 with the board filtered to nobody:** the pane was
+**384px** tall with **464px of nothing** under it, the card 157 of that. The
+ground below is not a different surface — `.research-scroll`'s background and
+the body's are the same token, both `rgb(18, 19, 20)` — so what a reader sees
+stopping is the **card**, the one box on that screen with a fill and a dashed
+border of its own. Which is why filling the pane alone would have changed
+nothing on screen: the pane takes the height and has to hand it on.
+
+Handing it on needs the pane to be a **flex column**, since a block box gives a
+block child nothing to resolve `flex: 1` against. It becomes one only in this
+state — `:has(> .empty-state)`, where there is no table and so nothing that
+scrolls sideways — and the three sticky rows above the card keep their
+`position: sticky` and their `left: 0`, which a flex item is allowed to have.
+Expanded is excluded by hand rather than left to work itself out: that mode
+hides the empty state with `display: none` and the element is still in the tree
+for `:has` to find, while a full-page box has its own reason for `flex: 0 1
+auto`.
+
+The two paragraphs then **center in the height they are given**. At the top of a
+600px card under 42px of padding they would be the same expanse this rule set
+out to close, drawn one box in.
+
+**Driven at 1500×950 and 390×844**, board filtered to nobody: the pane goes
+**384 → 834** and **~280 → 731**, the card **157 → 604** and **→ 501**, the dead
+strip under it **464 → 14** and **→ 14** (the app's own bottom padding), with
+`scrollHeight - clientHeight` **0** on the pane and no page overflow on either
+axis at either width. Clearing the filter puts the table back and the pane
+returns to `display: block` and `flex: 0 1 auto` — the rule is off the moment
+there are rows, which is the whole of its scope.
 
 ### The research board
 
