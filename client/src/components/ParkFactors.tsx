@@ -239,8 +239,15 @@ function figTitle(stat: ParkStat, v: number | null): string {
  * The alternative was Savant's own — white ink on a saturated chip — and it does
  * not survive six themes: the ink here is `--text`, which is already near-white
  * in four of them, so switching it buys nothing where the problem actually is.
+ *
+ * **Exported**, because the research board's comparison tints its cells the same
+ * way and this number is a *measurement* rather than a taste — a second copy of
+ * it is a second thing to re-measure when a palette moves, and the one that got
+ * missed would fail contrast silently. The `frac` either side of it is each
+ * surface's own: a park is measured from 100, a compared player from the group's
+ * own mean.
  */
-const MAX_TINT = 70;
+export const MAX_TINT = 70;
 
 function heatStyle(v: number | null, full: number): { background: string } | undefined {
   if (typeof v !== 'number' || full <= 0) return undefined;
