@@ -11071,6 +11071,42 @@ button.start-line:focus-visible {
   border-radius: var(--control-radius);
   background: var(--bg);
 }
+/* **A board with no rows fills the window; a board with a few does not.** The
+   `flex: 0 1 auto` above is about a *table* — a dozen rows must not sit in a
+   bordered expanse reaching to the bottom of the screen, which reads as a table
+   that has stopped scrolling. An empty state is the opposite object: there is
+   no table to have stopped, and shrinking to it leaves the card ending in
+   mid-page with the page's own ground below it for the rest of the window —
+   measured at 1500x950, the pane 384px tall with **464px of nothing** under it.
+   The pane's ground and the page's are the same token, so what the reader sees
+   stopping is the card, and it is the card that has to reach: the pane takes
+   the height and hands it on.
+
+   **A column, so it can be handed on at all.** The pane is a block box and the
+   card is a block in it, so a `flex: 1` on the card resolves against nothing.
+   Made a flex column only in this state, where the pane holds no table and
+   therefore nothing that scrolls sideways — the three sticky rows above the
+   card keep their `position: sticky` and their `left: 0`, which is what a flex
+   item is allowed to have. **Expanded is excluded** rather than left to sort
+   itself out: that mode hides the empty state (`display: none`) but the element
+   is still there for `:has` to find, and a full-page box has its own reason for
+   `flex: 0 1 auto` two hundred lines up.
+
+   The two paragraphs then **center in the height they were given**, rather than
+   sitting at the top of a 600px card under 42px of padding — a card that is
+   mostly its own bottom edge is the expanse this rule set out to close, drawn
+   one box in. */
+.research-view:not(.is-expanded) > .research-scroll:has(> .empty-state) {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.research-view:not(.is-expanded) > .research-scroll > .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 
 /* ---- The three wide tables take the window ---------------------------------
    Dropping `.app`'s 1180px cap gave these three the room a monitor has, but
@@ -23057,6 +23093,26 @@ html[data-theme='light'] .league-table thead th {
   background: var(--accent);
   box-shadow: none;
 }
+/* **An opened row is lit as a whole, for the reason the active one is.** The
+   rule below records that a tint painted on `.rl-pick` stopped 30px short of
+   the row's right edge and left the `⋯` outside its own row's highlight; an
+   *open* row has the same fault twice over, because there is a drawer under the
+   press as well as a button beside it. Measured: the pick's hover band ran
+   386px of the row's 420 and 34px of its 74, so the row read as a lit strip
+   with an unlit notch at one end and an unlit strip of chips below it — three
+   pieces where the reader had pressed one thing.
+
+   So the ground goes on the row, which is the box that actually contains all
+   three, and the press's hover stays on `.rl-pick` as a further step on top of
+   it — a lit sub-target on a lit ground, which is what a hover is everywhere
+   else in this app. Weaker than the active row's tint and in `--text` rather
+   than the accent, because *open* is a disclosure and *active* is a state: the
+   two are independent (a row can be both) and the one that says something about
+   the board has to win, which it does by sitting after this rule at the same
+   specificity. */
+.rl-row.is-open {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
 /* **The tint is on the row, not on the press.** Painted on `.rl-pick` it
    stopped 30px short of the row's right edge — the `⋯` sat outside its own
    row's highlight, which reads as a control that belongs to nothing. The
@@ -23141,13 +23197,27 @@ html[data-theme='light'] .league-table thead th {
 }
 
 /* The drawer under an opened row: the action strip, or whichever action has
-   taken it over. Inset from the row's own edge so it reads as belonging to the
-   row above rather than as the next one. */
+   taken it over.
+
+   **Its padding is the row's own, on all four sides.** It was `2px 8px 8px
+   16px` — an 8px extra inset on the left so the strip read as belonging to the
+   row above rather than as the next row down. That was written when the rows
+   were divided by hairlines; they are outlined boxes with 6px of air between
+   them now, so a drawer inside one cannot be read as the next row and the inset
+   buys nothing. What it cost was measurable: the chips began at x=39 against
+   the name's x=31, so the strip was indented from the very name it acts on,
+   and sat 9px off the right edge against 16 on the left. The 2px top was worse
+   than the asymmetry — 28px of chips 2px under a 34px name is one block, not a
+   name with its actions under it.
+
+   8px on every side is `.rl-pick`'s own horizontal padding, so a chip's left
+   edge lands on the name's, and the strip has the same air above it that the
+   row has below it. */
 .rl-drawer {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 2px 8px 8px 16px;
+  padding: 8px;
 }
 .rl-drawer-note {
   margin: 0;
