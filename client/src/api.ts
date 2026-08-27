@@ -26,6 +26,9 @@ import type {
   PlayerStatus,
   RecentNews,
   ResearchIncludeKey,
+  SavedList,
+  SavedSearch,
+  SharedItem,
   ResearchRow,
   RosterSource,
   ScheduleWindow,
@@ -412,6 +415,100 @@ export const api = {
       headers: JSON_HEADERS,
       body: JSON.stringify({ on }),
     });
+  },
+
+  // ---- The board's named lists and saved searches --------------------
+  //
+  // **One family, because it is one idea twice**: a watchlist is a saved set of
+  // players and a search is a saved reading of the board, and both are named,
+  // renamed, deleted and shared by the same gestures. Every mutation answers
+  // with the **whole** collection rather than the one row it touched, which is
+  // what lets the client replace its copy outright instead of patching it — the
+  // list is a dozen items at most, and a patch is where two tabs come to
+  // disagree about what somebody owns.
+
+  /** The lists, which one is active, and the searches — one read, because they
+   *  are one item on the record and the board wants all three the moment it
+   *  opens. */
+  async researchLists(): Promise<{
+    lists: SavedList[];
+    searches: SavedSearch[];
+    activeId: string;
+  }> {
+    return request('/api/research/lists');
+  },
+  /** Add a list, optionally **with its players already on it** — which is what
+   *  copying a shared one is, and it has to be one write: the whole user record
+   *  is one item behind one version guard, so a run of stars fired at a fresh
+   *  list is a run of conflicting writes. */
+  async addList(name: string, keys?: string[]): Promise<{ lists: SavedList[]; id: string }> {
+    return request('/api/research/lists', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(keys?.length ? { name, keys } : { name }),
+    });
+  },
+  async renameList(listId: string, name: string): Promise<{ lists: SavedList[] }> {
+    return request(`/api/research/lists/${encodeURIComponent(listId)}`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name }),
+    });
+  },
+  async deleteList(listId: string): Promise<{ lists: SavedList[] }> {
+    return request(`/api/research/lists/${encodeURIComponent(listId)}`, { method: 'DELETE' });
+  },
+  /** Which list the star writes to. `null` clears the choice back to the first
+   *  list — the convention every preference follows. */
+  async setActiveList(listId: string | null): Promise<{ activeId: string }> {
+    return request('/api/research/lists/active', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ listId }),
+    });
+  },
+  async addSearch(
+    name: string,
+    board: Record<string, unknown>,
+  ): Promise<{ searches: SavedSearch[]; id: string }> {
+    return request('/api/research/searches', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name, board }),
+    });
+  },
+  /** Rename a search, point it at the board as it stands, or both — an omitted
+   *  field is left alone, which is what lets a rename not disturb the reading. */
+  async updateSearch(
+    searchId: string,
+    patch: { name?: string; board?: Record<string, unknown> },
+  ): Promise<{ searches: SavedSearch[] }> {
+    return request(`/api/research/searches/${encodeURIComponent(searchId)}`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(patch),
+    });
+  },
+  async deleteSearch(searchId: string): Promise<{ searches: SavedSearch[] }> {
+    return request(`/api/research/searches/${encodeURIComponent(searchId)}`, { method: 'DELETE' });
+  },
+  /** Share one, or stop. Answers with the code, or null when off. Turning it on
+   *  twice hands back the code already minted rather than replacing it, so a
+   *  second press does not invalidate a link somebody was given last week. */
+  async shareResearchItem(
+    kind: 'list' | 'search',
+    id: string,
+    enabled: boolean,
+  ): Promise<{ code: string | null }> {
+    return request('/api/research/share', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ kind, id, enabled }),
+    });
+  },
+  /** Open a shared list or search by code — the owner's **current** copy. */
+  async sharedResearchItem(code: string): Promise<SharedItem> {
+    return request(`/api/research/shared/${encodeURIComponent(code)}`);
   },
   /** Mark the League page's Transactions feed read up to `ts` — the date of
    *  the newest move on screen. What undraws the red dot on that tab, and the

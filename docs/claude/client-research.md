@@ -504,6 +504,139 @@ now. Before → after, panel open: headings **343 → 337** at 390 with Search,
 **387 → 381** with Filters, **341 → 337** at 1200. Page-body horizontal overflow
 **0** at every reading.
 
+### Watchlists, saved searches, and the panel that would not paint
+
+**Two controls, and they are two configurations of one component**
+(`ResearchLists.tsx`). A watchlist is a saved set of players and a search is a
+saved reading of the board; the rows, the inline rename, the share panel and the
+armed delete are written once and used twice, because everything *around* the
+two payloads is identical.
+
+**Where each sits follows from what it is.** The Lists button is welded to the
+Watchlist toggle in the *which players* run, a watchlist being a set of players.
+The Searches button reads **last** in the *tools* run, after everything a saved
+search is made of: Search, Filters and Watchlist decide who is in the table,
+Schedule decides what the table is about them, Columns and Ranks decide how it is
+drawn — and a saved search is all of them at once, under a name.
+
+**A split button, not one button doing two things.** The toggle's job has not
+changed; what is new is that "the watchlist" names one of several, so the caret
+beside it is where that is said. Pressing a button that both toggles a set *and*
+opens a panel is a control the reader cannot aim: the two answers are different
+sizes and the wrong one is a pixel away. The two share an outline (the toggle
+gives up its right radius and its right border) so they read as one thing.
+
+**And the toggle now names the list.** With one list `Watchlist` said
+everything; with several it says which of them only by not saying. The default
+list is *called* `Watchlist`, so a reader who never makes a second one sees
+exactly the button they always did, and a rename moves the label with it. A
+shared list showing over the top takes the label too, because that is the list
+on the board.
+
+**The panels are rows of `.research-head`, and the first attempt was a popover
+hanging off each button.** That does not work here and the failure is worth
+recording, because it looks like nothing: `.tool-scroll-box` scrolls
+horizontally, so it clips on **both** axes, and an absolutely-positioned child
+of it is simply not painted. Measured, the popover reported a perfectly ordinary
+**268×322 box at `x: 140, y: 160`** — a rect is computed whether or not an
+ancestor clips it — and `elementFromPoint` at its centre returned the table
+behind. And even unclipped it would have had the fault this file already records
+for Search and Filters: the bar scrolls away and the condensed run replaces it,
+so a panel anchored to the bar opens hundreds of pixels above the top of the
+pane. So they go where every panel on this board goes. After the move, the same
+measurement: **380×189 at `x: 22, y: 264`**, `elementFromPoint` inside it.
+
+Joining `ResearchUi.panels` buys the rest for free — the open state is part of
+where you were, and `setPanel`'s exclusivity means opening Lists closes Filters
+exactly as opening Filters closes Search. The panel's own state (a rename in
+progress, a half-pressed delete) needs no reset effect either: it is unmounted
+when the panel shuts, so a panel re-opened cannot come back mid-gesture.
+
+**Pressing a row does different things in the two panels, and the asymmetry is
+the point.** A list is a **setting**: the row lights, the button above renames
+itself, the panel stays open so the reader can go on to rename or share it. A
+search is an **action**: its result is the board underneath, so applying closes
+the panel — leaving it open would hide the very thing the press did.
+`Update one to this board` is a second action rather than the same press,
+because saving over a search is the one gesture here that destroys something,
+and a control that reads or writes depending on where in the row you press it is
+the control this app's roster ✕ was rewritten to stop being. The delete **arms
+rather than asks**, the same gesture and the same red (`--strikeout`) that ✕
+already uses.
+
+**Applying a search replaces the reader's work, where `openSpotlightBoard`
+deliberately does not.** That door leaves a search, a filter and a day set
+alone, because it is a *door* — it opens the board at a place. A saved search
+*is* somebody's reading, named; applying it while keeping yesterday's four
+filters would produce a board that is neither. What it does not do is **write to
+the record**: the include set and the Watchlist button are set locally with
+their touched refs raised, exactly as that door sets the include set, so opening
+somebody's link cannot quietly become your saved default.
+
+**What a saved search remembers** is eleven fields (`ResearchSearchBoard`), and
+the test each had to pass is *would a reader who saved this be surprised to find
+it different*: position, span, ownership sets, watchlist on or off, clubs or
+players, measured or projected, columns, sort key, sort direction, filters,
+name search. What it deliberately does **not** remember is anything that is not
+a reading — the paging, which panels were open, the half-typed condition in the
+filter builder. Those are where the reader had got to, not what they were
+looking at.
+
+### A shared list or search says so, and touches nothing of yours
+
+`wl=` and `rs=` are the two params, separate keys for the app's own reason that
+two params must never mean two things: one is a set of players and the other is
+a reading of the board, and a link is read before anything on screen can say
+which. **Nothing of the reader's is touched to get there** — a shared thing
+lives in App state and in the URL, in no preference and on no record — which is
+what makes "opening somebody's link must not disturb your own" a property of the
+design rather than something to remember.
+
+**The board's watchlist union and the row's star come apart here, and only
+here.** The union and the count are about the list *on screen*; the star is
+about the list you *own*. So the board takes two sets (`watchlistKeys` and
+`ownWatchlistKeys`) and marking a stranger's players starred while the press
+writes to your own list is the thing that does not happen.
+
+**The notice's two wordings are different tenses, and the difference is
+honest.** A shared **watchlist** is live — its keys are on the board right now,
+and re-sorting does not stop that being true — so it reads *Showing*. A shared
+**search** is a reading that was *applied*; the board is now the reader's own to
+change, and a banner claiming they are "using" it would go on claiming so after
+they had re-filtered it into something else. So it reads *Opened from*, which
+stays true. Both offer the same two ways out: keep it (a **copy**, which stops
+tracking the owner's) or be rid of it.
+
+**It sits between the controls and the table**, because that is where the fact
+belongs: the board below looks entirely ordinary, and without this there is
+nothing to say the rows came out of a link. It needed `flex: 1 1 100%` to claim
+a line — `.research-chrome` is `display: contents`, so it is an item of
+`.view-tools`'s own flex row, and left to size itself it landed in whatever the
+third run had left over: **a 600px box starting half-way across a 1200px window
+with `Save as my own` clipped off its right edge**. Fixed, it measures
+**1156px at `x: 22`** with both buttons inside.
+
+**Driven, not compiled.** The whole round trip, twice — as the owner and, with
+the server restarted under a second `DEV_USER_ID`, as a genuine stranger:
+
+- A search saved off `pos=SP&win=30&inc=mine,fa` and shared; the link opened
+  cold carries **only** `rs=<code>`, and the board comes up at 30d, SP, both
+  ownership sets lit, **201 of 415 pitchers**, with the pitcher column set — none
+  of which was in the link.
+- A shared list opened by a stranger: the toggle reads `Closers 2` and is on,
+  the notice reads *Showing a shared watchlist · Closers — nothing of yours has
+  changed*, and **no row is starred**, their own list being empty.
+- `Save as my own` copies it, makes it active, and the notice goes; the star
+  then writes to it (`Closers 2 → 3`) and survives a reload.
+- `Dismiss` drops both the notice and the param.
+- At **390px**: `document.scrollWidth` 390, the notice 346px over two lines with
+  both buttons in, the `Lists` word visually hidden (the caret being unambiguous
+  beside a button that says Watchlist), and the panel painted and hit-testable at
+  346px.
+
+**Bundle**: JS 745.79 → 760.94 kB raw, 219.89 → 224.19 gzipped; CSS 192.67 →
+196.70 raw, 34.32 → 34.97 gzipped.
+
 ### The page scrolls, and the head stays
 
 *(This supersedes the arrangement the section above describes — the band is no

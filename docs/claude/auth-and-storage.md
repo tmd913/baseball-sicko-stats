@@ -45,6 +45,122 @@ The two stamps make a **half-open** interval, `[addedAt, removedAt)`: each is th
 
 **`researchWatchlist` was `researchWatchlistOnly` until the board started unioning the watchlist in rather than narrowing to it** (see **Client**), and the rename is handled the way this codebase handles every stored-shape change: the old key is **read on the way in** and never written, so a preference saved before the change still applies, and `setResearchInclude` **deletes it on every write** so no record ends up holding two answers to one question. A record therefore migrates the first time its owner touches the control — the same as-people-use-the-app rule `getEspnCreds` follows for the legacy inline ESPN credential, and for the same reason: a migration script over every user buys nothing that a fallback read doesn't, and can fail halfway. Checked by stubbing the prefs response: a record carrying only the old key brings the board up identically to one carrying only the new.
 
+### The watchlist became watchlists, and the board's readings can be saved
+
+**One list was one attribute, and the reason to have several is the reason there
+were two lists in the first place.** A reader keeps *sets* of players — "closers
+I might stream", "the guys I'd trade for", "prospects to watch" are three
+questions, not one list of thirty names. So `watchlist: string[]` on the item
+became `watchlists: SavedList[]`, each with an id, a name, its keys and its
+stamps, and `UserPrefs.activeWatchlistId` says which one the star writes to.
+
+**The id is what everything references, never the name**, because a list can be
+renamed and every reference to one — the active choice, a share pointing at it,
+a link in somebody's history — would otherwise break the moment its owner
+corrected a typo.
+
+**The migration is a read-forward and nothing else.** `listsOf` is called by both
+backends' loaders, so a record with only the old attribute becomes one list
+called `Watchlist` with the keys it always had — the same word every surface in
+the app already uses for it, so a user who never asks for a second list never
+meets the fact that there can be one. A record with *neither* becomes one
+**empty** list rather than no lists, because every surface downstream assumes
+there is a list to be active and "you have no watchlists" is an empty state
+nobody can reach on purpose. The stamps are **0** rather than "now": the list is
+as old as the record, and stamping it with the moment of the migration would
+make every legacy list look as though it had been created the day this deployed.
+On the first write the item is replaced and the legacy attribute goes with it —
+the rule `getEspnCreds` follows for the legacy inline credential, a migration
+that happens as people use the app rather than in a script over every account.
+**The cost of that rule is the rollback and it is worth writing down**: a user
+who has touched this and then meets an older build has a record with no
+`watchlist` attribute, and that build reads an empty watchlist. Nothing is
+deleted — the keys are in `watchlists` — and it is the exposure every
+read-forward migration here carries.
+
+**The active list is resolved rather than trusted**, in one function
+(`activeList`) that every read and every write goes through: the preference names
+an id, the id may name a list that was deleted from another tab, and both fall
+back to the **first** list. That is the app's standing rule for an unrecognized
+value, and `listsOf` is what guarantees there is a first one to fall back to.
+Which is also why deleting the active list needs no special case at all, and why
+`setActiveList` stores only an id that names something — clearing the entry back
+to absence rather than writing down a pointer to nothing.
+
+**A saved search is the same envelope around a different payload.** `SavedSearch`
+carries an id, a name, the stamps, a share code — and a `board` that is
+**opaque to the server**. Which positions exist, what a window is, which column
+keys are real, what a filter operator may be: every one of those is the client's
+vocabulary, and this is the split `researchColumns` already makes, where the
+route checks the *shape* of what arrived and the meaning lives where the thing
+is drawn. So adding a column or an operator needs no server change, and a search
+written by a newer browser is narrowed by an older one (`readSearchBoard`)
+rather than rejected by an older server.
+
+**The caps are not arbitrary.** The whole user record is **one DynamoDB item**
+behind a hard 400KB ceiling that the roster, the tombstones and the preferences
+already sit inside, so an uncapped list of searches is a way to make somebody's
+entire saved state unwritable, roster included, with no way back through the UI.
+`MAX_LISTS` 20, `MAX_SEARCHES` 30, `MAX_LIST_KEYS` 500, `MAX_NAME_LEN` 60,
+`MAX_BOARD_BYTES` 8,000 — measured, a `board` with forty columns, six filters
+and a search string serializes to ~1.4KB, so thirty of them is ~42KB. The client
+mirrors the two counts by hand so a control can say *why* its Add button has
+gone before the reader presses it and gets a 409; if they drift, the client's
+copy is only ever a **label** and the server refuses either way.
+
+### Sharing a list or a search: the invite pattern, one level simpler
+
+**A share is a pointer record and the owner's copy, and a read requires the two
+to agree** — `leagueForInvite`'s rule, and this is the second thing in the app
+to need it. `share#<code>` names whose record the thing is on and which thing it
+is; the item carries `shareCode` back. The pointer is written **after** the
+owner's copy and deleted **before** it, both for the reason `setLeagueSharing`
+gives: whichever half fails, the failure must not be the one that leaves a link
+working. Deleting a list or a search deletes its pointer too, or the link would
+go on resolving to something that no longer exists.
+
+**A live reference and not a snapshot**, which is the one real decision here. A
+shared watchlist that froze the day it was handed over would be a worse thing
+than a link to a list — the whole use is *these are the arms I am watching*, and
+it is worth something precisely because it goes on being true. The cost is that
+the owner can change what a recipient sees, which is what revoking is for; and
+the recipient's own copy, when they take one, is a copy and stops tracking.
+That is what *Save as my own* means.
+
+**Nobody's name travels with it.** The app knows its users as Cognito subs and
+their email addresses, and an email is not a thing to hand to whoever holds a
+link. So a shared item arrives with its own name and the fact that it is shared,
+and says nothing about who shared it — which is all the UI needs to say *you are
+reading somebody else's list*. `mine` rides along so that following **your own**
+share link is not dressed up as a warning.
+
+**Turning sharing on twice hands back the code already minted**, rather than
+replacing it: a second press must not quietly invalidate the link somebody was
+given last week. Turning it off deletes both halves, and one message covers
+"never existed", "revoked" and "deleted since" — which of the three it is tells
+a stranger holding a guessed code something about whether they are close, the
+reasoning `/api/espn/join` already states. Codes are 16 URL-safe characters, the
+length `mintInviteCode` uses, because holding one is the whole of the
+authorisation. **Ids are 8**, deliberately shorter: an id is a name for a thing
+you own, and every route that takes one also takes the caller's own user id and
+looks only in their own record.
+
+**`PUT /api/research/lists/active` must be declared before
+`PUT /api/research/lists/:listId`, and that is not style.** Express matches in
+declaration order, so with the parameterised route first the literal one is
+never reached: `active` binds to `listId` and the *rename* handler answers, then
+rejects the body for having no name on it. Found exactly that way — setting the
+active list came back `400 name must be 1-60 characters`, an error from a route
+nobody had called.
+
+**Copying a shared list is one write, and it had to become one.** The create
+route takes an optional `keys` array for exactly this. Written as a create
+followed by a run of `PUT /api/watch` calls it was **measured to lose data**:
+the record is a single item behind a single version guard, so the stars raced
+each other and `mutate` replays one apiece — copying a two-player list landed
+**one** of the two, and put it on the wrong list, the activate having been a
+separate request the stars raced as well. One write cannot race itself.
+
 ### The search remembers who you picked
 
 **`UserPrefs.recentPlayers` is the last five players picked out of the header search, most recent first** — what that field offers before a character has been typed (see **Client**, where the menu it draws is set out). It is a *fifth* per-user list beside the roster, the watchlist and the two column sets, and it is deliberately none of them: it says nothing about who is followed or reported on, only about who was looked up.
