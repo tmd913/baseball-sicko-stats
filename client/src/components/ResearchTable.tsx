@@ -3217,11 +3217,17 @@ export function ResearchTable({
           ) : (
             <div className="rl-split">
               {watchlistToggle}
+              {/* **A caret, not a second word.** It read `Watchlist · Lists ▾`,
+                  which is two nouns for one thing: the half beside this one
+                  already names the list, so all this half has to say is *there
+                  are others*. Its accessible name comes from the `title`
+                  through `aria-label`, which is what `label` being absent
+                  arranges. */}
               <SavedButton
-                label="Lists"
-                title="Which watchlist — choose, rename, share or add one"
+                title="Choose a watchlist, or rename, share and add one"
                 open={listsOpen}
                 onToggle={() => setPanel('lists', !listsOpen)}
+                className="rl-split-caret"
               />
             </div>
           )}

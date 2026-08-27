@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { SavedList, SavedSearch, SharedItem } from '../types';
 
 /**
@@ -8,7 +9,7 @@ import type { SavedList, SavedSearch, SharedItem } from '../types';
  * of the board. They are different payloads answering different questions, and
  * everything *around* them is the same: both are named, renamed, deleted and
  * shared, both live on the user's record, both are a button in the bar over a
- * panel in the head. So the rows, the rename, the share panel and the armed
+ * panel in the head. So the rows, the rename, the share drawer and the armed
  * delete are written once and configured twice, rather than as two components
  * that will drift — the rule this codebase applies to a stylesheet (`fold,
  * don't restyle`) read forwards into a component that does not exist yet.
@@ -25,30 +26,36 @@ import type { SavedList, SavedSearch, SharedItem } from '../types';
  *   columns, sort and filters in one go, so the panel closes and the reader is
  *   looking at the result.
  *
- * ### On the row actions, and why they are inline rather than a dialog
+ * ### One trailing control per row, not three glyphs
  *
- * Renaming, sharing and deleting are three small things done to one row, and
- * each of them opened as a modal would put a dialog over a panel over a bar —
- * three layers deep to type six characters. So a row **expands in place**: the
- * name becomes an input, or the share link appears under it. The head is
- * measured (`--research-head-h`), so an expanded row moves the column headings
- * and the sort's scroll target with it without being told anything.
+ * A row's actions were three 12px glyphs (`✎ ⤴ ✕`) jammed against its right
+ * edge, and they were wrong twice over. **They were unreadable** — a pencil at
+ * that size against `--faint` is a smudge, and nothing said what any of them
+ * did until you hovered, which a touch device never does. And **they were
+ * un-pressable**: a 22×24px target, where this app's own icon buttons are 30px
+ * and its chips 28. A fourth action (a search can be *updated* to the board it
+ * is looking at) had nowhere to go at all, which is why that one had ended up
+ * as a duplicated run of pills at the foot of the panel, restating the same two
+ * names the list above it already carried.
  *
- * The one thing that is *not* inline is the delete, which arms rather than
- * asks: the first press turns the button red and the second does it. Same
- * gesture the roster's own ✕ uses (`RemoveButton`), and for the same reason —
- * a confirm dialog for a thing that takes two seconds to rebuild is a dialog
- * nobody reads.
+ * So a row is **one press and one `⋯`**. The press does the row's own thing;
+ * the `⋯` opens a drawer under it — **labeled chips**, at the size the column
+ * picker's own chips are, so nothing is guessed at and everything is aimable.
+ * Rename and Share take that drawer *over* rather than stacking on it: three
+ * states of one box, not a pile of panels.
+ *
+ * The delete arms rather than asks, the same gesture and the same red
+ * (`--strikeout`) the roster's ✕ already uses — a confirm dialog for a thing
+ * that takes two seconds to rebuild is a dialog nobody reads.
  */
 
-/** How a row's expanded state is drawn — one at a time, so opening the share
- *  panel on one row closes the rename input on another. */
-type RowMode = { id: string; mode: 'rename' | 'share' } | null;
+/** Which row's drawer is open, and what it is showing. `menu` is the strip of
+ *  actions; the other two are one action having taken the drawer over. */
+type Drawer = { id: string; mode: 'menu' | 'rename' | 'share' } | null;
 
-/** A press that arms and then acts, by row id. Both this and `RowMode` are
- *  state of the **panel**, which is unmounted when the panel shuts — so a panel
- *  re-opened never comes back with a delete half-pressed or an input still
- *  expanded, and no effect is needed to say so. */
+/** A delete that has been armed, by row id. State of the **panel**, which is
+ *  unmounted when the panel shuts — so a panel re-opened never comes back with
+ *  a delete half-pressed, and no effect is needed to say so. */
 type Armed = string | null;
 
 export interface SavedThing {
@@ -109,15 +116,17 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** The share panel for one row: the link, a copy button, and the way to stop. */
-function SharePanel({
+/** The share drawer for one row: the link, a copy button, and the way to stop. */
+function ShareDrawer({
   kind,
   thing,
   onShare,
+  onBack,
 }: {
   kind: 'list' | 'search';
   thing: SavedThing;
   onShare: (id: string, enabled: boolean) => void;
+  onBack: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const link = thing.shareCode ? shareLink(kind, thing.shareCode) : null;
@@ -130,179 +139,257 @@ function SharePanel({
   }, [copied]);
   if (!link) {
     return (
-      <div className="rl-share">
-        <p className="rl-share-note">
+      <div className="rl-drawer">
+        <p className="rl-drawer-note">
           {kind === 'list'
-            ? 'Anyone with the link can see who is on this list. They read your copy, so it stays current as you change it.'
-            : 'Anyone with the link can open this reading of the board. They read your copy, so it stays current as you change it.'}
+            ? 'Anyone with the link sees who is on this list — your copy, so it stays current.'
+            : 'Anyone with the link opens this reading of the board — your copy, so it stays current.'}
         </p>
-        <button type="button" className="rl-btn rl-btn-go" onClick={() => onShare(thing.id, true)}>
-          Create a link
-        </button>
+        <div className="rl-acts">
+          <button type="button" className="rl-act rl-act-go" onClick={() => onShare(thing.id, true)}>
+            Create a link
+          </button>
+          <button type="button" className="rl-act" onClick={onBack}>
+            Back
+          </button>
+        </div>
       </div>
     );
   }
   return (
-    <div className="rl-share">
+    <div className="rl-drawer">
       {/* Readonly rather than disabled: a disabled input cannot be selected,
           and selecting the text by hand is the fallback when the clipboard is
           not available and the copy button has quietly failed. */}
-      <input className="rl-share-link" readOnly value={link} onFocus={(e) => e.target.select()} />
-      <div className="rl-share-row">
+      <input className="rl-link" readOnly value={link} onFocus={(e) => e.target.select()} />
+      <div className="rl-acts">
         <button
           type="button"
-          className="rl-btn rl-btn-go"
+          className="rl-act rl-act-go"
           onClick={() => {
             void copyText(link).then(setCopied);
           }}
         >
           {copied ? 'Copied' : 'Copy link'}
         </button>
-        <button type="button" className="rl-btn" onClick={() => onShare(thing.id, false)}>
+        <button type="button" className="rl-act" onClick={() => onShare(thing.id, false)}>
           Stop sharing
+        </button>
+        <button type="button" className="rl-act" onClick={onBack}>
+          Back
         </button>
       </div>
     </div>
   );
 }
 
-/** One row of either menu. */
+/** The rename drawer — the name as an input, committed on Enter or on Save. */
+function RenameDrawer({
+  thing,
+  onRename,
+  onBack,
+}: {
+  thing: SavedThing;
+  onRename: (id: string, name: string) => void;
+  onBack: () => void;
+}) {
+  const [draft, setDraft] = useState(thing.name);
+  const ref = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    // Focus and select, so the commonest rename — replacing the whole name — is
+    // one gesture.
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const commit = () => {
+    const name = draft.trim();
+    if (name && name !== thing.name) onRename(thing.id, name);
+    onBack();
+  };
+  return (
+    <div className="rl-drawer">
+      <div className="rl-acts">
+        <input
+          ref={ref}
+          className="rl-input"
+          value={draft}
+          maxLength={60}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter commits, Escape abandons — and Escape is stopped here so it
+            // does not travel on and close the panel as well, which is the app's
+            // "one press undoes one thing" applied inside a row.
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'Escape') {
+              e.stopPropagation();
+              onBack();
+            }
+          }}
+          aria-label={`Rename ${thing.name}`}
+        />
+        {/* `onMouseDown` is prevented so the press does not blur the input out
+            from under itself before the click lands. */}
+        <button
+          type="button"
+          className="rl-act rl-act-go"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={commit}
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** One row of either panel: a press, its marks, and the drawer behind `⋯`. */
 function Row({
   thing,
   active,
   count,
   kind,
-  mode,
+  drawer,
   armed,
   onPick,
-  onMode,
+  onDrawer,
   onArm,
   onRename,
   onDelete,
   onShare,
+  onReplace,
 }: {
   thing: SavedThing;
-  /** Lit, for the lists menu — the searches menu has no active row, a search
+  /** Lit, for the lists panel — the searches panel has no active row, a search
    *  being an action rather than a setting. */
   active?: boolean;
   /** How many players are on it; absent on a search. */
   count?: number;
   kind: 'list' | 'search';
-  mode: RowMode;
+  drawer: Drawer;
   armed: Armed;
   onPick: (id: string) => void;
-  onMode: (m: RowMode) => void;
+  onDrawer: (d: Drawer) => void;
   onArm: (id: string | null) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   onShare: (id: string, enabled: boolean) => void;
+  /** Point this saved search at the board as it stands — searches only. */
+  onReplace?: (id: string) => void;
 }) {
-  const renaming = mode?.id === thing.id && mode.mode === 'rename';
-  const sharing = mode?.id === thing.id && mode.mode === 'share';
-  const [draft, setDraft] = useState(thing.name);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    if (!renaming) return;
-    setDraft(thing.name);
-    // Focus and select, so the commonest rename — replacing the whole name —
-    // is one gesture.
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, [renaming, thing.name]);
-
-  const commit = () => {
-    const name = draft.trim();
-    if (name && name !== thing.name) onRename(thing.id, name);
-    onMode(null);
-  };
-
+  const open = drawer?.id === thing.id;
+  const mode = open ? drawer.mode : null;
+  const isList = kind === 'list';
   return (
-    <li className={`rl-row${active ? ' is-active' : ''}`}>
+    <li className={`rl-row${active ? ' is-active' : ''}${open ? ' is-open' : ''}`}>
       <div className="rl-row-main">
-        {renaming ? (
-          <input
-            ref={inputRef}
-            className="rl-rename"
-            value={draft}
-            maxLength={60}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter commits, Escape abandons — and Escape is stopped here so
-              // it does not travel on and close the popover as well, which is
-              // the app's "one press undoes one thing" applied inside a row.
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commit();
-              } else if (e.key === 'Escape') {
-                e.stopPropagation();
-                onMode(null);
-              }
-            }}
-            onBlur={commit}
-            aria-label="Name"
-          />
-        ) : (
-          <button
-            type="button"
-            className="rl-pick"
-            aria-pressed={kind === 'list' ? !!active : undefined}
-            onClick={() => onPick(thing.id)}
-            title={
-              kind === 'list'
-                ? 'Make this the list the star writes to'
-                : 'Apply this reading to the board'
-            }
-          >
-            <span className="rl-name">{thing.name}</span>
-            {count !== undefined && <span className="rl-count">{count}</span>}
-            {thing.shareCode && (
-              <span className="rl-shared-mark" title="Shared — a link opens this" aria-hidden="true">
-                ⤴
-              </span>
-            )}
-          </button>
-        )}
-        <div className="rl-row-tools">
-          <button
-            type="button"
-            className={`rl-icon${renaming ? ' is-on' : ''}`}
-            title="Rename"
-            aria-label={`Rename ${thing.name}`}
-            onClick={() => onMode(renaming ? null : { id: thing.id, mode: 'rename' })}
-          >
-            ✎
-          </button>
-          <button
-            type="button"
-            className={`rl-icon${sharing ? ' is-on' : ''}${thing.shareCode ? ' is-shared' : ''}`}
-            title={thing.shareCode ? 'Shared — get the link' : 'Share'}
-            aria-label={`Share ${thing.name}`}
-            onClick={() => onMode(sharing ? null : { id: thing.id, mode: 'share' })}
-          >
-            ⤴
-          </button>
-          {/* **Arms rather than asks** — see the note at the head of this file. */}
-          <button
-            type="button"
-            className={`rl-icon rl-del${armed === thing.id ? ' is-armed' : ''}`}
-            title={armed === thing.id ? 'Press again to delete' : 'Delete'}
-            aria-label={
-              armed === thing.id ? `Press again to delete ${thing.name}` : `Delete ${thing.name}`
-            }
-            onClick={() => {
-              if (armed === thing.id) {
-                onArm(null);
-                onDelete(thing.id);
-              } else {
-                onArm(thing.id);
-              }
-            }}
-          >
-            {armed === thing.id ? 'Delete?' : '✕'}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="rl-pick"
+          aria-pressed={isList ? !!active : undefined}
+          onClick={() => onPick(thing.id)}
+          title={
+            isList
+              ? active
+                ? `“${thing.name}” is the list the star writes to`
+                : `Make “${thing.name}” the list the star writes to`
+              : `Apply “${thing.name}” to the board`
+          }
+        >
+          {/* **A dot, reserved on every row.** The active list is tinted, and a
+              tint alone puts identity on hue, which this app does not do.
+              Reserved rather than conditional so every name starts at the same
+              x whichever row is lit. */}
+          {isList && <span className={`rl-dot${active ? ' is-on' : ''}`} aria-hidden="true" />}
+          <span className="rl-name">{thing.name}</span>
+          {thing.shareCode && (
+            <span className="rl-shared-mark" title="Shared — a link opens this" aria-hidden="true">
+              ⤴
+            </span>
+          )}
+          {count !== undefined && <span className="rl-count">{count}</span>}
+        </button>
+        <button
+          type="button"
+          className={`rl-more${open ? ' is-open' : ''}`}
+          aria-expanded={open}
+          aria-label={`Actions for ${thing.name}`}
+          title={`Rename, share or delete “${thing.name}”`}
+          onClick={() => {
+            onArm(null);
+            onDrawer(open ? null : { id: thing.id, mode: 'menu' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <circle cx="3" cy="8" r="1.4" fill="currentColor" />
+            <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+            <circle cx="13" cy="8" r="1.4" fill="currentColor" />
+          </svg>
+        </button>
       </div>
-      {sharing && <SharePanel kind={kind} thing={thing} onShare={onShare} />}
+
+      {mode === 'menu' && (
+        <div className="rl-drawer">
+          <div className="rl-acts">
+            <button
+              type="button"
+              className="rl-act"
+              onClick={() => onDrawer({ id: thing.id, mode: 'rename' })}
+            >
+              Rename
+            </button>
+            {onReplace && (
+              <button
+                type="button"
+                className="rl-act"
+                title={`Replace “${thing.name}” with the board as it stands`}
+                onClick={() => onReplace(thing.id)}
+              >
+                Update to this board
+              </button>
+            )}
+            <button
+              type="button"
+              className={`rl-act${thing.shareCode ? ' is-on' : ''}`}
+              onClick={() => onDrawer({ id: thing.id, mode: 'share' })}
+            >
+              {thing.shareCode ? 'Sharing' : 'Share'}
+            </button>
+            {/* **Arms rather than asks** — see the note at the head of this
+                file. */}
+            <button
+              type="button"
+              className={`rl-act rl-act-del${armed === thing.id ? ' is-armed' : ''}`}
+              onClick={() => {
+                if (armed === thing.id) {
+                  onArm(null);
+                  onDelete(thing.id);
+                } else {
+                  onArm(thing.id);
+                }
+              }}
+            >
+              {armed === thing.id ? 'Really delete?' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
+      {mode === 'rename' && (
+        <RenameDrawer
+          thing={thing}
+          onRename={onRename}
+          onBack={() => onDrawer({ id: thing.id, mode: 'menu' })}
+        />
+      )}
+      {mode === 'share' && (
+        <ShareDrawer
+          kind={kind}
+          thing={thing}
+          onShare={onShare}
+          onBack={() => onDrawer({ id: thing.id, mode: 'menu' })}
+        />
+      )}
     </li>
   );
 }
@@ -326,6 +413,11 @@ function Row({
  * stay in the run. `ResearchUi.panels` is what joins them, which also buys the
  * exclusivity for free: `setPanel` shuts the others, so opening Lists closes
  * Filters exactly as opening Filters closes Search.
+ *
+ * **The caret is drawn rather than typed.** `▾` is a full-height character that
+ * has to be shrunk to sit beside a 12px label, and at the 9px that took it
+ * rendered as a dot — measured on the bar, where `Searches 2 ▾` read as
+ * `Searches 2 ·`. This one is a 9×6 path by construction.
  */
 export function SavedButton({
   label,
@@ -333,31 +425,46 @@ export function SavedButton({
   count,
   open,
   onToggle,
+  className,
+  glyph,
 }: {
-  label: string;
+  /** The word on the button, or absent for the caret-only half of a split,
+   *  where the half beside it already names the thing. */
+  label?: string;
   title: string;
   count?: number;
   open: boolean;
   onToggle: () => void;
+  className?: string;
+  glyph?: ReactNode;
 }) {
   return (
     <button
       type="button"
-      className={`research-toggle rl-btn-open${open ? ' active' : ''}`}
+      className={`research-toggle rl-btn-open${open ? ' active' : ''}${className ? ` ${className}` : ''}`}
       aria-expanded={open}
+      aria-label={label ? undefined : title}
       title={title}
       onClick={onToggle}
     >
-      <span className="rl-open-label">{label}</span>
-      {count !== undefined && count > 0 && <span className="research-count">{count}</span>}
-      <span className="rl-caret" aria-hidden="true">
-        ▾
-      </span>
+      {glyph}
+      {label && <span className="research-toggle-label">{label}</span>}
+      {count !== undefined && count > 0 && <span className="research-toggle-count">{count}</span>}
+      <svg className="rl-caret" viewBox="0 0 10 6" width="9" height="6" aria-hidden="true">
+        <path
+          d="M1 1.2 5 4.8 9 1.2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </button>
   );
 }
 
-/** A name being typed for a new list or search, with its own commit rules. */
+/** The name of a new list or search, and the button that makes it. */
 function NewRow({
   placeholder,
   cta,
@@ -382,7 +489,7 @@ function NewRow({
   return (
     <div className="rl-new">
       <input
-        className="rl-rename"
+        className="rl-input"
         placeholder={placeholder}
         value={draft}
         maxLength={60}
@@ -395,12 +502,7 @@ function NewRow({
         }}
         aria-label={placeholder}
       />
-      <button
-        type="button"
-        className="rl-btn rl-btn-go"
-        disabled={!draft.trim()}
-        onClick={commit}
-      >
+      <button type="button" className="rl-act rl-act-go" disabled={!draft.trim()} onClick={commit}>
         {cta}
       </button>
     </div>
@@ -427,11 +529,6 @@ export interface ListsPanelProps {
  * This panel is where that is changed, and where a list is made, renamed,
  * shared or thrown away.
  *
- * The button beside the toggle is a **separate target**, welded to it by the
- * stylesheet: pressing a button that both toggles a set and opens a panel is a
- * control the reader cannot aim, the two answers being different sizes and one
- * pixel apart.
- *
  * Pressing a row makes that list **active** and leaves the panel open, because
  * choosing a list is a *setting* — the row lights, the button above renames
  * itself, and the reader can go straight on to rename or share it. That is the
@@ -447,7 +544,7 @@ export function ListsPanel({
   onDelete,
   onShare,
 }: ListsPanelProps) {
-  const [mode, setMode] = useState<RowMode>(null);
+  const [drawer, setDrawer] = useState<Drawer>(null);
   const [armed, setArmed] = useState<Armed>(null);
   return (
     <div className="research-panel rl-panel">
@@ -460,10 +557,10 @@ export function ListsPanel({
             thing={l}
             count={l.keys.length}
             active={l.id === activeId}
-            mode={mode}
+            drawer={drawer}
             armed={armed}
             onPick={onPick}
-            onMode={setMode}
+            onDrawer={setDrawer}
             onArm={setArmed}
             onRename={onRename}
             onDelete={onDelete}
@@ -471,17 +568,19 @@ export function ListsPanel({
           />
         ))}
       </ul>
-      <NewRow
-        placeholder="New watchlist"
-        cta="Add"
-        disabled={lists.length >= max}
-        disabledWhy={`You can keep at most ${max} watchlists — delete one to add another.`}
-        onCreate={onCreate}
-      />
-      <p className="rl-note">
-        The star on a row adds to the <strong>active</strong> list, and the Watchlist button puts
-        that list on the board.
-      </p>
+      <div className="rl-foot">
+        <NewRow
+          placeholder="New watchlist"
+          cta="Add"
+          disabled={lists.length >= max}
+          disabledWhy={`You can keep at most ${max} watchlists — delete one to add another.`}
+          onCreate={onCreate}
+        />
+        <p className="rl-note">
+          The star on a row adds to the <strong>active</strong> list; the Watchlist button puts that
+          list on the board.
+        </p>
+      </div>
     </div>
   );
 }
@@ -510,11 +609,13 @@ export interface SearchesPanelProps {
  * thing the press did. Choosing a list is a setting and its result is the row
  * lighting, which is inside the panel.
  *
- * `Update one to this board` is a second action and is deliberately **not** the
- * same press as applying. Saving over a search is the one gesture here that
- * destroys something, and a control that reads or writes depending on where in
- * the row you press it is the control this app's roster ✕ was rewritten to stop
- * being.
+ * `Update to this board` is a fourth action in the row's own drawer. It used to
+ * be a duplicated run of pills at the foot of this panel — the same names,
+ * listed twice, under a label — which is what a fourth action looks like when a
+ * row has nowhere to put it. It stays a *separate press* from applying, because
+ * saving over a search is the one gesture here that destroys something, and a
+ * control that reads or writes depending on where in the row you press it is
+ * the control this app's roster ✕ was rewritten to stop being.
  */
 export function SearchesPanel({
   searches,
@@ -527,7 +628,7 @@ export function SearchesPanel({
   onShare,
   onClose,
 }: SearchesPanelProps) {
-  const [mode, setMode] = useState<RowMode>(null);
+  const [drawer, setDrawer] = useState<Drawer>(null);
   const [armed, setArmed] = useState<Armed>(null);
   return (
     <div className="research-panel rl-panel">
@@ -535,8 +636,8 @@ export function SearchesPanel({
       {searches.length === 0 ? (
         <p className="rl-note">
           Nothing saved yet. A saved search remembers the position, the span, which players are
-          included, the columns, the sort and every filter — name this board below and it comes
-          back in one press.
+          included, the columns, the sort and every filter — name this board below and it comes back
+          in one press.
         </p>
       ) : (
         <ul className="rl-rows">
@@ -545,49 +646,34 @@ export function SearchesPanel({
               key={sv.id}
               kind="search"
               thing={sv}
-              mode={mode}
+              drawer={drawer}
               armed={armed}
               onPick={() => {
                 onApply(sv);
                 onClose();
               }}
-              onMode={setMode}
+              onDrawer={setDrawer}
               onArm={setArmed}
               onRename={onRename}
               onDelete={onDelete}
               onShare={onShare}
+              onReplace={(id) => {
+                onReplace(id);
+                onClose();
+              }}
             />
           ))}
         </ul>
       )}
-      {searches.length > 0 && (
-        <div className="rl-replace">
-          <span className="rl-replace-label">Update one to this board:</span>
-          <div className="rl-replace-row">
-            {searches.map((sv) => (
-              <button
-                key={sv.id}
-                type="button"
-                className="rl-btn rl-replace-btn"
-                title={`Replace “${sv.name}” with the board as it stands`}
-                onClick={() => {
-                  onReplace(sv.id);
-                  onClose();
-                }}
-              >
-                {sv.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <NewRow
-        placeholder="Name this board"
-        cta="Save"
-        disabled={searches.length >= max}
-        disabledWhy={`You can keep at most ${max} saved searches — delete one to save another.`}
-        onCreate={onSave}
-      />
+      <div className="rl-foot">
+        <NewRow
+          placeholder="Name this board"
+          cta="Save"
+          disabled={searches.length >= max}
+          disabledWhy={`You can keep at most ${max} saved searches — delete one to save another.`}
+          onCreate={onSave}
+        />
+      </div>
     </div>
   );
 }
@@ -613,6 +699,11 @@ export function SearchesPanel({
  * be rid of it. Neither has touched anything of theirs to get here, which is
  * the property the whole design is arranged around: a shared thing lives in the
  * URL and nowhere else.
+ *
+ * **Three parts on one line, in the order they are read**: what kind of thing
+ * this is, its name, and the reassurance. They were one run of prose with the
+ * name bolded inside it, which at 390 wrapped into a paragraph — and a bar over
+ * a table has to be scannable in one glance rather than read.
  */
 export function SharedNotice({
   shared,
@@ -632,19 +723,22 @@ export function SharedNotice({
         ⤴
       </span>
       <span className="rl-shared-text">
-        {isList ? 'Showing a shared watchlist' : 'Opened from a shared search'}
-        {' · '}
-        <strong>{shared.name}</strong>
-        {shared.mine ? (
-          <span className="rl-shared-own"> — your own, over a link</span>
-        ) : isList ? (
-          <span className="rl-shared-own"> — nothing of yours has changed</span>
-        ) : null}
+        <span className="rl-shared-what">
+          {isList ? 'Shared watchlist' : 'Opened from a shared search'}
+        </span>
+        <strong className="rl-shared-name">{shared.name}</strong>
+        <span className="rl-shared-own">
+          {shared.mine
+            ? 'your own, over a link'
+            : isList
+              ? 'nothing of yours has changed'
+              : 'the board is yours to change from here'}
+        </span>
       </span>
       <span className="rl-shared-acts">
         <button
           type="button"
-          className="rl-btn rl-btn-go"
+          className="rl-act rl-act-go"
           disabled={saving}
           onClick={onSaveAsMine}
           title={
@@ -655,7 +749,7 @@ export function SharedNotice({
         >
           {saving ? 'Saving…' : 'Save as my own'}
         </button>
-        <button type="button" className="rl-btn" onClick={onDismiss}>
+        <button type="button" className="rl-act" onClick={onDismiss}>
           {isList ? 'Stop showing it' : 'Dismiss'}
         </button>
       </span>
