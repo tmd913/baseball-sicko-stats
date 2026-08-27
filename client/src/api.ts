@@ -20,6 +20,7 @@ import type {
   SeasonArsenal,
   PlayerKind,
   PitcherSeasonStats,
+  PlayerCut,
   PlayerPercentiles,
   PlayerReport,
   PlayerWindows,
@@ -510,6 +511,17 @@ export const api = {
   async sharedResearchItem(code: string): Promise<SharedItem> {
     return request(`/api/research/shared/${encodeURIComponent(code)}`);
   },
+  /** Which density the player page's percentile card opens at. A **string**
+   *  that a null clears back to the default, rather than a boolean — the same
+   *  update semantics `saveTheme` has, and for the same reason: there can be a
+   *  third one. */
+  async savePercentileDensity(density: string | null): Promise<UserPrefs> {
+    return request('/api/prefs/percentile-density', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ density }),
+    });
+  },
   /** Mark the League page's Transactions feed read up to `ts` — the date of
    *  the newest move on screen. What undraws the red dot on that tab, and the
    *  only thing that does. The league travels with the date because a marker
@@ -845,11 +857,21 @@ export const api = {
     const { players } = await request<{ players: Record<string, RecentNews> }>('/api/news/recent');
     return players;
   },
+  /**
+   * The percentile card — the whole season, or one cut of it.
+   *
+   * **One route for both**, because it is one card: same sections, same keys,
+   * same two densities, fewer rows under a cut. The `cut` is left off entirely
+   * rather than sent as an empty string, so the full-season card's URL is the
+   * one it always was and anything cached against it stays cached.
+   */
   async percentiles(
     playerId: number,
     kind: 'batter' | 'pitcher' = 'batter',
+    cut: PlayerCut | null = null,
   ): Promise<PlayerPercentiles> {
-    return request(`/api/percentiles/${playerId}?type=${kind}`);
+    const q = cut ? `&cut=${cut}` : '';
+    return request(`/api/percentiles/${playerId}?type=${kind}${q}`);
   },
   /**
    * One player's row on each of the research board's five windows — the player

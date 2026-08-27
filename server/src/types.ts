@@ -1396,10 +1396,49 @@ export interface PlayerPercentiles {
   playerId: number;
   year: number;
   sections: PercentileSection[];
+  /**
+   * **The same card at Savant's own density** — its fifteen bars, in its groups
+   * and its order, against the thirty-odd of `sections`.
+   *
+   * Two arrangements rather than two cards: both are built from one scrape of
+   * one row (see `percentiles.ts::scrape`), so the client's density switch
+   * costs no request and cannot show a `Summary` and a `Detailed` that disagree
+   * about a number. Empty exactly when `sections` is — a player Savant holds no
+   * card for has neither, and the client's empty state is drawn off `sections`
+   * alone.
+   */
+  summary: PercentileSection[];
   updatedAt: string; // ISO timestamp of when the data was fetched
   // Shape of the card when it was scraped; a stored card built by an older
   // version is re-scraped rather than served (see CARD_VERSION).
   version?: number;
+  /**
+   * **Which cut of the season this card ranks**, or absent for the whole of it.
+   *
+   * On the wire for the reason `PlayerWindows.cut` is: the card is re-read when
+   * the reader picks a cut, and a stale reply landing on a fresh one would
+   * otherwise be a card of the wrong split with nothing on it to say so.
+   *
+   * Absent means the full season, which is the **only** card whose bars are
+   * Savant's own. Every cut card is built here — see `percentileCuts.ts` — so
+   * every row on one is marked `estimated` and drawn broken, which is this
+   * app's standing rule that an estimate never wears the same clothes as a
+   * measurement.
+   */
+  cut?: PlayerCut | null;
+  /**
+   * **How much of a season the cut rests on** — plate appearances for a batter,
+   * batters faced for a pitcher — and absent on the full-season card, where
+   * Savant's own qualifier already answers the question.
+   *
+   * A cut card is the one place in this app where the population and the
+   * sample come apart on purpose: the bars rank a **cut** value inside the
+   * **whole season's** qualified distribution, which is what was asked for and
+   * is the only reading that makes `vs LHP` comparable with anything. That
+   * makes the sample size the reader's only guard against a 34-PA card of
+   * noise, so it is carried rather than left to be inferred from a bar.
+   */
+  cutSample?: number | null;
 }
 
 /** One plate appearance in a season xwOBA series (Savant estimated wOBA). */
@@ -1495,6 +1534,42 @@ export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
 
 /** In the order the control offers them: the hands, then the ballpark. */
 export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
+
+/**
+ * **The recent-form cut, which is not a split and not a span either.**
+ *
+ * `last100` is the player's most recent 100 **at-bats** on a batter's card and
+ * his most recent 100 **batters faced** on a pitcher's — one value whose label
+ * is a fact about whose page it is, which is the economy `SplitCut` already
+ * makes for the handedness pair.
+ *
+ * It is deliberately **not** a `ResearchWindow`. The board's windows are days
+ * (7, 15, 30, 60) and a day-count is the wrong unit for "how is he going right
+ * now": thirty days of a man platooned out of half his club's games is eleven
+ * at-bats, and thirty days of an everyday hitter is a hundred and twenty. A
+ * count of at-bats is the same amount of evidence for both, which is the whole
+ * reason to have it — and it is why this cut has no `window` axis to be crossed
+ * with. "His last 100 at-bats within the last 7 days" is not a narrower
+ * question than either half; it is not a question.
+ *
+ * **At-bats rather than plate appearances on the batter's side, because that is
+ * what was asked for.** The cut is the *span* of plate appearances containing
+ * his last 100 at-bats, so the walks among them are still counted — a BB% over
+ * a window that had excluded walks from its own denominator would be a rate
+ * measured against the one thing it is about. Which means the card rests on
+ * slightly more than 100 plate appearances, and `cutSample` says how many.
+ */
+export type RecentCut = 'last100';
+
+/** Every cut of a season the app can draw: the four splits, and recent form. */
+export type PlayerCut = SplitCut | RecentCut;
+
+/** In the order the percentile card's control offers them — the hands, the
+ *  ballpark, then recent form, which is last because it is the odd one out. */
+export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'];
+
+/** How many at-bats (or batters faced) the `last100` cut looks back over. */
+export const RECENT_CUT_SIZE = 100;
 
 export interface ResearchRow {
   id: number;

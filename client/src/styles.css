@@ -6731,6 +6731,54 @@ button.start-line:focus-visible {
   border-radius: var(--control-radius-inner);
 }
 
+/* ---- The percentile card's two controls: which cut, and how many bars ---- */
+/* They sit **above** the card rather than in its head, because a cut can come
+   back empty and an empty state has to leave the control that caused it
+   reachable — inside the head they would vanish with the card.
+
+   `align-items: center` and a wrapping row, because there are three items of
+   two different heights (two pill switches and a badge) and on a phone the
+   density switch drops under the cuts. The badge's `auto` margin pushes it to
+   the far end on a wide row and is harmless on a wrapped one. */
+.pct-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* Both switches are `.split-switch` — the same object the Stats tab's cut
+   control is, folded rather than restyled. Two things are theirs alone here:
+   the 9px that class carries below itself is this row's `gap`'s business, and
+   the cut row is the one switch in the app with six pills in it, so it is the
+   one allowed to wrap inside itself on a narrow phone. */
+.pct-controls .split-switch {
+  margin-bottom: 0;
+}
+.pct-cuts {
+  flex-wrap: wrap;
+}
+/* The badge to the far end, and reserved whether or not it is showing — see
+   `.stats-updating`, whose rules it shares. */
+.pct-controls .stats-updating {
+  margin-left: auto;
+}
+/* The sentence a cut card carries above its bars: what the population is, whose
+   ranks these are, and how much of a season the line rests on. Muted and set
+   small because it is a caveat rather than a heading — it has to be read once
+   and then stop competing with thirty bars. */
+.pct-cut-note {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+}
+.pct-cut-note strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
 /* The percentile card: a fixed label column, a flexible plot, a value column. */
 .pct-card {
   --pct-label-w: 152px;

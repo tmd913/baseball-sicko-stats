@@ -7,6 +7,7 @@ import type {
   SplitCut,
 } from '../types';
 import { SPLIT_CUTS } from '../types';
+import { CUT_LABEL, cutOf } from '../lib';
 import { LoadingLine } from './Loading';
 import {
   allColumns,
@@ -195,12 +196,8 @@ interface Sort {
  * `All` is not a value: it is the absence of one, which is what makes the
  * uncut table the thing a link with no `cut=` opens on.
  */
-const CUT_LABEL: Record<SplitCut, Record<PlayerKind, string>> = {
-  vsr: { batter: 'vs RHP', pitcher: 'vs RHB' },
-  vsl: { batter: 'vs LHP', pitcher: 'vs LHB' },
-  home: { batter: 'Home', pitcher: 'Home' },
-  away: { batter: 'Away', pitcher: 'Away' },
-};
+// (moved to `lib.ts` — the percentile card draws the same cuts, and two
+// tables of the same words is how two surfaces come to disagree about them.)
 
 /**
  * How the empty row names the cut it is empty *of*.
@@ -219,11 +216,6 @@ const cutPhrase = (cut: SplitCut, kind: PlayerKind): string =>
     ? `${cut === 'home' ? 'home' : 'away'} ${kind === 'pitcher' ? 'outings' : 'games'}`
     : `${kind === 'pitcher' ? 'outings' : 'games'} ${CUT_LABEL[cut][kind]}`;
 
-/** The same cut as an adverbial, for a sentence that already has its noun —
- *  *everybody's line **vs LHP***, *everybody's line **at home***. The pills say
- *  `Home` because a pill is a label; a sentence wants the preposition. */
-const cutOf = (cut: SplitCut, kind: PlayerKind): string =>
-  cut === 'home' ? 'at home' : cut === 'away' ? 'on the road' : CUT_LABEL[cut][kind];
 
 /**
  * **The percentile badges here are the board's own, over the board's own

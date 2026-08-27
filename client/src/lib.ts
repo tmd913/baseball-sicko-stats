@@ -8,12 +8,13 @@ import type {
   PlateAppearance,
   GameStatus,
   PlayerGame,
+  PlayerCut,
   PlayerKind,
   PlayerReport,
   PlayerStatus,
   RosterStatus,
 } from './types';
-import { playerKey } from './types';
+import { playerKey, RECENT_CUT_SIZE } from './types';
 
 /**
  * ESPN's eligibility vocabulary, split by the kind of player it describes.
@@ -219,6 +220,52 @@ export function positionCell(
       : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
   return { text: ordered.join('/'), title };
 }
+
+/**
+ * **What a cut of a season is called on this man's page**, for every surface
+ * that draws one.
+ *
+ * Here rather than beside either of them because there are two — the player
+ * page's **Stats** tab, whose spans are cut four ways, and its **Percentile
+ * Rankings** card, whose cuts are those four plus recent form — and two tables
+ * of the same words is precisely the duplication that ends with one surface
+ * saying `vs LHP` where the other says `vs L`. One vocabulary, two readers.
+ *
+ * **The handedness pair names the *other* man's hand**, which is what a platoon
+ * split means on both boards: `vsr` reads as *vs RHP* on a batter's page and
+ * *vs RHB* on a pitcher's. One value rather than four, because the axis is the
+ * same one and the label is a fact about whose page it is — the economy
+ * `SplitCut` is defined around.
+ *
+ * **Recent form follows the same rule from the other side.** A batter's hundred
+ * is at-bats and a pitcher's is batters faced: the natural unit on each side of
+ * the ball rather than two different questions, so it is one cut with two
+ * labels like the pair above it. It has no meaning on the Stats tab — a table
+ * whose rows are already spans — so that surface indexes this with a `SplitCut`
+ * and never reaches the entry, which is why widening the key cost it nothing.
+ */
+export const CUT_LABEL: Record<PlayerCut, Record<PlayerKind, string>> = {
+  vsr: { batter: 'vs RHP', pitcher: 'vs RHB' },
+  vsl: { batter: 'vs LHP', pitcher: 'vs LHB' },
+  home: { batter: 'Home', pitcher: 'Home' },
+  away: { batter: 'Away', pitcher: 'Away' },
+  last100: {
+    batter: `Last ${RECENT_CUT_SIZE} AB`,
+    pitcher: `Last ${RECENT_CUT_SIZE} BF`,
+  },
+};
+
+/** The same cut as an adverbial, for a sentence that already has its noun —
+ *  *everybody's line **vs LHP***, *everybody's line **at home***. The pills say
+ *  `Home` because a pill is a label; a sentence wants the preposition. */
+export const cutOf = (cut: PlayerCut, kind: PlayerKind): string =>
+  cut === 'home'
+    ? 'at home'
+    : cut === 'away'
+      ? 'on the road'
+      : cut === 'last100'
+        ? `over his last ${RECENT_CUT_SIZE} ${kind === 'pitcher' ? 'batters faced' : 'at-bats'}`
+        : CUT_LABEL[cut][kind];
 
 /**
  * Which side of the plate he stands on, or which arm he throws with — the one

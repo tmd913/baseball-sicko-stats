@@ -18,8 +18,8 @@ const BROWSER_UA =
  * rank; `raw` holds the underlying stat; `fmt` renders that stat the way Savant
  * prints it to the right of each bar. Order here is the display order.
  */
-type Fmt = 'avg' | 'dec1' | 'dec2' | 'int';
-interface MetricDef {
+export type Fmt = 'avg' | 'dec1' | 'dec2' | 'int';
+export interface MetricDef {
   key: string;
   label: string;
   pct: string; // field in the statcast record with the 0-100 percentile
@@ -30,12 +30,12 @@ interface MetricDef {
   // higher-is-better; Savant's own `percent_rank_` fields already bake this in.
   lowerBetter?: boolean;
 }
-interface SectionDef {
+export interface SectionDef {
   title: string;
   metrics: MetricDef[];
 }
 
-const SECTIONS: SectionDef[] = [
+export const SECTIONS: SectionDef[] = [
   {
     title: 'Value',
     metrics: [
@@ -165,7 +165,7 @@ const SECTIONS: SectionDef[] = [
 // (only used by the estimated-percentile fallback) flags the results a pitcher
 // wants LOW — the ones they allow. Savant's own `percent_rank_` fields already
 // encode direction, so it rarely fires.
-const PITCHER_SECTIONS: SectionDef[] = [
+export const PITCHER_SECTIONS: SectionDef[] = [
   {
     title: 'Value',
     metrics: [
@@ -262,6 +262,134 @@ const PITCHER_SECTIONS: SectionDef[] = [
   },
 ];
 
+/**
+ * **Savant's own card, which is a different card from the one above.**
+ *
+ * The two tables in this file now answer two questions. `SECTIONS` and
+ * `PITCHER_SECTIONS` are *this app's* reading — every row Savant's player page
+ * ranks, grouped the way a reader working through a stranger's profile wants
+ * them, thirty-odd bars deep. What follows is **the fifteen-bar card Savant
+ * actually draws**, which is what somebody who says "the Savant card" means and
+ * what the client's `Summary` density shows.
+ *
+ * **It is measured, not remembered.** Savant renders the card client-side, so
+ * it is nowhere in the player-page HTML this file already scrapes; the metric
+ * list lives in the page's own bundle
+ * (`/sections/player-update/.../scripts/build/index.js`), as five group arrays
+ * for a batter and two for a pitcher, assembled by `U5`/`sle`/`cle` in that
+ * file. Labels, order, field names and the `inverse` flags below are
+ * transcribed from it rather than recalled — the alternative was writing down a
+ * card from memory and having it silently drift from the page it claims to
+ * match.
+ *
+ * Three things about that transcription are worth writing down:
+ *
+ * - **`inverse` is exactly this file's `lowerBetter`.** Savant's own
+ *   `L5(row, metric)` uses it for one thing only — flipping the z-score when it
+ *   has to estimate a rank off `metricSummaryStats` — which is precisely what
+ *   `estimatePercentile` does with `lowerBetter`. Same flag, same job.
+ * - **Savant ranks its summary xERA by `percent_rank_xwoba`**, not by
+ *   `percent_rank_xera`. That reads as a bug and is not one: the two fields
+ *   carry the **same number**, measured on five pitchers spanning the range —
+ *   Sánchez 78/78, Skubal 1/1, Cole 80/80, Skenes 90/90, Nola 44/44 — xERA
+ *   being a monotone transform of xwOBA on their model. So this table names
+ *   `percent_rank_xera`, the field named for the stat it ranks, and the card is
+ *   identical either way.
+ * - **The rows Savant shows but doesn't rank are *not* here.** `BATTER_COMPUTED`
+ *   and `PITCHER_COMPUTED` splice HR, Fast Swing %, ERA, Edge %, Swords and the
+ *   rest into the detailed card; the summary card has none of them, so
+ *   `buildSections` is called with `extras: false` for it. That is not a
+ *   simplification — splicing them in by section title would land HR at the
+ *   foot of `Batting` (there being no `xhr` here to sit ahead of) and ERA in
+ *   `Value`, which is a card Savant does not draw.
+ *
+ * Groups a player has nothing in disappear on their own: the metric-level
+ * null-drop in `buildSections` empties them and the section-level one drops
+ * them, which is how `Catching` stays off a shortstop's card without a test for
+ * it — the same mechanism Savant's own `Q5` uses for that one group.
+ */
+export const SUMMARY_SECTIONS: SectionDef[] = [
+  {
+    title: 'Value',
+    metrics: [
+      { key: 'batting_rv', label: 'Batting Run Value', pct: 'percent_rank_swing_take_run_value', raw: 'swing_take_run_value', fmt: 'int' },
+      { key: 'baserunning_rv', label: 'Baserunning Run Value', pct: 'percent_rank_runner_run_value', raw: 'runner_run_value', fmt: 'int' },
+      { key: 'fielding_rv', label: 'Fielding Run Value', pct: 'percent_rank_fielding_run_value', raw: 'fielding_run_value', fmt: 'int' },
+    ],
+  },
+  {
+    title: 'Batting',
+    metrics: [
+      { key: 'xwoba', label: 'xwOBA', pct: 'percent_rank_xwoba', raw: 'xwoba', fmt: 'avg' },
+      { key: 'xba', label: 'xBA', pct: 'percent_rank_xba', raw: 'xba', fmt: 'avg' },
+      { key: 'xslg', label: 'xSLG', pct: 'percent_rank_xslg', raw: 'xslg', fmt: 'avg' },
+      { key: 'exit_velo', label: 'Avg Exit Velo', pct: 'percent_rank_exit_velocity_avg', raw: 'exit_velocity_avg', fmt: 'dec1' },
+      { key: 'barrel', label: 'Barrel %', pct: 'percent_rank_barrel_batted_rate', raw: 'barrel_batted_rate', fmt: 'dec1' },
+      { key: 'hard_hit', label: 'Hard-Hit %', pct: 'percent_rank_hard_hit_percent', raw: 'hard_hit_percent', fmt: 'dec1' },
+      { key: 'sweet_spot', label: 'LA Sweet-Spot %', pct: 'percent_rank_sweet_spot_percent', raw: 'sweet_spot_percent', fmt: 'dec1' },
+      { key: 'bat_speed', label: 'Bat Speed', pct: 'percent_rank_swing_speed', raw: 'avg_swing_speed', fmt: 'dec1' },
+      { key: 'squared_up', label: 'Squared-Up %', pct: 'percent_rank_squared_up_swing', raw: 'squared_up_swing', fmt: 'dec1' },
+      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'oz_swing_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'k', label: 'K %', pct: 'percent_rank_k_percent', raw: 'k_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'bb', label: 'BB %', pct: 'percent_rank_bb_percent', raw: 'bb_percent', fmt: 'dec1' },
+    ],
+  },
+  {
+    title: 'Fielding',
+    metrics: [
+      { key: 'oaa', label: 'Range (OAA)', pct: 'percent_rank_oaa', raw: 'outs_above_average', fmt: 'int' },
+      { key: 'arm_rv', label: 'Arm Value', pct: 'percent_rank_fielding_run_value_arm', raw: 'fielding_run_value_arm', fmt: 'int' },
+      { key: 'arm_avg', label: 'Arm Strength', pct: 'percent_rank_arm_overall', raw: 'arm_overall', fmt: 'dec1' },
+    ],
+  },
+  {
+    title: 'Catching',
+    metrics: [
+      { key: 'blocks', label: 'Blocks Above Avg', pct: 'percent_rank_blocks_above_average', raw: 'blocks_above_average', fmt: 'int' },
+      { key: 'cs', label: 'CS Above Avg', pct: 'percent_rank_cs_above_average', raw: 'cs_above_average', fmt: 'int' },
+      { key: 'framing_rv', label: 'Framing', pct: 'percent_rank_fielding_run_value_framing', raw: 'fielding_run_value_framing', fmt: 'int' },
+      { key: 'pop_2b', label: 'Pop Time', pct: 'percent_rank_pop_2b', raw: 'pop_2b', fmt: 'dec2', lowerBetter: true },
+    ],
+  },
+  {
+    title: 'Running',
+    metrics: [
+      { key: 'sprint', label: 'Sprint Speed', pct: 'percent_speed_order', raw: 'sprint_speed', fmt: 'dec1' },
+    ],
+  },
+];
+
+/** The pitcher half of the card above — Savant's `cle`, two groups deep. */
+export const PITCHER_SUMMARY_SECTIONS: SectionDef[] = [
+  {
+    title: 'Value',
+    metrics: [
+      { key: 'run_value', label: 'Pitching Run Value', pct: 'percent_rank_swing_take_run_value', raw: 'swing_take_run_value', fmt: 'int' },
+      { key: 'rv_fastball', label: 'Fastball Run Value', pct: 'percent_rank_pitch_run_value_fastball', raw: 'pitch_run_value_fastball', fmt: 'int' },
+      { key: 'rv_breaking', label: 'Breaking Run Value', pct: 'percent_rank_pitch_run_value_breaking', raw: 'pitch_run_value_breaking', fmt: 'int' },
+      { key: 'rv_offspeed', label: 'Offspeed Run Value', pct: 'percent_rank_pitch_run_value_offspeed', raw: 'pitch_run_value_offspeed', fmt: 'int' },
+    ],
+  },
+  {
+    title: 'Pitching',
+    metrics: [
+      { key: 'xera', label: 'xERA', pct: 'percent_rank_xera', raw: 'xera', fmt: 'dec2', lowerBetter: true },
+      { key: 'xba', label: 'xBA', pct: 'percent_rank_xba', raw: 'xba', fmt: 'avg', lowerBetter: true },
+      { key: 'fb_velo', label: 'Fastball Velo', pct: 'percent_rank_fastball_velo', raw: 'fastball_velo', fmt: 'dec1' },
+      { key: 'exit_velo', label: 'Avg Exit Velo', pct: 'percent_rank_exit_velocity_avg', raw: 'exit_velocity_avg', fmt: 'dec1', lowerBetter: true },
+      { key: 'chase', label: 'Chase %', pct: 'percent_rank_chase_percent', raw: 'oz_swing_percent', fmt: 'dec1' },
+      { key: 'whiff', label: 'Whiff %', pct: 'percent_rank_whiff_percent', raw: 'whiff_percent', fmt: 'dec1' },
+      { key: 'k', label: 'K %', pct: 'percent_rank_k_percent', raw: 'k_percent', fmt: 'dec1' },
+      { key: 'bb', label: 'BB %', pct: 'percent_rank_bb_percent', raw: 'bb_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'barrel', label: 'Barrel %', pct: 'percent_rank_barrel_batted_rate', raw: 'barrel_batted_rate', fmt: 'dec1', lowerBetter: true },
+      { key: 'hard_hit', label: 'Hard-Hit %', pct: 'percent_rank_hard_hit_percent', raw: 'hard_hit_percent', fmt: 'dec1', lowerBetter: true },
+      { key: 'gb', label: 'GB %', pct: 'percent_rank_groundballs_percent', raw: 'groundballs_percent', fmt: 'dec1' },
+      { key: 'fb_ext', label: 'Extension', pct: 'percent_rank_fastball_extension', raw: 'fastball_extension', fmt: 'dec1' },
+    ],
+  },
+];
+
 type StatcastRow = Record<string, unknown>;
 
 function toNum(v: unknown): number | null {
@@ -271,7 +399,7 @@ function toNum(v: unknown): number | null {
 }
 
 /** Format a raw stat the way Savant prints it beside the bar. */
-function formatValue(v: unknown, fmt: Fmt): string | null {
+export function formatValue(v: unknown, fmt: Fmt): string | null {
   const n = toNum(v);
   if (n === null) return null;
   if (fmt === 'int') return String(Math.round(n));
@@ -518,7 +646,7 @@ const getHrDist = (year: number) =>
 /** League percentile of `value` within a distribution: the share of the league
  * it beat, matching Savant's percent-rank convention. `lowerBetter` flips which
  * side of it counts as beaten (a pitcher's ERA is better for being smaller). */
-function leaguePercentile(
+export function leaguePercentile(
   value: number,
   values: number[],
   lowerBetter = false,
@@ -902,12 +1030,21 @@ interface Computed {
   rankDists: Record<string, number[]>;
 }
 
+/**
+ * `extras` is whether the rows Savant *shows but does not rank* get spliced in
+ * — HR and Fast Swing % on a batter, everything in `PITCHER_COMPUTED` on a
+ * pitcher. True for this app's own detailed card, which is where they belong,
+ * and **false for the summary card**, which is Savant's own fifteen bars and
+ * carries none of them. See the note on `SUMMARY_SECTIONS` for why leaving them
+ * on would not merely be redundant but would put them in the wrong place.
+ */
 function buildSections(
   row: StatcastRow,
   dist: Record<string, MetricStats>,
   defs: SectionDef[],
   kind: 'batter' | 'pitcher',
   computed: Computed,
+  extras = true,
 ): PercentileSection[] {
   const sections: PercentileSection[] = [];
   for (const sec of defs) {
@@ -943,7 +1080,7 @@ function buildSections(
       if (percentile === null && value === null) continue;
       metrics.push({ key: m.key, label: m.label, percentile, value, ...(estimated && { estimated }) });
     }
-    if (kind === 'batter') {
+    if (extras && kind === 'batter') {
       // Actual HR (ahead of the scraped xHR, so the client pairs the two into an
       // expected/actual dumbbell) and Fast Swing % (beside Bat Speed, the other
       // bat-tracking row) are ranked against a leaderboard rather than scraped.
@@ -956,7 +1093,7 @@ function buildSections(
         else metrics.splice(def.before ? at : at + 1, 0, metric);
       }
     }
-    if (kind === 'pitcher') {
+    if (extras && kind === 'pitcher') {
       // Rows Savant shows but doesn't rank are computed rather than scraped.
       // Each goes just ahead of its expected twin, so the client pairs the two
       // into a dumbbell the way the batter card pairs HR with xHR; the rest
@@ -989,8 +1126,15 @@ function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): 
  * split the batter card's one long Batting section into Batting / Batted Ball /
  * Swing / Plate Discipline, v5 gave the rows Savant ranks but doesn't summarize
  * (Air %, Pull Air %, Blast %) a leaderboard to be ranked against, which a
- * stored v4 card holds as a bar-less row and would go on serving that way. */
-const CARD_VERSION = 5;
+ * stored v4 card holds as a bar-less row and would go on serving that way.
+ *
+ * **v6 is `summary`** — Savant's own fifteen-bar card, arranged from the very
+ * same scraped row beside the detailed one. It is a field *added* to the stored
+ * blob and *read straight back out of it* (the client's density switch renders
+ * it), which is both halves of the test `RULES.md` sets for a bump: a v5 card
+ * deserializes with `summary` missing, and the switch would find nothing under
+ * `Summary` for the six hours until that card aged out. */
+const CARD_VERSION = 6;
 
 /** A cached card is fresh if it was built by this version of the card and is
  * either a past season (immutable) or, for the current season, younger than the
@@ -1070,11 +1214,16 @@ async function scrape(
     // for a past one, which is right in both directions: a prospect who debuts
     // today is a card six hours from now, and a season he never played in is
     // never going to grow one.
+    // Both arrangements are empty, not just the detailed one: the density
+    // switch must not offer a `Summary` that turns out to hold the same nothing
+    // wearing a different heading. The client draws its empty state off
+    // `sections` and never sees the switch at all on a card this shape.
     return {
       playerId,
       year,
       version: CARD_VERSION,
       sections: [],
+      summary: [],
       updatedAt: new Date().toISOString(),
     };
   }
@@ -1130,11 +1279,20 @@ async function scrape(
       }
     }
   }
+  // **Two arrangements of one scrape, and no second anything.** Both cards are
+  // built from the same `row`, the same `dist` and the same `computed`, so the
+  // summary costs one more pass over a table of ~15 entries and not a request,
+  // a leaderboard or a cache entry. That is what lets the client's density
+  // switch be instant: flipping between the reader's two questions must not be
+  // a round trip, and there is nothing to fetch because there was never a
+  // second read to make.
+  const summaryDefs = kind === 'pitcher' ? PITCHER_SUMMARY_SECTIONS : SUMMARY_SECTIONS;
   return {
     playerId,
     year,
     version: CARD_VERSION,
     sections: buildSections(row, dist, defs, kind, computed),
+    summary: buildSections(row, dist, summaryDefs, kind, computed, false),
     updatedAt: new Date().toISOString(),
   };
 }

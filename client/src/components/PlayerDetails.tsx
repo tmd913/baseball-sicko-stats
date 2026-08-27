@@ -11,6 +11,7 @@ import type {
   GameLogGap,
   PitcherGameLog,
   PitcherSeasonStats,
+  PlayerCut,
   PlayerPercentiles,
   PercentileMetric,
   PlayerKind,
@@ -25,7 +26,16 @@ import type {
   SplitCut,
   XwobaSeries,
 } from '../types';
-import { handCell, headshotUrl, isRotationStarter, savantPlayerUrl, statusCorner } from '../lib';
+import { PLAYER_CUTS } from '../types';
+import {
+  CUT_LABEL,
+  cutOf,
+  handCell,
+  headshotUrl,
+  isRotationStarter,
+  savantPlayerUrl,
+  statusCorner,
+} from '../lib';
 import {
   MovementChart,
   PitchUsageChart,
@@ -44,7 +54,7 @@ import { GameLog } from './GameLog';
 import { PlayerWindowTable } from './PlayerWindowTable';
 import { NewsTab } from './PlayerNews';
 import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
-import { LoadingBlock } from './Loading';
+import { LoadingBlock, LoadingLine } from './Loading';
 import {
   TAP_SLOP,
   useDelayedFlag,
@@ -74,6 +84,46 @@ function mix(a: [number, number, number], b: [number, number, number], t: number
 function pctColor(p: number): string {
   return p <= 50 ? mix(POOR, AVG, p / 50) : mix(AVG, GREAT, (p - 50) / 50);
 }
+
+/**
+ * **How much of the percentile card is drawn**, and the vocabulary lives here
+ * rather than on the record for the reason `theme.ts` owns the theme's: the
+ * server stores the word and validates only that it is one, so a density a
+ * newer build introduces is ignored by an older tab instead of rejected by an
+ * older server.
+ *
+ * `summary` is **Savant's own card** — the fifteen bars anyone who says "the
+ * Savant card" means, in its groups and its order, transcribed from the player
+ * page's own bundle rather than remembered (see `percentiles.ts`). `detailed`
+ * is this app's reading: every row Savant ranks, grouped for someone working
+ * through a stranger's profile.
+ *
+ * Both arrive in **one response** off one scrape, so the switch is a render and
+ * never a request — which is the whole reason it can be a switch rather than a
+ * tab. Flipping it cannot show two cards that disagree about a number, because
+ * there is only ever one set of numbers.
+ */
+export const PERCENTILE_DENSITIES = ['summary', 'detailed'] as const;
+export type PercentileDensity = (typeof PERCENTILE_DENSITIES)[number];
+
+/**
+ * **Savant's card, not ours.** A reader who opens this tab has come for the
+ * card they know from the player page, and the thirty-nine-row version is a
+ * door off it rather than the front of it. Absence-is-the-default on the record
+ * is exactly what lets that call be revisited without anybody's saved
+ * preference needing to be.
+ */
+export const DEFAULT_DENSITY: PercentileDensity = 'summary';
+
+/** A stored density, or the default for anything this build does not know —
+ *  including `undefined`, which is what an untouched record reads as. */
+export function toDensity(v: string | undefined): PercentileDensity {
+  return PERCENTILE_DENSITIES.find((d) => d === v) ?? DEFAULT_DENSITY;
+}
+
+/** The unit `cutSample` is counted in, for the sentence under a cut card. */
+const sampleUnit = (isPitcher: boolean, n: number): string =>
+  isPitcher ? (n === 1 ? 'batter faced' : 'batters faced') : n === 1 ? 'plate appearance' : 'plate appearances';
 
 /** One metric row: label · bar with percentile bubble · raw value. */
 function MetricRow({ metric }: { metric: PercentileMetric }) {
@@ -512,6 +562,10 @@ export function PlayerDetails({
   onShowRanksChange,
   statsCut,
   onStatsCutChange,
+  pctCut,
+  onPctCutChange,
+  pctDensity,
+  onPctDensityChange,
   rankPopulations,
   onNeedRankPopulations,
   onOpenDetails,
@@ -600,6 +654,21 @@ export function PlayerDetails({
    *  because a URL parameter has to outlive the overlay that draws it. */
   statsCut: SplitCut | null;
   onStatsCutChange: (cut: SplitCut | null) => void;
+  /** **Which cut the Percentile Rankings card is drawn over**, or null for his
+   *  whole season — `pcut=` in the URL, under its own key rather than sharing
+   *  the Stats tab's `cut=`, since a reader can want the left-handed card and
+   *  the uncut table. Held by App for the reason `statsCut` is: this component
+   *  is unmounted the moment the overlay closes and a URL param has to outlive
+   *  it. Its vocabulary is one wider — `PLAYER_CUTS` adds recent form. */
+  pctCut: PlayerCut | null;
+  onPctCutChange: (cut: PlayerCut | null) => void;
+  /** **How many bars that card draws** — Savant's fifteen or all thirty-odd.
+   *  A saved preference rather than a URL param, the line `showRanks` is on: it
+   *  is a habit of reading rather than which numbers are on screen. Both
+   *  arrangements ride in one response, so this is a render and never a
+   *  request. */
+  pctDensity: PercentileDensity;
+  onPctDensityChange: (density: PercentileDensity) => void;
   /** The research board's rows per window for this kind, as far as App has
    *  them — the population those percentiles are ranked within. Passed through
    *  rather than fetched here, since App is where the board's own cache lives
@@ -730,6 +799,9 @@ export function PlayerDetails({
   // Keyed by kind as well as player, the way the day and the game log are: the
   // card is a batting one or a pitching one.
   const pctReq = useRef<string | null>(null);
+  /** Which read is the newest. The cut control can be pressed again before its
+   *  answer is back, and only the newest may write the card. */
+  const pctSeq = useRef(0);
   // The season line and platoon splits are fetched here (not passed in) so the
   // details view works for any player, whether or not they're on the watchlist.
   const [splits, setSplits] = useState<{
@@ -826,6 +898,26 @@ export function PlayerDetails({
   const arsenalWait = useDelayedFlag(arsenalLoading);
   const dayWait = useDelayedFlag(dayLoading);
 
+  /**
+   * **The card at the density this reader asked for**, and the other one beside
+   * it — both already in hand, since one scrape builds both (see
+   * `percentiles.ts::scrape`). That is what makes the switch a render: there is
+   * nothing to fetch because there was never a second read to make.
+   *
+   * `otherSections` exists for one sentence: an empty `Summary` over a
+   * non-empty `Detailed` is a fact about the *switch*, not about the player,
+   * and the empty state has to be able to tell those apart to name its own
+   * cause.
+   */
+  const shownSections = useMemo(
+    () => (data ? (pctDensity === 'summary' ? data.summary : data.sections) : []),
+    [data, pctDensity],
+  );
+  const otherSections = useMemo(
+    () => (data ? (pctDensity === 'summary' ? data.sections : data.summary) : []),
+    [data, pctDensity],
+  );
+
   // The percentile-point distance below which two paired bubbles would overlap,
   // measured from the live track width (~a bubble diameter's worth of the rail)
   // so the stagger threshold stays correct across desktop and mobile widths.
@@ -846,9 +938,19 @@ export function PlayerDetails({
   }, [data]);
 
   useEffect(() => {
-    const req = `${kind}-${playerId}`;
+    // **The cut is part of the question**, so it is part of the mark — the same
+    // move the Stats tab's read makes, and for the same reason: a ref set to a
+    // bare "yes" would answer `vs LHP` with the season card and never re-ask.
+    const req = `${kind}-${playerId}-${pctCut ?? 'all'}`;
     if (tab !== 'percentiles' || pctReq.current === req) return;
     pctReq.current = req;
+    // …and the sequence number decides whose answer may land. A cut is a
+    // control a reader presses twice in three seconds, and this is the slowest
+    // read on the page, so a `Home` returning after a `vs LHP` would otherwise
+    // write the wrong card under a lit pill. Not a cleanup flag: an effect
+    // teardown must never unmark a read in flight, which is the hang recorded
+    // below.
+    const seq = ++pctSeq.current;
     setLoading(true);
     setError(null);
     // Whether the answer lands is decided by the ref, not by a `live` flag the
@@ -866,20 +968,20 @@ export function PlayerDetails({
     // `.catch().finally()` so the error path can null the ref *after* clearing
     // the wait, a `finally` reading a ref its own `catch` had just nulled being
     // the way this fix goes wrong.
-    api.percentiles(playerId, kind).then(
+    api.percentiles(playerId, kind, pctCut).then(
       (d) => {
-        if (pctReq.current !== req) return;
+        if (pctReq.current !== req || pctSeq.current !== seq) return;
         setData(d);
         setLoading(false);
       },
       (e: unknown) => {
-        if (pctReq.current !== req) return;
+        if (pctReq.current !== req || pctSeq.current !== seq) return;
         setError(e instanceof Error ? e.message : 'Failed to load');
         setLoading(false);
         pctReq.current = null; // allow a retry on re-open
       },
     );
-  }, [tab, playerId, kind]);
+  }, [tab, playerId, kind, pctCut]);
 
   useEffect(() => {
     let live = true;
@@ -1806,7 +1908,105 @@ export function PlayerDetails({
         <BatterSplitsTab vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
       )}
 
-      {tab === 'percentiles' && pctWait && <LoadingBlock>Reading the percentile card</LoadingBlock>}
+      {/* **The card's own controls, and they sit outside it on purpose.**
+
+          Two questions, and they are deliberately different kinds of control.
+          The **cut** is which numbers the card is about, so it goes in the URL
+          (`pcut=`) and re-reads; the **density** is how much of the same card
+          this reader likes to see, so it is a saved preference and a render.
+          The rules file draws that line and this is it applied: a link that
+          leaves the cut out describes a different card, where one that leaves
+          the density out describes the same card seen by somebody else.
+
+          They are drawn above the card rather than inside its head because a
+          cut can come back **empty** — a man with no plate appearance against
+          left-handers has no rows to hang a control off — and an empty state
+          has to name the control that caused it *and* leave that control
+          reachable. Inside the head they would vanish with the card, and the
+          only way back to the season would be the browser's Back button.
+
+          Hidden entirely for a player Savant has no card for at all, which is
+          `data.cut == null && sections.length === 0`: the season read came back
+          empty, so there is nothing for a cut to be a cut of. That test is why
+          `cut` rides on the response — the two empties are indistinguishable
+          from the rows alone. */}
+      {tab === 'percentiles' && data && !(data.cut == null && data.sections.length === 0) && (
+        <div className="pct-controls">
+          {/* **Folded onto the Stats tab's cut control, not styled to match
+              it.** `.split-switch`/`.split-tab` is the same object doing the
+              same job one tab over — a row of pills naming which cut of a
+              season is on screen — and two rules that agree today are two rules
+              that will one day differ. The modifier carries the one thing that
+              is genuinely different here: this row has six pills where that one
+              has five, so it is allowed to wrap. */}
+          <div className="split-switch pct-cuts" role="tablist" aria-label="Split">
+            {([null, ...PLAYER_CUTS] as (PlayerCut | null)[]).map((c) => (
+              <button
+                key={c ?? 'all'}
+                type="button"
+                role="tab"
+                aria-selected={pctCut === c}
+                className={`split-tab${pctCut === c ? ' active' : ''}`}
+                onClick={() => onPctCutChange(c)}
+                title={
+                  c === null
+                    ? 'His whole season — the only card whose bars are Savant’s own'
+                    : `What he did ${cutOf(c, kind)}, placed among every qualified player’s full season`
+                }
+              >
+                {c === null ? 'Season' : CUT_LABEL[c][kind]}
+              </button>
+            ))}
+          </div>
+          {/* The density, on the same switch for the same reason — and beside
+              the cuts rather than under them, because the two are read
+              together: *which numbers*, then *how many of them*. */}
+          <div className="split-switch pct-density" role="tablist" aria-label="Density">
+            {PERCENTILE_DENSITIES.map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="tab"
+                aria-selected={pctDensity === d}
+                className={`split-tab${pctDensity === d ? ' active' : ''}`}
+                onClick={() => onPctDensityChange(d)}
+                title={
+                  d === 'summary'
+                    ? 'Savant’s own card — the fifteen bars its player page draws'
+                    : 'Every row this app ranks, grouped'
+                }
+              >
+                {d === 'summary' ? 'Summary' : 'Detailed'}
+              </button>
+            ))}
+          </div>
+          {/* **The in-place `Updating` badge — the one mark a re-read is
+              allowed to leave**, and it sits in this row rather than in the
+              card's head so that it cannot move the card. Laid out whether or
+              not it is showing, for the reason the Stats tab's identical badge
+              is: this row wraps on a phone, so a badge that arrived with the
+              read would re-flow the pills under the finger that had just
+              pressed one. `visibility` rather than a conditional render, so the
+              box reserved is the badge's own width and not a number written
+              down here. */}
+          <span className={`stats-updating${loading && data ? '' : ' is-idle'}`} aria-hidden={!(loading && data)}>
+            <LoadingLine className="refreshing" announce={!!(loading && data)}>
+              Updating
+            </LoadingLine>
+          </span>
+        </div>
+      )}
+
+      {/* **A block wait only when there is nothing to show yet.** Gated on
+          `!data`, which is what makes changing the cut quiet: the card that is
+          up stays up while the next one is in flight and the `Updating` badge
+          in its head carries the tense. Without that gate, every press of a cut
+          pill blanked a full-height card for the length of a request — a
+          re-read painting over an answer, which is the one thing the loading
+          rules forbid outright. */}
+      {tab === 'percentiles' && pctWait && !data && (
+        <LoadingBlock>Reading the percentile card</LoadingBlock>
+      )}
       {/* **The read failed, which is a fact about the read and about nothing
           else.** A percentile card is a population, and there is more than one
           way for one to come back with nothing in it; the two that are actually
@@ -1823,19 +2023,46 @@ export function PlayerDetails({
           player rather than as our own read falling over. The way to try again
           is the tab, which drops its mark on failure so re-entering re-reads
           (`pctReq.current = null` in the effect above), and an empty state
-          names the control that answers it. */}
+          names the control that answers it.
+
+          **A failed *cut* leaves the card that was on screen standing** and
+          says so beside it rather than replacing it, which is the same rule the
+          wait above follows: the reader has an answer worth keeping, and the
+          one that failed is a question they asked on top of it. */}
       {tab === 'percentiles' && error && !loading && (
         <div className="details-status details-error">
-          Couldn’t read the percentile card: {error}. That is this read failing rather than
-          anything about {name} — leave the tab and come back to try it again.
+          {data
+            ? `Couldn’t read the ${pctCut ? CUT_LABEL[pctCut][kind] : 'season'} card: ${error}. The card below is the last one that answered — press a split again to retry.`
+            : `Couldn’t read the percentile card: ${error}. That is this read failing rather than anything about ${name} — leave the tab and come back to try it again.`}
         </div>
       )}
-      {tab === 'percentiles' && data && !loading && data.sections.length > 0 && (
+      {tab === 'percentiles' && data && shownSections.length > 0 && (
         <div className="pct-card" ref={cardRef}>
           <div className="pct-card-head">
-            <span className="pct-card-title">{data.year} MLB Percentile Rankings</span>
+            <span className="pct-card-title">
+              {data.year} MLB Percentile Rankings
+              {data.cut ? ` — ${CUT_LABEL[data.cut][kind]}` : ''}
+            </span>
           </div>
-          {data.sections.map((sec) => (
+          {/* **What a cut card is, said once, above the bars.** Three things a
+              reader cannot get from the bars themselves and would otherwise
+              have to assume: that the population is the *whole season* (which
+              is what makes a split comparable to anything), that these ranks
+              are ours rather than Savant's (which is what the broken bubbles
+              mean), and how much of a season the line rests on — the last being
+              the only guard against reading a hundredth percentile off
+              thirty-four plate appearances. */}
+          {data.cut && (
+            <p className="pct-cut-note">
+              His {CUT_LABEL[data.cut][kind]} line
+              {data.cutSample != null
+                ? ` — ${data.cutSample} ${sampleUnit(isPitcher, data.cutSample)} — `
+                : ' '}
+              placed among every qualified player’s <strong>full season</strong>. These ranks are
+              ours rather than Savant’s, so every bubble is drawn broken.
+            </p>
+          )}
+          {shownSections.map((sec) => (
             <div className="pct-section" key={sec.title}>
               <h2 className="pct-section-title">{sec.title}</h2>
               {renderMetricRows(sec.metrics, overlapPct)}
@@ -1843,28 +2070,38 @@ export function PlayerDetails({
           ))}
         </div>
       )}
-      {/* **A card that came back empty, which is the new case and a real
-          answer.** Savant has no major-league Statcast season for him of this
-          kind — measured on a prospect a fantasy league has rostered (Kade
-          Anderson, whose pitching page carries no `statcast:` payload at all)
-          and on a batter asked for a pitcher's card.
+      {/* **A card that came back empty, which is a real answer**, and there are
+          now three ways to reach one — so the sentence names which.
 
-          It says the same thing the Overview tab says two tabs over, in the
-          same words, because it is the same fact: *has not appeared in a
-          major-league game this season*. The pitcher's wording narrows it to
-          the half this card is about — a man who has only ever batted has
-          appeared, and only "has not pitched" is true of him — and the second
-          clause is what makes it an empty state rather than a note: the card
-          *is* a rank against the players who did.
+          The **cut** is empty: he has no plate appearance in it. Common and
+          unremarkable (a left-handed platoon bat against left-handers), and the
+          control that caused it is the row of pills above, still on screen.
 
-          It is not drawn inside `.pct-card`, where it used to sit under a
-          heading reading `2026 MLB Percentile Rankings` — a title over a card
-          with no rankings in it. */}
-      {tab === 'percentiles' && data && !loading && data.sections.length === 0 && (
+          The **density** is empty and the other one is not: he has a line but
+          nothing in the fifteen bars Savant draws — a handful of plate
+          appearances with no batted ball among them. Rare, and it names the
+          switch rather than the player.
+
+          The **season** is empty: Savant has no major-league Statcast for him
+          of this kind — measured on a prospect a fantasy league has rostered
+          (Kade Anderson, whose pitching page carries no `statcast:` payload at
+          all) and on a batter asked for a pitcher's card. It says what the
+          Overview tab says two tabs over, in the same words, because it is the
+          same fact; the pitcher's wording narrows it to the half this card is
+          about, a man who has only ever batted having appeared.
+
+          None of the three is drawn inside `.pct-card`, where the first used to
+          sit under a heading reading `2026 MLB Percentile Rankings` — a title
+          over a card with no rankings in it. */}
+      {tab === 'percentiles' && data && !loading && shownSections.length === 0 && (
         <div className="details-status">
-          {isPitcher
-            ? `${name} has not pitched in a major-league game this season, so there is nothing to rank him against.`
-            : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
+          {data.cut
+            ? `${name} has no ${CUT_LABEL[data.cut][kind]} line this season — nothing to rank. Pick another split above.`
+            : otherSections.length > 0
+              ? `Nothing of ${name}’s season lands in Savant’s own fifteen bars — switch to Detailed above for the rows he does have.`
+              : isPitcher
+                ? `${name} has not pitched in a major-league game this season, so there is nothing to rank him against.`
+                : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
         </div>
       )}
     </DetailsShell>

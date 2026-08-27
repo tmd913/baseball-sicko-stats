@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { SignOutButton, Splash } from './auth';
-import { MAX_LISTS, MAX_SEARCHES, playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
+import {
+  MAX_LISTS,
+  MAX_SEARCHES,
+  PLAYER_CUTS,
+  playerKey,
+  RESEARCH_WINDOWS,
+  SPLIT_CUTS,
+} from './types';
 import { projectedRowValue, projectedRowValuePerGame, STANDARD_5X5 } from './categoryValue';
 import type {
   BoardProjection,
@@ -32,6 +39,7 @@ import type {
   SavedList,
   SavedSearch,
   SharedItem,
+  PlayerCut,
   SplitCut,
   TeamInfo,
   TrendWindow,
@@ -94,7 +102,8 @@ import {
   withProjectedColumn,
 } from './components/researchColumns';
 import { simulateLiveDay } from './simulate';
-import { PlayerDetails } from './components/PlayerDetails';
+import { PlayerDetails, DEFAULT_DENSITY, toDensity } from './components/PlayerDetails';
+import type { PercentileDensity } from './components/PlayerDetails';
 import { toStatsColumnKeys } from './components/PlayerWindowTable';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './components/DateControls';
 import type { DateBarReading, DatePreset } from './components/DateControls';
@@ -1882,6 +1891,67 @@ export default function App() {
   }, [detailsKey]);
 
   /**
+   * **Which cut the player page's Percentile Rankings card is drawn over**, or
+   * null for his whole season.
+   *
+   * `pcut=` and not `cut=`, which is the app's own rule that two params must
+   * never mean two things: `cut=` is the Stats tab's, this is the percentile
+   * card's, and a link is read before anything on screen can say which tab
+   * wrote it. The two are genuinely separate questions — a reader can want the
+   * left-handed *card* and the uncut *table* — and sharing a key would have
+   * silently coupled them.
+   *
+   * Its vocabulary is one entry wider than the Stats tab's: `PLAYER_CUTS` adds
+   * `last100`, recent form, which is a count of at-bats rather than a split and
+   * has no meaning on a table whose rows are already spans (see `RecentCut`).
+   *
+   * Held here rather than in `PlayerDetails` for the reason `statsCut` is: that
+   * component is unmounted the moment the overlay closes, and a param the URL
+   * carries has to outlive it. And put away when the page leaves the screen by
+   * the same effect below, for the same reason — a cut is a question about
+   * *this* man.
+   */
+  const [pctCut, setPctCut] = useState<PlayerCut | null>(
+    () => PLAYER_CUTS.find((c) => c === initialParams.get('pcut')) ?? null,
+  );
+  useEffect(() => {
+    if (!detailsKey) setPctCut(null);
+  }, [detailsKey]);
+
+  /**
+   * **How many bars the percentile card shows** — `'summary'`, Savant's own
+   * fifteen, or `'detailed'`, every row this app ranks.
+   *
+   * A saved preference and **no URL param at all**, which is where it parts
+   * from `pctCut` an inch above it. The cut is *which numbers the card is
+   * about*, so a link that leaves it out describes a different card; the
+   * density is how much of the same card a given reader likes to be shown,
+   * which is true of them on every player they open. That is the line
+   * `statRanks` is on, and this follows its wiring exactly — including the
+   * `Touched` ref, which is the whole of the reconciliation when there is no
+   * param for the saved value to defend itself against.
+   *
+   * Seeded to the default rather than to nothing, so the first paint is a card
+   * rather than a blank while `/api/prefs` is in flight.
+   */
+  const [pctDensity, setPctDensityState] = useState<PercentileDensity>(DEFAULT_DENSITY);
+  const pctDensityTouched = useRef(false);
+  const setPctDensity = useCallback(
+    (density: PercentileDensity) => {
+      pctDensityTouched.current = true;
+      setPctDensityState(density);
+      // Stored as the *word*, and the default cleared to absence rather than
+      // written down — the convention every preference on the record follows,
+      // and what lets the default move later without anyone's record needing
+      // revisiting.
+      queueUserWrite(() =>
+        api.savePercentileDensity(density === DEFAULT_DENSITY ? null : density),
+      ).catch((e: Error) => console.error('saving percentile-density failed:', e.message));
+    },
+    [queueUserWrite],
+  );
+
+  /**
    * Which sets of players the board includes, and whether the watchlist is on
    * the board as well. Shared across both boards and both windows like the
    * window above — they are statements about *you* rather than about a board —
@@ -1996,6 +2066,11 @@ export default function App() {
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
         if (!showRanksTouched.current && prefs.statRanks) setShowRanksState(true);
+        // A density this build does not recognize resolves to the default
+        // rather than emptying the tab — the rule the theme two lines below
+        // follows, and the reason the server stores the word without checking
+        // it against a list.
+        if (!pctDensityTouched.current) setPctDensityState(toDensity(prefs.percentileDensity));
         // The record is the source of truth and the localStorage mirror is
         // only a paint-ahead cache, so what lands here wins — and is written
         // back, which is how a theme picked on one device reaches this one.
@@ -4551,6 +4626,9 @@ export default function App() {
     // player to be a cut *of* would name a lens that is not in force, which is
     // the rule `proj=` and `mt=` already follow.
     if (detailsKey && statsCut) p.set('cut', statsCut);
+    // The percentile card's own cut, under its own key — see `pctCut`, and the
+    // app's rule that two params must never mean two things.
+    if (detailsKey && pctCut) p.set('pcut', pctCut);
     /**
      * **Written on every view, `summary` included** — where it used to be
      * omitted as the default.
@@ -4789,6 +4867,7 @@ export default function App() {
     gamePagePk,
     statsCut,
     sharedLink,
+    pctCut,
     view,
     researchPos,
     researchWindow,
@@ -10832,6 +10911,14 @@ export default function App() {
           /* Which cut of the spans the Stats tab is on, out of the URL. */
           statsCut={statsCut}
           onStatsCutChange={setStatsCut}
+          /* …and which cut the Percentile Rankings card is on, out of `pcut=`.
+             A separate key from the Stats tab's, deliberately: a reader can
+             want the left-handed card and the uncut table. */
+          pctCut={pctCut}
+          onPctCutChange={setPctCut}
+          /* How many bars that card draws — a saved preference, not a param. */
+          pctDensity={pctDensity}
+          onPctDensityChange={setPctDensity}
           showRanks={showRanks}
           onShowRanksChange={setShowRanks}
           /* The Stats tab's percentile population — the same board rows the

@@ -8,6 +8,7 @@ import { mapLimit } from './limit.js';
 import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './savant.js';
 import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
+import { getCutPercentiles } from './percentileCuts.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
@@ -29,7 +30,13 @@ import { getGamePlays, getGameReport } from './game.js';
 import { getTeamGames } from './teamGames.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
-import { RESEARCH_INCLUDE_KEYS, RESEARCH_WINDOWS, SPLIT_CUTS, TEAM_HITTING_WINDOWS } from './types.js';
+import {
+  PLAYER_CUTS,
+  RESEARCH_INCLUDE_KEYS,
+  RESEARCH_WINDOWS,
+  SPLIT_CUTS,
+  TEAM_HITTING_WINDOWS,
+} from './types.js';
 import type {
   PlayerKind,
   ResearchIncludeKey,
@@ -65,6 +72,7 @@ import {
   setHideInjured,
   setMuteAudio,
   setTheme,
+  setPercentileDensity,
   setStatRanks,
   setRecentPlayer,
   setSeenTransactions,
@@ -898,6 +906,31 @@ app.put(
       return;
     }
     res.json(await setStatRanks(userId(req), on));
+  }),
+);
+
+/**
+ * Which density the player page's percentile card opens at. A route of its own
+ * for the reason each of the ones around it is — its update semantics are its
+ * own: a **string** that a null clears, rather than a boolean that is always
+ * set, so the stored entry can go back to meaning "whatever the default is".
+ *
+ * The word itself is not validated against a list here, deliberately, and it is
+ * the same split `/api/prefs/theme` makes: which densities exist is the
+ * client's business (`PlayerDetails.tsx`), and a value it does not recognize is
+ * read there as the default. Validating it here would mean a newer browser's
+ * choice being rejected by an older server instead of ignored by an older tab.
+ */
+app.put(
+  '/api/prefs/percentile-density',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { density } = (req.body ?? {}) as { density?: unknown };
+    if (density !== null && typeof density !== 'string') {
+      res.status(400).json({ error: 'density must be a string or null' });
+      return;
+    }
+    res.json(await setPercentileDensity(userId(req), density));
   }),
 );
 
@@ -2263,7 +2296,25 @@ app.get(
     const yearQ = Number(req.query.year);
     const year = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
-    res.json(await getPercentiles(playerId, year, kind));
+    // **A cut of the season, on the same route because it is the same card** —
+    // same sections, same keys, same two densities, fewer rows. A second route
+    // would be a second shape for the client to hold and a second place for the
+    // two to drift, which is the argument the windows route below already makes
+    // for its own cut.
+    //
+    // An unrecognized `cut` falls back to the full season rather than 400ing,
+    // the client's own rule for a parameter it does not know arriving in a
+    // link: fall back rather than empty the view.
+    // A cut is the **current** season's or nothing — see `getCutPercentiles`,
+    // which has no year to take because both halves of the card it builds are
+    // pinned to this one. Asked for a cut of 2023, the honest answer is that
+    // season's uncut card rather than this season's numbers under its heading.
+    const cut = year === undefined ? PLAYER_CUTS.find((c) => c === req.query.cut) : undefined;
+    res.json(
+      cut
+        ? await getCutPercentiles(playerId, kind, cut)
+        : await getPercentiles(playerId, year, kind),
+    );
   }),
 );
 
