@@ -15,7 +15,6 @@ import type {
   EspnMatchupSide,
   EspnScoreboard,
   EspnStatus,
-  LeagueNews,
   MlbScoreboard,
   MlbStandings,
   PlayerKind,
@@ -2503,7 +2502,11 @@ export default function App() {
    */
   const [mlbTab, setMlbTab] = useState<MlbTab>(() => {
     const raw = initialParams.get('mlb');
-    return raw === 'standings' || raw === 'news' ? raw : 'scoreboard';
+    // `mlb=news` was a third tab and is gone. It falls back here rather than
+    // being special-cased, which is this file's standing rule for a value it
+    // does not recognize — an old link opens the page rather than emptying it,
+    // and the URL keeps what it was handed until something on screen writes it.
+    return raw === 'standings' ? raw : 'scoreboard';
   });
   /** The Scoreboard's day, as a rule where it came from one and as a date
    *  otherwise — the two halves `initialPreset`/`initialRange` split the
@@ -3504,9 +3507,6 @@ export default function App() {
   const [standings, setStandings] = useState<MlbStandings | null>(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsError, setStandingsError] = useState<string | null>(null);
-  const [mlbNews, setMlbNews] = useState<LeagueNews | null>(null);
-  const [mlbNewsLoading, setMlbNewsLoading] = useState(false);
-  const [mlbNewsError, setMlbNewsError] = useState<string | null>(null);
 
   /**
    * The day's games.
@@ -3626,38 +3626,6 @@ export default function App() {
   }, [view, mlbTab, standings]);
 
   /**
-   * The league's news — once, on the first open of the tab.
-   *
-   * **`mlbNews` is in the test rather than in the dependency list**, which is
-   * the shape this file uses wherever a read must happen exactly once: a
-   * dependency on the thing the effect sets would re-run it on its own answer,
-   * and a `ref` marking it "asked" would be the StrictMode trap this app has
-   * found four times — pass one sets the mark, its teardown discards the
-   * answer, pass two sees the mark and returns, and the wait never comes down.
-   * Testing the state we already hold cannot do that.
-   */
-  useEffect(() => {
-    if (view !== 'mlb' || mlbTab !== 'news' || mlbNews !== null) return;
-    let canceled = false;
-    setMlbNewsLoading(true);
-    setMlbNewsError(null);
-    api
-      .mlbNews()
-      .then((n) => {
-        if (!canceled) setMlbNews(n);
-      })
-      .catch((e: Error) => {
-        if (!canceled) setMlbNewsError(e.message);
-      })
-      .finally(() => {
-        if (!canceled) setMlbNewsLoading(false);
-      });
-    return () => {
-      canceled = true;
-    };
-  }, [view, mlbTab, mlbNews]);
-
-  /**
    * **The app's three single-day rules**, for the Scoreboard's bar — filtered
    * out of `datePresets` rather than written again, a second list of the same
    * three days being two lists that will one day disagree about which day
@@ -3669,7 +3637,6 @@ export default function App() {
   const singleDayPresets = useMemo(() => presets.filter((p) => p.start === p.end), [presets]);
   const showMlbBoardWait = useDelayedFlag(mlbBoardLoading);
   const showStandingsWait = useDelayedFlag(standingsLoading);
-  const showMlbNewsWait = useDelayedFlag(mlbNewsLoading);
 
   const ownedIds = useMemo(
     () => (ownership ? new Set(Object.keys(ownership.owned).map(Number)) : null),
@@ -6540,12 +6507,18 @@ export default function App() {
     [trending, valueSpan],
   );
 
-  /** Every player the season roster can place — what decides whether a league
-   *  news row's name is a door, `openLeaguePlayer` below being the door itself
-   *  and needing the very same list to pick his kind. A `Set` because the feed
-   *  asks it ~970 times per draw. See `MlbNews.tsx`. */
-  const knownIds = useMemo(() => new Set(knownPlayers.map((p) => p.id)), [knownPlayers]);
-
+  /**
+   * **Opening a player the app knows only by MLB id** — a transactions row, a
+   * matchup's acquisitions, a game page's decisions. The player page needs a
+   * *kind* to open on and the season roster is where this app is told one, so
+   * the list is searched for it and a man it cannot place opens as a batter,
+   * which is the commoner half and the one a bare id is likelier to be.
+   *
+   * There was a `knownIds` set beside this, for the league news feed's *"is
+   * this name a door"* test — it asked ~970 times a draw, so a `Set`. That feed
+   * is gone with the MLB view's News tab and so is the set; the four callers
+   * left all open a name they already know is a player.
+   */
   const openLeaguePlayer = useCallback(
     (mlbId: number) => {
       const hit = knownPlayers.find((p) => p.id === mlbId);
@@ -9882,15 +9855,6 @@ export default function App() {
           standingsError={standingsError}
           /* And a standings row is a door into the club's, likewise. */
           onOpenTeam={(id) => openTeam(id, undefined)}
-          news={mlbNews}
-          newsLoading={showMlbNewsWait}
-          newsError={mlbNewsError}
-          /* Which names on the feed are doors — see `MlbNews.tsx`. The player
-             page needs a kind to open on and the season roster is where this
-             app is told one, so a man it cannot place is a name and not a
-             press. */
-          knownIds={knownIds}
-          onOpenPlayer={openLeaguePlayer}
         />
       ) : view === 'research' ? (
         <ResearchTable

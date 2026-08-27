@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState } from 'react';
 import type { NewsItem, PlayerNews } from '../types';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
@@ -34,7 +34,6 @@ export function NewsList({
   items,
   shown,
   summaries,
-  owner,
 }: {
   items: NewsItem[];
   /** How many rows to draw. The preview takes 1 — the latest item is the one
@@ -48,54 +47,81 @@ export function NewsList({
    *  carries none and the guard below is what keeps that an absent child rather
    *  than an empty one. */
   summaries?: boolean;
-  /**
-   * **Who the row is about**, drawn above the meta line — the one thing a
-   * *league* feed needs and a player's own page cannot want, his name being the
-   * page it is on.
-   *
-   * A slot rather than a second list, which is this file's own standing rule
-   * (`GameLogTable` and its five-row preview, the Overview section and the News
-   * tab): two lists that merely resemble each other are two lists that will one
-   * day disagree about what a row is. The caller renders the line because it is
-   * the caller that knows whether a name is a door — a player the season roster
-   * cannot place opens nothing, and a press with nothing behind it is worse
-   * than a plain name. See `MlbNews.tsx`.
-   */
-  owner?: (item: NewsItem) => ReactNode;
 }) {
   const rows = shown === undefined ? items : items.slice(0, shown);
   return (
     <ul className="news-list">
       {rows.map((item) => (
-        <NewsRow key={item.id} item={item} summary={summaries ?? false} owner={owner} />
+        <NewsRow key={item.id} item={item} summary={summaries ?? false} />
       ))}
     </ul>
   );
 }
 
-function NewsRow({
-  item,
-  summary,
-  owner,
-}: {
-  item: NewsItem;
-  summary: boolean;
-  owner?: (item: NewsItem) => ReactNode;
-}) {
+/**
+ * **A row is a press exactly where there is more of the note to read**, and a
+ * plain line everywhere else.
+ *
+ * `item.full` is the whole of a RotoWire note — the lede *and* the analysis
+ * paragraph RotoWire's own player page withholds — and the server sets it only
+ * where it genuinely beats the summary already on screen (`FULL_MIN_GAIN`). So
+ * the affordance is never dead: no `full`, no press, and the row draws as it
+ * always has. That is the same rule the league feed's name followed and the
+ * reason this file records it — *a press with nothing behind it is worse than
+ * a plain line*.
+ *
+ * **It replaces the summary rather than appending to it.** The full body opens
+ * with the same lede, so drawing both would print that sentence twice; what
+ * expands is the note growing from its first paragraph to all of it, which is
+ * what the reader asked for by pressing.
+ *
+ * **Open state lives here rather than in the tab**, because it is about this
+ * row and nothing else reads it — no URL param, the rule being that the URL
+ * carries what data a view shows and this changes none. Collapsing on a
+ * re-read is the honest behavior: a note that has changed is a different note.
+ */
+function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
+  const [open, setOpen] = useState(false);
+  // Only a row drawing its body can offer more of one. The Overview's preview
+  // passes `summaries` too, so this is genuinely both surfaces and not the tab
+  // alone — the same note reads the same way in both places.
+  const more = summary && item.full !== null && item.full !== undefined;
   const body = (
     <>
-      {owner?.(item)}
       <span className="news-meta">
         <span className="news-date">{formatDate(item.date)}</span>
         {item.kind && <span className="news-kind">{prettyKind(item)}</span>}
+        {more && (
+          <span className="news-more" aria-hidden="true">
+            {open ? 'Less' : 'More'}
+          </span>
+        )}
       </span>
       <span className="news-headline">{item.headline}</span>
-      {summary && item.summary && <span className="news-summary">{item.summary}</span>}
+      {summary && (open && item.full ? (
+        <span className="news-summary news-summary-full">{item.full}</span>
+      ) : (
+        item.summary && <span className="news-summary">{item.summary}</span>
+      ))}
     </>
   );
+  if (!more) {
+    return (
+      <li className={`news-item news-${item.source}`}>
+        <div className="news-static">{body}</div>
+      </li>
+    );
+  }
   return (
     <li className={`news-item news-${item.source}`}>
-      <div className="news-static">{body}</div>
+      <button
+        type="button"
+        className={`news-press${open ? ' is-open' : ''}`}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {body}
+      </button>
     </li>
   );
 }

@@ -5755,20 +5755,75 @@ button.start-line:focus-visible {
 .news-item:last-child {
   border-bottom: none;
 }
-/* **No row here is a press.** A `rotowire` note used to open that player's
-   page in a new tab and `.news-link` gave it a pointer, a hover tint and a
-   focus ring; the link is gone (it was never item-precise, every note on a man
-   going to the same `#latest-news` anchor, and what it opened onto was a
-   subscription wall), so the whole list is the shape the transaction row always
-   had. Which means one rule rather than two and nothing on this list that
-   *looks* pressable — the rule `.news-static` was written to state, now true of
-   the list rather than of half of it. */
-.news-static {
+/* **No row here was a press, and now a row with more of the note in it is.**
+   A `rotowire` note used to open that player's page in a new tab and
+   `.news-link` gave it a pointer, a hover tint and a focus ring; that link is
+   gone and stays gone — it was never item-precise (every note on a man going to
+   the same `#latest-news` anchor) and what it opened onto was a subscription
+   wall, which is not somewhere to send a reader from inside this app.
+
+   What is pressable now goes the other way: it opens *into* the row rather than
+   out of it, revealing the analysis paragraph RotoWire's own page withholds and
+   CBS republishes (`server/src/cbs.ts`). So the two rules are back, and the
+   split is honest this time — `.news-static` is a row with nothing more to
+   read and `.news-press` is a row with something. The server only sets `full`
+   where the body genuinely beats the summary, so a press never opens onto the
+   line the reader is already looking at.
+
+   **Folded rather than restyled**: the two share every box property through the
+   selector list, and `.news-press` adds only what being a control costs. Two
+   things that are the same object share a selector list rather than being given
+   rules that agree today. */
+.news-static,
+.news-press {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 0;
   color: inherit;
+}
+/* `font-family: inherit` and not `font: inherit` — the shorthand resets
+   `font-size`, which is this stylesheet's own recorded trap on a button reset
+   and would take the headline down to a browser default. */
+.news-press {
+  width: 100%;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* **Hover is scoped and `:focus-visible` is not**, the app's standing rule: a
+   full-width row in a scrolling list has no pointer to move away on a touch
+   device, so the tint would stick to the last row a finger crossed and read as
+   a selection. A pointer user loses nothing. */
+@media (hover: hover) {
+  .news-press:hover .news-headline {
+    color: var(--accent);
+  }
+}
+.news-press:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+/* The word that says the row opens. `--faint` and the `.news-kind` pill's own
+   size, because this is a *label* on the meta line rather than a state — the
+   app's color is spent on what is happening to a player. It sits after the kind
+   pill and inherits the meta line's gap, so a row with no kind still puts it in
+   the same place relative to the date. */
+.news-more {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .news-press:hover .news-more {
+    color: var(--accent);
+  }
 }
 .news-meta {
   display: flex;
@@ -5808,6 +5863,15 @@ button.start-line:focus-visible {
   font-size: 12px;
   line-height: 1.5;
   color: var(--faint);
+}
+/* The whole note, which is two paragraphs where the summary was one. The break
+   is a real `\n\n` in the text rather than markup — CBS separates the lede from
+   the analysis inside one node — so it is `pre-wrap` that draws it, and the
+   body reads at `--muted` rather than `--faint`: a reader who pressed for this
+   is reading it, where a summary under a headline is being skimmed. */
+.news-summary-full {
+  white-space: pre-wrap;
+  color: var(--muted);
 }
 /* Nothing to show, which for a healthy player mid-season is the ordinary case
    rather than a failure — so the tab says which two feeds were read and that
@@ -22150,56 +22214,6 @@ html[data-theme='light'] .league-table thead th {
 }
 .mlb-diff-down {
   color: var(--strikeout);
-}
-
-/* ---- News ---- */
-
-.mlb-news {
-  display: flex;
-  flex-direction: column;
-  gap: var(--stack-gap);
-}
-/* Centered on the page, the way the player page's own News tab is
-   (`.news-tab`): ten headlines capped at the reading column sat hard against
-   the left of a 1,280px window with 480px of nothing beside them, which reads
-   as a column that failed to fill rather than as prose set to a measure.
-
-   **`width: 100%` is beside the auto margin rather than implied by it**, which
-   is this stylesheet's own recorded trap: an auto margin on the *cross* axis
-   suppresses a flex item's stretch, so the list would have shrunk to its
-   longest headline and the hairlines under each row would have ended in
-   different places. `.upcoming-detail .pct-card` is where that is written down,
-   and it has bitten the same card twice. */
-.mlb-news .news-list,
-/* Who the row is about, above the date and the kind — the one line a league
-   feed has that a player's own News tab does not, his name there being the page
-   it is on. `.lg-tx-name` carries the press itself, folded on rather than
-   copied: a player's name as a door into his page is one object in this app and
-   the transactions feed is where it is written. */
-.mlb-news-who {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-}
-.mlb-news-club {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--faint);
-}
-/* His position, in the source's own abbreviation. An outlined pill and
-   `--faint` for `.news-kind`'s stated reason: this is a *label* and not a
-   state, and the app's color is spent on what is happening to a player. */
-.mlb-news-pos {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 5px;
 }
 
 /* **Narrow screens, and at the end of the file** — a media query adds no

@@ -3,7 +3,7 @@ import { mapLimit } from './limit.js';
 import { getRotowireIndex } from './rotowire.js';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
 import { getTeamAbbrevs } from './mlbStats.js';
-import type { LeagueNews, LeagueNewsItem, RecentNews, NewsRecency } from './types.js';
+import type { RecentNews, NewsRecency } from './types.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
@@ -109,9 +109,16 @@ const TTL = 30 * 60 * 1000;
  *
  * It was **two days**, and the reasoning was exactly right for the one reader
  * this file had: the mark says today or yesterday, so two days back and one
- * forward made the boundary a filter rather than a fetch. `getLeagueNews` is
- * the second reader and asks a different question — *what has been going on* —
- * which two days cannot answer on a Monday morning.
+ * forward made the boundary a filter rather than a fetch. It went to seven for
+ * a second reader, `getLeagueNews`, which asked a different question — *what
+ * has been going on* — that two days cannot answer on a Monday morning.
+ *
+ * **That reader is gone with the MLB view's News tab, and seven stays.** The
+ * mark is once again the only thing this sweep answers, and two days would do
+ * for it — but seven is also what makes the *player page's* News tab reach back
+ * a week rather than to Tuesday, `getPlayerNews` reading RotoWire's own player
+ * page over the same span. Narrowing it back would save one request's size and
+ * cost the thing a reader opens a News tab for.
  *
  * Seven is RotoWire's own reach rather than a number picked to be round: 25
  * notes per club span four to seven days (measured, all thirty clubs), so a
@@ -139,10 +146,13 @@ const NEWS_DAYS = 7;
  * shape stored changed, and a v1 blob deserialized as this would be a list of
  * `undefined`s. The reduction is still a reduction — ~250KB of notes out of
  * ~10MB of HTML and JSON, against the ~25KB the map alone cost — and it is what
- * buys the second reader of this sweep (`getLeagueNews`) its whole answer
- * without a second sweep. The map is derived from the list at read time, which
- * is the same "store the fact, classify on read" rule the paragraph above
- * makes for the levels.
+ * bought the second reader of this sweep (`getLeagueNews`) its whole answer
+ * without a second sweep. **That reader is gone and the shape is kept**, which
+ * is a deliberate choice rather than an oversight: the notes are what make the
+ * blob mean the same thing whenever it is read, and reducing it back to the map
+ * would re-introduce the very v1 shape the version above was bumped away from.
+ * The map is derived from the list at read time, which is the same "store the
+ * fact, classify on read" rule the paragraph above makes for the levels.
  */
 const BLOB_KEY = 'news-recent-v2.json';
 
@@ -516,211 +526,3 @@ export async function getRecentNews(): Promise<Map<number, RecentNews>> {
   return out;
 }
 
-/**
- * # The ten biggest stories, and how a story's size is decided
- *
- * The MLB view's News tab, off the sweep the mark already pays for.
- *
- * **It was the whole feed and is a top ten**, which is the change that matters
- * here: 973 items over seven days (measured, 2026-08-25) is not *news*, it is
- * an inbox — nine hundred of them being RotoWire's desk noting that a man went
- * 2-for-4 and MLB's log noting that Lakeland activated a right-hander. A reader
- * who opens a tab called News wants to know what happened in the league, and
- * on an ordinary day that is a dozen things.
- *
- * ## The score
- *
- * Three parts, all of them off what is already on the note:
- *
- *  1. **What kind of event it is** — a trade is the biggest thing that happens
- *     in a season, an option to Triple-A is not. MLB states its own kind
- *     (`typeDesc`) and that half is a lookup; RotoWire states none on a club
- *     page, so its half is matched on the headline and the note, which is the
- *     desk's own wording and turns out to be strongly conventional (`Traded to`,
- *     `Undergoes surgery`, `Placed on 15-day IL`, `Named closer`).
- *  2. **How recent it is.** Today over yesterday over the rest of the week —
- *     `baseballToday()`'s day, the one this file already classifies by.
- *  3. **How much is being said about him.** A player with four notes filed on
- *     one day is a player something is happening to, and this is the one signal
- *     here that is derived from the corpus rather than declared over it.
- *
- * **And one story per player**, taking his best: a trade generates a
- * transaction, a RotoWire note and usually a second note about his new role,
- * and three tenths of the list spent on one man is a list that has stopped
- * being about the league.
- *
- * ## What is deliberately *not* modeled
- *
- * **How big a name he is.** A trade involving a star and a trade involving a
- * fringe reliever score the same here, and that is a real limitation rather
- * than an oversight: the honest signals for it are on boards this file does not
- * read (the research board's playing time, ESPN's roster percentage), and
- * pulling a megabyte of season stats into a news sweep to sort ten headlines is
- * the wrong trade. The note count in (3) is the cheap proxy and it is a partial
- * one.
- *
- * ## What is dropped before any of it
- *
- * **Minor-league transactions** — see `SweepNote.major` for the measurement (73
- * of 216 moves over three days name a major-league club). The mark keeps them;
- * a feed of the whole organization is not what "the league" means.
- */
-
-/** How many stories the tab draws. Ten because a day of baseball has about that
- *  many things in it worth a headline, and because a list a reader can take in
- *  without scrolling is the difference between a news page and a feed. */
-const TOP_STORIES = 10;
-
-/**
- * **What MLB's own kinds are worth.** Its `typeDesc` is already a reader's
- * phrase and the whole vocabulary is twelve words wide — measured over the live
- * sweep: Status Change 64, Optioned 47, Recalled 46, Assigned 36,
- * Designated for Assignment 17, Signed as Free Agent 13, Outrighted 13,
- * Selected 12, Claimed Off Waivers 5, Released 3, Trade 2, Declared Free Agency
- * 2. So this is a table rather than a guess about one.
- *
- * `Status Change` is the one that cannot be scored from its kind: it is both
- * "placed on the 60-day injured list" and "sent on a rehab assignment", which
- * are not the same story. It scores from its description like a RotoWire note,
- * which is what `EVENTS` below is for.
- */
-const MLB_KINDS: Record<string, number> = {
-  Trade: 12,
-  'Signed as Free Agent': 8,
-  Released: 7,
-  'Declared Free Agency': 6,
-  'Designated for Assignment': 6,
-  'Claimed Off Waivers': 5,
-  Selected: 4,
-  Outrighted: 3,
-  Recalled: 3,
-  Optioned: 2,
-  // Rehab assignments and minor-league shuffling, which is what this kind is
-  // almost entirely made of.
-  Assigned: 1,
-};
-
-/**
- * **What a note is about, from the desk's own words.**
- *
- * Applied to the headline and the note together, and **the highest match wins**
- * rather than the sum: a note reading "Undergoes Tommy John surgery, out for
- * season" is one story and should not out-score a trade by matching three
- * patterns.
- *
- * Ordered loosely by weight for reading; the code does not depend on the order.
- * Every pattern here was written against the live corpus rather than from
- * memory — the headlines RotoWire actually files are short and conventional
- * (`Sent back to minors`, `Undergoing MRI on elbow`, `Collects save No. 30`),
- * which is what makes this work at all.
- */
-const EVENTS: { re: RegExp; weight: number }[] = [
-  { re: /\b(traded|trade[ds]? to|dealt to|acquired (?:by|from))\b/i, weight: 12 },
-  { re: /\b(tommy john|undergoes? surgery|season-ending|out for (?:the )?season|done for (?:the )?(?:season|year))\b/i, weight: 11 },
-  { re: /\b(suspended|suspension)\b/i, weight: 9 },
-  { re: /\b(no-hitter|perfect game|hits for the cycle|walk-?off|grand slam)\b/i, weight: 8 },
-  { re: /\b(60-day|placed on the (?:10|15)-day injured list|placed on (?:the )?injured list|to the il|il move)\b/i, weight: 7 },
-  { re: /\b(released|designated for assignment|dfa'?d?|claimed off waivers)\b/i, weight: 6 },
-  { re: /\b(named closer|closer(?:'s)? (?:job|role)|takes over (?:the )?ninth|save chances|ninth-inning opportunit)\b/i, weight: 6 },
-  { re: /\b(activated|reinstated|returns from the il|off the il)\b/i, weight: 5 },
-  { re: /\b(promoted|called up|selected|heading (?:back )?to (?:the )?(?:big leagues|majors)|makes? (?:his )?(?:mlb|major-league) debut)\b/i, weight: 5 },
-  { re: /\b(mri|imaging|x-?rays?|exits? (?:the )?game|leaves? (?:the )?game|carted off|scratched)\b/i, weight: 4 },
-  { re: /\b(demoted|sent (?:back )?(?:down|to (?:the )?minors)|optioned|outrighted)\b/i, weight: 3 },
-  // A milestone the desk bothered to number — `Collects save No. 30`,
-  // `Blasts 27th homer`, `Cruises to 10th victory`. Worth a place on a slow day
-  // and never worth beating an injury.
-  { re: /\b(no\. \d{2,}|\d{2,}(?:st|nd|rd|th) (?:homer|home run|save|victory|win|steal))\b/i, weight: 3 },
-  { re: /\b(rehab (?:start|assignment|appearance)|throwing progression|facing hitters)\b/i, weight: 2 },
-];
-
-/** Whole days between two ISO dates, both parsed as UTC midnight — the rule
- *  `etDate.ts::daysBetween` follows, restated in one line rather than imported
- *  because that module's copy takes the app's own day boundaries and this is
- *  arithmetic on two strings. */
-function days(from: string, to: string): number {
-  return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
-}
-
-/** The best pattern a note matches, or zero — see `EVENTS`. */
-function eventWeight(note: SweepNote): number {
-  const text = `${note.headline} ${note.summary ?? ''}`;
-  let best = 0;
-  for (const { re, weight } of EVENTS) {
-    if (weight > best && re.test(text)) best = weight;
-  }
-  return best;
-}
-
-export async function getLeagueNews(): Promise<LeagueNews> {
-  const notes = (await loadNotes()).filter((n) => n.major);
-  const today = baseballToday();
-  /* How many notes each player has on the day of the note being scored — the
-     corpus's own answer to "is something happening to this man". Counted once
-     over the whole sweep rather than per note, which would be a million
-     comparisons for a map lookup's worth of answer (`recentNews`'s own rule,
-     one function up). */
-  const chatter = new Map<string, number>();
-  for (const n of notes) {
-    const key = `${n.playerId}:${n.date.slice(0, 10)}`;
-    chatter.set(key, (chatter.get(key) ?? 0) + 1);
-  }
-  /** One entry per player, his best story. */
-  const best = new Map<number, { note: SweepNote; score: number }>();
-  for (const n of notes) {
-    const day = n.date.slice(0, 10);
-    const kind = n.kind ? MLB_KINDS[n.kind] ?? 0 : 0;
-    // **The larger of the two, not the sum.** A `Status Change` scores 0 from
-    // its kind and everything from its description; a `Trade` scores 12 from
-    // its kind and would score 12 again from the word in its description.
-    const event = Math.max(kind, eventWeight(n));
-    // Capped at three, because past that the count is saying "RotoWire covers
-    // this club closely" rather than "something is happening to this man".
-    const noise = Math.min(3, (chatter.get(`${n.playerId}:${day}`) ?? 1) - 1);
-    // **Graded rather than the two levels the mark uses**, which is the one
-    // place this scorer parts from `getRecentNews`: a mark has two states
-    // because a dot has two colors, where a *ranking* wants an edge between
-    // Sunday and Wednesday as well. Four steps and then flat, so size still
-    // decides the order and recency decides between comparable stories — which
-    // is why a season-ending surgery filed six days ago can still lead a list
-    // read today, and should.
-    const recency = day >= today ? 4 : Math.max(0, 4 - Math.round(days(day, today)));
-    const score = event + noise + recency;
-    // **Nothing with no event in it, ever.** A day's box-score notes are ~700
-    // of the 973 and every one of them would score 3 or 4 on recency and
-    // chatter alone — enough to fill a top ten with men who went 2-for-4. The
-    // list is allowed to be short; it is not allowed to be wrong about what a
-    // story is.
-    if (event === 0) continue;
-    const had = best.get(n.playerId);
-    if (!had || score > had.score) best.set(n.playerId, { note: n, score });
-  }
-  const ranked = [...best.values()]
-    // Score, then the newer of two equal ones, then RotoWire's wording over
-    // MLB's — the precedence `getPlayerNews` gives them and `sweep` orders by,
-    // so the headline here is the headline at the top of his own News tab.
-    .sort((a, b) => b.score - a.score || b.note.date.localeCompare(a.note.date))
-    .slice(0, TOP_STORIES);
-  return {
-    items: ranked.map(({ note: n }) => ({
-      // **The player, the day and the headline**, prefixed by source — the same
-      // "what the row says" rule `NewsItem.id` states, and the same reason:
-      // RotoWire's note ids are not on a club page to be had, and two sources
-      // must not be able to collide.
-      id: `${n.source}:${n.playerId}:${n.date}:${n.headline}`,
-      source: n.source,
-      date: n.date,
-      headline: n.headline,
-      summary: n.summary,
-      kind: n.kind,
-      playerId: n.playerId,
-      playerName: n.playerName,
-      team: n.team,
-      position: n.position,
-    })),
-    days: NEWS_DAYS,
-    // What the ten were picked out of, so the tab can say so rather than
-    // leaving a reader to wonder whether ten is all there was.
-    considered: notes.length,
-    fetchedAt: Date.now(),
-  };
-}

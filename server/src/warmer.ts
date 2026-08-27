@@ -13,6 +13,7 @@ import { revisedDates } from './revisions.js';
 import { getRosterTrend } from './espn.js';
 import { buildLeagueXwoba } from './leagueWoba.js';
 import { warmXwobaSeries } from './xwoba.js';
+import { warmCbsIndex } from './cbs.js';
 
 /**
  * The scheduled cache warmer.
@@ -240,6 +241,18 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
         console.log(`league xwOBA ${l.xwoba} over ${l.pa} PA, ${l.days} days through ${l.through}`),
       )
       .catch((err) => console.error('league xwOBA build failed:', err));
+    // **The one index a request path is not allowed to build.** CBS publishes
+    // no player list, so its address book is thirty club roster pages plus the
+    // injuries page — 31 requests and **~36 seconds measured**, against the API
+    // Lambda's 29-second ceiling. `getCbsIndex` therefore answers *empty* on a
+    // cold blob and starts the build behind itself rather than making a reader
+    // wait for something that cannot finish in time; this is what stops it ever
+    // being cold. A missed night costs the News tab its analysis paragraphs
+    // until the next one, and nothing else — the notes themselves are
+    // RotoWire's and come off a different index entirely.
+    await warmCbsIndex()
+      .then(() => console.log('CBS news index warm'))
+      .catch((err) => console.error('CBS index warm failed:', err));
     return { mode, dates: [...rescored, ...dates] };
   }
 
