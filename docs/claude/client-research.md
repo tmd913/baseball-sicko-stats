@@ -1139,44 +1139,42 @@ shape, below.)*
     0.08KB over the wire, for a head, a measured height, a fold and the removal
     of a portal.
 
-### A board with no rows fills the window; a board with a few does not
+### A board with no rows keeps its card and loses the rule under it
 
-The pane is `flex: 0 1 auto`, and the reason is recorded twice in the stylesheet:
-with `flex: 1` a dozen rows sat in a bordered expanse reaching to the bottom of
-the screen, which reads as a table that has stopped scrolling. That rule is
-about a **table**. Applied to an empty state it says the opposite of what it
-means — there is no table to have stopped, and the pane shrinks to the card and
-ends in mid-page.
+The pane is bordered on **one** side by the time it is drawn: the left and
+right go with the table bleed, and the top is dropped where the app chrome's own
+hairline closes the seam (`.research-view:not(.is-expanded) > .research-scroll`,
+above). What is left is a bottom rule running the full width of the window,
+which is right under a table — it is what closes the rows — and wrong under an
+empty state, where there are no rows to close. Measured at 1500x950 with the
+board holding nobody, the line sat at **y=486 of 950**: a few pixels under the
+card, with two thirds of the window below it and nothing to say what it divided.
 
-**Measured at 1500×950 with the board filtered to nobody:** the pane was
-**384px** tall with **464px of nothing** under it, the card 157 of that. The
-ground below is not a different surface — `.research-scroll`'s background and
-the body's are the same token, both `rgb(18, 19, 20)` — so what a reader sees
-stopping is the **card**, the one box on that screen with a fill and a dashed
-border of its own. Which is why filling the pane alone would have changed
-nothing on screen: the pane takes the height and has to hand it on.
+So the rule goes off in that state and **nothing else moves**:
 
-Handing it on needs the pane to be a **flex column**, since a block box gives a
-block child nothing to resolve `flex: 1` against. It becomes one only in this
-state — `:has(> .empty-state)`, where there is no table and so nothing that
-scrolls sideways — and the three sticky rows above the card keep their
-`position: sticky` and their `left: 0`, which a flex item is allowed to have.
-Expanded is excluded by hand rather than left to work itself out: that mode
-hides the empty state with `display: none` and the element is still in the tree
-for `:has` to find, while a full-page box has its own reason for `flex: 0 1
-auto`.
+```css
+.research-view:not(.is-expanded) > .research-scroll:has(> .empty-state) {
+  border-bottom: none;
+}
+```
 
-The two paragraphs then **center in the height they are given**. At the top of a
-600px card under 42px of padding they would be the same expanse this rule set
-out to close, drawn one box in.
+**The card keeps its size, and that is the correction to a first attempt at
+this.** The report was that the pane "does not fill the window", and the first
+reading of it was literal: the pane was made a flex column, the card told to
+`flex: 1`, and its two paragraphs centered in the height that gave them — 157px
+of card became 604. That is wrong, and wrong in the direction this file argues
+everywhere else. A card is sized by what it says. `flex: 0 1 auto` is as right
+over an empty state as it is under a short table, and the expanse a filled card
+leaves under two centered lines is the same expanse the pane's own
+`flex: 0 1 auto` exists to prevent. **The only thing wrong was a rule with
+nothing left to rule off**, and the only thing to change was that rule.
 
-**Driven at 1500×950 and 390×844**, board filtered to nobody: the pane goes
-**384 → 834** and **~280 → 731**, the card **157 → 604** and **→ 501**, the dead
-strip under it **464 → 14** and **→ 14** (the app's own bottom padding), with
-`scrollHeight - clientHeight` **0** on the pane and no page overflow on either
-axis at either width. Clearing the filter puts the table back and the pane
-returns to `display: block` and `flex: 0 1 auto` — the rule is off the moment
-there are rows, which is the whole of its scope.
+**Driven at 1500x950**, board holding nobody: the card **157px** before and
+after, the pane 365 and `display: block` / `flex: 0 1 auto` throughout, the
+pane's `border-bottom-width` **1px -> 0px**, and no page overflow. Turning an
+ownership set back on puts 50 rows and the bottom rule back together
+(`border-bottom-width` **1px**, pane 834), which is the whole of the rule's
+scope: off exactly while there is an empty state, on the moment there are rows.
 
 ### The research board
 
