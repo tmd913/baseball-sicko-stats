@@ -191,6 +191,30 @@ export interface UserPrefs {
    *  this is a habit of reading rather than a setting on a table. */
   statRanks?: boolean;
   /**
+   * **Which density the player page's Percentile Rankings tab opens at** —
+   * `'summary'`, Savant's own fifteen bars, or `'detailed'`, every row this app
+   * ranks.
+   *
+   * A preference rather than a URL parameter, and beside `statRanks` rather
+   * than beside `statsCut`, because it is the same kind of thing `statRanks`
+   * is: a **habit of reading**. The cut a reader picks is *which numbers the
+   * card is about* and goes in the URL, where a link can carry it; the density
+   * is how many rows that reader likes to be shown, which is true of them on
+   * every player they open and is not worth a stranger inheriting from a link.
+   *
+   * Absent means the default, the convention every entry here follows — and the
+   * default is **summary**, which is a change of behavior for anyone who used
+   * this tab before the switch existed. Deliberate: the fifteen-bar card is the
+   * one a reader means by "the Savant card", the detailed one is a door off it,
+   * and absence-is-the-default is exactly what lets that call be revisited
+   * without anybody's record needing to be.
+   *
+   * A string rather than a boolean for the reason `theme` is one: there can be a
+   * third density, and a value the client does not recognize reads as the
+   * default rather than emptying the tab.
+   */
+  percentileDensity?: string;
+  /**
    * The color scheme, by id — `'midnight'` (the dark original) or
    * `'lavender'`. Absent means the default, which is the convention every
    * toggle above follows and is the right one here for the same reason: the
@@ -1376,6 +1400,30 @@ export async function setStatRanks(userId: string, on: boolean): Promise<UserPre
     const prefs = { ...cur.prefs };
     if (on) prefs.statRanks = true;
     else delete prefs.statRanks;
+    return { prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * Which density the percentile card opens at. A `null` clears the entry back to
+ * the default rather than storing a word meaning "the default" — the rule every
+ * absence here follows, and what lets the default move later.
+ *
+ * The **vocabulary is the client's**, exactly as `theme`'s is: this validates
+ * that a string arrived and nothing more, and a density the client does not
+ * recognize is read there as the default. That is the same split
+ * `researchColumns` makes, where the route checks the shape of a key and the
+ * meaning lives where the thing is drawn.
+ */
+export async function setPercentileDensity(
+  userId: string,
+  density: string | null,
+): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (density) prefs.percentileDensity = density;
+    else delete prefs.percentileDensity;
     return { prefs };
   });
   return next.prefs;

@@ -1285,8 +1285,24 @@ export interface PlayerPercentiles {
   playerId: number;
   year: number;
   sections: PercentileSection[];
+  /** **The same card at Savant's own density** — its fifteen bars, in its
+   *  groups and its order, against the thirty-odd of `sections`. Both are built
+   *  from one scrape, so the density switch costs no request and the two cannot
+   *  disagree about a number. Empty exactly when `sections` is. */
+  summary: PercentileSection[];
   updatedAt: string;
   version?: number;
+  /** Which cut of the season this card ranks, or absent for the whole of it.
+   *  On the wire so a stale reply cannot land on a fresh one unnoticed — the
+   *  rule `PlayerWindows.cut` already follows. A cut card's bars are all ours,
+   *  so every metric on one arrives `estimated`. */
+  cut?: PlayerCut | null;
+  /** Plate appearances (batters faced, on a pitcher) behind the cut, and absent
+   *  on the full-season card. A cut card ranks a **cut** value inside the
+   *  **season's** qualified distribution, which is the reading that was asked
+   *  for and the one that makes the sample size the reader's only guard against
+   *  a card of noise — so the card prints it. */
+  cutSample?: number | null;
 }
 
 /** One plate appearance in a season xwOBA series (Savant estimated wOBA). */
@@ -1383,6 +1399,33 @@ export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
 
 /** In the order the control offers them: the hands, then the ballpark. */
 export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
+
+/**
+ * **The recent-form cut, which is not a split and not a span either.**
+ *
+ * `last100` is the player's most recent 100 at-bats on a batter's card and his
+ * most recent 100 batters faced on a pitcher's — one value whose label is a
+ * fact about whose page it is, the economy `SplitCut` already makes.
+ *
+ * Deliberately not a `ResearchWindow`: the board's windows are days, and a
+ * day-count is the wrong unit for recent form (thirty days of a platooned
+ * hitter is eleven at-bats and thirty days of an everyday one is a hundred and
+ * twenty). Which is also why it has no window axis to be crossed with — "his
+ * last 100 at-bats within the last 7 days" is not a narrower question.
+ *
+ * Mirrors `server/src/types.ts` by hand, like everything else in this file.
+ */
+export type RecentCut = 'last100';
+
+/** Every cut of a season the app can draw: the four splits, and recent form. */
+export type PlayerCut = SplitCut | RecentCut;
+
+/** In the order the percentile card's control offers them — the hands, the
+ *  ballpark, then recent form, which is last because it is the odd one out. */
+export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'];
+
+/** How many at-bats (or batters faced) the `last100` cut looks back over. */
+export const RECENT_CUT_SIZE = 100;
 
 /**
  * **A named list of players followed on the research board**, of which there
@@ -1732,6 +1775,14 @@ export interface UserPrefs {
   /** Draw a percentile rank under every value on the research board and the
    *  player page's Stats tab. Absent means off, the same convention. */
   statRanks?: boolean;
+  /** Which density the player page's Percentile Rankings tab opens at — see
+   *  `PERCENTILE_DENSITIES` in `PlayerDetails.tsx`, which owns the vocabulary
+   *  the way `theme.ts` owns the theme's. A **habit of reading** and so a saved
+   *  preference rather than a URL parameter, where the *cut* beside it is which
+   *  numbers the card is about and so goes in the URL. Absent means the
+   *  default, and a density this build does not know is read as the default
+   *  rather than as an error. */
+  percentileDensity?: string;
   /** Which of the user's watchlists the board's star writes to and its
    *  Watchlist button unions on. A preference and not a URL parameter: the
    *  active list is a fact about the person, where a **shared** list is a

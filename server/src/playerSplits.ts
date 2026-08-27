@@ -3,8 +3,8 @@ import { readJsonBlob, writeJsonBlob } from './storage.js';
 import { empty, tally, toStatcast, windowDates } from './statcastWindow.js';
 import type { StatcastCounts } from './statcastWindow.js';
 import { getResearch, SEASON } from './research.js';
-import { RESEARCH_WINDOWS, SPLIT_CUTS } from './types.js';
-import type { PlayerKind, ResearchRow, ResearchWindow, SplitCut } from './types.js';
+import { RECENT_CUT_SIZE, RESEARCH_WINDOWS, SPLIT_CUTS } from './types.js';
+import type { PlayerCut, PlayerKind, ResearchRow, ResearchWindow, SplitCut } from './types.js';
 
 /**
  * **One player's five spans, cut four ways** — vs right, vs left, home, away.
@@ -13,6 +13,14 @@ import type { PlayerKind, ResearchRow, ResearchWindow, SplitCut } from './types.
  * the side under the board's own columns. This is that table asked a second
  * question — *is he a different player against left-handers, or on the road* —
  * which is a cut along an axis the board has not got.
+ *
+ * **And a fifth cut that is none of those**, added with the percentile card's
+ * own cut control: `last100`, his most recent hundred at-bats (batters faced on
+ * a pitcher). It is not a split and not a span — see `RecentCut` in `types.ts`
+ * for why a count of at-bats is the right unit for recent form and a count of
+ * days is not — so it hangs off `PlayerCuts` beside the four rather than
+ * inside them, and it costs this module no second request: it is one more pass
+ * over the season of pitches the four cuts have already downloaded.
  *
  * ### Why none of the cheap routes work
  *
@@ -104,9 +112,16 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
  * carries is **added or begins to be filled** — a stored blob deserializes with
  * everything added since it missing, and this one is read straight back out as
  * the answer, which is the test `RULES.md` sets.
+ *
+ * `-v2`: the blob stopped *being* the four cuts and became an object with them
+ * under `windows` and the recent-form cut beside it under `last100`. A stored
+ * v1 blob is the bare `CutWindows`, so it would deserialize into a `PlayerCuts`
+ * with **both** fields undefined — every cut of every span reading as "he has
+ * nothing here", which is the shape of answer this file is at pains to
+ * distinguish from a real one. The rename is the bump.
  */
 const cutKey = (kind: PlayerKind, playerId: number) =>
-  `player-cuts-${kind}-${playerId}-${SEASON}-v1.json`;
+  `player-cuts-${kind}-${playerId}-${SEASON}-v2.json`;
 
 /**
  * One player's whole season of pitches.
@@ -420,7 +435,100 @@ function toRow(
 
 type CutWindows = Record<SplitCut, { window: ResearchWindow; row: ResearchRow | null }[]>;
 
-async function buildAll(playerId: number, kind: PlayerKind): Promise<CutWindows> {
+/**
+ * Everything one season of one player's pitches reduces to.
+ *
+ * **`last100` is a sibling of `windows` rather than a fifth key inside it**, and
+ * the shape is the argument: a `CutWindows` entry is that cut measured over each
+ * of five spans, and recent form has no spans to be measured over — see
+ * `RecentCut`, which sets out why "his last 100 at-bats within the last 7 days"
+ * is not a narrower question. Folding it in would have meant four honest rows
+ * and one row of noughts on every cut of every window, which is exactly the
+ * "did not go 0-for-0" fault `toRow` returns null to avoid.
+ */
+interface PlayerCuts {
+  windows: CutWindows;
+  /** The most recent 100 at-bats (batters faced for a pitcher), or null where
+   *  he has not had a plate appearance all season. Fewer than 100 where he has
+   *  not had that many — the row is what he *has* done, and `pa` on it says how
+   *  much that is. */
+  last100: ResearchRow | null;
+}
+
+/**
+ * A total order over one season of pitches.
+ *
+ * `at_bat_number` restarts each game and `pitch_number` each plate appearance,
+ * so neither orders a season alone; `game_pk` breaks the one tie `game_date`
+ * leaves, which is a doubleheader — two games on one date whose at-bat numbers
+ * both start at 1. Measured on a real export: Judge's season arrives in
+ * **neither** order (not ascending, not descending), so it has to be sorted
+ * rather than read off the end.
+ */
+function pitchOrder(r: Record<string, string>): [string, number, number, number] {
+  return [
+    r.game_date ?? '',
+    Number(r.game_pk) || 0,
+    Number(r.at_bat_number) || 0,
+    Number(r.pitch_number) || 0,
+  ];
+}
+
+function comparePitches(a: Record<string, string>, b: Record<string, string>): number {
+  const x = pitchOrder(a);
+  const y = pitchOrder(b);
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] < y[i]) return -1;
+    if (x[i] > y[i]) return 1;
+  }
+  return 0;
+}
+
+/**
+ * The rows making up his most recent `RECENT_CUT_SIZE` at-bats — or batters
+ * faced, on a pitcher, where every plate appearance is one.
+ *
+ * Walked **backwards through plate appearances**, not through pitches or
+ * through days: the cut is a count of at-bats and its edge therefore falls on a
+ * plate-appearance boundary, never in the middle of one. Every pitch of a kept
+ * plate appearance is kept with it, because the discipline half of the card
+ * (chase, whiff, first-pitch strikes) is counted off pitches and would
+ * otherwise be measured over a fragment of the very appearances the batting
+ * half is measured over.
+ *
+ * The plate appearances *between* those at-bats come along too — a walk sitting
+ * between two of them is inside the span and is counted, which is what makes
+ * the BB% on this card mean anything. So the row rests on rather more than 100
+ * plate appearances, and that number is what `pa` on it reports.
+ */
+function recentRows(
+  rows: Record<string, string>[],
+  kind: PlayerKind,
+): Record<string, string>[] {
+  const sorted = [...rows].sort(comparePitches);
+  let atBats = 0;
+  // **The whole season, until proved otherwise.** A player with fewer than
+  // `RECENT_CUT_SIZE` at-bats never trips the test below, and keeping every row
+  // is the right answer for him: his last 100 at-bats are all of them.
+  let cutAt = 0;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const e = sorted[i].events;
+    if (!e || NON_PA_EVENTS.has(e)) continue;
+    // A pitcher's unit is the batter faced, which every plate appearance is; a
+    // batter's is the at-bat, which the walks and sacrifices among them are not.
+    if (kind === 'pitcher' || !NON_AB_EVENTS.has(e)) atBats++;
+    if (atBats > RECENT_CUT_SIZE) {
+      // One too many. `events` sits on the **last** pitch of a plate
+      // appearance, so index `i` is where the appearance outside the span ends
+      // and `i + 1` is the first pitch of the oldest one inside it.
+      cutAt = i + 1;
+      break;
+    }
+  }
+  return sorted.slice(cutAt);
+}
+
+async function buildAll(playerId: number, kind: PlayerKind): Promise<PlayerCuts> {
   const res = await fetch(seasonPitchUrl(playerId, kind), {
     headers: { 'User-Agent': BROWSER_UA },
   });
@@ -463,11 +571,18 @@ async function buildAll(playerId: number, kind: PlayerKind): Promise<CutWindows>
       return { window, row: toRow(counts, playerId, kind, id) };
     });
   }
-  return out;
+
+  // Recent form, off the same rows already in memory: a sixth pass over a list
+  // the fetch above has already paid for, which is the same economy the four
+  // cuts make between themselves.
+  const recent = emptyCut();
+  for (const r of recentRows(rows, kind)) addPitch(recent, r);
+
+  return { windows: out, last100: toRow(recent, playerId, kind, id) };
 }
 
-const mem = new Map<string, { data: CutWindows; fetchedAt: number }>();
-const inFlight = new Map<string, Promise<CutWindows>>();
+const mem = new Map<string, { data: PlayerCuts; fetchedAt: number }>();
+const inFlight = new Map<string, Promise<PlayerCuts>>();
 
 /**
  * All four cuts of all five spans, from one request and one cache entry.
@@ -477,7 +592,7 @@ const inFlight = new Map<string, Promise<CutWindows>>();
  * already paid for both, and storing them apart would be the same megabyte
  * downloaded four times. The blob is the twenty rows, not the megabyte.
  */
-async function allCuts(playerId: number, kind: PlayerKind): Promise<CutWindows> {
+async function allCuts(playerId: number, kind: PlayerKind): Promise<PlayerCuts> {
   const key = `${kind}-${playerId}`;
   const hit = mem.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return hit.data;
@@ -485,7 +600,7 @@ async function allCuts(playerId: number, kind: PlayerKind): Promise<CutWindows> 
   if (running) return running;
 
   const p = (async () => {
-    const stored = await readJsonBlob<CutWindows>(
+    const stored = await readJsonBlob<PlayerCuts>(
       cutKey(kind, playerId),
       (_v, cachedAt) => Date.now() - cachedAt < CACHE_TTL_MS,
     );
@@ -520,5 +635,33 @@ export async function getPlayerCutWindows(
   windows: { window: ResearchWindow; row: ResearchRow | null }[];
 }> {
   const all = await allCuts(playerId, kind);
-  return { season: SEASON, kind, cut, windows: all[cut] };
+  return { season: SEASON, kind, cut, windows: all.windows[cut] };
+}
+
+/**
+ * **One cut of the whole season, as a single board row** — what the percentile
+ * card's cut ranks (see `percentileCuts.ts`).
+ *
+ * The season entry rather than a span, and that is the point rather than a
+ * default: the card places a cut value inside the **full season's** qualified
+ * distribution, so a cut measured over anything narrower than the season would
+ * be the one half of that comparison drawn to a different scale.
+ *
+ * `last100` is the exception that proves it — a count of at-bats rather than a
+ * span, and the reason it is a sibling field here rather than a fifth key on
+ * `windows` is set out on `PlayerCuts`.
+ *
+ * Costs nothing the Stats tab has not already paid: same fetch, same blob, same
+ * six hours, so a reader who has looked at either surface has bought both.
+ */
+export async function getPlayerSeasonCut(
+  playerId: number,
+  kind: PlayerKind,
+  cut: PlayerCut,
+): Promise<ResearchRow | null> {
+  const all = await allCuts(playerId, kind);
+  if (cut === 'last100') return all.last100 ?? null;
+  const windows = all.windows[cut];
+  if (!windows) return null;
+  return windows.find((w) => w.window === 'season')?.row ?? null;
 }
