@@ -12002,7 +12002,13 @@ button.start-line:focus-visible {
    table's slack, so on a desktop this costs the stats nothing, and ahead of the
    name it would have pushed every name in the column along by its own width.
    Muted when off, accent when on, filled when on — see `WatchStar`. */
-.research-watch {
+/* The compare tick is folded onto the star rather than styled to resemble it:
+   the same 19px square in the same gutter at the end of the same sticky name
+   column, with the same baseline nudge. Two controls that are the same object
+   share a selector; what differs is the lit color and the refusal state, both
+   below. */
+.research-watch,
+.research-tick {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
@@ -12018,16 +12024,32 @@ button.start-line:focus-visible {
   position: relative;
   top: -0.09em;
 }
-.research-watch:hover {
+.research-watch:hover,
+.research-tick:hover {
   color: var(--text);
 }
-.research-watch.on {
+.research-watch.on,
+.research-tick.on {
   color: var(--accent);
 }
-.research-watch:focus-visible {
+.research-watch:focus-visible,
+.research-tick:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+/* **Full, and it says so rather than going inert.** `aria-disabled` and not
+   `disabled`, because a disabled button shows no `title` and the title is the
+   whole of the explanation — see `CompareTick`. Faded and `not-allowed`, so
+   the refusal is visible before the press as well as after it. */
+.research-tick.is-full {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+@media (hover: hover) {
+  .research-tick.is-full:hover {
+    color: var(--muted);
+  }
 }
 
 /* The **roster** mark on a board row — a different list from the star beside
@@ -23203,4 +23225,327 @@ html[data-theme='light'] .league-table thead th {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
+}
+
+
+/* ---- Compare: the board's control, and the page it opens ---------------- */
+/* The mode toggle and the button that opens the page are one flex item of the
+   tools run, so they wrap together — two controls that are one thought must not
+   end up on two lines of a wrapping row with a pill between them. */
+.research-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* The `Compare 3 →` button is the run's one **primary** control: everything
+   else in the bar is a setting, and this is the press that goes somewhere. It
+   takes the accent as a fill rather than as a tint, which is the only place in
+   this bar that happens and is why it reads as the action it is. */
+.research-compare-go {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+@media (hover: hover) {
+  .research-compare-go:hover {
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+  }
+}
+
+/* The comparison page. The scroller is the table's own, so the sticky stat
+   column has something to be sticky inside.
+
+   **Centered, and `safe` is the whole of why that is written this way.** The
+   table is content-width (see `.cmp-table`), so at 1920 it is ~600px inside a
+   1,888px pane and belongs in the middle of it. A plain `center` would be
+   right until the table is *wider* than the pane, at which point flexbox
+   centers the overflow in both directions and puts the first column — the
+   sticky stat names — off the left edge, unreachable by scrolling. `safe`
+   falls back to `start` in exactly that case, which is the behavior a
+   scrolling table needs; the `flex-start` above it is what an engine without
+   `safe` gets, and losing the centering is the harmless half. */
+.cmp-wrap {
+  display: flex;
+  justify-content: flex-start;
+  justify-content: safe center;
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+}
+.cmp-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.cmp-title-text {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-title-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+  flex: none;
+}
+/* **Content-width, not pane-width.** `min-width: 100%` made a three-man
+   comparison 1,888px wide at 1920 — three columns of ~600px each with one
+   number in the middle of them, which is not a table so much as three numbers
+   a long way apart. At `max-content` the same comparison is ~600px and the
+   pane centers it; six players come to ~1,000, and anything past the pane
+   scrolls inside `.cmp-wrap` rather than the page. */
+.cmp-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+}
+/* **The stat name is sticky**, and it is the whole point of the transpose: a
+   comparison is read *along a row*, which needs the row's own name on screen at
+   every horizontal offset. `--cell-bg` rather than an assigned background, the
+   app's rule for a cell whose ground is painted in more than one place. */
+.cmp-corner,
+.cmp-stat {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--cell-bg, var(--panel));
+  text-align: left;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cmp-corner {
+  z-index: 3;
+}
+.cmp-stat {
+  padding: 7px 12px 7px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.cmp-corner,
+.cmp-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cell-bg, var(--panel));
+  border-bottom: 1px solid var(--border);
+}
+.cmp-corner {
+  padding: 8px 12px 8px 0;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+/* **Every column exactly the same width, which `min-width` did not buy.** With
+   a minimum alone the widest name set its own column: `Pete Crow-Armstrong`
+   made the third column 30px wider than the two beside it, so a comparison of
+   three had three different column widths and the numbers under them did not
+   line up with anything. A fixed width is what makes a table of one row per
+   stat scannable down as well as across. 148px is two lines of a long full
+   name at 12px/800. */
+/* **Every column exactly the same width**, which a `width` on the `th` alone
+   does not buy: under `table-layout: auto` that is a *suggestion*, and the cell
+   grows to whatever its content needs — measured, `Pete Crow-Armstrong` took
+   its column to 189px against 148 and 170 for the two beside it, so a
+   comparison of three had three different column widths and the numbers under
+   them lined up with nothing. What actually fixes a column is a fixed box
+   *inside* it (`.cmp-head-open`), which leaves the cell nothing to grow for. */
+.cmp-head {
+  padding: 8px 10px;
+}
+/* **The ✕ is taken out of the flow.** As a flex sibling it pushed the
+   headshot-and-name block off-center by its own width, so a column's identity
+   sat left of the numbers under it. Absolute in the cell's corner, the block
+   centers in the whole column and the ✕ is where a dismiss belongs. */
+.cmp-head-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.cmp-head-open {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  /* The number that decides the column — 128px is two lines of a long full name
+     at 12px/800, and every player column is this plus the cell's 20px of
+     padding. */
+  width: 128px;
+  border: none;
+  background: none;
+  padding: 0;
+  /* `font-family` and not `font`: the shorthand resets `font-size`. */
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.cmp-photo {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg);
+}
+/* **A name wraps rather than ellipsizing**, and its box is reserved either
+   way. Truncating a player's name in a comparison of three is the one thing
+   this header must not do — `Pete Crow-Armstr…` beside two whole names is a
+   column the reader cannot be sure of. Two lines, clamped, with the height of
+   two always reserved so the three headers are the same height whether any of
+   them wrapped. */
+.cmp-head-name {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  max-width: 100%;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cmp-head-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--faint);
+}
+@media (hover: hover) {
+  .cmp-head-open:hover .cmp-head-name {
+    color: var(--accent);
+  }
+}
+.cmp-head-open:focus-visible,
+.cmp-drop:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.cmp-drop {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--faint);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .cmp-drop:hover {
+    color: var(--strikeout);
+    background: color-mix(in srgb, var(--strikeout) 14%, transparent);
+  }
+}
+.cmp-cell {
+  padding: 7px 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--border-faint, var(--border));
+}
+/* **The leader.** Bolder *and* tinted, so identity never rests on hue — the
+   app's rule wherever a mark carries meaning. A tint rather than a fill,
+   because a whole column of filled cells would out-shout the numbers it is
+   about. */
+.cmp-cell.is-best {
+  color: var(--accent);
+  font-weight: 800;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* The compare card. `.pct-card`'s own shape — panel, border, radius, padding —
+   with two things widened for what it holds: a comparison carries N bars per
+   metric where a player's card carries one, so 680px is too narrow, and the
+   label column is a metric name rather than a stat abbreviation. */
+.pct-card--cmp {
+  max-width: 880px;
+}
+.cmp-note {
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--faint);
+  text-align: center;
+}
+.cmp-pct-section {
+  margin-top: 16px;
+}
+.cmp-pct-section:first-of-type {
+  margin-top: 4px;
+}
+.cmp-pct-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-faint, var(--border));
+}
+.cmp-pct-label {
+  flex: 0 0 128px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding-top: 2px;
+}
+.cmp-pct-bars {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* One bar per player, stacked — so the comparison is read down a short column
+   under one label rather than across a row of tracks the reader has to align by
+   eye. The surname leads each, since three tracks with no names on them is
+   three tracks nobody can tell apart. */
+.cmp-pct-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* **Measured at runtime, not declared** — see `PercentilesTab`, which reads the
+   widest surname's own `scrollWidth` and publishes it here. The fallback is
+   what applies for the one frame before that lands, and is deliberately a
+   little generous rather than exact. */
+.cmp-pct-who {
+  flex: 0 0 var(--cmp-who-w, 92px);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-pct-bar .pct-track {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cmp-pct-bar .pct-value {
+  flex: 0 0 46px;
+  text-align: right;
+}
+/* On a phone the label runs the full width and the bars sit under it: 128px of
+   label and a 72px name leaves a track too narrow for a bubble to sit in. */
+@media (max-width: 560px) {
+  .cmp-pct-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cmp-pct-label {
+    flex: none;
+  }
+  .cmp-pct-bars {
+    width: 100%;
+  }
 }

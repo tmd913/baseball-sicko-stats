@@ -980,6 +980,27 @@ interface Props {
    * always.
    */
   ownWatchlistKeys: Set<string>;
+  /**
+   * **Compare mode** — whether the tick that puts a row into a comparison is
+   * drawn at all.
+   *
+   * A mode rather than a column that is always there, and the name column is
+   * the reason: see `WatchStar`'s own note, which records that this is the
+   * app's widest table's sticky column and that a control ahead of the name
+   * pushes every name along by its own width. The tick sits **after** the star
+   * for the same reason the star sits after the name, and only while somebody
+   * is using it.
+   */
+  compareOn: boolean;
+  onCompareModeChange: (on: boolean) => void;
+  /** Who is ticked, in the order they were ticked — which is the order they
+   *  are drawn in on the page, so a reader picks left to right. */
+  compareSelected: string[];
+  onToggleCompare: (key: string) => void;
+  /** How many may be ticked. The row declines past it rather than dropping the
+   *  oldest to make room; the button says how many are in. */
+  maxCompare: number;
+  onOpenCompare: () => void;
   /** The named lists, the saved searches and the shared-link chrome — one prop
    *  object rather than fifteen flat ones, and the reason is that they are one
    *  feature: every field is read by `ResearchLists.tsx` and by nothing else in
@@ -1242,6 +1263,77 @@ function ResearchPhoto({
  * "watched", which is the same read a checkbox would give at three times the
  * width and with a form's grammar rather than a state's.
  */
+/**
+ * **The tick that puts a row into a comparison**, drawn only in compare mode.
+ *
+ * A checkbox in everything but the element: `role="checkbox"` on a button
+ * rather than an `<input>`, which is what the rest of this bar's controls do
+ * and what lets it be the same 19px square the star beside it is without
+ * fighting a UA-drawn box. Its state is announced by `aria-checked`, so nothing
+ * rests on the glyph.
+ *
+ * **Full is `aria-disabled`, not `disabled`.** A disabled button shows no
+ * `title`, and the title is the whole of the explanation — a reader who presses
+ * a sixth row is owed the sentence saying why nothing happened, and a control
+ * that is merely inert says nothing at all.
+ */
+function CompareTick({
+  on,
+  full,
+  max,
+  name,
+  onToggle,
+}: {
+  on: boolean;
+  full: boolean;
+  max: number;
+  name: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      aria-disabled={full || undefined}
+      className={`research-tick${on ? ' on' : ''}${full ? ' is-full' : ''}`}
+      title={
+        on
+          ? `Take ${name} out of the comparison`
+          : full
+            ? `Already comparing ${max} players — untick one to add ${name}`
+            : `Compare ${name}`
+      }
+      onClick={() => {
+        if (!full) onToggle();
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+        <rect
+          x="4"
+          y="4"
+          width="16"
+          height="16"
+          rx="3.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        {on && (
+          <path
+            d="m7.8 12.3 2.9 2.9 5.5-5.9"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+      </svg>
+    </button>
+  );
+}
+
 function WatchStar({
   on,
   name,
@@ -1322,6 +1414,12 @@ export function ResearchTable({
   rosterKeys,
   watchlistKeys,
   ownWatchlistKeys,
+  compareOn,
+  onCompareModeChange,
+  compareSelected,
+  onToggleCompare,
+  maxCompare,
+  onOpenCompare,
   saved,
   onWatchlistToggle,
   onOpenDetails,
@@ -3485,6 +3583,66 @@ export function ResearchTable({
                 onToggle={() => setPanel('searches', !searchesOpen)}
               />
             )}
+            {/**
+             * **Compare, and it is two controls in one place rather than two
+             * buttons.**
+             *
+             * Off, it is a toggle that turns the ticks on. On with fewer than
+             * two ticked it is the same toggle wearing the count, which is what
+             * says *keep going*. On with two or more it grows a second button
+             * beside it that opens the page — a **separate target**, because
+             * `Compare 3` doing one thing at two ticks and another at three is
+             * a control whose meaning changes under the reader.
+             *
+             * Off the bar on the team reading with the controls it sits among:
+             * a comparison is of players, and this board's rows are clubs.
+             */}
+            {!teams && (
+              <div className="research-compare">
+                <button
+                  type="button"
+                  className={`research-toggle${compareOn ? ' on' : ''}`}
+                  aria-pressed={compareOn}
+                  title={
+                    compareOn
+                      ? 'Stop picking players to compare'
+                      : `Tick up to ${maxCompare} rows and line them up side by side`
+                  }
+                  onClick={() => onCompareModeChange(!compareOn)}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    {/* Two bars of different heights, which is what a
+                        comparison looks like — and not the ⇄ arrows, which in
+                        this app already mean a swap. */}
+                    <path d="M8 20V9M16 20V4" />
+                    <path d="M3.5 20h17" />
+                  </svg>
+                  <span className="research-toggle-label">Compare</span>
+                  {compareOn && compareSelected.length > 0 && (
+                    <span className="research-toggle-count">{compareSelected.length}</span>
+                  )}
+                </button>
+                {compareOn && compareSelected.length >= 2 && (
+                  <button
+                    type="button"
+                    className="research-toggle research-compare-go"
+                    title={`Line up the ${compareSelected.length} ticked players side by side`}
+                    onClick={onOpenCompare}
+                  >
+                    Compare {compareSelected.length} →
+                  </button>
+                )}
+              </div>
+            )}
             <ScheduleToggle
               on={scheduleSpan !== null}
               /* On with no index is the read still out — App holds the window
@@ -4714,6 +4872,26 @@ export function ResearchTable({
                         name={r.name}
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
+                      {/* **After the star, and only in compare mode.** Both
+                          halves follow the same rule: this is the sticky name
+                          column, so a control ahead of the name pushes every
+                          name along by its own width, and a control drawn all
+                          the time pays that on every row for a comparison
+                          nobody is making. */}
+                      {compareOn && (
+                        <CompareTick
+                          on={compareSelected.includes(key)}
+                          /* Full and not ticked: the row declines rather than
+                             dropping somebody to make room, and says why. */
+                          full={
+                            compareSelected.length >= maxCompare &&
+                            !compareSelected.includes(key)
+                          }
+                          max={maxCompare}
+                          name={r.name}
+                          onToggle={() => onToggleCompare(key)}
+                        />
+                      )}
                       </PlayerIdentity>
                       )}
                     </td>

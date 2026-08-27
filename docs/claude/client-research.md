@@ -686,6 +686,143 @@ already uses.
 **Bundle**: JS 745.79 → 762.13 kB raw, 219.89 → 224.42 gzipped; CSS 192.67 →
 198.16 raw, 34.32 → 35.16 gzipped.
 
+### Compare: the board transposed for two to six men
+
+**The board answers *who out of six hundred*, and it answers it by scanning.**
+Forty columns across, one row per man — and the comparison a reader is actually
+making happens in their head, between two rows forty pixels apart. By the time
+the field is down to three names that is the wrong shape. `ComparePage.tsx` is
+the same numbers with the axes swapped: **one row per stat, one column per
+player**, which is the shape the player page's Stats tab already uses for one
+man across five spans.
+
+**It has no stat vocabulary of its own, and that is the whole design.** The rows
+are exactly the columns the reader has on, in their order, drawn by the same
+`Column.format` the board draws them with — so a number here and the same number
+on the board behind cannot disagree, and a column added to
+`researchColumns.tsx` appears here having been told nothing. The reader's own
+Columns picker is this page's picker. **The rows are handed in rather than
+fetched**, for the same reason: the board is holding them at whatever window,
+position and ownership sets are in force, and re-reading would be a second
+answer free to disagree with the one on screen — and would have to invent an
+opinion about which window a comparison is over.
+
+**The leader in each row is lit, and `isRankable` is what decides whether the
+question is even askable.** That is `columnRanks.tsx`'s own test — the one that
+already decides whether the board may draw a percentile badge — so this needs no
+second opinion about which end is good: `Opp` holds words, `Ros%` and the trend
+columns are a fact about a *market* rather than about a player, `Start` is an
+ordinal, and launch angle and the GB/LD/FB split are "a profile, not a grade".
+Direction is `ascFirst` and nothing else, the field the sort arrows and the rank
+badges both read. A tie lights **every** player in it rather than the first,
+which would be an artifact of the order they were picked in; and a row where
+*all* of them are level lights none, the app's rule that a mark on every row
+marks nothing.
+
+**A row nobody has a value in is dropped** — the same rule read sideways, the
+unit on a comparison being the row. It is common rather than exotic: the column
+set is one list for a whole board, so `W%` is team-only, `Opp` empties once the
+day's games are done, and `Ros%` and the trends are null with no ESPN league
+connected. Measured on three batters: **four of twenty-nine rows** were dashes
+all the way across.
+
+**The tick is a mode, not a column.** `WatchStar`'s own note records why: this
+is the app's widest table's *sticky* column, every pixel of it is a stat pushed
+off the right edge of a phone, and a control ahead of the name pushes every name
+along by its own width — which is why the star trails and takes 19px of a column
+that absorbs the table's slack. A tick on every row for a comparison nobody is
+making would be that cost paid all the time. Turned on it is folded onto the
+star's own selector — same square, same gutter, same baseline nudge — and it
+sits after it.
+
+**Six is the cap and the row refuses rather than rolling.** Dropping the oldest
+to make room would mean a seventh tick silently un-ticking a first the reader
+still wants, with nothing on screen to say which went. Full is
+**`aria-disabled`, not `disabled`**, because a disabled button shows no `title`
+and the title is the whole of the explanation: *Already comparing 6 players —
+untick one to add Fernando Tatis Jr.*
+
+**`Compare` is two controls in one place.** Off, a toggle that turns the ticks
+on. On with fewer than two ticked, the same toggle wearing the count, which is
+what says *keep going*. On with two or more it grows a **separate** `Compare 3
+→` beside it, because a button that does one thing at two ticks and another at
+three is a control whose meaning changes under the reader. The second is the
+run's one *primary* control — everything else in the bar is a setting — so it
+takes the accent as a fill rather than as a tint.
+
+**A page, not a dialog**, and it joins `PageStep` for a reason that is not
+tidiness: another page can be opened *from* it. Pressing a name opens that man's
+page and `Back` has to come back to the comparison, which a dialog would have
+needed a route of its own to manage and which this gets from the stack all four
+pages already share. `cmp=` carries the keys, so a link describes exactly the
+page it opens, and it is the fourth of the exclusive set (player, then team,
+then game, then this, in the oldest-wins order a hand-made URL is resolved by).
+Dropping to fewer than two closes the page rather than drawing one column and
+calling it a comparison.
+
+**The percentile tab is a second read rather than a second card.** The Stats tab
+is free; each percentile card is a Savant player-page scrape at ~1.07s cold, so
+six is six of the most expensive read this app makes. Lazy on first open, and
+the reads go out **together** — six in series is six seconds of an empty pane —
+with each caught into a null so one player's failure costs his own column and
+not the tab. It draws **Savant's summary card**, not this app's detailed one: a
+comparison is read across, so every metric costs N bars rather than one. And it
+is the same transpose again — one row per metric, three stacked bars under it,
+so the comparison is along the axis the reader is already looking down.
+
+**A surname is not the last word of a name.** `split(' ').pop()` reads *Fernando
+Tatis Jr.* as `Jr.`, and three bars labeled `Jr.` are three bars nobody can tell
+apart; a trailing suffix is kept with the name before it. Verified on the real
+row: `Tatis Jr.` beside `Bregman`.
+
+**Driven, not compiled.** At 1200: the mode draws 50 ticks, three ticked gives
+`Compare 3 →`, and the page opens on `cmp=batter-608324,batter-683002,batter-691718`
+with **25 rows and 25 lit leaders** over three sticky-headed columns. The
+seventh tick refuses with its sentence, and turning the mode off drops the
+selection (a half-made list the reader cannot see is a thing that surprises them
+next time). A name opens `?player=batter-608324`; `Back` returns to
+`?cmp=…`; Escape from the comparison leaves to the board. At **390px**:
+`document.scrollWidth` 390 with the table scrolling inside its own
+`.cmp-wrap` (512 against a 358 client width), and the percentile rows turning to
+label-over-bars.
+
+**And then the survey found four things the build had nothing to say about:**
+
+- **The percentile tab was a bare list running the full window.** At 1440 that
+  is a **1,140px percentile track** — a bar so long the bubble's position stops
+  reading as a position. It is `.pct-card` with a modifier now, capped at
+  **880** and centered: 680 is too narrow for N bars per metric and 1,140 far
+  too wide. Measured after: card `x: 520, w: 880` at 1920, track 536.
+- **The surname column was a declared 88px**, which is a number about a font
+  this app does not choose — and wrong in both directions: `Crow-Armstrong`
+  truncated at 1440 with a thousand pixels of unused row beside it, while three
+  short names left 40px of every row empty. It is **measured at runtime** now
+  (`scrollWidth` off the widest name in place, which reports the full content
+  width even where `overflow: hidden` is clipping it), published as
+  `--cmp-who-w` and capped at 150. Measured: **98px, nothing truncated**, at
+  1920 through 390.
+- **The stats table filled the pane.** `min-width: 100%` made a three-man
+  comparison **1,888px wide at 1920** — three columns of ~600px each with one
+  number in the middle. It is `max-content` centered in a `safe center` flex
+  scroller now: **657px at 1920**, and at 390 it starts at `x: 16` and scrolls
+  inside its own box with the sticky stat column pinned (checked with
+  `elementFromPoint` after `scrollLeft: 200`). `safe` is load-bearing — a plain
+  `center` puts the first column off the left edge, unreachable, the moment the
+  table is wider than the pane.
+- **The columns were three different widths.** A `width` on a `th` is a
+  suggestion under `table-layout: auto`, so `Pete Crow-Armstrong` took its own
+  column to **189px against 148 and 170** and the numbers under the three lined
+  up with nothing. What fixes a column is a fixed box *inside* it: all three are
+  **183px** now, the same height, and a long name **wraps to two clamped lines
+  rather than ellipsizing** — truncating a player's name in a comparison of
+  three is the one thing that header must not do. The two-line box is reserved
+  either way, so a wrapped name does not make its own header taller than the
+  others. The ✕ came out of the flow while that was being done: as a flex
+  sibling it pushed the headshot-and-name block off-center by its own width.
+
+**Bundle**: Against the branch this stacks on: JS 762.13 → 775.60 kB raw,
+224.42 → 228.04 gzipped. CSS 198.16 → 202.78 raw, 35.16 → 35.98 gzipped.
+
 ### The page scrolls, and the head stays
 
 *(This supersedes the arrangement the section above describes — the band is no
