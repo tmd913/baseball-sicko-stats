@@ -387,6 +387,44 @@ function PercentilesTab({
 }) {
   const wait = useDelayedFlag(loading);
   const sections = useMemo(() => toMetricRows(cards), [cards]);
+  /**
+   * **The surname column, measured rather than declared.**
+   *
+   * It was `flex: 0 0 88px`, which is a number about a font this app does not
+   * choose — and it was wrong in both directions: `Crow-Armstrong` truncated to
+   * `Crow-Armstr…` at 1440 with 1,000px of unused row beside it, while a
+   * comparison of three short names left 40px of it empty on every row. It has
+   * to be *one* width (each bar is its own flex row, so a per-row width would
+   * start the tracks at different offsets down the column), and the honest one
+   * is the widest name actually in the set.
+   *
+   * `scrollWidth` is what makes that a measurement rather than an estimate: it
+   * reports the full content width even where `overflow: hidden` is clipping
+   * it, so the names can be measured *in place*, at the real font, without a
+   * ghost to lay out. Capped at 150px, past which a name is genuinely too long
+   * for a label and its `title` carries the rest.
+   */
+  const barsRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const box = barsRef.current;
+    if (!box) return;
+    const measure = () => {
+      const names = box.querySelectorAll<HTMLElement>('.cmp-pct-who');
+      let widest = 0;
+      names.forEach((n) => {
+        widest = Math.max(widest, n.scrollWidth);
+      });
+      if (widest > 0) {
+        box.style.setProperty('--cmp-who-w', `${Math.min(150, Math.ceil(widest) + 2)}px`);
+      }
+    };
+    measure();
+    // The font can land after the first paint, and a comparison can gain or
+    // lose a player without remounting — so re-measure on both.
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [sections, players]);
   const anyCard = cards.some((c) => c && c.summary.length > 0);
   if (wait && !anyCard) return <LoadingBlock>Reading the percentile cards</LoadingBlock>;
   if (error && !anyCard) {
@@ -406,7 +444,14 @@ function PercentilesTab({
     );
   }
   return (
-    <div className="cmp-wrap">
+    /* **A card, capped, like the one on a player's own page.** It was a bare
+       list on the page background running the full width: at 1440 that is a
+       1,140px percentile track, which is a bar so long the bubble's position
+       stops being readable as a position. `.pct-card` is the shape this
+       already is on the player page, so it is that class with a modifier
+       widening the cap — a comparison carries N bars per metric where that one
+       carries one, so 680 is too narrow and 1,140 far too wide. */
+    <div className="pct-card pct-card--cmp" ref={barsRef}>
       {/* **Savant's fifteen bars, not this app's thirty-nine.** A comparison is
           read across, so every metric costs N bars rather than one — and the
           summary card is the set a reader means by "the Savant card". The

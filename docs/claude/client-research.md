@@ -786,8 +786,42 @@ next time). A name opens `?player=batter-608324`; `Back` returns to
 `.cmp-wrap` (512 against a 358 client width), and the percentile rows turning to
 label-over-bars.
 
-**Bundle**: JS 760.94 → 773.95 kB raw, 224.19 → 227.76 gzipped; CSS 196.70 →
-200.57 raw, 34.97 → 35.61 gzipped — measured against the branch this stacks on.
+**And then the survey found four things the build had nothing to say about:**
+
+- **The percentile tab was a bare list running the full window.** At 1440 that
+  is a **1,140px percentile track** — a bar so long the bubble's position stops
+  reading as a position. It is `.pct-card` with a modifier now, capped at
+  **880** and centered: 680 is too narrow for N bars per metric and 1,140 far
+  too wide. Measured after: card `x: 520, w: 880` at 1920, track 536.
+- **The surname column was a declared 88px**, which is a number about a font
+  this app does not choose — and wrong in both directions: `Crow-Armstrong`
+  truncated at 1440 with a thousand pixels of unused row beside it, while three
+  short names left 40px of every row empty. It is **measured at runtime** now
+  (`scrollWidth` off the widest name in place, which reports the full content
+  width even where `overflow: hidden` is clipping it), published as
+  `--cmp-who-w` and capped at 150. Measured: **98px, nothing truncated**, at
+  1920 through 390.
+- **The stats table filled the pane.** `min-width: 100%` made a three-man
+  comparison **1,888px wide at 1920** — three columns of ~600px each with one
+  number in the middle. It is `max-content` centered in a `safe center` flex
+  scroller now: **657px at 1920**, and at 390 it starts at `x: 16` and scrolls
+  inside its own box with the sticky stat column pinned (checked with
+  `elementFromPoint` after `scrollLeft: 200`). `safe` is load-bearing — a plain
+  `center` puts the first column off the left edge, unreachable, the moment the
+  table is wider than the pane.
+- **The columns were three different widths.** A `width` on a `th` is a
+  suggestion under `table-layout: auto`, so `Pete Crow-Armstrong` took its own
+  column to **189px against 148 and 170** and the numbers under the three lined
+  up with nothing. What fixes a column is a fixed box *inside* it: all three are
+  **183px** now, the same height, and a long name **wraps to two clamped lines
+  rather than ellipsizing** — truncating a player's name in a comparison of
+  three is the one thing that header must not do. The two-line box is reserved
+  either way, so a wrapped name does not make its own header taller than the
+  others. The ✕ came out of the flow while that was being done: as a flex
+  sibling it pushed the headshot-and-name block off-center by its own width.
+
+**Bundle**: Against the branch this stacks on: JS 762.13 → 775.60 kB raw,
+224.42 → 228.04 gzipped. CSS 198.16 → 202.78 raw, 35.16 → 35.98 gzipped.
 
 ### The page scrolls, and the head stays
 

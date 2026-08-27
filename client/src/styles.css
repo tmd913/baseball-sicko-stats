@@ -23253,8 +23253,21 @@ html[data-theme='light'] .league-table thead th {
 }
 
 /* The comparison page. The scroller is the table's own, so the sticky stat
-   column has something to be sticky inside. */
+   column has something to be sticky inside.
+
+   **Centered, and `safe` is the whole of why that is written this way.** The
+   table is content-width (see `.cmp-table`), so at 1920 it is ~600px inside a
+   1,888px pane and belongs in the middle of it. A plain `center` would be
+   right until the table is *wider* than the pane, at which point flexbox
+   centers the overflow in both directions and puts the first column — the
+   sticky stat names — off the left edge, unreachable by scrolling. `safe`
+   falls back to `start` in exactly that case, which is the behavior a
+   scrolling table needs; the `flex-start` above it is what an engine without
+   `safe` gets, and losing the centering is the harmless half. */
 .cmp-wrap {
+  display: flex;
+  justify-content: flex-start;
+  justify-content: safe center;
   overflow-x: auto;
   overscroll-behavior-x: none;
 }
@@ -23278,11 +23291,16 @@ html[data-theme='light'] .league-table thead th {
   color: var(--faint);
   flex: none;
 }
+/* **Content-width, not pane-width.** `min-width: 100%` made a three-man
+   comparison 1,888px wide at 1920 — three columns of ~600px each with one
+   number in the middle of them, which is not a table so much as three numbers
+   a long way apart. At `max-content` the same comparison is ~600px and the
+   pane centers it; six players come to ~1,000, and anything past the pane
+   scrolls inside `.cmp-wrap` rather than the page. */
 .cmp-table {
   border-collapse: separate;
   border-spacing: 0;
-  width: auto;
-  min-width: 100%;
+  width: max-content;
 }
 /* **The stat name is sticky**, and it is the whole point of the transpose: a
    comparison is read *along a row*, which needs the row's own name on screen at
@@ -23321,26 +23339,42 @@ html[data-theme='light'] .league-table thead th {
   text-transform: uppercase;
   color: var(--faint);
 }
+/* **Every column exactly the same width, which `min-width` did not buy.** With
+   a minimum alone the widest name set its own column: `Pete Crow-Armstrong`
+   made the third column 30px wider than the two beside it, so a comparison of
+   three had three different column widths and the numbers under them did not
+   line up with anything. A fixed width is what makes a table of one row per
+   stat scannable down as well as across. 148px is two lines of a long full
+   name at 12px/800. */
+/* **Every column exactly the same width**, which a `width` on the `th` alone
+   does not buy: under `table-layout: auto` that is a *suggestion*, and the cell
+   grows to whatever its content needs — measured, `Pete Crow-Armstrong` took
+   its column to 189px against 148 and 170 for the two beside it, so a
+   comparison of three had three different column widths and the numbers under
+   them lined up with nothing. What actually fixes a column is a fixed box
+   *inside* it (`.cmp-head-open`), which leaves the cell nothing to grow for. */
 .cmp-head {
   padding: 8px 10px;
-  /* Every column the same width, so no player's line is wider than another's
-     and the eye can run down one without the others shifting under it. The
-     minimum is a headshot plus a surname; past six columns the wrap scrolls. */
-  min-width: 132px;
 }
+/* **The ✕ is taken out of the flow.** As a flex sibling it pushed the
+   headshot-and-name block off-center by its own width, so a column's identity
+   sat left of the numbers under it. Absolute in the cell's corner, the block
+   centers in the whole column and the ✕ is where a dismiss belongs. */
 .cmp-head-inner {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 4px;
-  justify-content: space-between;
+  justify-content: center;
 }
 .cmp-head-open {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  flex: 1 1 auto;
-  min-width: 0;
+  /* The number that decides the column — 128px is two lines of a long full name
+     at 12px/800, and every player column is this plus the cell's 20px of
+     padding. */
+  width: 128px;
   border: none;
   background: none;
   padding: 0;
@@ -23356,15 +23390,23 @@ html[data-theme='light'] .league-table thead th {
   object-fit: cover;
   background: var(--bg);
 }
+/* **A name wraps rather than ellipsizing**, and its box is reserved either
+   way. Truncating a player's name in a comparison of three is the one thing
+   this header must not do — `Pete Crow-Armstr…` beside two whole names is a
+   column the reader cannot be sure of. Two lines, clamped, with the height of
+   two always reserved so the three headers are the same height whether any of
+   them wrapped. */
 .cmp-head-name {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
   text-align: center;
   max-width: 100%;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .cmp-head-sub {
   font-size: 10px;
@@ -23383,19 +23425,28 @@ html[data-theme='light'] .league-table thead th {
   border-radius: 6px;
 }
 .cmp-drop {
-  flex: none;
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   border: none;
+  border-radius: 50%;
   background: none;
   color: var(--faint);
   font-family: inherit;
   font-size: 11px;
   line-height: 1;
-  padding: 2px 3px;
+  padding: 0;
   cursor: pointer;
 }
 @media (hover: hover) {
   .cmp-drop:hover {
     color: var(--strikeout);
+    background: color-mix(in srgb, var(--strikeout) 14%, transparent);
   }
 }
 .cmp-cell {
@@ -23413,13 +23464,25 @@ html[data-theme='light'] .league-table thead th {
   font-weight: 800;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
+/* The compare card. `.pct-card`'s own shape — panel, border, radius, padding —
+   with two things widened for what it holds: a comparison carries N bars per
+   metric where a player's card carries one, so 680px is too narrow, and the
+   label column is a metric name rather than a stat abbreviation. */
+.pct-card--cmp {
+  max-width: 880px;
+}
 .cmp-note {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 11px;
+  line-height: 1.45;
   color: var(--faint);
+  text-align: center;
 }
 .cmp-pct-section {
-  margin-top: 14px;
+  margin-top: 16px;
+}
+.cmp-pct-section:first-of-type {
+  margin-top: 4px;
 }
 .cmp-pct-row {
   display: flex;
@@ -23451,11 +23514,12 @@ html[data-theme='light'] .league-table thead th {
   align-items: center;
   gap: 8px;
 }
-/* 88px, measured: `Crow-Armstrong` is the longest surname on a comparison
-   drawn during this work and needs 84 at 11px/700; the `title` on every bar
-   carries the whole name for anything longer. */
+/* **Measured at runtime, not declared** — see `PercentilesTab`, which reads the
+   widest surname's own `scrollWidth` and publishes it here. The fallback is
+   what applies for the one frame before that lands, and is deliberately a
+   little generous rather than exact. */
 .cmp-pct-who {
-  flex: 0 0 88px;
+  flex: 0 0 var(--cmp-who-w, 92px);
   font-size: 11px;
   font-weight: 700;
   color: var(--faint);
