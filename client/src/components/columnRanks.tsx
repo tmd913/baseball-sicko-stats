@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { PlayerKind, ResearchRow } from '../types';
 import type { Column } from './researchColumns';
+import { ordinal } from '../lib';
 import { OPPONENT_KEY, ROSTER_PCT_COLUMN, TREND_BY_KEY } from './researchColumns';
 import { TURN_KEY } from './schedule';
 
@@ -387,22 +388,6 @@ export function rankFill(rank: number | undefined, n: number): CSSProperties | u
  * qualified batter against the unqualified.
  */
 const populationNoun = (kind: PlayerKind) => (kind === 'pitcher' ? 'pitchers' : 'batters');
-
-/** `94th`, `1st`, `22nd` — so the badge's tooltip reads as a sentence. */
-function ordinal(n: number): string {
-  const rem100 = n % 100;
-  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
-}
 
 /**
  * **The badge, under the value rather than beside it.**

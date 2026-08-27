@@ -61,6 +61,7 @@ import type {
 import {
   eligibleCodes,
   headshotUrl,
+  ordinal,
   positionCell,
   searchFold,
   statusCorner,
@@ -1331,10 +1332,10 @@ function CompareTick({
       className={`research-tick${on ? ' on' : ''}${full ? ' is-full' : ''}`}
       title={
         on
-          ? `Take ${name} out of the comparison`
+          ? `Drop ${name} from the comparison`
           : full
-            ? `Already comparing ${max} players — untick one to add ${name}`
-            : `Compare ${name}`
+            ? `${max} players is the most you can compare — untick one to add ${name}`
+            : `Add ${name} to the comparison`
       }
       onClick={() => {
         if (!full) onToggle();
@@ -2355,9 +2356,13 @@ export function ResearchTable({
     const pct = scale.of(col.value(row));
     if (pct === null) return undefined;
     const off = Math.round(pct - mid);
-    const where = `${row.name} — ${col.title}: ${pct}th percentile of ${rankPopulationLabel}`;
+    // `ordinal`, not a hardcoded `th`: the tooltip reads a percentile back as a
+    // sentence, and `3th`/`22th`/`43th` is the first thing a reader sees in it.
+    const where = `${row.name} — ${col.title}: ${ordinal(pct)} percentile of ${rankPopulationLabel}`;
     if (Math.abs(off) < 1) return `${where}, level with the others compared.`;
-    return `${where}, ${Math.abs(off)} points ${off > 0 ? 'above' : 'below'} the average of those compared.`;
+    return `${where}, ${Math.abs(off)} percentile points ${
+      off > 0 ? 'above' : 'below'
+    } the average of the players compared.`;
   };
 
   const compareTint = (col: Column, row: ResearchRow): CSSProperties | undefined => {
@@ -2374,7 +2379,7 @@ export function ResearchTable({
     // cell — see `.research-cmp-badge`. Tinting the cell meant layering over a
     // ground that is *named* (`--cell-bg`) and carries the zebra, which took a
     // gradient and a qualified selector to do without stripping it; a badge has
-    // no such ground and takes the colour directly, the way the park strip's
+    // no such ground and takes the color directly, the way the park strip's
     // own figures do.
     return {
       background: `color-mix(in srgb, ${hue} ${Math.round(frac * MAX_TINT)}%, transparent)`,
@@ -3793,7 +3798,7 @@ export function ResearchTable({
                   title={
                     compareOn
                       ? 'Stop picking players to compare'
-                      : `Tick up to ${maxCompare} rows and line them up side by side`
+                      : `Tick up to ${maxCompare} players, then narrow the board to just them`
                   }
                   onClick={() => onCompareModeChange(!compareOn)}
                 >
@@ -3842,15 +3847,15 @@ export function ResearchTable({
                     className={`research-toggle research-compare-go${comparing ? ' on' : ''}`}
                     title={
                       comparing
-                        ? `Showing only these ${compareKeys.length} — press to put the whole board back`
-                        : `Narrow the board to the ${compareSelected.length} ticked players`
+                        ? `Showing only the ${compareKeys.length} you picked — press to bring the whole board back`
+                        : `Narrow the board to the ${compareSelected.length} players you have ticked`
                     }
                     onClick={comparing ? onClearCompare : onOpenCompare}
                   >
                     <span className="research-toggle-label">
                       {comparing
                         ? `Comparing ${compareKeys.length}`
-                        : `Compare ${compareSelected.length}`}
+                        : `Compare these ${compareSelected.length}`}
                     </span>
                     {comparing ? (
                       <svg
@@ -4839,14 +4844,15 @@ export function ResearchTable({
                    line would read here: a comparison *is* its population, so
                    the numerator and the denominator are the same number by
                    construction. What a reader wants to know instead is what
-                   they are looking at and what it is measured against — the
-                   colour is a claim about the league, and this is the sentence
-                   that states it. */
+                   they are looking at and what the badges mean — the color
+                   is a claim about the league, and this is the sentence that
+                   states it. Two clauses, in the order the reader needs them:
+                   what the badge measures, then which way each hue runs. */
                 <>
                   Comparing <strong>{visible.length}</strong>{' '}
-                  {kind === 'pitcher' ? 'pitchers' : 'batters'} — colour is each
-                  man&rsquo;s percentile against {rankPopulationLabel}, next to the average of those
-                  compared.
+                  {kind === 'pitcher' ? 'pitchers' : 'batters'} — each badge ranks that player on{' '}
+                  {rankPopulationLabel}: warm is above the average of these {visible.length}, cool
+                  is below.
                 </>
               ) : (
                 `${visible.length} of ${boardRows.length} ${
@@ -5161,7 +5167,7 @@ export function ResearchTable({
                         {/* **The heat is a badge around the value, not a wash
                             over the cell.** A tinted cell is a *block* — it runs
                             the column's full width whatever the number in it is,
-                            so a table of them reads as a chequerboard rather
+                            so a table of them reads as a checkerboard rather
                             than as figures worth comparing, and it fights the
                             zebra and the sorted column's own tint for the same
                             ground. Round the figure it is the park strip's own

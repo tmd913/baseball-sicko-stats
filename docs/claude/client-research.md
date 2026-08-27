@@ -705,7 +705,7 @@ of the three they picked would be a control quietly overruling a more specific
 instruction. `Compare` says *limit the board to these*, and it does.
 
 **One button, two states, because it is one thought.** Picking, it commits:
-`Compare 3 →`. Committed, it is the way back: `Comparing 3 ✕`, lit. A second
+`Compare these 3 →`. Committed, it is the way back: `Comparing 3 ✕`, lit. A second
 button for the second half would be a control only ever pressable in the state
 the first one is not. The commit step is necessary rather than incidental — a
 board that narrowed on the *first* tick would leave one row on screen and no way
@@ -721,7 +721,7 @@ dropping below two clears the narrowing rather than leaving a board of one man,
 which is not a comparison and is a state a reader cannot untick their way out
 of.
 
-### The colour is how much better, by the league's own standards
+### The color is how much better, by the league's own standards
 
 A comparison has to say *how much better*, and the honest measure of that is not
 the gap between the two men — two hitters on .252 and .251 are a whole range
@@ -751,14 +751,50 @@ palette moves. The yardstick is built from `population`, the whole board, and
 not from the narrowed rows: the standard must not change because the reader
 picked three men, which is the same care `ranks` takes one line up.
 
-**And the tooltip says in words what the colour says in hue**, because identity
+**And the tooltip says in words what the color says in hue**, because identity
 never rests on hue here: *"Alex Bregman — Strikeout rate: 88th percentile of the
-Season board, 31 points above the average of those compared."*
+Season board, 31 percentile points above the average of the players compared."*
+
+**Its ordinal is `ordinal()`'s, and it was a hardcoded `th`.** The sentence
+shipped as `${pct}th percentile`, which is right for 88 and wrong for the whole
+first, second and third of every ten — read off the live board it gave *"Games
+played: 3th percentile"* and *"Triples: 43th percentile"* on the very first row
+of a three-man comparison, the tooltip's first figure being the first thing the
+reader sees in it. `lib.ts` has carried `ordinal` since the lineup spot needed
+one, so this is a use of it rather than a fourth copy — and `columnRanks.tsx`,
+which draws the badge under the value, had a **second** implementation of the
+same eleven lines for the same reason ("so the badge's tooltip reads as a
+sentence"). Both read from `lib` now, one arithmetic for one figure, and the
+two tooltips on one cell can no longer disagree about what an ordinal is.
+
+**Every word of the compare controls was written for the page, and the page is
+gone.** They shipped saying what the old overlay did rather than what the
+narrowing does, and a control that describes a thing that no longer happens is
+worse than one that says nothing:
+
+| where | was | is |
+| --- | --- | --- |
+| `Compare` toggle, off | *Tick up to 6 rows and line them up side by side* | *Tick up to 6 players, then narrow the board to just them* |
+| commit button | `Compare 3` — *Narrow the board to the 3 ticked players* | `Compare these 3` — *Narrow the board to the 3 players you have ticked* |
+| committed button | *Showing only these 3 — press to put the whole board back* | *Showing only the 3 you picked — press to bring the whole board back* |
+| a row's tick, unticked | *Compare Alex Bregman* | *Add Alex Bregman to the comparison* |
+| a row's tick, ticked | *Take Alex Bregman out of the comparison* | *Drop Alex Bregman from the comparison* |
+| a row's tick, full | *Already comparing 6 players — untick one to add X* | *6 players is the most you can compare — untick one to add X* |
+
+Three of those were **stale rather than clumsy** — "side by side" was the
+transposed page's geometry, and nothing is laid out side by side on a narrowed
+board. The tick's was **premature**: `Compare X` and `Already comparing 6` both
+claim a comparison that has not started, the ticks being a *selection* until the
+commit button is pressed, so they name the set being built instead. And
+`Compare 3` on the commit button read identically to the `Compare` toggle
+wearing its count of 3 immediately to its left — two adjacent controls with the
+same word and the same number, doing different things. `Compare these 3` is the
+one that acts on the set, and the demonstrative is what separates them.
 
 ### The heat is a badge around the value, not a wash over the cell
 
 **A tinted cell is a *block*.** It runs the column's full width whatever the
-number in it is, so a narrowed board read as a chequerboard rather than as
+number in it is, so a narrowed board read as a checkerboard rather than as
 figures worth comparing — and it fought two things for the same ground: the
 zebra, and the sorted column's own tint.
 
@@ -785,14 +821,25 @@ shorthand's reset. Both were measured before they were believed: the computed
 `background-image` came back `none` on every cell while `--cmp-heat` was set
 correctly on all of them, and before that an absolutely-positioned `::before` at
 `z-index: -1` inside an `isolate`d cell — the textbook answer — did not paint at
-all. A badge has no such ground and takes the colour directly. The zebra is
+all. A badge has no such ground and takes the color directly. The zebra is
 untouched by construction now rather than by care: both grounds still alternate
 down a narrowed board.
 
 **The count line changes, because `3 of 3` says nothing.** A comparison *is* its
 own population, so the numerator and denominator are the same number by
-construction. What a reader wants there instead is what the colour means, and
+construction. What a reader wants there instead is what the color means, and
 that is what it says.
+
+Its **first** wording said it in one clause and lost the reader in it —
+*"color is each man's percentile against the Season board, next to the average
+of those compared"* asks a single sentence to carry the scale, the population
+*and* the midpoint, with "next to" doing the work of a comparison it never
+names, and it says nothing about which end is which. (It also spelled that first
+word the British way, on screen and in three comments and five lines of this
+file — the only such spelling the repo had; see `CLAUDE.md`.) It is two clauses now, in
+the order the reader needs them — what a badge measures, then which way each hue
+runs: *"Comparing **3** batters — each badge ranks that player on the Season
+board: warm is above the average of these 3, cool is below."*
 
 **Driven, not compiled.** At 1500, 900 and 407: the board narrows to exactly the
 3 ticked, **no page opens**, 69 of 78 badges carry a tint (the nine that do not
