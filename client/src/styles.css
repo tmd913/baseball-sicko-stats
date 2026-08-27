@@ -11071,41 +11071,23 @@ button.start-line:focus-visible {
   border-radius: var(--control-radius);
   background: var(--bg);
 }
-/* **A board with no rows fills the window; a board with a few does not.** The
-   `flex: 0 1 auto` above is about a *table* — a dozen rows must not sit in a
-   bordered expanse reaching to the bottom of the screen, which reads as a table
-   that has stopped scrolling. An empty state is the opposite object: there is
-   no table to have stopped, and shrinking to it leaves the card ending in
-   mid-page with the page's own ground below it for the rest of the window —
-   measured at 1500x950, the pane 384px tall with **464px of nothing** under it.
-   The pane's ground and the page's are the same token, so what the reader sees
-   stopping is the card, and it is the card that has to reach: the pane takes
-   the height and hands it on.
+/* **A board with no rows keeps the pane's height and loses its bottom rule.**
+   The pane is bordered on one side by the time it is drawn — the sides go with
+   the bleed below and the top is dropped where the chrome's own hairline closes
+   the seam — so what is left is a bottom rule running the full width of the
+   window, which is right under a table and wrong under an empty state: there
+   are no rows for it to close, so it reads as the page ending in mid-air a few
+   pixels under the card, with the rest of the window below it. Measured at
+   1500x950 with the board filtered to nobody, the line sat at **y=486 of 950**.
 
-   **A column, so it can be handed on at all.** The pane is a block box and the
-   card is a block in it, so a `flex: 1` on the card resolves against nothing.
-   Made a flex column only in this state, where the pane holds no table and
-   therefore nothing that scrolls sideways — the three sticky rows above the
-   card keep their `position: sticky` and their `left: 0`, which is what a flex
-   item is allowed to have. **Expanded is excluded** rather than left to sort
-   itself out: that mode hides the empty state (`display: none`) but the element
-   is still there for `:has` to find, and a full-page box has its own reason for
-   `flex: 0 1 auto` two hundred lines up.
-
-   The two paragraphs then **center in the height they were given**, rather than
-   sitting at the top of a 600px card under 42px of padding — a card that is
-   mostly its own bottom edge is the expanse this rule set out to close, drawn
-   one box in. */
+   **The pane keeps its height**, which is the correction to a first attempt at
+   this: the pane was made a flex column and the card told to fill it, on the
+   reading that the box should reach the bottom of the window. It should not.
+   The card is sized by what it says, `flex: 0 1 auto` is as right here as it is
+   under a short table, and the only thing that was ever wrong was a rule with
+   nothing left to rule off. */
 .research-view:not(.is-expanded) > .research-scroll:has(> .empty-state) {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-}
-.research-view:not(.is-expanded) > .research-scroll > .empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  border-bottom: none;
 }
 
 /* ---- The three wide tables take the window ---------------------------------
