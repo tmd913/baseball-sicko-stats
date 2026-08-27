@@ -184,11 +184,49 @@ function StatsTab({
   onDrop: (key: string) => void;
 }) {
   const rows = useMemo(() => players.map((p) => p.row), [players]);
+  /**
+   * **A row nobody has a value in is a row that says nothing** — the app's rule
+   * that a mark on every row marks nothing, read sideways: on a comparison the
+   * unit is the *row*, and one that dashes for all three is three dashes and no
+   * information.
+   *
+   * It is common rather than exotic. The board's column set is one list for a
+   * whole board, so `W%` is team-only and null on every player, `Opp` is empty
+   * once the day's games are done, and `Ros%` and the trend columns are null
+   * for anyone with no ESPN league connected. Measured on a three-man
+   * comparison of batters: **four of twenty-nine rows** were dashes all the way
+   * across.
+   *
+   * The test is the column's own `value` and `text` rather than what `format`
+   * printed, because `format` returns a node — and those two are precisely what
+   * the board's sort and filter read, so a row kept here is a row those two
+   * would have something to say about.
+   */
+  const shown = useMemo(
+    () =>
+      columns.filter((col) =>
+        rows.some((r) => {
+          if (!r) return false;
+          return col.value(r) !== null || (col.text?.(r) ?? null) !== null;
+        }),
+      ),
+    [columns, rows],
+  );
   if (columns.length === 0) {
     return (
       <div className="details-status">
         No columns are turned on, so there is nothing to line up. The board&rsquo;s{' '}
         <strong>Columns</strong> picker is what this page draws — turn some on and come back.
+      </div>
+    );
+  }
+  // Every column dashed for everybody, which is not the same fact as no columns
+  // at all and says so: the picker is still the control that answers it.
+  if (shown.length === 0) {
+    return (
+      <div className="details-status">
+        None of these players has a value in any of the columns on the board, so there is nothing to
+        line up. The board&rsquo;s <strong>Columns</strong> picker is what this page draws.
       </div>
     );
   }
@@ -209,7 +247,7 @@ function StatsTab({
           </tr>
         </thead>
         <tbody>
-          {columns.map((col) => {
+          {shown.map((col) => {
             const leaders = leadersOf(col, rows);
             return (
               <tr key={col.key}>
@@ -297,6 +335,29 @@ function toMetricRows(
     .filter((s) => s.metrics.length > 0);
 }
 
+/**
+ * The surname, for a label 88px wide.
+ *
+ * **A suffix is not a surname**, which the obvious `split(' ').pop()` gets
+ * wrong on every Jr. and every III in the league — *Ronald Acuña Jr.* would
+ * read as `Jr.` three bars running, and three bars labeled `Jr.` are three bars
+ * nobody can tell apart. So a trailing suffix is kept *with* the name before
+ * it, which is how anybody says it out loud.
+ *
+ * A one-word name is itself, and a name that is still too long for the box
+ * ellipsizes there — the `title` on every bar carries the whole of it.
+ */
+const SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v']);
+function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  const last = parts[parts.length - 1];
+  if (SUFFIXES.has(last.toLowerCase())) {
+    return parts.slice(-2).join(' ');
+  }
+  return last;
+}
+
 const POOR: [number, number, number] = [50, 90, 161];
 const AVG: [number, number, number] = [138, 143, 153];
 const GREAT: [number, number, number] = [210, 45, 73];
@@ -374,7 +435,7 @@ function PercentilesTab({
                           : `${players[i].name} — no ${m.label}`
                       }
                     >
-                      <span className="cmp-pct-who">{players[i].name.split(' ').slice(-1)[0]}</span>
+                      <span className="cmp-pct-who">{shortName(players[i].name)}</span>
                       <div className="pct-track">
                         {p !== null && (
                           <>
