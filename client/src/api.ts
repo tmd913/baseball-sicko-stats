@@ -417,6 +417,17 @@ export const api = {
       body: JSON.stringify({ on }),
     });
   },
+  /** Which density the player page's percentile card opens at. A **string**
+   *  that a null clears back to the default, rather than a boolean — the same
+   *  update semantics `saveTheme` has, and for the same reason: there can be a
+   *  third one. */
+  async savePercentileDensity(density: string | null): Promise<UserPrefs> {
+    return request('/api/prefs/percentile-density', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ density }),
+    });
+  },
 
   // ---- The board's named lists and saved searches --------------------
   //
@@ -510,17 +521,6 @@ export const api = {
   /** Open a shared list or search by code — the owner's **current** copy. */
   async sharedResearchItem(code: string): Promise<SharedItem> {
     return request(`/api/research/shared/${encodeURIComponent(code)}`);
-  },
-  /** Which density the player page's percentile card opens at. A **string**
-   *  that a null clears back to the default, rather than a boolean — the same
-   *  update semantics `saveTheme` has, and for the same reason: there can be a
-   *  third one. */
-  async savePercentileDensity(density: string | null): Promise<UserPrefs> {
-    return request('/api/prefs/percentile-density', {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ density }),
-    });
   },
   /** Mark the League page's Transactions feed read up to `ts` — the date of
    *  the newest move on screen. What undraws the red dot on that tab, and the

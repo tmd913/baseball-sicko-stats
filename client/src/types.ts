@@ -1401,6 +1401,33 @@ export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
 export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
 
 /**
+ * **The recent-form cut, which is not a split and not a span either.**
+ *
+ * `last100` is the player's most recent 100 at-bats on a batter's card and his
+ * most recent 100 batters faced on a pitcher's — one value whose label is a
+ * fact about whose page it is, the economy `SplitCut` already makes.
+ *
+ * Deliberately not a `ResearchWindow`: the board's windows are days, and a
+ * day-count is the wrong unit for recent form (thirty days of a platooned
+ * hitter is eleven at-bats and thirty days of an everyday one is a hundred and
+ * twenty). Which is also why it has no window axis to be crossed with — "his
+ * last 100 at-bats within the last 7 days" is not a narrower question.
+ *
+ * Mirrors `server/src/types.ts` by hand, like everything else in this file.
+ */
+export type RecentCut = 'last100';
+
+/** Every cut of a season the app can draw: the four splits, and recent form. */
+export type PlayerCut = SplitCut | RecentCut;
+
+/** In the order the percentile card's control offers them — the hands, the
+ *  ballpark, then recent form, which is last because it is the odd one out. */
+export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'];
+
+/** How many at-bats (or batters faced) the `last100` cut looks back over. */
+export const RECENT_CUT_SIZE = 100;
+
+/**
  * **A named list of players followed on the research board**, of which there
  * may be several. Mirrors `server/src/store.ts` by hand, like everything here.
  *
@@ -1475,33 +1502,6 @@ export interface SharedItem {
   board?: Record<string, unknown>;
   mine: boolean;
 }
-
-/**
- * **The recent-form cut, which is not a split and not a span either.**
- *
- * `last100` is the player's most recent 100 at-bats on a batter's card and his
- * most recent 100 batters faced on a pitcher's — one value whose label is a
- * fact about whose page it is, the economy `SplitCut` already makes.
- *
- * Deliberately not a `ResearchWindow`: the board's windows are days, and a
- * day-count is the wrong unit for recent form (thirty days of a platooned
- * hitter is eleven at-bats and thirty days of an everyday one is a hundred and
- * twenty). Which is also why it has no window axis to be crossed with — "his
- * last 100 at-bats within the last 7 days" is not a narrower question.
- *
- * Mirrors `server/src/types.ts` by hand, like everything else in this file.
- */
-export type RecentCut = 'last100';
-
-/** Every cut of a season the app can draw: the four splits, and recent form. */
-export type PlayerCut = SplitCut | RecentCut;
-
-/** In the order the percentile card's control offers them — the hands, the
- *  ballpark, then recent form, which is last because it is the odd one out. */
-export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'];
-
-/** How many at-bats (or batters faced) the `last100` cut looks back over. */
-export const RECENT_CUT_SIZE = 100;
 
 export interface ResearchRow {
   id: number;
@@ -1775,11 +1775,6 @@ export interface UserPrefs {
   /** Draw a percentile rank under every value on the research board and the
    *  player page's Stats tab. Absent means off, the same convention. */
   statRanks?: boolean;
-  /** Which of the user's watchlists the board's star writes to and its
-   *  Watchlist button unions on. A preference and not a URL parameter: the
-   *  active list is a fact about the person, where a **shared** list is a
-   *  transient thing a link hands you (`wl=`). Absent means the first list. */
-  activeWatchlistId?: string;
   /** Which density the player page's Percentile Rankings tab opens at — see
    *  `PERCENTILE_DENSITIES` in `PlayerDetails.tsx`, which owns the vocabulary
    *  the way `theme.ts` owns the theme's. A **habit of reading** and so a saved
@@ -1788,6 +1783,11 @@ export interface UserPrefs {
    *  default, and a density this build does not know is read as the default
    *  rather than as an error. */
   percentileDensity?: string;
+  /** Which of the user's watchlists the board's star writes to and its
+   *  Watchlist button unions on. A preference and not a URL parameter: the
+   *  active list is a fact about the person, where a **shared** list is a
+   *  transient thing a link hands you (`wl=`). Absent means the first list. */
+  activeWatchlistId?: string;
   /** Read the roster views off the ESPN fantasy team rather than the saved
    *  list. The one preference here that stores **both** its values, so absent
    *  means *unspecified* rather than the saved list — which is still what an
