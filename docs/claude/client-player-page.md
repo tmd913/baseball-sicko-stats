@@ -620,6 +620,103 @@ Savant row that exists but yields no metric in any section would also arrive as
 a 1-PA batter draws 25 bars — and the guard would be a second field on the
 wire to separate two states that have never differed.
 
+### The percentile card grew two controls: which cut, and how many bars
+
+**The tab answered one question and a reader arrives with two.** *How good is
+he* is what the card was built for. *Is he a different hitter against
+left-handers, and how has he been going lately* is the question the roster
+decision actually turns on, and it had no home anywhere on the page — the Stats
+tab cuts **spans** four ways, which is a different table asking a different
+thing. And underneath both was a third, quieter complaint: the card had grown to
+thirty-nine rows, which is a good reference and is **not the card anybody means
+by "the Savant card"**.
+
+So there are two controls above the card, and they are deliberately different
+kinds of control.
+
+**The cut is `pcut=` in the URL; the density is a saved preference.** That is
+the rules file's own line applied: which data a view shows goes in the URL, a
+fact about the person goes on their record. A link that leaves the cut out
+describes a different card, where one that leaves the density out describes the
+same card seen by somebody who likes fewer rows. `pcut=` and not `cut=`, which
+is the app's rule that two params must never mean two things — `cut=` is the
+Stats tab's, and a reader can genuinely want the left-handed *card* and the
+uncut *table*. It is put away when the page leaves the screen, the standing rule
+for a lens, by the same effect that puts `statsCut` away and for the same
+reason.
+
+**Six cuts, and the sixth is not a split.** `Season · vs RHP · vs LHP · Home ·
+Away · Last 100 AB`, reading `vs RHB` / `vs LHB` / `Last 100 BF` on a pitcher —
+the handedness pair naming the *other* man's hand, which is the economy
+`SplitCut` is defined around, and recent form following it from the other side
+(a batter's hundred is at-bats, a pitcher's is batters faced). `Last 100 AB` is
+deliberately a **count** rather than a span: thirty days of a platooned hitter
+is eleven at-bats and thirty days of an everyday one is a hundred and twenty, so
+a day-count is the wrong unit for "how is he going right now". Which is also why
+it has no window to be crossed with — see `RecentCut` in `types.ts`.
+
+**Both switches are `.split-switch`, folded onto the Stats tab's cut control
+rather than styled to resemble it.** Same object, same job, one rule. The
+modifier carries the one thing that is genuinely different: this is the app's
+only switch with six pills in it, so it is the one allowed to wrap inside
+itself. Measured at 390px: the cut row wraps to two lines, the density switch
+drops below it, the controls block is 94px tall and `document.scrollWidth` is
+390 — no horizontal overflow.
+
+**The controls sit above the card rather than in its head, and that is not a
+layout preference.** A cut can come back **empty** — a man with no plate
+appearance against left-handers has no rows to hang a control off — and the
+app's rule is that an empty state names its own cause *and* the control that
+caused it. Inside the head they would vanish with the card and the only way back
+to the season would be the browser's Back button. Measured on Omar Martinez
+(3 PA, none against left-handers), `?player=batter-683079&pcut=vsl`: the
+controls stand with `vs LHP` lit, no card, and *Omar Martinez has no vs LHP line
+this season — nothing to rank. Pick another split above.* Pressing `Season`
+recovers 31 rows and drops `pcut` from the URL.
+
+**The density is a render and never a request**, which is the whole reason it
+can be a switch rather than a tab: one scrape builds both arrangements (see
+`percentiles.ts`), so they ride in one response and cannot disagree about a
+number. **The cut is a request**, and it obeys the loading rules exactly.
+Measured on a cold `Last 100 BF` for Skubal — the per-player pitch CSV is a
+multi-second Savant fetch — read back at t+500ms, t+1200ms and t+2500ms: the
+previous card is still on screen with all 36 rows, the in-place `Updating` badge
+is showing, and **no block wait appears**. The badge lives in the controls row
+rather than the card's head so that it cannot move the card, and is laid out
+whether or not it is showing (`.stats-updating`, whose rules it shares) — this
+row wraps on a phone, so a badge arriving with the read would re-flow the pills
+under the finger that had just pressed one.
+
+Two guards on the read, answering different questions, the pair the Stats tab's
+read already carries: the **ref** carries the cut (`${kind}-${playerId}-${cut}`)
+so that a *different* question re-asks, and the **sequence number** decides whose
+answer may land — a cut is a control pressed twice in three seconds and this is
+the slowest read on the page, so a `Home` returning after a `vs LHP` would
+otherwise write the wrong card under a lit pill.
+
+**The default is `Summary`, and that is a change of behavior.** Absence on the
+record means the default, which is exactly what lets that call be revisited
+without anybody's saved preference needing to be. The fifteen-bar card is the
+one a reader means by "the Savant card"; the thirty-nine-row one is a door off
+it rather than the front of it. Measured on Judge at 900px: Summary draws 20
+rows over `Value · Batting · Fielding · Running` (no `Catching`, the
+metric-level null-drop taking it), Detailed 35 rows over eight sections.
+
+**A cut card says three things above its bars that a reader cannot get from the
+bars.** *His vs LHP line — 76 plate appearances — placed among every qualified
+player's **full season**. These ranks are ours rather than Savant's, so every
+bubble is drawn broken.* The population is the season and not a population of
+splits (there is no such board, and ranking splits among splits would score an
+average platoon hitter 50 twice over and say nothing); the ranks are this app's,
+which is what the broken bubbles mean; and the sample is the only guard a reader
+has against reading a hundredth percentile off thirty-four plate appearances.
+`percentileCuts.ts` carries the measurement that makes the last of those
+necessary — pitcher bat-speed-against holds eighty per cent of the league inside
+1.2 mph, so a cut moves a man from the 50th to the 0th on 1.3 mph of noise.
+
+**Bundle**: JS 745.79 → 748.94 kB raw, 219.89 → 220.93 gzipped; CSS 192.67 →
+193.02 raw, 34.32 → 34.37 gzipped.
+
 ### The player page's Overview tab: the player as a summary page
 
 **It was his day and nothing else, and one thing is not what a page opened on a stranger is opened for.** A research-board row is a man you are deciding about, and the three questions under that decision are *how good is he*, *what is he doing* and *how has he been going* — of which the tab answered the middle one and left the other two behind two more tabs. So it is three blocks in that order (`PlayerOverview.tsx`), each a summary with a door to the tab that holds it whole:

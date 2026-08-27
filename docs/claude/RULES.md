@@ -79,9 +79,12 @@ not the other fails at runtime rather than at build time.
 is in `CLAUDE.md`; **check the count against the code rather than trusting the
 prose** — `grep -rln "hfSea\|CURRENT_SEASON = \|SEASON = " server/src/` is what
 it is derived from, and it has been one behind **twice** (`teamResearch.ts`, and
-then `parkFactors.ts`). That grep answers **twelve** against a count of eleven,
+then `parkFactors.ts`). That grep answers **thirteen** against a count of eleven,
 and always will — `playerSplits.ts` answers it by *using* an imported `SEASON`
-rather than declaring one. Count the declarations, not the filenames — and note
+rather than declaring one, and `percentileCuts.ts` answers it from a **comment**
+containing the word `hfSea`, left there deliberately so a reader auditing the
+roll-over meets the file (`CLAUDE.md` has both). Count the declarations, not the
+filenames — and note
 the declaration grep is itself one short, `savant.ts` spelling its pin
 `hfSea: '2026|'` where the pattern looks for `hfSea=`. Ten from that grep plus
 `savant.ts` is the eleven.
