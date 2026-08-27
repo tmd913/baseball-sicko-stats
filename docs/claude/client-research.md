@@ -634,8 +634,57 @@ the server restarted under a second `DEV_USER_ID`, as a genuine stranger:
   beside a button that says Watchlist), and the panel painted and hit-testable at
   346px.
 
-**Bundle**: JS 745.79 → 760.94 kB raw, 219.89 → 224.19 gzipped; CSS 192.67 →
-196.70 raw, 34.32 → 34.97 gzipped.
+### A row's actions were three 12px glyphs, and that was two faults
+
+The first drawing of these panels put `✎ ⤴ ✕` against each row's right edge,
+and it was wrong twice over.
+
+**They were unreadable.** A pencil at 12px against `--faint` is a smudge, and
+nothing said what any of the three did until you hovered — which a touch device
+never does.
+
+**They were un-pressable.** Measured, the three shared a 22×24px box apiece,
+against this app's own icon buttons at **30px** and its chips at **28**.
+
+And a *fourth* action had nowhere to go at all. A saved search can be **updated**
+to the board it is looking at, and with the row full that had ended up as a
+labeled run of pills at the foot of the panel — the same two names, listed a
+second time, under `Update one to this board:`. A panel restating its own list is
+what a row with no room looks like.
+
+So a row is **one press and one `⋯`**, and the `⋯` opens a drawer under it
+holding **labeled chips** at `.research-order-chip`'s own 28px/12px/700. Nothing
+is guessed at, everything is aimable, and the fourth action is just a fourth
+chip. Rename and Share take the drawer *over* rather than stacking on it —
+three states of one box. Measured after: `.rl-more` **30×30**, chips **28** tall,
+the row **34**.
+
+**Nothing here invents a scale.** The heading is `.research-colgroup-head`'s
+11px/800/uppercase in `--muted`; a lit chip is the accent at 12% behind a 45%
+border, which is what "this control is doing something" already looks like in
+this bar; the armed delete is `--strikeout`, the red `.remove-btn.armed`
+already uses.
+
+**Three smaller things the survey turned up:**
+
+- **The caret rendered as a dot.** `▾` is a full-height character shrunk to sit
+  beside a 12px label, and at the 9px that took it read as `Searches 2 ·`. It is
+  a drawn 9×6 path now.
+- **`Watchlist · Lists ▾` was two nouns for one thing.** The half beside it
+  already names the list, so the second half is a caret alone, with its
+  accessible name off the `title`.
+- **The active row's tint stopped 30px short of its own right edge**, painted on
+  the press rather than on the row — so the `⋯` sat outside the highlight it
+  belonged to. It is on `.rl-row-main` now, and the active list is said twice
+  (a filled dot *and* the tint), because identity never rests on hue here.
+  The dot is reserved on every row so the names line up whichever is lit.
+- **The shared bar was a paragraph.** One run of prose with the name bolded
+  inside it, which at 390 wrapped into three lines of reading over a table. It
+  is three parts in the order they are read now — an uppercase kind, the name,
+  the reassurance — and at 1440 it is a single 44px line.
+
+**Bundle**: JS 745.79 → 762.13 kB raw, 219.89 → 224.42 gzipped; CSS 192.67 →
+198.16 raw, 34.32 → 35.16 gzipped.
 
 ### The page scrolls, and the head stays
 
