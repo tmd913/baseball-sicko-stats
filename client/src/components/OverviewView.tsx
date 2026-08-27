@@ -705,6 +705,11 @@ export interface ValuePlayer extends RailPlayer {
    *  the categories the league scores — `categoryValue.ts`, over the span
    *  undivided, which is the reading a projected board is opened for. */
   value: number;
+  /** …and the same figure per appearance, which is the other reading the rail
+   *  offers: *how good is he on a day he plays* against *how much will he give
+   *  me this week*. See `ValueReading`, and `projectedRowValuePerGame` for why
+   *  it needs no minimum-games floor. */
+  perGame: number;
   /** How many games that projection is made of, which is the context the figure
    *  is meaningless without: six games of a good hitter outscore three of an
    *  equal one, and this is the column that says which he is. */
@@ -1017,7 +1022,9 @@ const projGames = (n: number): string => (Number.isInteger(n) ? String(n) : n.to
  * which is the same context the trending card ends on and the answer to *has
  * anybody else noticed*.
  */
-function valueFigure(p: ValuePlayer): ReactNode {
+function valueFigure(p: ValuePlayer, reading: ValueReading): ReactNode {
+  const perGame = reading === 'perGame';
+  const v = perGame ? p.perGame : p.value;
   return (
     <>
       {/* **The same box the trending card's three moves are drawn in**, with one
@@ -1028,11 +1035,22 @@ function valueFigure(p: ValuePlayer): ReactNode {
           for the same reason: a bold signed number beside a batting line is not
           self-evidently a ranking. */}
       <span className="trend-wins is-solo">
-        <span className="trend-win-lab">Value</span>
+        {/* **The label says which reading**, for the reason the ranked trend
+            column is marked on the card and not only on the switch: a bold
+            signed number is not self-evidently one figure rather than the other,
+            and the reader is looking here rather than at the control. */}
+        <span className="trend-win-lab">{perGame ? 'Val/G' : 'Value'}</span>
         <span className="trend-wins-rule" />
         <span className="trend-card-val">
-          {p.value >= 0 ? '+' : '−'}
-          {Math.abs(p.value).toFixed(1)}
+          {v >= 0 ? '+' : '−'}
+          {/* **Two decimals per appearance, one for the total**, and it is
+              forced rather than chosen: the whole live spread of the
+              per-appearance figure inside a seat is about 0.55–0.65 for
+              batters, so one decimal prints seven of a top eight as `0.6` and
+              the order of the rail becomes a puzzle. The cell is the same width
+              either way — `+0.65` and `+13.8` are both five characters, against
+              a track measured at 35.33px. */}
+          {Math.abs(v).toFixed(perGame ? 2 : 1)}
         </span>
       </span>
       <span className="trend-card-pct">
@@ -1046,6 +1064,35 @@ function valueFigure(p: ValuePlayer): ReactNode {
 /** Which reading of the spotlight is on screen. In the URL as `spot=value`, the
  *  trending rail being the one it opens on. */
 export type SpotlightTab = 'trending' | 'value';
+
+/**
+ * **Which way the value rail is read** — the whole span added up, or one
+ * appearance of him.
+ *
+ * They are different questions and neither answers the other. `total` is *how
+ * much will he give me over the days this matchup has left*, which is what a
+ * projected board is opened for and why it was the only reading for as long as
+ * there was one; `perGame` is *how good is he on a day he plays*, which is the
+ * question a manager streaming one open day is actually asking, and on which a
+ * hitter with eight games can beat one with eleven.
+ *
+ * Measured on the live boards over 2026-08-26 → 09-06, the batters' row: the
+ * total gives `Crow-Armstrong · Alonso · Witt Jr. · Alvarez · Ohtani` and the
+ * per-appearance reading gives `Crow-Armstrong · Cruz · Tatis Jr. · Witt Jr. ·
+ * Ohtani` — Oneil Cruz (7.8 G) and Fernando Tatis Jr. (8.7 G) rising past two
+ * eleven-game men. On the starters' row Gerrit Cole leads the total on three
+ * turns and is off the top eight per turn. So the switch is a real second list
+ * rather than a re-ordering at the margin, which is the test the trend windows'
+ * own switch was held to.
+ *
+ * **In the URL as `spotv=avg`**, `total` being the default and so writing
+ * nothing — and scoped one step further in than `spot=`, exactly as `spotw=` is
+ * on the other rail: a reading on a link that opens the *trending* rail names a
+ * ranking nothing on screen is made of. It is separate state from the tab, so a
+ * reader who picks it, crosses to Trending and comes back finds it where he
+ * left it — a sub-selection inside a page is not a leaving.
+ */
+export type ValueReading = 'total' | 'perGame';
 
 /**
  * **Player Spotlight — the two rails as one block with a switch.**
@@ -1078,6 +1125,8 @@ function SpotlightSection({
   tab,
   onTab,
   onWindow,
+  valueReading,
+  onValueReading,
   onOpenPlayer,
   onSeeMore,
 }: {
@@ -1086,6 +1135,9 @@ function SpotlightSection({
   tab: SpotlightTab;
   onTab: (tab: SpotlightTab) => void;
   onWindow: (w: TrendWindow) => void;
+  /** Which way the value rail is read — see `ValueReading`. */
+  valueReading: ValueReading;
+  onValueReading: (r: ValueReading) => void;
   onOpenPlayer: (id: number) => void;
   /** The door at the end of every row — see `SeeMoreCard`. It is handed the
    *  **active** rail rather than reading `tab`, which is not always the rail on
@@ -1106,13 +1158,23 @@ function SpotlightSection({
     });
   }
   if (highValue) {
+    const per = valueReading === 'perGame';
     tabs.push({
       key: 'value',
       label: 'High Value',
-      note: `most projected value through ${prettyDate(highValue.through)}`,
-      title:
-        'Who is worth the most over the days this matchup has left, in the categories your league scores — free agents only',
-      sortedBy: `projected value through ${prettyDate(highValue.through)}`,
+      // **The note names the reading, not just the span.** The two figures are
+      // not comparable to each other any more than either is to a day card's
+      // `+1.4`, so the sentence under the heading has to say which one the rail
+      // in front of the reader is ordered by.
+      note: per
+        ? `most projected value per game through ${prettyDate(highValue.through)}`
+        : `most projected value through ${prettyDate(highValue.through)}`,
+      title: per
+        ? 'Who is worth the most per appearance over the days this matchup has left, in the categories your league scores — free agents only'
+        : 'Who is worth the most over the days this matchup has left, in the categories your league scores — free agents only',
+      sortedBy: per
+        ? `projected value per game through ${prettyDate(highValue.through)}`
+        : `projected value through ${prettyDate(highValue.through)}`,
     });
   }
   if (tabs.length === 0) return null;
@@ -1128,7 +1190,9 @@ function SpotlightSection({
           Player Spotlight
           <span className="ov-heading-note">{active.note}</span>
         </h3>
-        {(tabs.length > 1 || (active.key === 'trending' && (trending?.windows.length ?? 0) > 1)) && (
+        {(tabs.length > 1 ||
+          (active.key === 'trending' && (trending?.windows.length ?? 0) > 1) ||
+          (active.key === 'value' && highValue !== null)) && (
           <div className="ov-spot-tools">
             {/* **Two switches, and only where each has two things to choose
                 between.** A control with one live option marks nothing — the
@@ -1151,6 +1215,40 @@ function SpotlightSection({
                     title={t.title}
                   >
                     {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {active.key === 'value' && highValue && (
+              // **The readings' switch is the value rail's alone**, drawn where
+              // the trending rail draws its windows and for the identical
+              // reason: it is a cut of *this* reading, and a control left on
+              // screen naming a divisor the trending rail is not ranked by
+              // would be a lens the page claims is in force when it is not.
+              //
+              // **It is never suppressed the way the other two are.** The rule
+              // there is that a control with one live option marks nothing —
+              // the rails' switch goes when there is one rail, the windows'
+              // when the ownership read has one baseline. This one always has
+              // exactly two, and both are always answerable off the figures the
+              // rail is already built from.
+              <div className="view-switch" role="tablist" aria-label="Value reading">
+                {(
+                  [
+                    ['total', 'Total', 'Rank on the whole span added up — who will give me the most over these days'],
+                    ['perGame', 'Per G', 'Rank on value per appearance — how good he is on a day he plays'],
+                  ] as const
+                ).map(([key, label, title]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={key === valueReading}
+                    className={`view-tab${key === valueReading ? ' active' : ''}`}
+                    onClick={() => onValueReading(key)}
+                    title={title}
+                  >
+                    {label}
                   </button>
                 ))}
               </div>
@@ -1184,7 +1282,7 @@ function SpotlightSection({
       {active.key === 'value' && highValue ? (
         <RailRows
           board={highValue.board}
-          figure={valueFigure}
+          figure={(p) => valueFigure(p, valueReading)}
           sortedBy={active.sortedBy}
           onOpenPlayer={onOpenPlayer}
           onSeeMore={onSeeMore && ((seat) => onSeeMore('value', seat))}
@@ -1413,6 +1511,8 @@ export default function OverviewView({
   spotlight,
   onSpotlight,
   onSpotWindow,
+  valueReading,
+  onValueReading,
   onSeeMore,
   dates,
   onOpenPlayer,
@@ -1440,6 +1540,9 @@ export default function OverviewView({
   /** …and the window the trending rail is ranked on. The value in force rides on
    *  `trending` itself, this being the one that was asked for. */
   onSpotWindow: (w: TrendWindow) => void;
+  /** Which way the High Value rail is read — see `ValueReading`. */
+  valueReading: ValueReading;
+  onValueReading: (r: ValueReading) => void;
   /** The door at the end of every rail row: the research board, on this seat's
    *  position pill, free agents only, sorted on the column the rail is ranked
    *  by. See `SeeMoreCard`, and `App::openSpotlightBoard` for what it sets. */
@@ -1936,6 +2039,8 @@ export default function OverviewView({
         tab={spotlight}
         onTab={onSpotlight}
         onWindow={onSpotWindow}
+        valueReading={valueReading}
+        onValueReading={onValueReading}
         onOpenPlayer={onOpenPlayer}
         onSeeMore={onSeeMore}
       />
