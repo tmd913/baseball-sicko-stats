@@ -7816,7 +7816,13 @@ button.start-line:focus-visible {
    ground tinted to 30% is a number on a pale ground. The padding and the radius
    are what make it a chip at all; `min-width` stops a two-digit index drawing a
    visibly narrower one than a three-digit index beside it. */
-.pf-fig-val {
+/* A figure wearing a hot/cold reading — the park strip's, and the research
+   board's when it is comparing. Folded rather than restyled: they are the same
+   object doing the same job, a number in a tinted pill, and the two differ only
+   in the type they are set in. `background` is written inline on both, by
+   `heatStyle` here and by `compareTint` there. */
+.pf-fig-val,
+.research-cmp-badge {
   font-size: 15px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -7825,6 +7831,25 @@ button.start-line:focus-visible {
   padding: 1px 6px;
   border-radius: 6px;
   text-align: center;
+}
+/* **The board's takes its cell's type rather than declaring its own**, which is
+   the whole of what differs: a park figure is a standalone number in a strip
+   and sets its own 15px, where this one sits in a table whose columns are
+   already sized — and a badge that resized the number inside it would make a
+   comparison a different table from the board it narrowed.
+
+   `inline-block` so the padding and the radius apply at all (an inline box
+   takes horizontal padding and no vertical), and no `min-width`: three
+   characters is right for a park index and wrong for a column of `1`s. */
+.research-cmp-badge {
+  display: inline-block;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  min-width: 0;
+  /* Clawed back off the cell's own gutter, so a badged column is no wider than
+     an unbadged one and a comparison does not re-lay the table out. */
+  margin-inline: -4px;
 }
 
 /* The card, on the team page's Park tab. */
@@ -23348,32 +23373,8 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 
-/* **The comparison's heat.** The colour is written inline by `compareTint` as
-   `--cmp-heat`, mixing `--park-hot` or `--park-cold` in proportion to how far
-   that player's percentile sits from the average of those compared — the park
-   board's own pattern, at its own measured `MAX_TINT`.
-
-   **A `background-image`, and the selector is qualified for a reason.** This
-   table's ground is *named* (`--cell-bg`) and painted once by
-   `.summary-table th, .summary-table td` — the rule two thousand lines up that
-   the zebra and the sticky columns all feed. That is a `background` shorthand,
-   so it resets `background-image`, and a bare `.research-cmp-cell` (one class)
-   loses the longhand to it however late in the file it sits: measured, the
-   computed `background-image` came back `none` on every cell while
-   `--cmp-heat` was set correctly on all of them. Qualified by the table and the
-   element it is two classes and an element, which takes it.
-
-   A flat gradient rather than a `background-color`, because the heat has to
-   **layer over** the row's own ground rather than replace it: a comparison that
-   stripped the zebra would cost a forty-column table the striping that makes it
-   readable, and `--cell-bg` is the app's rule that a cell's ground is named
-   rather than assigned. This adds a layer and leaves that name alone.
-
-   (The first attempt was an absolutely-positioned `::before` at `z-index: -1`
-   inside an `isolate`d cell, which is the textbook answer and did not paint at
-   all — `getComputedStyle(cell, '::before').backgroundColor` came back as the
-   cell's own `--bg` throughout. A layer that needs a stacking context to land
-   in the right place is a layer with somewhere to go wrong.) */
-.summary-table td.research-cmp-cell {
-  background-image: linear-gradient(var(--cmp-heat, transparent), var(--cmp-heat, transparent));
-}
+/* The comparison's cells. The heat itself is on the **badge** around each value
+   (`.research-cmp-badge`, folded onto the park strip's own figure) rather than
+   on the cell — see `ResearchTable`, where that is argued. What is left for the
+   cell is nothing at all today; the class is kept because it is what the badge
+   is scoped by in the markup and what a future cell-level rule would hang on. */

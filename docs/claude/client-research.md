@@ -755,29 +755,39 @@ picked three men, which is the same care `ranks` takes one line up.
 never rests on hue here: *"Alex Bregman — Strikeout rate: 88th percentile of the
 Season board, 31 points above the average of those compared."*
 
-### Two things the heat had to be careful of
+### The heat is a badge around the value, not a wash over the cell
 
-**It is a `background-image`, not a `background`.** This table's ground is
-*named* — `--cell-bg`, painted once by `.summary-table th, .summary-table td`,
-which the zebra and the sticky columns all feed. An inline `background` would
-replace whichever of those a cell had, so a comparison would silently strip the
-striping that makes a forty-column table readable. A flat `linear-gradient` is a
-`background-image`: it layers over `background-color` and leaves the name alone.
-Checked, both grounds survive under it — `rgb(18,19,20)` and `rgb(32,33,34)`
-still alternate down a narrowed board.
+**A tinted cell is a *block*.** It runs the column's full width whatever the
+number in it is, so a narrowed board read as a chequerboard rather than as
+figures worth comparing — and it fought two things for the same ground: the
+zebra, and the sorted column's own tint.
 
-**And the selector has to outrank that painting rule.** It is a `background`
-shorthand, so it resets `background-image`, and a bare `.research-cmp-cell` —
-one class — loses the longhand to it however late in the file it sits: measured,
-the computed `background-image` came back `none` on every cell while
-`--cmp-heat` was set correctly on all of them. `.summary-table td.research-cmp-cell`
-is two classes and an element, which takes it.
+Round the figure it is `.pf-fig-val`, the park strip's own shape, which is where
+this app already draws a number wearing a hot/cold reading — so the two are
+**folded onto one rule** rather than given styles that agree today. What differs
+is the type: a park figure is a standalone number and sets its own 15px, where
+this one sits in a table whose columns are already sized, so it inherits. A
+negative inline margin claws its padding back off the cell's gutter, which is
+what keeps a badged column exactly as wide as an unbadged one — measured, no
+horizontal overflow at 1500 or 407 and the table is not re-laid out.
 
-*(The first attempt was an absolutely-positioned `::before` at `z-index: -1`
-inside an `isolate`d cell — the textbook answer, and it did not paint at all:
-`getComputedStyle(cell, '::before').backgroundColor` came back as the cell's own
-`--bg` throughout. A layer that needs a stacking context to land in the right
-place is a layer with somewhere to go wrong.)*
+It is drawn **whenever a comparison is in force, tint or no tint**: an untinted
+badge is invisible, and a box that appeared and vanished per column would step
+the numbers in and out down a row.
+
+**Which also retired a whole class of problem.** Tinting the cell meant painting
+over a ground that is *named* (`--cell-bg`, painted once by
+`.summary-table th, .summary-table td`, which the zebra and the sticky columns
+all feed), and doing that without stripping the striping took a flat
+`linear-gradient` — a `background-image`, so it layers over `background-color`
+— and a selector qualified to two classes and an element to outrank that
+shorthand's reset. Both were measured before they were believed: the computed
+`background-image` came back `none` on every cell while `--cmp-heat` was set
+correctly on all of them, and before that an absolutely-positioned `::before` at
+`z-index: -1` inside an `isolate`d cell — the textbook answer — did not paint at
+all. A badge has no such ground and takes the colour directly. The zebra is
+untouched by construction now rather than by care: both grounds still alternate
+down a narrowed board.
 
 **The count line changes, because `3 of 3` says nothing.** A comparison *is* its
 own population, so the numerator and denominator are the same number by
@@ -785,15 +795,17 @@ construction. What a reader wants there instead is what the colour means, and
 that is what it says.
 
 **Driven, not compiled.** At 1500, 900 and 407: the board narrows to exactly the
-3 ticked, **no page opens**, 69 of 78 stat cells carry a tint (the nine that do
-not are columns where fewer than two of them have a value), both zebra grounds
-survive underneath, the button reads `Comparing 3`, and there is no horizontal
-page overflow at any of them. An inbound `?cmp=…` link arrives with all three
+3 ticked, **no page opens**, 69 of 78 badges carry a tint (the nine that do not
+are columns where fewer than two of them have a value, or where they are level),
+both zebra grounds survive underneath, the button reads `Comparing 3`, and there
+is no horizontal page overflow at any of them. With `Ranks` on, the badge and
+the percentile under it sit clear of each other — badge at `y: 353, h: 18`, rank
+at `y: 371` — and the rank's own number is not badged. An inbound `?cmp=…` link arrives with all three
 ticked; unticking takes the board 3 → 2, and again clears it back to 638 with
 `cmp` gone from the URL.
 
-**Bundle**: JS 776.65 → 770.80 kB raw, 228.30 → 227.04 gzipped; CSS 203.60 →
-200.40 raw, 36.15 → 35.56 gzipped — **a feature that removes more than it adds**,
+**Bundle**: JS 776.65 → 770.86 kB raw, 228.30 → 227.04 gzipped; CSS 203.60 →
+200.42 raw, 36.15 → 35.56 gzipped — **a feature that removes more than it adds**,
 the page and its stylesheet being larger than the narrowing that replaced them.
 
 ### Six faults found by looking at it, and what each one turned out to be

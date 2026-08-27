@@ -2370,14 +2370,15 @@ export function ResearchTable({
     if (Math.abs(off) < 1) return undefined;
     const frac = Math.min(1, Math.abs(off) / 50);
     const hue = off > 0 ? 'var(--park-hot)' : 'var(--park-cold)';
-    // **A custom property, not a `background`.** A board cell already carries a
-    // zebra stripe and, on the sorted column, a tint of its own; setting
-    // `background` inline would replace whichever it landed on and quietly
-    // strip the striping that makes a wide table readable. The stylesheet
-    // paints this on a layer over the cell instead — see `.research-cmp-cell`.
+    // A plain `background`, because it lands on a **badge** rather than on the
+    // cell — see `.research-cmp-badge`. Tinting the cell meant layering over a
+    // ground that is *named* (`--cell-bg`) and carries the zebra, which took a
+    // gradient and a qualified selector to do without stripping it; a badge has
+    // no such ground and takes the colour directly, the way the park strip's
+    // own figures do.
     return {
-      '--cmp-heat': `color-mix(in srgb, ${hue} ${Math.round(frac * MAX_TINT)}%, transparent)`,
-    } as CSSProperties;
+      background: `color-mix(in srgb, ${hue} ${Math.round(frac * MAX_TINT)}%, transparent)`,
+    };
   };
   /** What a badge says it is ranked against — the board and the span, in
    *  words, since a 7-day percentile and a season one are different claims. */
@@ -5155,13 +5156,29 @@ export function ResearchTable({
                         className={`sum-num${activeSortKey === c.key ? ' research-sorted' : ''}${
                           c.cellClass ? ` ${c.cellClass(r) ?? ''}` : ''
                         }${comparing ? ' research-cmp-cell' : ''}`}
-                        /* The comparison's heat, and nothing at all on an
-                           ordinary board — `compareTint` answers `undefined`
-                           unless a comparison is in force. */
-                        style={comparing ? compareTint(c, r) : undefined}
                         title={comparing ? compareTitle(c, r) : undefined}
                       >
-                        {c.format(r)}
+                        {/* **The heat is a badge around the value, not a wash
+                            over the cell.** A tinted cell is a *block* — it runs
+                            the column's full width whatever the number in it is,
+                            so a table of them reads as a chequerboard rather
+                            than as figures worth comparing, and it fights the
+                            zebra and the sorted column's own tint for the same
+                            ground. Round the figure it is the park strip's own
+                            shape (`.pf-fig-val`), which is where this app
+                            already draws a number wearing a hot/cold reading.
+
+                            Drawn whenever a comparison is in force, tint or no
+                            tint: an untinted badge is invisible, and a box that
+                            appeared and vanished per column would step the
+                            numbers in and out down a row. */}
+                        {comparing ? (
+                          <span className="research-cmp-badge" style={compareTint(c, r)}>
+                            {c.format(r)}
+                          </span>
+                        ) : (
+                          c.format(r)
+                        )}
                         {/* …and the percentile under it, when the reader has
                             asked for one. A second line rather than something
                             beside the value, because this table cannot afford
