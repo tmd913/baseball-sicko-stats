@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { addDays, baseballToday } from './etDate.js';
@@ -51,6 +52,91 @@ const FILE = path.join(DATA_DIR, 'watchlist.json');
 /** The single local user, matching `auth.ts`'s `DEV_USER_ID ?? 'local'` — used
  *  only where a file-backed call has no request to read the id from. */
 const DEV_USER = process.env.DEV_USER_ID ?? 'local';
+
+/**
+ * **A named list of players followed on the research board**, of which there
+ * may now be several.
+ *
+ * The watchlist used to be one list and one attribute — `watchlist: string[]`
+ * on the item — and the reason to have more than one is the same reason there
+ * are two lists in the first place: a reader keeps *sets* of players, and
+ * "closers I might stream", "the guys I'd trade for" and "prospects to watch"
+ * are three questions, not one list of thirty names.
+ *
+ * **Keys, not entries**, which is the rule the single list already followed and
+ * for the same reason: the board holds every row it could mark, so a stored
+ * name and club would be a second and staler copy. Nothing about that changed.
+ *
+ * `id` is minted here and is opaque to the client — an id rather than the name
+ * because a list can be **renamed**, and every reference to one (the active
+ * choice on the record, a share pointing at it, a link in somebody's history)
+ * would otherwise break the moment its owner corrected a typo.
+ */
+export interface SavedList {
+  id: string;
+  name: string;
+  /** `playerKey` strings, newest first — the order `setWatchlisted` has always
+   *  maintained. */
+  keys: string[];
+  /**
+   * The share code this list is reachable by, or absent when it is not shared.
+   *
+   * Present means *anyone holding the code may read it*; it is not a list of
+   * who has. Revoking clears it here **and** deletes the pointer record, and a
+   * read requires the two to agree — the same both-must-agree rule
+   * `leagueForInvite` uses, so a half-finished revoke cannot leave a working
+   * link behind.
+   */
+  shareCode?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * **A named reading of the research board** — the whole of what decides which
+ * rows are on screen, in which order, under which columns.
+ *
+ * `board` is **opaque here on purpose.** Which positions exist, what a window
+ * is, which column keys are real, what a filter's operator may be — every one
+ * of those is the client's vocabulary (`ResearchTable.tsx`), and this is the
+ * split `researchColumns` already makes: the route checks the *shape* of what
+ * arrived and the meaning lives where the thing is drawn. So a build that adds
+ * a column or a filter operator needs no server change at all, and a saved
+ * search written by a newer browser is narrowed by an older one rather than
+ * rejected by an older server.
+ *
+ * What the server does own is the envelope: the id, the name, the stamps, the
+ * share code, and the caps below.
+ */
+export interface SavedSearch {
+  id: string;
+  name: string;
+  /** The board's reading as the client defines it — see above. */
+  board: Record<string, unknown>;
+  /** As `SavedList.shareCode`, and revoked the same way. */
+  shareCode?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * How many of each a user may keep, and how big one may be.
+ *
+ * These are not arbitrary: the whole user record is **one DynamoDB item**, and
+ * an item has a hard 400KB ceiling that the roster, the tombstones and the
+ * preferences already sit inside. A cap that is never reached costs nothing; an
+ * uncapped list of searches on a shared item is a way to make somebody's entire
+ * saved state unwritable, roster included, with no way back through the UI.
+ * So each is checked at the route and the numbers are generous against any real
+ * use: measured, a search's `board` with forty columns, six filters and a
+ * search string serializes to ~1.4KB, so thirty of them is ~42KB.
+ */
+export const MAX_LISTS = 20;
+export const MAX_SEARCHES = 30;
+export const MAX_LIST_KEYS = 500;
+export const MAX_NAME_LEN = 60;
+/** Serialized `board`, in bytes. */
+export const MAX_BOARD_BYTES = 8_000;
 
 /**
  * Everything saved for one user. Preferences live on the **same item** as the
@@ -148,6 +234,27 @@ export interface UserPrefs {
   /** Put the watchlist on the research board **as well as** those sets. Absent
    *  means off. */
   researchWatchlist?: boolean;
+  /**
+   * **Which of the user's watchlists is the active one** — the list the board's
+   * star writes to, the list its Watchlist button unions on, the list every
+   * surface that says "the watchlist" means.
+   *
+   * A preference and not a URL parameter, which is the app's own line: the
+   * active list is a fact about the person, true of them on every view and
+   * across every device, where a *shared* list is a transient thing a link
+   * hands you and lives in the URL for exactly as long as you are looking at
+   * it. That separation is what makes "opening somebody's shared list must not
+   * disturb your own" a property of the design rather than a thing to remember.
+   *
+   * Absent means **the first list**, which is the same absence-is-the-default
+   * convention as everything else here and is what makes the migration free: a
+   * record that has never seen this feature has one list (its old `watchlist`,
+   * read forward by `listsOf`) and no entry here, and that resolves to exactly
+   * the list it always had. An id naming a list that has since been deleted
+   * falls back the same way rather than emptying the board — the standing rule
+   * for an unrecognized value.
+   */
+  activeWatchlistId?: string;
   /**
    * The last few players picked out of the header search, most recent first —
    * what that field offers before a single character has been typed.
@@ -338,9 +445,69 @@ interface Versioned {
    *  mark, so a stored copy of the name would only be a second and staler one,
    *  and membership is the whole of what this list is. */
   watchlist: string[];
+  /**
+   * **The named lists, which are what the watchlist is now** — and `watchlist`
+   * above is the shape they are read forward *from* rather than a second copy
+   * of them.
+   *
+   * A record written before this has a `watchlist` attribute and no
+   * `watchlists`; `listsOf` turns that into a single list called `Watchlist`
+   * with the keys it always had, so nothing migrates until its owner touches
+   * it. On the first write the item is replaced and the legacy attribute goes
+   * with it — the rule `getEspnCreds` follows for the legacy inline credential,
+   * a migration that happens as people use the app rather than in a script over
+   * every account.
+   *
+   * **The cost of that rule is the rollback**, and it is worth writing down: a
+   * user who has touched this and then meets an older build has a record with
+   * no `watchlist` attribute, and that build reads an empty watchlist. It is
+   * recoverable (nothing is deleted — the keys are in `watchlists`) and it is
+   * the same exposure every read-forward migration in this codebase carries.
+   */
+  watchlists: SavedList[];
+  /** The named readings of the research board. Absent on a record that has
+   *  never saved one, which reads as none — the convention `removed` and
+   *  `espn` already follow. */
+  searches: SavedSearch[];
   prefs: UserPrefs;
   espn: EspnLeague | null;
   version: number;
+}
+
+/**
+ * The user's lists, **reading a legacy record forward**.
+ *
+ * One place, called by both backends' loaders, so the migration is a property
+ * of loading rather than something each caller has to remember. A record with
+ * `watchlists` is handed back as it is; one with only the old `watchlist`
+ * attribute becomes a single list under a name — and a record with neither
+ * becomes a single **empty** list rather than no lists at all, because every
+ * surface downstream assumes there is a list to be active, and "you have no
+ * watchlists" is a state the UI would have to invent an empty state for that
+ * nobody can reach on purpose.
+ */
+const LEGACY_LIST_ID = 'default';
+
+function listsOf(
+  stored: SavedList[] | undefined,
+  legacy: string[] | undefined,
+): SavedList[] {
+  if (stored && stored.length) return stored;
+  return [
+    {
+      id: LEGACY_LIST_ID,
+      // The word every surface in the app already uses for it, so a user who
+      // never asked for more than one list never meets the fact that there can
+      // be. Renaming it is theirs to do.
+      name: 'Watchlist',
+      keys: legacy ?? [],
+      // Zero rather than "now": the list is as old as the record, and stamping
+      // it with the moment of the migration would make every legacy list look
+      // as though it had been created the day this deployed.
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  ];
 }
 
 /** Entries saved before `kind` existed are batters. */
@@ -393,6 +560,8 @@ async function ddbLoad(userId: string): Promise<Versioned> {
         players?: RosterEntry[];
         removed?: RosterRemoval[];
         watchlist?: string[];
+        watchlists?: SavedList[];
+        searches?: SavedSearch[];
         prefs?: UserPrefs;
         espn?: EspnLeague;
         version?: number;
@@ -402,12 +571,23 @@ async function ddbLoad(userId: string): Promise<Versioned> {
   // throttle, a network blip — throws, because swallowing it would render the
   // "your watchlist is empty" state and then persist that emptiness.
   if (!item) {
-    return { players: [], removed: [], watchlist: [], prefs: {}, espn: null, version: 0 };
+    return {
+      players: [],
+      removed: [],
+      watchlist: [],
+      watchlists: listsOf(undefined, undefined),
+      searches: [],
+      prefs: {},
+      espn: null,
+      version: 0,
+    };
   }
   return {
     players: migrate(item.players ?? []),
     removed: migrate(item.removed ?? []) as RosterRemoval[],
     watchlist: item.watchlist ?? [],
+    watchlists: listsOf(item.watchlists, item.watchlist),
+    searches: item.searches ?? [],
     prefs: item.prefs ?? {},
     espn: item.espn ?? null,
     version: item.version ?? 0,
@@ -426,7 +606,17 @@ async function ddbPersist(userId: string, next: Versioned): Promise<void> {
         // never watchlisted anybody and one who has cleared the list are the
         // same stored state. The roster's tombstones follow the same rule.
         ...(next.removed.length ? { removed: next.removed } : {}),
-        ...(next.watchlist.length ? { watchlist: next.watchlist } : {}),
+        // **The named lists are what is written, and the legacy attribute is
+        // not.** A `Put` replaces the whole item, so the old `watchlist` simply
+        // stops existing on the first write after this deploys — see
+        // `Versioned.watchlists` for the read-forward and what it costs on a
+        // rollback. Absent rather than empty follows the rule beside it, and a
+        // user with one empty list is stored as no lists at all, which
+        // `listsOf` reads straight back as one empty list.
+        ...(next.watchlists.some((l) => l.keys.length || l.name !== 'Watchlist' || l.shareCode)
+          ? { watchlists: next.watchlists }
+          : {}),
+        ...(next.searches.length ? { searches: next.searches } : {}),
         prefs: next.prefs,
         // Absent rather than null when there is no connection, so disconnecting
         // removes the credential from the item instead of leaving a tombstone.
@@ -527,6 +717,8 @@ async function fileLoad(userId: string): Promise<Versioned> {
     players?: RosterEntry[];
     removed?: RosterRemoval[];
     watchlist?: string[];
+    watchlists?: SavedList[];
+    searches?: SavedSearch[];
     prefs?: UserPrefs;
     espn?: EspnLeague;
   };
@@ -534,6 +726,8 @@ async function fileLoad(userId: string): Promise<Versioned> {
     players: migrate(item.players ?? []),
     removed: migrate(item.removed ?? []) as RosterRemoval[],
     watchlist: item.watchlist ?? [],
+    watchlists: listsOf(item.watchlists, item.watchlist),
+    searches: item.searches ?? [],
     prefs: item.prefs ?? {},
     espn: item.espn ?? null,
     version: 0,
@@ -546,7 +740,10 @@ async function filePersist(userId: string, next: Versioned): Promise<void> {
   db[userId] = {
     players: next.players,
     ...(next.removed.length ? { removed: next.removed } : {}),
-    ...(next.watchlist.length ? { watchlist: next.watchlist } : {}),
+    ...(next.watchlists.some((l) => l.keys.length || l.name !== 'Watchlist' || l.shareCode)
+      ? { watchlists: next.watchlists }
+      : {}),
+    ...(next.searches.length ? { searches: next.searches } : {}),
     prefs: next.prefs,
     ...(next.espn ? { espn: next.espn } : {}),
   };
@@ -840,27 +1037,204 @@ export async function getAllRosterPlayers(): Promise<WatchPlayer[]> {
 /** The keys this user is watching, in the order they were added (newest
  *  first, matching the roster's own convention). */
 export async function getWatchlist(userId: string): Promise<string[]> {
-  return (await load(userId)).watchlist;
+  const cur = await load(userId);
+  return activeList(cur).keys;
 }
 
 /**
- * Add or remove one key. Idempotent in both directions, which is what makes the
- * lost-update replay in `mutate` the right resolution rather than a failure: a
- * board row's star is pressed from one tab while another is doing something
- * else with the item, and replaying "make sure this key is (not) in the list"
- * against the newer record is exactly correct.
+ * **Which list is the active one**, resolved rather than trusted.
+ *
+ * The preference names an id and the id may name nothing — the list was deleted
+ * from another tab, or the record predates the preference entirely. Both fall
+ * back to the **first** list, which is the app's standing rule that an
+ * unrecognized value falls back rather than emptying the view, and `listsOf`
+ * guarantees there is always a first one to fall back to.
+ */
+function activeList(cur: Versioned): SavedList {
+  const wanted = cur.prefs.activeWatchlistId;
+  return cur.watchlists.find((l) => l.id === wanted) ?? cur.watchlists[0];
+}
+
+/** All of this user's lists, in the order they were made. */
+export async function getLists(userId: string): Promise<SavedList[]> {
+  return (await load(userId)).watchlists;
+}
+
+/** …and which of them is active, resolved the same way every write does. */
+export async function getActiveListId(userId: string): Promise<string> {
+  return activeList(await load(userId)).id;
+}
+
+/**
+ * An id for a list or a search: eight URL-safe characters.
+ *
+ * Shorter than an invite code (16) and deliberately so — this is a **name for a
+ * thing you own**, not the whole of the authorisation to read it. Guessing one
+ * gets you nothing, because every route that takes one also takes the caller's
+ * own user id and looks only in their own record; the codes that *are* an
+ * authorisation are minted at the full length by `index.ts`.
+ */
+function mintId(): string {
+  return randomBytes(6).toString('base64url');
+}
+
+/** Apply `change` to one list of this user's, by id. A no-op (and no write) if
+ *  there is no such list, which is what makes a delete racing a rename resolve
+ *  as the delete rather than as an error. */
+async function mutateList(
+  userId: string,
+  listId: string,
+  change: (list: SavedList) => SavedList | null,
+): Promise<SavedList[]> {
+  const next = await mutate(userId, (cur) => {
+    const at = cur.watchlists.findIndex((l) => l.id === listId);
+    if (at === -1) return null;
+    const replaced = change(cur.watchlists[at]);
+    const watchlists = [...cur.watchlists];
+    if (replaced === null) watchlists.splice(at, 1);
+    else watchlists[at] = replaced;
+    // **Never nothing.** Deleting the last list would leave every surface
+    // downstream with no list to be active, so the floor is one empty list —
+    // exactly what `listsOf` hands a brand-new record.
+    return { watchlists: watchlists.length ? watchlists : listsOf(undefined, undefined) };
+  });
+  return next.watchlists;
+}
+
+/** Add a list. The name is the caller's; the id and the stamps are ours. */
+export async function addList(
+  userId: string,
+  name: string,
+  keys: string[] = [],
+): Promise<{ lists: SavedList[]; id: string }> {
+  const id = mintId();
+  const now = Date.now();
+  const next = await mutate(userId, (cur) => {
+    if (cur.watchlists.length >= MAX_LISTS) return null;
+    return {
+      watchlists: [...cur.watchlists, { id, name, keys, createdAt: now, updatedAt: now }],
+    };
+  });
+  return { lists: next.watchlists, id };
+}
+
+/** Rename one. */
+export async function renameList(
+  userId: string,
+  listId: string,
+  name: string,
+): Promise<SavedList[]> {
+  return mutateList(userId, listId, (l) =>
+    l.name === name ? l : { ...l, name, updatedAt: Date.now() },
+  );
+}
+
+/**
+ * Delete one — **and its share pointer with it**, or the link would go on
+ * resolving to a list that no longer exists. The pointer is removed first for
+ * the reason `setLeagueSharing` writes its own last: the failure that leaves a
+ * link working is worse than the one that leaves an orphan pointer, which
+ * resolves to nothing anyway because the two must agree.
+ */
+export async function deleteList(userId: string, listId: string): Promise<SavedList[]> {
+  const cur = await load(userId);
+  const code = cur.watchlists.find((l) => l.id === listId)?.shareCode;
+  if (code) await deleteRaw(SHARE_KEY(code));
+  return mutateList(userId, listId, () => null);
+}
+
+/**
+ * Add or remove one key **from the active list**. Idempotent in both
+ * directions, which is what makes the lost-update replay in `mutate` the right
+ * resolution rather than a failure: a board row's star is pressed from one tab
+ * while another is doing something else with the item, and replaying "make sure
+ * this key is (not) in this list" against the newer record is exactly correct.
+ *
+ * **The active list and not a named one**, which is the whole of what the star
+ * had to learn: it is one press on a row and there is no room on it to ask
+ * *which list*, so the answer is the one the reader has selected — the same
+ * thing the Watchlist button unions and the same thing every sentence in the UI
+ * calls "your watchlist".
  */
 export async function setWatchlisted(
   userId: string,
   key: string,
   on: boolean,
 ): Promise<string[]> {
-  const next = await mutate(userId, (cur) => {
-    const has = cur.watchlist.includes(key);
-    if (has === on) return null; // already so — nothing to write
-    return { watchlist: on ? [key, ...cur.watchlist] : cur.watchlist.filter((k) => k !== key) };
+  const cur = await load(userId);
+  const id = activeList(cur).id;
+  const lists = await mutateList(userId, id, (l) => {
+    const has = l.keys.includes(key);
+    if (has === on) return l; // already so — no change, and `mutate` writes nothing
+    return {
+      ...l,
+      keys: on ? [key, ...l.keys] : l.keys.filter((k) => k !== key),
+      updatedAt: Date.now(),
+    };
   });
-  return next.watchlist;
+  return (lists.find((l) => l.id === id) ?? lists[0]).keys;
+}
+
+// ---- Saved searches ---------------------------------------------------
+
+/** Every reading this user has saved, oldest first. */
+export async function getSearches(userId: string): Promise<SavedSearch[]> {
+  return (await load(userId)).searches;
+}
+
+/** Save the board as it stands, under a name. */
+export async function addSearch(
+  userId: string,
+  name: string,
+  board: Record<string, unknown>,
+): Promise<{ searches: SavedSearch[]; id: string }> {
+  const id = mintId();
+  const now = Date.now();
+  const next = await mutate(userId, (cur) => {
+    if (cur.searches.length >= MAX_SEARCHES) return null;
+    return { searches: [...cur.searches, { id, name, board, createdAt: now, updatedAt: now }] };
+  });
+  return { searches: next.searches, id };
+}
+
+/**
+ * Rename a search, replace what it points at, or both.
+ *
+ * One function for the two because they are one gesture in the UI — *update
+ * this saved search to the board I am looking at* — and because a partial
+ * update is what makes "rename without disturbing the reading" possible: an
+ * omitted field is left alone rather than cleared.
+ */
+export async function updateSearch(
+  userId: string,
+  searchId: string,
+  patch: { name?: string; board?: Record<string, unknown> },
+): Promise<SavedSearch[]> {
+  const next = await mutate(userId, (cur) => {
+    const at = cur.searches.findIndex((x) => x.id === searchId);
+    if (at === -1) return null;
+    const searches = [...cur.searches];
+    searches[at] = {
+      ...searches[at],
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.board !== undefined ? { board: patch.board } : {}),
+      updatedAt: Date.now(),
+    };
+    return { searches };
+  });
+  return next.searches;
+}
+
+/** Delete a search, and its share pointer with it — as `deleteList`. */
+export async function deleteSearch(userId: string, searchId: string): Promise<SavedSearch[]> {
+  const cur = await load(userId);
+  const code = cur.searches.find((x) => x.id === searchId)?.shareCode;
+  if (code) await deleteRaw(SHARE_KEY(code));
+  const next = await mutate(userId, (c) => {
+    if (!c.searches.some((x) => x.id === searchId)) return null;
+    return { searches: c.searches.filter((x) => x.id !== searchId) };
+  });
+  return next.searches;
 }
 
 // ---- Preferences ------------------------------------------------------
@@ -983,6 +1357,20 @@ export async function setTheme(userId: string, theme: string | null): Promise<Us
  * rather than a property of either table, so a reader who turns it on for the
  * board wants it on the Stats tab as well.
  */
+export async function setActiveList(userId: string, listId: string | null): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    // **Only an id that names a list is stored**, which is what keeps the
+    // fallback in `activeList` a safety net rather than the normal path: a
+    // request naming a list that has been deleted clears the entry back to
+    // absence — the first list — rather than writing down a pointer to nothing.
+    if (listId && cur.watchlists.some((l) => l.id === listId)) prefs.activeWatchlistId = listId;
+    else delete prefs.activeWatchlistId;
+    return { prefs };
+  });
+  return next.prefs;
+}
+
 export async function setStatRanks(userId: string, on: boolean): Promise<UserPrefs> {
   const next = await mutate(userId, (cur) => {
     const prefs = { ...cur.prefs };
@@ -1194,6 +1582,130 @@ export async function setEspnTeam(
 // this needs no new table and no CDK change — and an invite code gets a
 // pointer record of its own (`invite#<code>`) so a join is one lookup rather
 // than a scan.
+
+// ---- Sharing a list or a search ---------------------------------------
+//
+// **The same shape the ESPN invite already has**, one level simpler. A share is
+// a pointer record (`share#<code>`) naming whose record the thing is on and
+// which thing it is, and the owner's copy carries the code back — so a read
+// requires the two to agree and a half-finished revoke cannot leave a working
+// link behind. That is `leagueForInvite`'s rule, and this is the second thing
+// in the app to need it.
+//
+// **A live reference and not a snapshot**, which is the one real decision here.
+// A shared watchlist that froze the day it was handed over would be a worse
+// thing than a link to a list — the whole use is *these are the arms I am
+// watching*, and it is worth something precisely because it goes on being true.
+// The cost is that the owner can change what a recipient sees, which is
+// exactly what revoking is for; and the recipient's own copy, when they take
+// one, is a copy and stops tracking. That is what "save as my own" means.
+//
+// **Nobody's name travels with it.** The app knows its users as Cognito subs
+// and their email addresses, and an email is not a thing to hand to whoever
+// holds a link. So a shared item arrives with its own name and the fact that it
+// is shared, and says nothing about who shared it — which is all the UI needs to
+// say *you are reading somebody else's list*.
+
+const SHARE_KEY = (code: string) => `share#${code}`;
+
+/** What a share pointer holds: whose record, and which thing on it. */
+interface SharePointer {
+  kind: 'list' | 'search';
+  ownerId: string;
+  itemId: string;
+}
+
+/** A shared thing as a reader who is not its owner receives it. */
+export interface SharedItem {
+  kind: 'list' | 'search';
+  code: string;
+  name: string;
+  /** Set for a list, absent for a search. */
+  keys?: string[];
+  /** Set for a search, absent for a list. */
+  board?: Record<string, unknown>;
+  /** True when the reader asking is the person who shared it — which the client
+   *  uses to *not* draw the "you are reading somebody else's" chrome over your
+   *  own list. Following your own share link is not a thing to warn about. */
+  mine: boolean;
+}
+
+/**
+ * Turn sharing on for one list or search, minting a code if it has none, or off.
+ *
+ * Idempotent on: asking twice returns the code it already had, so a reader who
+ * presses Share again gets the link they handed out last week rather than
+ * quietly invalidating it. Off deletes both halves.
+ */
+export async function setItemSharing(
+  userId: string,
+  kind: 'list' | 'search',
+  itemId: string,
+  enabled: boolean,
+  mintCode: () => string,
+): Promise<string | null> {
+  const cur = await load(userId);
+  const item =
+    kind === 'list'
+      ? cur.watchlists.find((l) => l.id === itemId)
+      : cur.searches.find((x) => x.id === itemId);
+  if (!item) return null;
+  const existing = item.shareCode;
+  if (enabled && existing) return existing;
+  const code = enabled ? mintCode() : null;
+
+  await mutate(userId, (c) => {
+    if (kind === 'list') {
+      const at = c.watchlists.findIndex((l) => l.id === itemId);
+      if (at === -1) return null;
+      const watchlists = [...c.watchlists];
+      const { shareCode: _drop, ...rest } = watchlists[at];
+      watchlists[at] = code ? { ...rest, shareCode: code } : rest;
+      return { watchlists };
+    }
+    const at = c.searches.findIndex((x) => x.id === itemId);
+    if (at === -1) return null;
+    const searches = [...c.searches];
+    const { shareCode: _drop, ...rest } = searches[at];
+    searches[at] = code ? { ...rest, shareCode: code } : rest;
+    return { searches };
+  });
+
+  // The pointer is written **after** the owner's copy and deleted **before**
+  // it, both for the same reason `setLeagueSharing` gives: whichever half fails,
+  // the failure must not be the one that leaves a link working.
+  if (code) await putRaw(SHARE_KEY(code), { kind, ownerId: userId, itemId }, 0);
+  else if (existing) await deleteRaw(SHARE_KEY(existing));
+  return code;
+}
+
+/**
+ * Resolve a share code to the thing it opens, reading the **owner's current**
+ * copy — see the note above on why this is a live reference.
+ *
+ * Null for a code that was never valid, has been revoked, or points at an item
+ * since deleted. Deliberately one answer for all three: which of them it is
+ * tells a stranger holding a guessed code something about whether they are
+ * close, which is the reasoning `/api/espn/join` already states.
+ */
+export async function resolveShare(code: string, readerId: string): Promise<SharedItem | null> {
+  const { item } = await loadRaw(SHARE_KEY(code));
+  const ptr = item as unknown as SharePointer | null;
+  if (!ptr || (ptr.kind !== 'list' && ptr.kind !== 'search')) return null;
+  const owner = await load(ptr.ownerId);
+  const mine = ptr.ownerId === readerId;
+  if (ptr.kind === 'list') {
+    const list = owner.watchlists.find((l) => l.id === ptr.itemId);
+    // Both halves must agree, or a revoke that got half-way would leave this
+    // resolving — the rule `leagueForInvite` states and the reason the pointer
+    // is not trusted on its own.
+    if (!list || list.shareCode !== code) return null;
+    return { kind: 'list', code, name: list.name, keys: list.keys, mine };
+  }
+  const search = owner.searches.find((x) => x.id === ptr.itemId);
+  if (!search || search.shareCode !== code) return null;
+  return { kind: 'search', code, name: search.name, board: search.board, mine };
+}
 
 const LEAGUE_KEY = (leagueId: number) => `league#${leagueId}`;
 const INVITE_KEY = (code: string) => `invite#${code}`;
