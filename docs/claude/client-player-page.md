@@ -714,8 +714,35 @@ has against reading a hundredth percentile off thirty-four plate appearances.
 necessary — pitcher bat-speed-against holds eighty per cent of the league inside
 1.2 mph, so a cut moves a man from the 50th to the 0th on 1.3 mph of noise.
 
-**Bundle**: JS 745.79 → 748.94 kB raw, 219.89 → 220.93 gzipped; CSS 192.67 →
-193.02 raw, 34.32 → 34.37 gzipped.
+**Three things about the controls were wrong on screen and were measured to be
+so**, all of them geometry the build had nothing to say about:
+
+- **They were a full-width row over a centered card.** At 1440 the controls
+  began at `x: 16, w: 1408` while the card they are about was `x: 380, w: 680` —
+  a run of pills floating in 364px of empty space to the left of their own
+  subject. They take the card's own cap and auto margins now, written as the
+  same two lines so the two cannot come apart if that number moves, and are
+  centered inside it because the card's head is: at 1440 both read
+  `x: 380, w: 680`.
+- **The `Updating` badge wrapped, and cost the row a line it never drew on.**
+  The Stats tab's labeled pill is 106px, and 415 + 157 of switches inside a
+  680px column leaves about a hundred — so it fell to a second row that was
+  empty whenever nothing was loading, and pushed the card down by it. Measured
+  before → after: the controls box **68px → 30px**, the card's top **271 →
+  233**. It is a reserved **20px ball** now, which is the idiom the two other
+  bar controls that read something already use — `ScheduleControl` and
+  `TurnPicker` both swap their glyph for a `size="sm"` ball and neither carries
+  a word. Still reserved by `visibility`, so a read landing cannot move a pill
+  under the finger that pressed one.
+- **The phone stranded a pill and broke the title mid-phrase.** The cut switch
+  was a full-width box, so at 390 it wrapped with `Last 100 AB` alone on a
+  second line and 230px of unused track beside it; it is shrink-wrapped and
+  center-justified now, so both lines are the width of the pills in them. And
+  the card title broke as `— vs` / `LHP`, two half-thoughts, which a `nowrap`
+  on the cut phrase and `text-wrap: balance` on the title fix together.
+
+**Bundle**: JS 745.79 → 749.03 kB raw, 219.89 → 220.93 gzipped; CSS 192.67 →
+193.40 raw, 34.32 → 34.45 gzipped.
 
 ### The player page's Overview tab: the player as a summary page
 

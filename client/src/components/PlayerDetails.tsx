@@ -54,7 +54,7 @@ import { GameLog } from './GameLog';
 import { PlayerWindowTable } from './PlayerWindowTable';
 import { NewsTab } from './PlayerNews';
 import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
-import { LoadingBlock, LoadingLine } from './Loading';
+import { LoadingBlock, SpinningBaseball } from './Loading';
 import {
   TAP_SLOP,
   useDelayedFlag,
@@ -1980,19 +1980,28 @@ export function PlayerDetails({
               </button>
             ))}
           </div>
-          {/* **The in-place `Updating` badge — the one mark a re-read is
-              allowed to leave**, and it sits in this row rather than in the
-              card's head so that it cannot move the card. Laid out whether or
-              not it is showing, for the reason the Stats tab's identical badge
-              is: this row wraps on a phone, so a badge that arrived with the
-              read would re-flow the pills under the finger that had just
-              pressed one. `visibility` rather than a conditional render, so the
-              box reserved is the badge's own width and not a number written
-              down here. */}
-          <span className={`stats-updating${loading && data ? '' : ' is-idle'}`} aria-hidden={!(loading && data)}>
-            <LoadingLine className="refreshing" announce={!!(loading && data)}>
-              Updating
-            </LoadingLine>
+          {/* **The one mark a re-read is allowed to leave**, and it is a ball
+              rather than a labeled badge — which is the idiom the two other bar
+              controls that read something already use (`ScheduleControl` and
+              `TurnPicker` both swap their glyph for a `size="sm"` ball). It was
+              the Stats tab's `Updating` pill, and that is 106px: with 580px of
+              switches inside a 680px column it **wrapped to a second line**,
+              which cost the row 38px of permanently empty air above the card
+              and pushed the card down by it. Measured before → after: the
+              controls box **68px → 30px**.
+
+              Reserved either way, which is the rule that put it in this row
+              rather than in the card's head: `visibility` on a fixed 20px slot,
+              so a read landing cannot move a pill under the finger that just
+              pressed one. The words are for a screen reader alone — an
+              in-control mark is read by the control it is in, which is why
+              neither of the other two carries any. */}
+          <span
+            className={`pct-updating${loading && data ? '' : ' is-idle'}`}
+            role="status"
+            aria-label={loading && data ? 'Updating' : undefined}
+          >
+            <SpinningBaseball size="sm" />
           </span>
         </div>
       )}
@@ -2041,7 +2050,14 @@ export function PlayerDetails({
           <div className="pct-card-head">
             <span className="pct-card-title">
               {data.year} MLB Percentile Rankings
-              {data.cut ? ` — ${CUT_LABEL[data.cut][kind]}` : ''}
+              {/* **The cut is one unbreakable phrase.** On a phone the title
+                  wraps, and left as plain text it broke *inside* the cut —
+                  `— vs` on one line and `LHP` on the next, which reads as two
+                  half-thoughts. Nowrap moves the break to the space before the
+                  dash, where a title should break. */}
+              {data.cut && (
+                <span className="pct-card-cut"> — {CUT_LABEL[data.cut][kind]}</span>
+              )}
             </span>
           </div>
           {/* **What a cut card is, said once, above the bars.** Three things a
@@ -2054,12 +2070,16 @@ export function PlayerDetails({
               thirty-four plate appearances. */}
           {data.cut && (
             <p className="pct-cut-note">
-              His {CUT_LABEL[data.cut][kind]} line
-              {data.cutSample != null
-                ? ` — ${data.cutSample} ${sampleUnit(isPitcher, data.cutSample)} — `
-                : ' '}
-              placed among every qualified player’s <strong>full season</strong>. These ranks are
-              ours rather than Savant’s, so every bubble is drawn broken.
+              {data.cutSample != null && (
+                <>
+                  <span className="pct-cut-sample">
+                    {data.cutSample} {sampleUnit(isPitcher, data.cutSample)}
+                  </span>
+                  {', '}
+                </>
+              )}
+              placed among every qualified player’s <strong>full season</strong> — so these ranks
+              are ours rather than Savant’s, and every bubble is drawn broken.
             </p>
           )}
           {shownSections.map((sec) => (
