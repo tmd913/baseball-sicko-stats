@@ -1221,6 +1221,92 @@ row grows 36 → 80px. Wrapping rather than scrolling because both are *controls
 a rail can be half off the screen and still say there is more of it, where half a
 control off the screen is a reading the reader cannot reach.
 
+### The rail reads two ways, and the switch says which
+
+**The span undivided was the only reading for as long as there was one**, and it
+is still the default and still the right one for the question a projected board
+is usually opened for. What it cannot answer is the other one. *Who will give me
+the most over these days* and *how good is he on a day he plays* are different
+questions, the second is what a manager streaming one open day is asking, and a
+rail that only ever answered the first was half an offer — the same sentence
+*The window is a switch* makes about printing three spans and ranking on one.
+
+So `Total | Per G` sits beside the rails' switch, exactly where the trending
+rail's windows sit and drawn by the same component, and the rail is ranked on
+whichever is pressed.
+
+**It is a second list rather than a re-ordering at the margin**, which is the
+test the windows' switch was held to. Measured on the live league over
+2026-08-26 → 09-06, the batters' row: `Crow-Armstrong · Alonso · Witt Jr. ·
+Alvarez · Ohtani` by the total and `Tolbert · Durbin · Bell · Ruiz · Hernández`
+per appearance among the free agents the rail actually draws. On the starters'
+row Gerrit Cole leads the total on three turns and is off the top eight per
+turn.
+
+**The card says which**, in the box's own label (`Value` / `Val/G`) as well as
+in the note under the heading — the rule the ranked trend column already
+follows, and for its reason: the reader is looking at the card rather than at
+the control, and a bold signed number is not self-evidently one figure rather
+than the other. **Two decimals per appearance against the total's one**, forced
+rather than chosen: the whole live spread of the per-appearance figure inside a
+seat is about 0.55–0.65 for batters, so one decimal prints seven of a top eight
+as `0.6` and the order of the rail becomes a puzzle. The cell is the same width
+either way — `+0.65` and `+13.8` are both five characters against a 35.33px
+track.
+
+**`spotv=avg` in the URL**, the total writing nothing, and scoped one step
+further in than `spot=` exactly as `spotw=` is: a reading on a link that opens
+the *trending* rail names a divisor nothing on screen is made of. Separate state
+from the tab, so it survives a crossing of the switch — a sub-selection inside a
+page is not a leaving.
+
+**The switch is never suppressed**, where the other two are. That rule is that a
+control with one live option marks nothing; this one always has exactly two, and
+both are answerable off figures the rail is already built from.
+
+#### A per-appearance figure needs a floor, and the first measurement of it was taken on the wrong population
+
+**Under one projected appearance there is no figure** —
+`projectedRowValuePerGame` is null, the rail drops the row, and the board's
+`VAL/G` cell prints a dash.
+
+The worry is the obvious one: a tiny denominator dividing a man to the top.
+Measured over the **whole** board — 984 scored rows, 149 of them under a game —
+it looked like a non-issue, the best thin row ranking **24th** among batters,
+because the projection is *linear in chances* and `value / games` therefore
+recovers a stable per-appearance rate at any count.
+
+**That was an answer about a list nobody is shown.** The rail is **free agents
+only**, and everybody good has been taken out of that pool. Re-measured over its
+722 rows, **five of the batters' per-game top ten were under one game** and the
+leader was Davis Wendzel at **0.1 G for a total of 0.0** — a card reading *he is
+excellent when he plays, and he is not going to play*. The sweep:
+
+| floor | under 1 G in the top ten | leader |
+| --- | --- | --- |
+| none | **5** | Wendzel **0.49** (0.1 G) |
+| 0.5 | 4 | Tolbert 0.46 (7.3 G) |
+| **1** | **0** | Tolbert 0.46 (7.3 G) |
+| 2 | 0 | Tolbert 0.46 (7.3 G) |
+
+**One is where the effect saturates and the last point that costs nothing**: the
+batters' top ten is identical at 1 and 2, and the starters' row is untouched at
+1 but loses Randy Vásquez — a legitimate single-turn starter at exactly 1.0 G —
+at 1.5. The relievers' row has no row under 3.3 G and never moves.
+
+**The floor is on the figure, not on the rail**, and that is the second thing
+this section is a record of. Putting it in the rail alone was tried first and
+broke the row-by-row match the `See more` door is held to: the rail read
+`Tolbert · Durbin · Bell` and the board it opened read `Wendzel · Tolbert ·
+Kingery`, because the board had no floor. One rule in one function makes the
+rail, the column and the door agree by construction — verified after, both
+reading `Tolbert · Durbin · Bell · Ruiz`.
+
+And a dash is the honest cell rather than a hidden one: dividing by less than one
+projected appearance does not produce a per-appearance figure, it produces his
+rate with no appearance under it. The board already dashes `G` where there is
+nothing to project rather than printing a `0` that claims a measurement.
+
 ### The value card is the same box with one column
 
 The value rail's figure is drawn in **the same bordered table**, one column,
@@ -1358,7 +1444,11 @@ Six things, and each of them is *what the rail is* rather than a tidying-up:
   drawn over, so the board's figure is the card's figure rather than a second
   projection over a different week.
 - **The sort**, on the rail's own column, descending: `trendKey(window)` for
-  whichever window the switch is on, `projValue` for the value rail.
+  whichever window the switch is on, and for the value rail `projValue` or
+  **`projValueRate`** depending on which way it is being read. The second is
+  `DEFAULT_OFF`, so it is exactly the case the bullet below exists for — a rail
+  ranked per appearance opening a board ordered by the total would be a press
+  that looks like it did nothing.
 - **That column made visible**, and this one is not cosmetic. **A sort naming a
   column the table has not got silently falls back to the board's default**
   (`ResearchTable::sortableKey`), and four of the five trend windows are

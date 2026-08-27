@@ -2022,6 +2022,36 @@ Overview's `+1.4`, which is a single day, and the title says which it is.
 format separately, the arithmetic walks every category the league scores, and
 the board draws six hundred rows.
 
+**And `VAL/G` beside it, off by default**, which is the same figure per
+appearance — *how good is he on a day he plays* against `VAL`'s *how much will
+he give me over these days*. It exists because the Overview's High Value rail
+offers both readings and the `See more` card at the end of that rail opens
+**this board sorted on the rail's own column**: without a column for it, a rail
+ranked per appearance would land on a board ranked by the total and look like
+the door had done nothing. That is the fault `withProjectedColumn` was written
+to prevent for the four held-back trend windows, arriving here for the same
+reason and handled the same way — the door turns the column on itself.
+
+**Off beside `VAL`'s on**, which is the call `SV` and `HLD` get beside `SVHD`:
+the total is the read a projected board is opened for and the per-appearance cut
+is the follow-up question, and two columns of one figure on by default would be
+the board answering something nobody asked in the place it has least room. It is
+a tick away in the picker, under the same `Fantasy` heading.
+
+**Two decimals where `VAL` takes one**, and forced rather than chosen: the whole
+live spread of this figure inside a seat is about 0.55–0.65 for batters, so one
+decimal prints seven of a top eight as `0.6` and the order stops being readable.
+Same cell width either way — `+0.65` and `+13.8` are both five characters.
+
+**A dash under one projected appearance.** `projectedRowValuePerGame` is null
+there, and deliberately: dividing by less than one appearance does not produce a
+per-appearance figure, it produces his rate with no appearance under it. It is
+the rule `Games` already follows one column over, printing a dash rather than a
+`0` that would claim a measurement. The floor lives in the figure rather than in
+any one caller so that this column, the rail and the door between them read one
+list — `client-overview.md` carries the sweep that sets it at one appearance,
+and the measurement that shows what putting it anywhere else costs.
+
 **Two counts the server had to start sending.** Every term the scorer needs is
 on the projected row or falls out of what is — singles from hits less the
 extra-base hits, total bases from the four of them — except `hbp` and `sf`,

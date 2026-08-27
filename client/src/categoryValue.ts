@@ -433,6 +433,83 @@ export function projectedRowValue(row: ResearchRow, categories: EspnCategory[]):
 }
 
 /**
+ * **…and the same figure divided by the appearances it is made of** — *how good
+ * is he on a day he plays*, where the one above is *how much will he give me
+ * this week*.
+ *
+ * The two are different questions and neither subsumes the other. A hitter with
+ * eleven games beats an equal one with eight on the total and ties him here; a
+ * starter with three turns beats one with two on the total and may lose here.
+ * Which of them a reader wants depends on what he is deciding — a streamer for
+ * one open day wants this, and a man to hold all week wants the total — so the
+ * Overview's value rail offers both and says which is in force.
+ *
+ * **It divides by `games`, which for a pitcher is appearances**: a starter's
+ * turns and a reliever's outings, the same quantity the board's own `G` column
+ * prints and the same one `projectedPlayerValue` reads as `chances`. So this is
+ * per *appearance* rather than per club-game, which is the only reading that
+ * means anything for a man who does not play every day.
+ *
+ * **Null under one projected appearance** (`PER_GAME_MIN_GAMES`), and that is a
+ * correction — the first pass had no floor at all and measured the wrong
+ * population to justify it.
+ *
+ * The worry is a tiny denominator: a man projected for a tenth of an appearance
+ * dividing his way to the top. Measured over the **whole** board (984 scored
+ * rows, 149 of them under one game) it looked like a non-issue — the best thin
+ * row ranked 24th among batters — because the projection is **linear in
+ * chances**, so `value / games` recovers something close to a stable
+ * per-appearance rate at any count.
+ *
+ * **But the Overview's rail is free agents only, and that pool is far thinner.**
+ * Re-measured over the 722 rows nobody in the league has rostered, **five of the
+ * batters' per-game top ten had under one game** and the leader was Davis
+ * Wendzel at **0.1 G for a total of 0.0** — a card reading *he is excellent when
+ * he plays, and he is not going to play*. The first measurement was not wrong
+ * about the arithmetic; it was answering about a list nobody is shown.
+ *
+ * **So the floor is on the figure rather than on any one caller**, which is what
+ * makes every surface agree: the rail drops the row (it already drops a null
+ * value), the board's `VAL/G` cell prints a dash, and the `See more` door
+ * therefore lands on a board whose top ten *is* the rail's top ten — the
+ * row-by-row match that door is held to. A floor in the rail alone was tried
+ * first and broke exactly that: the rail read `Tolbert · Durbin · Bell` and the
+ * board it opened read `Wendzel · Tolbert · Kingery`.
+ *
+ * **And a dash is the honest cell, not a hidden one.** Dividing by less than one
+ * projected appearance does not produce a per-appearance figure — it produces
+ * his rate with no appearance under it, a number that says nothing about the
+ * span the board is set to. The board already prints a dash on `G` where there
+ * is nothing to project rather than a `0` claiming a measurement; this is that
+ * rule one column over.
+ *
+ * **One is where the effect saturates and the last point that costs nothing.**
+ * The sweep on the batters' row: unfloored **5** of the top ten are under a
+ * game, at 0.5 **4**, at 1 **none**, and at 2 the list is *identical* to 1 — so
+ * nothing above one buys anything. Meanwhile the starters' row is untouched at
+ * 1 and loses Randy Vásquez — a legitimate single-turn starter at exactly 1.0 G
+ * — at 1.5. The relievers' row has no row under 3.3 G and never moves.
+ *
+ * Null where the total is null, and null on a row with no appearance to divide
+ * by — `0` games is *there is nothing here to project* rather than a
+ * measurement of nothing, which is the reading the board's own `Games` column
+ * takes.
+ */
+/** The fewest projected appearances a per-appearance figure is drawn over — see
+ *  the block above for the sweep that sets it at one. */
+const PER_GAME_MIN_GAMES = 1;
+
+export function projectedRowValuePerGame(
+  row: ResearchRow,
+  categories: EspnCategory[],
+): number | null {
+  const total = projectedRowValue(row, categories);
+  if (total === null) return null;
+  const games = typeof row.games === 'number' && Number.isFinite(row.games) ? row.games : 0;
+  return games >= PER_GAME_MIN_GAMES ? total / games : null;
+}
+
+/**
  * …and the roster lens's own rows, which need no adapter worth the name:
  * `ProjectedPlayerLine` already carries a whole `BattingLine` and
  * `PitchingLine`, being built by the same engine from the same stat ids this

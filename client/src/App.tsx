@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api } from './api';
 import { SignOutButton, Splash } from './auth';
 import { playerKey, RESEARCH_WINDOWS, SPLIT_CUTS } from './types';
-import { projectedRowValue, STANDARD_5X5 } from './categoryValue';
+import { projectedRowValue, projectedRowValuePerGame, STANDARD_5X5 } from './categoryValue';
 import type {
   BoardProjection,
   EspnOwnership,
@@ -182,6 +182,7 @@ import type {
   TrendingRail,
   ValuePlayer,
   ValueRail,
+  ValueReading,
 } from './components/OverviewView';
 import type { MatchupReading } from './components/LeagueMatchup';
 import type { LeagueTab } from './components/LeagueView';
@@ -2568,6 +2569,21 @@ export default function App() {
     const raw = Number(initialParams.get('spotw'));
     return (TRENDING_CARD_WINDOWS as readonly number[]).includes(raw) ? (raw as TrendWindow) : 1;
   });
+  /**
+   * **Which way the value rail is read** — the span added up, or one appearance
+   * of him. `spotv=avg` in the URL, the total being the rail's own default and
+   * so writing nothing.
+   *
+   * `spotWindow`'s twin on the other rail in every respect: separate state from
+   * the tab, so it survives a crossing of the spotlight's switch (*a
+   * sub-selection inside a page is not a leaving*), scoped one step further in
+   * than `spot=` when it is written, and falling back on a value it does not
+   * recognize. See `ValueReading` for what the two readings are and for the
+   * measurement that shows they are two lists rather than one re-ordered.
+   */
+  const [valueReading, setValueReading] = useState<ValueReading>(() =>
+    initialParams.get('spotv') === 'avg' ? 'perGame' : 'total',
+  );
   /** Whether the Scoreboard's calendar is open. Its own flag rather than the
    *  app bar's `dateOpen`: the two bars are never on screen together, but one
    *  left open behind a view change would open the other. */
@@ -4622,6 +4638,12 @@ export default function App() {
     if (view === 'overview' && spotlightTab === 'trending' && spotWindow !== 1) {
       p.set('spotw', String(spotWindow));
     }
+    // …and the value rail's own reading, scoped the same way and for the same
+    // reason: on a link that opens the *trending* rail it would name a divisor
+    // nothing on screen is made of.
+    if (view === 'overview' && spotlightTab === 'value' && valueReading !== 'total') {
+      p.set('spotv', 'avg');
+    }
     if (simulate) p.set('sim', '1');
     if (hideInjured) p.set('hideil', '1');
     // The feed's own lens — one key, the row above being single-select.
@@ -4709,6 +4731,7 @@ export default function App() {
     standingsGroup,
     spotlightTab,
     spotWindow,
+    valueReading,
     matchupId,
     matchupTeam,
     matchupReading,
@@ -6341,13 +6364,20 @@ export default function App() {
    * Overview's High Value rail, in the same three rows of ten the Trending rail
    * takes and by the same rules.
    *
-   * **The figure is `categoryValue.ts` over the span undivided**, which is
-   * exactly what the research board's `VAL` column prints and is scored against
-   * `scoringCategories` — the reader's own league, or the standard 5×5 without
-   * one. Six games of a good hitter outscore three of an equal one, and *who
-   * will give me the most this week* is the question a rail like this is read
-   * for. It is therefore not comparable to the day cards' `+1.4`, which is a
-   * single day.
+   * **The figure is `categoryValue.ts`**, scored against `scoringCategories` —
+   * the reader's own league, or the standard 5×5 without one — and it is one of
+   * **two readings** the rail offers (`ValueReading`):
+   *
+   * - **the span undivided**, which is what the research board's `VAL` column
+   *   prints and what a projected board is opened for: six games of a good
+   *   hitter outscore three of an equal one, and *who will give me the most this
+   *   week* is the question. This is the default.
+   * - **per appearance**, `VAL/G` on that board, which is *how good is he on a
+   *   day he plays* — the question a manager streaming one open day asks, and
+   *   the one on which an eight-game hitter can beat an eleven-game one.
+   *
+   * Neither is comparable to the day cards' `+1.4`, which is a single day, and
+   * the note under the heading says which of the three any figure on screen is.
    *
    * **Free agents only, and a null `ownedIds` draws nothing rather than
    * everything** — both the Trending rail's rules, and for the Trending rail's
@@ -6370,12 +6400,21 @@ export default function App() {
    */
   const highValue = useMemo<ValueRail | null>(() => {
     if (!valueBoards || !ownedIds) return null;
+    const perGame = valueReading === 'perGame';
     const rows: (ValuePlayer & { seat: keyof RailBoard<ValuePlayer> })[] = [];
     for (const r of [...valueBoards.batters, ...valueBoards.pitchers]) {
       if (ownedIds.has(r.id)) continue;
       if (!r.games) continue;
+
       const value = projectedRowValue(r, scoringCategories);
       if (value === null) continue;
+      // **The per-appearance figure carries its own floor**, and a row without
+      // one is off the rail on that reading exactly as a row without a value is
+      // off it on either — `projectedRowValuePerGame` is null under one
+      // projected appearance, which is what keeps this rail, the board's
+      // `VAL/G` column and the `See more` door between them reading one list.
+      const perGameValue = projectedRowValuePerGame(r, scoringCategories);
+      if (perGame && perGameValue === null) continue;
       const espnPositions = eligibility?.get(r.id) ?? null;
       const seat: keyof RailBoard<ValuePlayer> =
         r.kind === 'batter'
@@ -6398,11 +6437,19 @@ export default function App() {
         kind: r.kind,
         rosterPct: rosterPct?.get(r.id) ?? null,
         value,
+        // Zero on a row the per-appearance reading has no figure for. It is
+        // never read there — such a row is dropped above — and the field is a
+        // number so the card never has to test it.
+        perGame: perGameValue ?? 0,
         games: r.games,
         seat,
       });
     }
-    rows.sort((a, b) => b.value - a.value);
+    // **Sorted on whichever reading is in force, then cut to ten per seat** —
+    // in that order, so the top ten *is* the top ten of the figure on the card.
+    // Cutting first and re-sorting would be ten men chosen by the total and
+    // shuffled, which is the kind of list that looks right and is not.
+    rows.sort((a, b) => (perGame ? b.perGame - a.perGame : b.value - a.value));
     const take = (seat: keyof RailBoard<ValuePlayer>): ValuePlayer[] =>
       rows.filter((r) => r.seat === seat).slice(0, TRENDING_TOP);
     const board = {
@@ -6413,7 +6460,7 @@ export default function App() {
     return board.batters.length || board.starters.length || board.relievers.length
       ? { board, through: valueBoards.span.end }
       : null;
-  }, [valueBoards, ownedIds, eligibility, rosterPct, scoringCategories]);
+  }, [valueBoards, ownedIds, eligibility, rosterPct, scoringCategories, valueReading]);
 
   /**
    * **The `See more` card at the end of a spotlight row** — the research board,
@@ -6468,7 +6515,18 @@ export default function App() {
       researchIncludeTouched.current = true;
       setResearchIncludeState({ ...DEFAULT_INCLUDE });
       const projected = rail === 'value' && valueSpan !== null;
-      const sortKey = projected ? 'projValue' : trendKey(trending?.window ?? 7);
+      // **The rail's own column, and the value rail has two of them now.** A
+      // door that opened the board sorted on the total while the rail in front
+      // of the reader was ranked per appearance would be the same fault the
+      // held-back trend windows are handled for: a press that looks like it did
+      // nothing, because the list it lands on is not the list it came from.
+      // `VAL/G` is `DEFAULT_OFF`, so this is exactly the case
+      // `withProjectedColumn` below exists to cover.
+      const sortKey = projected
+        ? valueReading === 'perGame'
+          ? 'projValueRate'
+          : 'projValue'
+        : trendKey(trending?.window ?? 7);
       if (projected && valueSpan) {
         setBoardRange({ ...valueSpan, preset: null });
         setResearchProjected(true);
@@ -6504,7 +6562,7 @@ export default function App() {
         shown: freshResearchUi().shown,
       }));
     },
-    [trending, valueSpan],
+    [trending, valueSpan, valueReading],
   );
 
   /**
@@ -9732,6 +9790,8 @@ export default function App() {
           spotlight={spotlightTab}
           onSpotlight={setSpotlightTab}
           onSpotWindow={setSpotWindow}
+          valueReading={valueReading}
+          onValueReading={setValueReading}
           /* …and the door at the end of every row, into the board the rail is a
              top ten of. See `openSpotlightBoard`. */
           onSeeMore={openSpotlightBoard}

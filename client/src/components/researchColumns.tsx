@@ -9,7 +9,7 @@ import type {
   TrendWindow,
 } from '../types';
 import { formatStartTime, handThrows, inningLabel, surname } from '../lib';
-import { projectedRowValue, STANDARD_5X5 } from '../categoryValue';
+import { projectedRowValue, projectedRowValuePerGame, STANDARD_5X5 } from '../categoryValue';
 
 /**
  * **The research board's stat vocabulary, in one place.**
@@ -908,6 +908,55 @@ function projectedValueColumn(categories: EspnCategory[]): Column {
   };
 }
 
+/**
+ * **The same figure per appearance**, beside the total rather than instead of
+ * it — *how good is he on a day he plays*, where `VAL` is *how much will he
+ * give me over these days*.
+ *
+ * It exists because the Overview's value rail offers both readings and the
+ * `See more` card at the end of that rail opens **this board sorted on the
+ * rail's own column**. Without a column for it, a rail ranked per appearance
+ * would open a board ranked by the total and look like the door had done
+ * nothing — which is the fault `withProjectedColumn` was written to prevent for
+ * the trend windows, arriving here for the same reason.
+ *
+ * **Two decimals where `VAL` takes one**, and that is forced rather than
+ * chosen: the whole live spread of this figure inside a seat is about
+ * 0.55–0.65 for batters, so one decimal prints seven of a top eight as `0.6`
+ * and the order of the board becomes unreadable. It is the same cell width
+ * either way — `+0.65` and `+13.8` are both five characters, and the rail's
+ * track was measured at 35.33px against `+13.8`'s 34.5.
+ *
+ * Memoized per row on a `WeakMap`, `projectedValueColumn`'s own device and for
+ * its reason: a column is asked for its value and its format separately, six
+ * hundred times a board.
+ */
+function projectedValueRateColumn(categories: EspnCategory[]): Column {
+  const cache = new WeakMap<ResearchRow, number | null>();
+  const valueOf = (r: ResearchRow): number | null => {
+    const had = cache.get(r);
+    if (had !== undefined) return had;
+    const v = projectedRowValuePerGame(r, categories);
+    cache.set(r, v);
+    return v;
+  };
+  return {
+    key: 'projValueRate',
+    label: 'VAL/G',
+    title:
+      "What his projected line is worth per appearance over these days, in the categories your league scores — VAL divided by the games it is made of, which for a pitcher is his turns. Use it for a man you are starting on one day; use VAL for a man you are holding all week",
+    pick: 'Projected value per game',
+    // Beside `VAL` in `Fantasy`, being the same fact about the same league — see
+    // `projectedValueColumn` for why that section and not one of its own.
+    group: 'Fantasy',
+    format: (r) => {
+      const v = valueOf(r);
+      return v === null ? '\u2014' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
+    },
+    value: valueOf,
+  };
+}
+
 export function projectedColumns(kind: PlayerKind, oneDay: boolean, categories: EspnCategory[] = STANDARD_5X5): Column[] {
   const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
   const byKey = new Map(base.map((c) => [c.key, c]));
@@ -951,6 +1000,7 @@ export function projectedColumns(kind: PlayerKind, oneDay: boolean, categories: 
   const withValue = [
     ...stats.slice(0, 1),
     projectedValueColumn(categories),
+    projectedValueRateColumn(categories),
     // **The counting run is put back on its own section**, which inserting a
     // grouped column into the middle of it takes away: the picker's cut runs a
     // section on until the next column that names one, so `PA` onwards would
@@ -1080,6 +1130,15 @@ export function toProjectedColumnKeys(
 const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   batter: new Set([
     'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
+    // **`VAL/G` is off beside `VAL`, which is on** — the same call `SV`/`HLD`
+    // get beside `SVHD`: the total is the read a projected board is opened for,
+    // and the per-appearance cut is the follow-up question rather than the first
+    // one. Two columns of one figure on by default would be the board answering
+    // a question nobody asked, in the one place it has least room. It is a tick
+    // away in the picker, and the Overview's `See more` turns it on by itself
+    // when the rail it came from is ranked on it — `withProjectedColumn`, which
+    // is exactly what the four held-back trend windows already use it for.
+    'projValueRate',
     // `hits` and `ab` are what `hAb` prints, so the two of them off is the
     // same line in one column rather than a stat dropped from the board.
     'hits', 'ab', 'cs', 'iso', 'babip', 'bbPerK', 'paPerHr', 'sbRate',
@@ -1088,6 +1147,7 @@ const DEFAULT_OFF: Record<PlayerKind, ReadonlySet<string>> = {
   ]),
   pitcher: new Set([
     'rosterTrend1', 'rosterTrend3', 'rosterTrend15', 'rosterTrend30',
+    'projValueRate',
     // SV and HLD are off because SVHD is on — the sum is the read, and the
     // split between them is the follow-up question rather than the first one.
     'battersFaced', 'saves', 'holds', 'runs', 'hitBatsmen', 'avgAgainst',
