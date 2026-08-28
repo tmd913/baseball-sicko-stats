@@ -6115,6 +6115,53 @@ export default function App() {
     [today],
   );
 
+  /**
+   * **Every day the Overview's two carousels draw** — the matchup period, in
+   * date order.
+   *
+   * The row was yesterday, today and tomorrow, which is the shape a manager
+   * *asks* after days in and is not the shape of the thing they are days of.
+   * The card at the top of that page scores a **period**, and a row that
+   * stopped at tomorrow could not answer *what did Saturday come to* about the
+   * very week the card above it is a total of.
+   *
+   * **Widened to hold the three named days rather than replaced by the
+   * period**, which is the one decision here worth the paragraph. A period's
+   * edges and the three days a manager asks after do not line up: on the last
+   * day of a period `end` is today and `tomorrow` belongs to the next one, and
+   * on the first day `start` is today and yesterday belongs to the last. Taking
+   * the period alone would have made the Overview *lose* the Tomorrow card
+   * twice a fortnight — a card the page has always had, drawn off a read it
+   * makes on entry either way. So the span is the union, and
+   * `matchupWindow.next` still goes deliberately unread: a projection of a
+   * matchup that has not started is a different reading with a different
+   * heading, which is the same line the roster's Schedule view and the
+   * spotlight's value rail both draw.
+   *
+   * **`matchupWindow` rather than `matchupSpan`**, which clamps the end back to
+   * today — that clamp is for the two roster views, whose columns would
+   * otherwise be empty; here the days ahead are the point.
+   *
+   * **A reader with no league keeps exactly the three there always were**,
+   * which is not a special case but the same rule read at its other end: a
+   * period is a thing a league has, and without one there is no span.
+   *
+   * The cap is a backstop rather than a policy — a league whose period ran to
+   * some absurd length would otherwise put a card a day in the DOM. Nothing in
+   * this league's schedule comes near it (7 and 14 are the two lengths ESPN
+   * publishes), and it is stated so that a strange one degrades to a long row
+   * rather than to a hung page.
+   */
+  const overviewDays = useMemo(() => {
+    const { yesterday, tomorrow } = overviewDates;
+    const first =
+      matchupWindow && matchupWindow.start < yesterday ? matchupWindow.start : yesterday;
+    const last = matchupWindow && matchupWindow.end > tomorrow ? matchupWindow.end : tomorrow;
+    const out: string[] = [];
+    for (let d = first; d <= last && out.length < 45; d = addDays(d, 1)) out.push(d);
+    return out;
+  }, [matchupWindow, overviewDates]);
+
   /** One played day of the Overview: the reports, and who was in the lineup on
    *  it. Held together because they are one answer — the block cuts the first
    *  by the second, and a report that landed without its lineup would count the
@@ -6125,6 +6172,14 @@ export default function App() {
      *  not answer for — in which case the block counts everybody and says
      *  `Watchlist` rather than claiming a lineup it has not got. */
     lineup: Set<string> | null;
+  }
+
+  /** **The played half of the period as one answer** — every report over the
+   *  span, and every day's lineup keyed by its date. One read rather than one a
+   *  day, `/api/report` answering a range with each game's own date on it. */
+  interface OverviewSpan {
+    players: PlayerReport[];
+    lineups: Record<string, string[]> | null;
   }
 
   const [ovToday, setOvToday] = useState<OverviewDay | null>(null);
@@ -6191,6 +6246,87 @@ export default function App() {
     oppTomorrow: 0,
     oppTodayProj: 0,
   });
+
+  /**
+   * **The rest of the period, and it is two different reads because the two
+   * upstreams answer differently.**
+   *
+   * The four days above are read on entry to the view and are what the page's
+   * own settle gate waits for. Everything else on the row is read **as the
+   * reader swipes to it** (`needOverviewDay`), which is the same economy that
+   * keeps this whole page off the boot gate: a reader who never swipes past
+   * tomorrow pays nothing for the fortnight behind it.
+   *
+   * - **The played half is one read for the lot.** `/api/report` over a span
+   *   carries every game with its own date and a `lineups` map keyed by date,
+   *   so period-start → the day before yesterday comes back in one answer and
+   *   the view cuts it per day (`lineOf`). One request, however long the
+   *   period.
+   * - **The unplayed half is one read each.** The projection engine hands back
+   *   a *span total* with no per-day breakdown, so a span cannot be split back
+   *   apart — which is the same fact that makes `TOMORROW` and today's own
+   *   projection two requests up there rather than one.
+   *
+   * Both halves again for the opponent, on the same `teamId` the four above
+   * take.
+   */
+  const [ovPast, setOvPast] = useState<OverviewSpan | null>(null);
+  const [ovPastLoading, setOvPastLoading] = useState(false);
+  /** **Answered, one way or the other** — which `ovPast` alone cannot say, null
+   *  meaning both *nobody has asked* and *the read failed*. The card draws a
+   *  wait for the first and its empty state for the second; see
+   *  `ExtraDays.pastSettled`. */
+  const [ovPastSettled, setOvPastSettled] = useState(false);
+  const [ovOppPast, setOvOppPast] = useState<OverviewSpan | null>(null);
+  const [ovOppPastLoading, setOvOppPastLoading] = useState(false);
+  const [ovOppPastSettled, setOvOppPastSettled] = useState(false);
+  const [ovFuture, setOvFuture] = useState<Record<string, RosterProjection>>({});
+  const [ovFutureLoading, setOvFutureLoading] = useState<Record<string, boolean>>({});
+  const [ovOppFuture, setOvOppFuture] = useState<Record<string, RosterProjection>>({});
+  const [ovOppFutureLoading, setOvOppFutureLoading] = useState<Record<string, boolean>>({});
+
+  /**
+   * **What has already been asked for**, so a carousel may say *I need this
+   * day* on every render and it costs one request. A ref rather than state:
+   * nothing draws it, and a set that re-rendered on every read would be four
+   * renders of the page for four swipes.
+   *
+   * **The two generation counters are what make it safe to keep.** The answers
+   * are about a roster on a day, and both of those move under the page — the
+   * clock rolls on resume, the reader crosses between their fantasy team and
+   * their watchlist, and the scoreboard steps to another week where the
+   * opponent is somebody else. Every read carries the generation it was asked
+   * under and **only an answer from the current one may write**, which is the
+   * app's own sequence-number rule spelled as one number for a set of reads
+   * whose size nobody knows in advance.
+   *
+   * **Two of them rather than one**, and the split is the same split the entry
+   * reads already make: the reader's own four are their own effect and the
+   * opponent's four are another, because they depend on different things.
+   * Folded into one counter, a step of the scoreboard's week — which changes
+   * nothing whatever about the reader's own days — would have thrown away a
+   * fortnight's worth of played reports and asked for them again.
+   *
+   * **What is deliberately *not* done is clearing the answers.** A change of
+   * generation empties the guards so the next swipe re-reads; the cards go on
+   * showing what they last had until the new answer lands, which is rule 1 —
+   * the same reason the opponent's four cards survive a period step rather than
+   * blanking the foot of the page.
+   */
+  const ovGen = useRef(0);
+  const ovOppGen = useRef(0);
+  const ovAsked = useRef({
+    past: false,
+    oppPast: false,
+    future: new Set<string>(),
+    oppFuture: new Set<string>(),
+  });
+  const ovExtraKey = `${today}|${usingFantasy ? 'f' : 's'}|${fantasyTeamId ?? ''}`;
+  useEffect(() => {
+    ovGen.current++;
+    ovAsked.current.past = false;
+    ovAsked.current.future = new Set();
+  }, [ovExtraKey]);
 
   const loadOverviewDay = useCallback(
     (
@@ -6348,6 +6484,113 @@ export default function App() {
   }, [view, overviewOppId, usingFantasy, overviewDates, loadOverviewDay]);
 
   /**
+   * **A day of the row is on screen or next to it — read it if it has not been
+   * read.**
+   *
+   * The carousel says *I need this day* for the card in view and its two
+   * neighbors; what that costs is decided here, because the two halves of the
+   * period cost completely different things and a row has no business knowing
+   * which. Three branches:
+   *
+   * - **Yesterday, today and tomorrow are already in hand** and cost nothing —
+   *   they are the four reads the page makes on entry.
+   * - **Anything earlier is one read for the whole back half**, fired once. It
+   *   runs period-start → the day before yesterday, so a fortnight's worth of
+   *   cards fill from a single answer.
+   * - **Anything later is one projection for that day**, the engine having no
+   *   per-day breakdown to hand back over a span.
+   *
+   * **Idempotent by contract**, which is what lets the carousel say it on every
+   * render: `ovAsked` holds what has gone out and `ovExtraGen` is what makes
+   * holding it safe across a clock roll or a change of roster.
+   *
+   * **Each fails on its own and each leaves the card standing**, the same rule
+   * the four entry reads keep: a dead projection costs one card its figures and
+   * the block prints the empty state it already had.
+   */
+  /** The opponent's half of the guards, on the one thing that moves it: who he
+   *  is. `today` and the source ride in through `ovExtraKey` above, which
+   *  re-runs this one too — a clock roll is a change for both halves. */
+  const ovOppExtraKey = `${ovExtraKey}|${overviewOppId ?? ''}`;
+  useEffect(() => {
+    ovOppGen.current++;
+    ovAsked.current.oppPast = false;
+    ovAsked.current.oppFuture = new Set();
+  }, [ovOppExtraKey]);
+
+  const needOverviewDay = useCallback(
+    (date: string, opp: boolean) => {
+      const { yesterday, tomorrow } = overviewDates;
+      if (date >= yesterday && date <= tomorrow) return;
+      if (opp && (overviewOppId == null || !usingFantasy)) return;
+      const counter = opp ? ovOppGen : ovGen;
+      const gen = counter.current;
+      const fresh = () => gen === counter.current;
+
+      if (date < yesterday) {
+        if (opp ? ovAsked.current.oppPast : ovAsked.current.past) return;
+        const from = overviewDays[0];
+        const to = addDays(yesterday, -1);
+        if (from > to) return;
+        if (opp) ovAsked.current.oppPast = true;
+        else ovAsked.current.past = true;
+        const setSpan = opp ? setOvOppPast : setOvPast;
+        const setLoading = opp ? setOvOppPastLoading : setOvPastLoading;
+        setLoading(true);
+        api
+          .report(from, to, usingFantasy ? 'fantasy' : 'saved', false, opp ? overviewOppId! : undefined)
+          .then((r) => {
+            if (fresh()) setSpan({ players: r.players, lineups: r.lineups ?? null });
+          })
+          .catch((e: Error) => {
+            // The cards' own failure and the cards' own message: the three days
+            // beside them are no less true for the week behind having failed.
+            console.error(`reading the ${opp ? "opponent's " : ''}played days failed:`, e.message);
+          })
+          .finally(() => {
+            if (fresh()) {
+              setLoading(false);
+              (opp ? setOvOppPastSettled : setOvPastSettled)(true);
+            }
+          });
+        return;
+      }
+
+      const asked = opp ? ovAsked.current.oppFuture : ovAsked.current.future;
+      if (asked.has(date)) return;
+      asked.add(date);
+      const setDay = opp ? setOvOppFuture : setOvFuture;
+      const setLoading = opp ? setOvOppFutureLoading : setOvFutureLoading;
+      setLoading((m) => ({ ...m, [date]: true }));
+      api
+        .rosterProjection(
+          date,
+          date,
+          usingFantasy ? 'fantasy' : 'watchlist',
+          opp ? overviewOppId : fantasyTeamId,
+        )
+        .then((proj) => {
+          if (fresh()) setDay((m) => ({ ...m, [date]: proj }));
+        })
+        .catch((e: Error) => {
+          console.error(`projecting ${date} failed:`, e.message);
+        })
+        .finally(() => {
+          if (fresh()) setLoading((m) => ({ ...m, [date]: false }));
+        });
+    },
+    [overviewDates, overviewDays, overviewOppId, usingFantasy, fantasyTeamId],
+  );
+  const needOverviewOwnDay = useCallback(
+    (date: string) => needOverviewDay(date, false),
+    [needOverviewDay],
+  );
+  const needOverviewOppDay = useCallback(
+    (date: string) => needOverviewDay(date, true),
+    [needOverviewDay],
+  );
+
+  /**
    * **Has the Overview got everything it is going to draw?**
    *
    * The page is a composition of up to nine reads that answer over about a
@@ -6395,6 +6638,14 @@ export default function App() {
    */
   const overviewSettled =
     ovFired &&
+    /* **And the matchup window, which is a fifth term and a new one.** The
+       carousel's length is that window's — the whole period, not three days —
+       so a page drawn before it lands is a three-card row that grows to
+       fourteen a moment later, with today sliding from the middle of it to
+       wherever it falls in the period. It is one 103-byte read made once per
+       session and it answers *no league* as readily as it answers a period, so
+       the term costs nothing in either direction. */
+    matchupWindowSettled &&
     !ovTodayLoading &&
     !ovYesterdayLoading &&
     !ovTomorrowLoading &&
@@ -6521,7 +6772,32 @@ export default function App() {
      * foot was withheld for until there was a switch at all.
      */
     (date: string, opponent = false) => {
-      const label = date === today ? 'Today' : date < today ? 'Yesterday' : 'Tomorrow';
+      /**
+       * **A preset is a rule, not a range** — which is why only the three days
+       * that *are* a rule get a label and everything else on the row opens as a
+       * custom range.
+       *
+       * It read `date < today ? 'Yesterday' : 'Tomorrow'`, which was exactly
+       * right while the carousel was three days long and became a lie the day
+       * it grew to a period: a press on the card four days back would have
+       * opened `YESTERDAY · Sun, Aug 24` with the bar three lines up calling
+       * Aug 26 yesterday, and — because the label is what the URL carries and
+       * the recipient re-derives — a link copied off it would have opened
+       * somebody else's yesterday, on a different day, in a different week.
+       *
+       * `Custom range · Sun, Aug 24` is the honest face for that press, and the
+       * note this file already carries about the opposite fault stands
+       * unchanged: the three named days would be wrong as custom ranges for the
+       * same reason these would be wrong as presets.
+       */
+      const label =
+        date === today
+          ? 'Today'
+          : date === addDays(today, -1)
+            ? 'Yesterday'
+            : date === addDays(today, 1)
+              ? 'Tomorrow'
+              : null;
       const days = { start: date, end: date, preset: label };
       // Before the state below, for the reason the projected toggle states: the
       // `view !== 'summary'` reset would otherwise fire on the same commit and
@@ -10579,6 +10855,28 @@ export default function App() {
           yesterday={ovYesterday?.players ?? null}
           tomorrow={ovTomorrow}
           todayProjection={ovTodayProjection}
+          days={overviewDays}
+          /* **The rest of the period, and it is not on the gate above.** Both
+             halves are read as the reader swipes to them — see
+             `needOverviewDay` — so these are empty on the render the page first
+             draws, which is the point: a reader who never swipes past tomorrow
+             pays for neither. */
+          extra={{
+            past: ovPast,
+            pastLoading: ovPastLoading,
+            pastSettled: ovPastSettled,
+            future: ovFuture,
+            futureLoading: ovFutureLoading,
+          }}
+          oppExtra={{
+            past: ovOppPast,
+            pastLoading: ovOppPastLoading,
+            pastSettled: ovOppPastSettled,
+            future: ovOppFuture,
+            futureLoading: ovOppFutureLoading,
+          }}
+          onNeedDay={needOverviewOwnDay}
+          onNeedOppDay={needOverviewOppDay}
           /* The foot of the page: the same three days for whoever this manager
              is playing. Null on no board, no matchup and a bye alike, which is
              what keeps the section absent rather than empty. */
