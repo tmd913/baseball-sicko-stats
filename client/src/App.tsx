@@ -4173,13 +4173,46 @@ export default function App() {
    * session with no league connected: the memo returns `seasonPlayers` itself,
    * so nothing downstream of it recomputes.
    */
+  /**
+   * **…and the men a *link* names that neither list holds**, looked up one at a
+   * time by the id in the key itself.
+   *
+   * `beyondMlb` above closed the gap for a prospect somebody in the reader's
+   * own league rosters, which is a very narrow window onto a very large
+   * population: MLB lists tens of thousands of people and this app's own list
+   * is 1,415 major leaguers. The header search now reaches the rest of them
+   * (`/api/players/search`), and the moment it does, a press can put a key in
+   * the URL that nothing on the client can name — measured before this existed:
+   * picking `Sebastian Walcott` out of the field set
+   * `?player=batter-806964` and rendered **nothing at all**, which is the
+   * "I can see his name but I can't click on him" this change is about.
+   *
+   * **Keyed by id and not by key**, because the answer is a row *per kind* and
+   * a two-way player is two of them; one lookup fills both halves. The rows are
+   * held for the session — they are ~120 bytes each and a reader opens a
+   * handful of strangers in one, so an eviction rule would be machinery for a
+   * map that never grows.
+   *
+   * **The two lists above win**, in that order, exactly as they already did:
+   * this is a fallback for a key nothing else answers, so a man who is later
+   * called up is drawn from the season list the moment it carries him.
+   */
+  const [foundPlayers, setFoundPlayers] = useState<SeasonPlayer[]>([]);
+
   const knownPlayers = useMemo(() => {
     const beyond = espnConnected ? ownership?.beyondMlb : null;
-    if (!beyond || beyond.length === 0) return seasonPlayers;
+    const add = [...(beyond ?? []), ...foundPlayers];
+    if (add.length === 0) return seasonPlayers;
     const have = new Set(seasonPlayers.map(playerKey));
-    const extra = beyond.filter((p) => !have.has(playerKey(p)));
+    const extra: SeasonPlayer[] = [];
+    for (const p of add) {
+      const key = playerKey(p);
+      if (have.has(key)) continue;
+      have.add(key);
+      extra.push(p);
+    }
     return extra.length > 0 ? [...seasonPlayers, ...extra] : seasonPlayers;
-  }, [seasonPlayers, espnConnected, ownership]);
+  }, [seasonPlayers, espnConnected, ownership, foundPlayers]);
 
   /**
    * Read the ownership map, which by now four surfaces want: the research
@@ -7980,6 +8013,58 @@ export default function App() {
     }
     return both;
   }, [knownPlayers]);
+  /**
+   * **Fill `foundPlayers` for every key the app is holding that nothing can
+   * name** — the open player page, and the recent searches under the field.
+   *
+   * Two callers rather than one, because the search reaching past the season
+   * list makes them the same problem. `?player=batter-806964` is the one that
+   * was reported (the press set the URL and the overlay never mounted); the
+   * recents are the quieter half — `PlayerAdder` drops a remembered key that
+   * resolves to nobody, on the sound rule that a row for a man the search
+   * cannot find would open on nothing, so a prospect picked yesterday would
+   * simply have vanished from a list he had earned a place in.
+   *
+   * The gate is *both* lists having landed and neither answering:
+   * `seasonPlayers` is empty for the first second of a session, so asking on a
+   * miss alone would fire a request for every player anybody deep-links to and
+   * throw it away. `playersLoading` is the flag that says the boot read is still
+   * out, and it is the one this waits on. In the ordinary session there is
+   * nothing to ask — every key resolves — so this costs **no request at all**
+   * unless a prospect is in play.
+   *
+   * A failed read is silent and costs that one row: the page opens on nothing,
+   * exactly as it did before the route existed, and a recent stays dropped.
+   * There is no banner because there is no answer being replaced.
+   *
+   * **It never unmarks in a cleanup**, and needs no mark at all: the test is the
+   * state already held (`askedPlayers`), so a StrictMode remount asks once and
+   * the second pass sees the id in the set and returns.
+   */
+  const askedPlayers = useRef(new Set<number>());
+  useEffect(() => {
+    if (playersLoading) return;
+    const have = new Set(knownPlayers.map((p) => p.id));
+    const want = new Set<number>();
+    for (const key of [detailsKey, ...recentPlayers]) {
+      if (!key) continue;
+      const id = Number(key.slice(key.indexOf('-') + 1));
+      if (!Number.isInteger(id) || have.has(id) || askedPlayers.current.has(id)) continue;
+      askedPlayers.current.add(id);
+      want.add(id);
+    }
+    for (const id of want) {
+      api
+        .playerById(id)
+        .then((r) => {
+          if (r.players.length > 0) setFoundPlayers((prev) => [...prev, ...r.players]);
+        })
+        .catch(() => {
+          /* That row stays unnamed, exactly as it was before. */
+        });
+    }
+  }, [detailsKey, recentPlayers, playersLoading, knownPlayers]);
+
   // The player backing an open details view. Name comes from the report if the
   // player is watchlisted, otherwise from the season roster — so details can be
   // opened for any player, on the watchlist or not. Position always comes from

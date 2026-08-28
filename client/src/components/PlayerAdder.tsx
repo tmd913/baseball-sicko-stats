@@ -2,8 +2,39 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { playerKey } from '../types';
 import type { SeasonPlayer, TeamInfo, WatchPlayer } from '../types';
 import { searchFold } from '../lib';
+import { api } from '../api';
+import { useDelayedFlag } from '../hooks';
 import { SpinningBaseball } from './Loading';
 import { TeamMark } from './PlayerIdentity';
+
+/**
+ * **How long the field waits after a keystroke before asking MLB.**
+ *
+ * The local match is free and runs on every letter; the remote one is a request
+ * per query, so it runs on the pause that says the reader has finished a word.
+ * 250ms is `WAIT_DELAY`'s number and it is the same idea from the other end —
+ * that is how long a reader will not notice something not having happened yet.
+ * Measured on the live server: `walker jenk` answers in 180-320ms cold and
+ * ~2ms warm, so a typed name is on screen inside half a second of the last
+ * keystroke and instantly on the second reader to type it.
+ */
+const SEARCH_DEBOUNCE = 250;
+
+/** Below this the query is not sent — the server's own `PLAYER_SEARCH_MIN`,
+ *  mirrored here so the field can hold its wait without a round trip to be told
+ *  the answer is empty. `names=an` comes back capped at 50 rows of nobody in
+ *  particular; the local list already answers a two-letter query. */
+const SEARCH_MIN = 3;
+
+/** **The whole menu, players and prospects together.** It was the local
+ *  matches' own cap and it stays the same number: eight names is already the
+ *  most this dropdown can be without reading as a page (the menu has no
+ *  max-height and no scroller of its own — it is a list, at the width of the
+ *  field), and the men MLB lists beyond the season roster arrive *into* that
+ *  budget rather than beside it. Measured before the cap covered both:
+ *  `griff` drew **13 rows** on a 430px phone, running past the fold and over
+ *  the page behind it. */
+const MENU_ROWS = 8;
 
 export function PlayerAdder({
   players,
@@ -33,6 +64,14 @@ export function PlayerAdder({
    * drawn as a bare id — a player the roster list has forgotten is one this
    * search could not find by typing either, so a row for him would open on
    * nothing.
+   *
+   * **That last clause stopped being true when the field learned to reach past
+   * the season list**, and the rule survives because `App` answers for it
+   * instead: a remembered key nothing on the client can name is looked up by id
+   * (`foundPlayers`) and arrives in `players` here, so a prospect picked
+   * yesterday is a row today rather than a name that quietly vanished. The
+   * drop is still the right behavior for what it is now left holding — a key
+   * MLB itself cannot name.
    */
   recent?: string[];
   /**
@@ -121,7 +160,7 @@ export function PlayerAdder({
     const q = searchFold(query);
     if (!q) return [];
     const out: SeasonPlayer[] = [];
-    for (let i = 0; i < players.length && out.length < 8; i++) {
+    for (let i = 0; i < players.length && out.length < MENU_ROWS; i++) {
       const p = players[i];
       if (watchedKeys.has(playerKey(p))) continue;
       if (haystacks[i].includes(q)) out.push(p);
@@ -172,6 +211,111 @@ export function PlayerAdder({
     () => recent.map((k) => byKey.get(k)).filter((p): p is SeasonPlayer => !!p),
     [recent, byKey],
   );
+
+  /**
+   * **The half of the answer this field cannot hold** — every prospect and
+   * minor leaguer MLB has an id for, asked for by name.
+   *
+   * `players` is `/api/players`: the season's ~1,400 **major leaguers**, fetched
+   * once at boot, which is what lets every keystroke above be a pass over an
+   * array rather than a request. A prospect is not on it. He was reachable only
+   * if somebody in the reader's own fantasy league happened to roster him
+   * (`EspnOwnership.beyondMlb`, merged into `players` upstream), so typing
+   * `Walker Jenkins` found the Twins' first-round outfielder in one league and
+   * nobody at all in the next — and a reader with no league connected could not
+   * reach a prospect by any route this app has.
+   *
+   * MLB publishes no *list* of that population, only a search over it, so this
+   * is the one search in the app that costs a request. It runs on the pause
+   * after a keystroke rather than on the keystroke, at `SEARCH_MIN` characters
+   * or more, and the server answers it out of an hour-long cache.
+   *
+   * **The rows land under the ones already drawn and never over them.** They
+   * arrive a few hundred milliseconds after the local matches and are appended,
+   * so nothing on screen moves — which is `Reserve the box, don't move the
+   * page` read for a list that grows downward: the row under the reader's
+   * finger is the row that was under it before the answer came back.
+   *
+   * **Sequence-numbered, because a slow query must not land on a fast one.**
+   * `q` is stored beside the rows and compared against what is typed *now*, so
+   * an answer for `walke` cannot be drawn under `walker jenk` even for a frame.
+   */
+  const [remote, setRemote] = useState<{ q: string; players: SeasonPlayer[] }>({
+    q: '',
+    players: [],
+  });
+  const [searching, setSearching] = useState(false);
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim().replace(/\s+/g, ' ');
+    if (q.length < SEARCH_MIN) {
+      // Not "no answer yet" — there is no question. The mark comes down with
+      // it, or a backspace to two letters leaves the field looking busy
+      // forever.
+      setSearching(false);
+      setRemote({ q: '', players: [] });
+      return;
+    }
+    // Marked before the timer rather than inside it, so the wait covers the
+    // pause as well as the request — the reader has stopped typing and the
+    // field owes an answer from that moment. The mark is cleared in an
+    // unconditional `finally` and never in this effect's cleanup, which is the
+    // rule a StrictMode remount is what tests.
+    setSearching(true);
+    const seq = ++searchSeq.current;
+    const t = setTimeout(() => {
+      api
+        .searchPlayers(q)
+        .then((r) => {
+          if (seq === searchSeq.current) setRemote({ q, players: r.players });
+        })
+        .catch(() => {
+          // A dead MLB search costs the prospects and nothing else: the men
+          // this field already knows are still typed, found and pressable, and
+          // a banner for half of a working control would be the louder error.
+          if (seq === searchSeq.current) setRemote({ q, players: [] });
+        })
+        .finally(() => {
+          if (seq === searchSeq.current) setSearching(false);
+        });
+    }, SEARCH_DEBOUNCE);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  /**
+   * Those rows, minus anybody the list above already answered for.
+   *
+   * The server drops the season list's own players before it replies, so the
+   * only overlap left is the league's rostered prospects — merged into
+   * `players` upstream and therefore already drawn. `byKey` is the whole of
+   * what this field knows, so one lookup settles it; `watchedKeys` then applies
+   * the same rule the local matches do, a player already on the roster having
+   * nothing left for the ＋ to do.
+   *
+   * **Drawn only while the answer is about what is typed now.** `remote.q` is
+   * the query it was asked for, so a stale set simply is not rendered rather
+   * than being cleared on every keystroke — which is what keeps the rows
+   * standing while a *longer* query is in flight.
+   */
+  const extra = useMemo(() => {
+    const q = query.trim().replace(/\s+/g, ' ');
+    if (!q || remote.q !== q) return [];
+    const room = MENU_ROWS - matches.length;
+    if (room <= 0) return [];
+    return remote.players
+      .filter((p) => {
+        const key = playerKey(p);
+        return !byKey.has(key) && !watchedKeys.has(key);
+      })
+      .slice(0, room);
+  }, [query, remote, byKey, watchedKeys, matches]);
+
+  /** The wait, on the app's own 250ms delay so a warm answer never flashes one.
+   *  It is drawn **only where the menu would otherwise be empty** — rule 1, a
+   *  read over rows is a quiet read, and the rows here are the local matches
+   *  that are already on screen. */
+  const waiting = useDelayedFlag(searching);
 
   const select = (p: SeasonPlayer) => {
     onPick?.(playerKey(p));
@@ -298,7 +442,7 @@ export function PlayerAdder({
           </button>
         )}
       </div>
-      {focused && (matches.length > 0 || teamMatches.length > 0) && (
+      {focused && (matches.length > 0 || teamMatches.length > 0 || extra.length > 0) && (
         <ul className="adder-menu">
           {/* The clubs first, under a head that says what they are — without one
               a `Milwaukee Brewers` row among a run of players reads as a player
@@ -311,6 +455,14 @@ export function PlayerAdder({
           )}
           {teamMatches.map(teamRow)}
           {matches.map(row)}
+          {/* **The men MLB lists and this app's own list does not**, under the
+              ones it does and drawn as the same row — no head over them and no
+              mark on them, because they are not a different kind of thing. A
+              reader typing `Walker Jenkins` wants Walker Jenkins; that he is at
+              St. Paul rather than at Target Field is the club on his meta line
+              and the empty Stats tab on his page, not a category this menu has
+              to teach him before it will hand him the name. See `extra`. */}
+          {extra.map(row)}
         </ul>
       )}
       {/* Before a character is typed, the players most recently picked out of
@@ -328,17 +480,40 @@ export function PlayerAdder({
           {recentRows.map(row)}
         </ul>
       )}
-      {focused && query.trim() && matches.length === 0 && teamMatches.length === 0 && (
-        <ul className="adder-menu">
-          {/* **What it says it searched.** The sentence named players alone
-              while players were all it had; with clubs in the field too, a
-              reader who typed a club name and read "No players match" would be
-              told the search does not do the thing it had just failed to do. */}
-          <li className="adder-none">
-            No {onOpenTeam ? 'players or teams' : 'players'} match &ldquo;{query}&rdquo;.
-          </li>
-        </ul>
-      )}
+      {focused &&
+        query.trim() &&
+        matches.length === 0 &&
+        teamMatches.length === 0 &&
+        extra.length === 0 && (
+          <ul className="adder-menu">
+            {/* **The empty state must not be told before the search is over.**
+                A prospect matches nothing locally by construction, so the one
+                query this field asks MLB for is exactly the query that has no
+                rows to sit under while it is out — and `No players or teams match
+                "Walker Jenkins"` is a claim about the league, printed a fifth of
+                a second before his row arrives to contradict it. So the wait
+                stands in that slot instead, and it names what is being read.
+
+                The ball carries the tense, hence no trailing ellipsis; the
+                sentence names the population rather than the endpoint, that being
+                what the reader is actually waiting on. */}
+            {waiting ? (
+              <li className="adder-none adder-searching" role="status">
+                <SpinningBaseball />
+                Reading every player MLB lists
+              </li>
+            ) : (
+              /* **What it says it searched.** The sentence named players alone
+                 while players were all it had; with clubs in the field too, a
+                 reader who typed a club name and read "No players match" would be
+                 told the search does not do the thing it had just failed to
+                 do. */
+              <li className="adder-none">
+                No {onOpenTeam ? 'players or teams' : 'players'} match &ldquo;{query}&rdquo;.
+              </li>
+            )}
+          </ul>
+        )}
     </div>
   );
 }

@@ -106,6 +106,30 @@ every person MLB has ever listed; a retired homonym cannot be on a fantasy
 roster but can very easily make a live prospect ambiguous and so cost him his
 match. All five of the league's unmatched men come back `active: true`.
 
+**A prospect is filed under the organization that owns him, not the affiliate he
+is standing on.** The row `extendIndex` builds carries a `teamId` and a `team`,
+and the `teamId` has always been the **parent** — it has to be, since the club
+test compares against `ESPN_TO_MLB_TEAM`, which is written in major-league ids —
+while `team` was `currentTeam.name`, the affiliate. That was argued as the only
+honest thing to print beside his name, and the flaw in it is that this row is not
+only printed: it *is* the club everywhere else it is read, so the name said
+`St. Paul Saints` while the cap beside it on his player page was drawn from an
+id that has no cap, and no reader was ever shown the two halves at once. The
+name now comes off `getTeamNames()` under the parent's id, so the two halves of
+one row name one club. Where he actually is has not gone anywhere: his News tab
+prints `St. Paul Saints activated OF Walker Jenkins` off MLB's own feed, which is
+where a sentence about an affiliate belongs.
+
+**This is no longer the only way to reach him, and the reasoning above is why it
+is still here.** `mlbStats.ts` now exports `searchPeople` — the same call, one
+implementation — and a `/api/players/search` route over it, so the header search
+finds *any* prospect and not only the ones somebody in the reader's league
+rosters (see `client.md`). `extendIndex` is untouched by that and stays: it
+answers a different question. The route resolves a **typed name** for a reader,
+where this resolves the **roster rows ESPN handed us** so that `owned`, the
+padlock, the roster % and the matchup pages have an id to key on. A search
+nobody types would fill none of them.
+
 **What it costs: one request.** `people/search` takes the whole batch — `names=`
 is comma-joined, up to `PROSPECT_BATCH` (40) at a time — and `fields=` trims the
 row from 1,203 bytes to 205. The five names together are **1,201 bytes**, and

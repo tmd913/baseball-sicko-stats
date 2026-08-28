@@ -1579,6 +1579,27 @@ where the picture is what the reader already recognises off the scoreboard card 
 the top of the page. **A dialog with no name has no second line and no badge** —
 which is what your own day card passes, it being about you by construction.
 
+**Both sides of both carousels wear the head now, and only a reader with no
+league gets the bare form.** The sentence above is the *Matchup leaders* block's
+rule read onto the day cards, where it does not hold: the rule it rests on — a
+mark that would be on every row marks nothing — is about a mark **inside a
+list**, and this is the head of a box. Two of these are opened one after the
+other on this page (your card, then the opponent's), and the reading a manager is
+making is *which of us*; a title that says whose list it is on only one of the
+two makes the reader supply the other from memory, off a page where the crest is
+the thing they already recognise. The block above the carousels had reached that
+conclusion for its own two sides already, so this is the day cards catching up
+rather than a new idea. Reported as: *"rank all" popup for my day card should
+match that of my opponent*.
+
+The gate is `myTeamId != null` and not `who` itself: with no league there is no
+team, no crest, and no name worth printing (`myName`'s fallback is the literal
+word `You`), and no opponent card to be told apart from — so that reader keeps
+the subject alone on one line, which is the whole of what the old branch was
+right about. Measured at 430px, your own card's dialog:
+`Brian&Tom's Excellent Adventure` over `Today, Aug 28 ↗ PROJECTED`, one crest,
+the list starting where it did.
+
 **The label row sits in the body's own padding.** Measured off the rendered
 dialog, `22 RANKED` / `VALUE` had **26px** above it and **18** below, against a
 13px line — a label with more air round it than height, three times over. Neither

@@ -38,7 +38,8 @@ import { mapLimit } from './limit.js';
 // The 30-club table every abbreviation in the app is drawn from — 24h cached
 // and already fetched for a player's own club badge, so a transactions row's
 // `MIL` costs nothing new.
-import { getTeamAbbrevs } from './mlbStats.js';
+import { getTeamAbbrevs, getTeamNames, kindsOf, majorClubOf, searchPeople } from './mlbStats.js';
+import type { SearchPerson } from './mlbStats.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamHitting.ts / expectedStats.ts /
@@ -454,24 +455,6 @@ export async function getMlbIndex(): Promise<MlbIndex> {
  */
 const PROSPECT_BATCH = 40;
 
-/** MLB's own search, trimmed with `fields` — 253 bytes for one name against the
- *  1,203 the untrimmed row costs, and `hydrate=currentTeam` is what carries the
- *  club (and, for a minor leaguer, `parentOrgId`, which is the currency the
- *  club test is written in). */
-const PEOPLE_FIELDS =
-  'people,id,fullName,active,currentTeam,id,name,parentOrgId,' +
-  'primaryPosition,code,abbreviation,batSide,pitchHand';
-
-interface SearchPerson {
-  id?: number;
-  fullName?: string;
-  active?: boolean;
-  currentTeam?: { id?: number; name?: string; parentOrgId?: number };
-  primaryPosition?: { code?: string; abbreviation?: string };
-  batSide?: { code?: string };
-  pitchHand?: { code?: string };
-}
-
 /** Normalized name → what the search answered with, or an **empty list** where
  *  it answered with nobody. A miss is remembered exactly as a hit is, so a name
  *  ESPN carries and MLB has never heard of is asked once an hour rather than
@@ -483,24 +466,11 @@ let prospectFetchedAt = 0;
  *  once and six cold ones would ask MLB the same question six times. */
 const prospectInFlight = new Map<string, Promise<void>>();
 
-async function searchPeople(names: string[]): Promise<SearchPerson[]> {
-  const url =
-    'https://statsapi.mlb.com/api/v1/people/search' +
-    `?names=${encodeURIComponent(names.join(','))}` +
-    `&hydrate=currentTeam&fields=${PEOPLE_FIELDS}`;
-  const res = await fetch(url, { headers: UA });
-  if (!res.ok) throw new Error(`MLB Stats API people/search returned ${res.status}`);
-  const data = (await res.json()) as { people?: SearchPerson[] };
-  return data.people ?? [];
-}
-
-/** The kinds rule `getMlbIndex` and `getSeasonPlayers` both use, stated once. */
-function kindsOf(code: string | undefined): PlayerKind[] {
-  return code === 'Y' ? ['batter', 'pitcher'] : code === '1' ? ['pitcher'] : ['batter'];
-}
-
 async function resolveProspects(keys: string[]): Promise<void> {
-  const people = await searchPeople(keys);
+  // The thirty clubs by id, so a prospect's parent organization can be *named*
+  // and not merely numbered — see `team` below. Already fetched and 24h cached
+  // for every cap logo in the app, so this is a map lookup.
+  const [people, teamNames] = await Promise.all([searchPeople(keys), getTeamNames()]);
   const found = new Map<string, IndexEntry[]>();
   for (const p of people) {
     // **Only somebody currently playing.** The search reaches back through
@@ -523,12 +493,29 @@ async function resolveProspects(keys: string[]): Promise<void> {
       // Kade Anderson's Arkansas Travelers (574) has to read as Seattle (136).
       // A major leaguer the season list has dropped has no parent and his own
       // club id is already the right one.
-      teamId: p.currentTeam?.parentOrgId ?? p.currentTeam?.id ?? null,
+      teamId: majorClubOf(p.currentTeam),
       kinds: kindsOf(p.primaryPosition?.code),
-      // Where he actually is, in MLB's own words — `Arkansas Travelers` rather
-      // than a major-league club he has never played for, which is the only
-      // honest thing to print beside his name in a search.
-      team: p.currentTeam?.name ?? '',
+      /**
+       * **The organization that owns him, named** — `Minnesota Twins`, not
+       * `St. Paul Saints`.
+       *
+       * It was the affiliate, on the argument that this is "where he actually
+       * is, in MLB's own words … the only honest thing to print beside his name
+       * in a search". The flaw in that is that this field is not only printed:
+       * it rides on the `SeasonPlayer` the client keys everything off, beside a
+       * `teamId` that has always been the **parent** (the line above, and it has
+       * to be — `ESPN_TO_MLB_TEAM` is written in major-league ids). So the two
+       * halves of one row named two different clubs, and every reader that draws
+       * both — the cap over a player page's club door, the team page that door
+       * opens — was working from the id while the reader was reading the name.
+       * `Arkansas Travelers` beside a Mariners cap is not more honest than
+       * `Seattle Mariners`; it is the same row saying two things.
+       *
+       * Where he actually is has not gone anywhere — his page's News tab prints
+       * `St. Paul Saints activated OF Walker Jenkins` off MLB's own feed, which
+       * is the place a sentence about an affiliate belongs.
+       */
+      team: teamNames.get(majorClubOf(p.currentTeam) ?? -1) ?? '',
       position: p.primaryPosition?.abbreviation ?? '',
       bats: p.batSide?.code ?? null,
       throws: p.pitchHand?.code ?? null,

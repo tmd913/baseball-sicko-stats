@@ -1151,6 +1151,16 @@ body {
   color: var(--muted);
   font-size: 13px;
 }
+/* The same line while the search of every player MLB lists is still out —
+   folded onto `.adder-none` rather than given its own padding and color,
+   because it is that line: one slot in the menu, one voice, and the two can
+   never come to disagree about where the sentence sits. All this adds is the
+   ball beside the words. */
+.adder-searching {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 /* The heading over the recently-picked players the search offers before
    anything is typed. It says what the rows are, which a menu that appears on
    focus alone could not — an unexplained list of five names under an empty box

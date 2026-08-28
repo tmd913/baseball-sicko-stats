@@ -494,6 +494,65 @@ drift measurement itself has a horizon: no current-version game blob on disk is
 older than 11 days, so "no drift on older games" is a fact about the blobs and
 **not** evidence that a June game frozen in June is still right.
 
+### A club id is the organization, never the affiliate a man is standing on
+
+**`hydrate=currentTeam` answers with where a player is *today*, and for 435 of
+the season's 1,415 players that is a minor-league club.** Measured on 2026-08-28
+against `people?personIds=` over every id `sports/1/players?season=2026` returns:
+Roman Anthony on the Worcester Red Sox, Adael Amador on the Albuquerque Isotopes,
+Kevin Alcántara on the Iowa Cubs — a third of the list, and it moves daily with
+options and rehab assignments.
+
+`getPlayerTeamIds` took `currentTeam.id` straight, so every one of those carried
+an affiliate's id as his `RosterInfo.teamId`, and **that id is not a club this
+app can draw**: `teamLogoUrl(533)` 404s, so `TeamMark` fell through to its dash
+and a player page's club door read `— His club →` over a link to a team page for
+a club that is not in the thirty. Roman Anthony's page, opened off the research
+board, is the case that found it.
+
+**It is also what the field is for.** `getRosterInfo`'s own comment says the id
+exists so a report can tie a player to his club's games "even when they're off
+the active roster (suspended, on the IL, optioned)" — and *optioned* is exactly
+the state in which the un-parented id tied him to nothing, his affiliate playing
+no games this app reads. The 40-man status looked up beside it has the same
+problem: `getTeamRosterStatus` wants a club with a 40-man, and only the
+major-league one has one.
+
+So `majorClubOf` — **`parentOrgId ?? id`**, one line, applied where the id is
+read. MLB puts `parentOrgId` on minor-league clubs and on no others, so a major
+leaguer is untouched by construction and nothing is inferred from an affiliate
+table this app would otherwise have to keep. A player MLB files under no club at
+all is still null: the join-to-null rule is unchanged. `parentOrgId` is one more
+`fields=` leaf on a call already being made.
+
+**Verified in the browser**, three player pages: Roman Anthony `—` → `BOS`,
+Walker Jenkins `—` → `MIN`, Aaron Judge `NYY` → `NYY`.
+
+### Every player MLB lists, not only the season's major leaguers
+
+`sports/1/players` is one request and one list; the population outside it has no
+list, only `people/search`. `searchPeople` is that call, **exported and shared**:
+`espn.ts` resolves a fantasy roster's prospects by exact name through it and
+`searchPlayers` answers the header search's typed query through the same one —
+one fetch, one `fields=` list, one place to fix. It moved here from `espn.ts`
+along with `kindsOf`, whose comment there claimed it was "the kinds rule
+`getMlbIndex` and `getSeasonPlayers` both use, stated once" and which
+`getSeasonPlayers` had in fact spelled out again; it is now one function and
+three callers.
+
+**Two measured properties of that endpoint, both of which the callers are written
+around.** It matches on **substrings** across the whole name — `names=jenk`
+answers with 25 Jenkinses, `names=walker jenk` with exactly one man — and it
+**caps at 50 rows**: `names=an`, `names=rod` and `names=gar` each come back with
+exactly 50. So a short query is knowingly a slice of the answer, which is what
+`PLAYER_SEARCH_MIN` exists to keep the app out of, and an exact-name caller must
+still check that a row's own normalized name equals the key it asked for.
+
+`searchRows` turns one of its rows into `SeasonPlayer`s, per kind, filed under
+`majorClubOf`'s club and named from the thirty-club table. That is the same rule
+`espn.ts` now applies to its prospect index entries — see **A prospect is filed
+under the organization that owns him** in `espn.md`.
+
 ### Handedness rides on the season roster, because that is the list that answers for everybody
 
 **Which side a man bats from and which arm he throws with are two more leaves on

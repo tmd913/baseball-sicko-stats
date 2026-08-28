@@ -7,6 +7,7 @@ import type {
   GameStatus,
   PitcherSeasonStats,
   PitchingLine,
+  PlayerKind,
   ProbablePitcher,
   RosterStatus,
   SeasonPlayer,
@@ -236,6 +237,15 @@ async function getTeamNamesById(): Promise<Map<number, string>> {
   return (await getTeams()).names;
 }
 
+/** The same table under the app's own naming convention, for the caller outside
+ *  this module that needs a club **named** rather than abbreviated — `espn.ts`
+ *  files a prospect under the organization that owns him, and the row it builds
+ *  prints a full club name. The sibling of `getTeamAbbrevs`, on the same 24h
+ *  cache and the same one fetch. */
+export async function getTeamNames(): Promise<Map<number, string>> {
+  return getTeamNamesById();
+}
+
 /** The other half of the same table — "MIL" by team id, on the same 24h cache.
  *  `getRosterInfo` already joins it for a *player's* own club; this is for the
  *  caller that has a bare team id and a column too narrow for a full name. */
@@ -300,16 +310,248 @@ export async function getSeasonPlayers(
     };
     // A two-way player (position code 'Y') gets a row per kind, so he can be
     // watched as a hitter, as a pitcher, or both — they're separate entries.
-    if (p.primaryPosition?.code === 'Y') {
-      return [
-        { ...row, kind: 'batter' as const },
-        { ...row, kind: 'pitcher' as const },
-      ];
-    }
-    return [{ ...row, kind: p.primaryPosition?.code === '1' ? ('pitcher' as const) : ('batter' as const) }];
+    return kindsOf(p.primaryPosition?.code).map((kind) => ({ ...row, kind }));
   });
 
   seasonPlayersCache.set(season, { players, fetchedAt: Date.now() });
+  return players;
+}
+
+// ---- Every player MLB lists, not only the season's major leaguers ---------
+
+/**
+ * **Which board(s) a player belongs to, from MLB's own position code**, stated
+ * once for the three places that ask.
+ *
+ * `getSeasonPlayers` builds a row per kind from it, `espn.ts::getMlbIndex` puts
+ * the same list on an index entry so a fantasy roster and the watchlist agree
+ * about a two-way player, and `searchPlayers` below needs it for a man neither
+ * of those has ever carried. It lived in `espn.ts` under a comment saying it
+ * was "the kinds rule `getMlbIndex` and `getSeasonPlayers` both use, stated
+ * once" — which was true of the rule and not of the code, `getSeasonPlayers`
+ * having spelled it out again. Here it is one function and three callers.
+ */
+export function kindsOf(code: string | undefined): PlayerKind[] {
+  return code === 'Y' ? ['batter', 'pitcher'] : code === '1' ? ['pitcher'] : ['batter'];
+}
+
+/** MLB's own player search, trimmed with `fields` — 253 bytes for one name
+ *  against the 1,203 an untrimmed row costs, and `hydrate=currentTeam` is what
+ *  carries the club (and, for a minor leaguer, the `parentOrgId` `majorClubOf`
+ *  reads). */
+export const PEOPLE_FIELDS =
+  'people,id,fullName,active,currentTeam,id,name,parentOrgId,' +
+  'primaryPosition,code,abbreviation,batSide,pitchHand';
+
+/** One row of `people/search`. */
+export interface SearchPerson {
+  id?: number;
+  fullName?: string;
+  active?: boolean;
+  currentTeam?: { id?: number; name?: string; parentOrgId?: number };
+  primaryPosition?: { code?: string; abbreviation?: string };
+  batSide?: { code?: string };
+  pitchHand?: { code?: string };
+}
+
+/**
+ * **MLB's search over every person it has ever listed**, which is the one
+ * upstream in this app that can answer for a player no roster and no
+ * leaderboard carries.
+ *
+ * It matches on **substrings** and it matches across the whole name, so
+ * `names=jenk` answers with 25 Jenkinses and `names=walker jenk` with exactly
+ * one man. Several names can be asked at once, comma-separated. **It caps at
+ * 50 rows** — measured, `names=an`, `names=rod` and `names=gar` each come back
+ * with exactly 50 — so a broad query is a slice of the answer rather than the
+ * whole of it, and both callers below are written knowing that.
+ *
+ * Exported because two of them ask: `espn.ts` resolves a fantasy roster's
+ * prospects by exact name, and `searchPlayers` answers the header search's
+ * typed query. One fetch, one field list, one place to fix.
+ */
+export async function searchPeople(names: string[]): Promise<SearchPerson[]> {
+  const url =
+    'https://statsapi.mlb.com/api/v1/people/search' +
+    `?names=${encodeURIComponent(names.join(','))}` +
+    `&hydrate=currentTeam&fields=${PEOPLE_FIELDS}`;
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) throw new Error(`MLB Stats API people/search returned ${res.status}`);
+  const data = (await res.json()) as { people?: SearchPerson[] };
+  return data.people ?? [];
+}
+
+/**
+ * One `people/search` row as a `SeasonPlayer`, **filed under the major-league
+ * club that owns him** rather than under the affiliate he is standing on.
+ *
+ * `majorClubOf` decides the id and the thirty-club table names it, so a
+ * prospect's row reads `Minnesota Twins` and carries `142` — which is the id
+ * every reader of this shape actually uses: `TeamMark` draws a cap from it, the
+ * team door opens a page on it, and neither can do anything with `1960`.
+ *
+ * **It said `St. Paul Saints` until now, deliberately** — see
+ * `docs/claude/client.md`, which recorded the club printed as "where he
+ * actually is, in MLB's own words … `Arkansas Travelers`, not `Seattle
+ * Mariners`, because he has never played for the latter". The reason that is
+ * the wrong call is that the row does not print the club on its own: it *is*
+ * the club everywhere else the row is read, so the name and the id disagreed —
+ * the search row said Saints while the cap beside his name on the player page
+ * was drawn from an id that has no cap, and no reader was ever shown the two
+ * halves at once. A row whose name and id name different clubs is a join
+ * waiting to be made wrongly.
+ */
+function searchRows(p: SearchPerson, teamNames: Map<number, string>): SeasonPlayer[] {
+  const teamId = majorClubOf(p.currentTeam);
+  const row = {
+    id: p.id as number,
+    name: p.fullName as string,
+    savantName: toSavantName(p.fullName as string),
+    team: (teamId !== null && teamNames.get(teamId)) || '',
+    teamId,
+    position: p.primaryPosition?.abbreviation ?? '',
+    bats: p.batSide?.code ?? null,
+    throws: p.pitchHand?.code ?? null,
+  };
+  return kindsOf(p.primaryPosition?.code).map((kind) => ({ ...row, kind }));
+}
+
+/** Below this many characters the query is not asked upstream: `names=an` comes
+ *  back capped at 50 rows of nobody in particular, and the header search
+ *  already answers a two-letter query out of the list it holds. */
+export const PLAYER_SEARCH_MIN = 3;
+
+/** The most rows one query answers with. The client draws them *under* the men
+ *  it already knows, so this is the tail of a menu that is capped at eight to
+ *  begin with; more than this is a page rather than a dropdown. */
+const PLAYER_SEARCH_MAX = 8;
+
+/** A typed query's answer, kept for an hour — the same TTL the season list
+ *  itself is on, and for the same reason: who MLB lists does not move faster
+ *  than that. Bounded, because the keys are whatever anybody typed. */
+const PLAYER_SEARCH_TTL = 60 * 60 * 1000;
+const PLAYER_SEARCH_KEYS = 500;
+const playerSearchCache = new Map<string, { players: SeasonPlayer[]; fetchedAt: number }>();
+
+/**
+ * **The players a typed query names that the season's own list cannot answer
+ * for** — every prospect, every minor leaguer, every man MLB has an id for and
+ * `sports/1/players` has never carried.
+ *
+ * This is the header search's second half. The first is `/api/players`, which
+ * the client holds from boot and matches against on every keystroke with no
+ * request at all; that list is 1,415 major leaguers and **a prospect is not one
+ * of them**, so before this route the app could not find Walker Jenkins by
+ * typing his name — it could only find him if somebody in the reader's fantasy
+ * league happened to roster him, which is what `EspnOwnership.beyondMlb` buys
+ * and is a very narrow window onto a very large population.
+ *
+ * **The season list wins**, so what comes back here is only what it does not
+ * hold: a man on both is dropped from this answer rather than sent twice, and
+ * the row already on the client is the one that stands. That is the same
+ * precedence `knownPlayers` applies to `beyondMlb`, applied on the server where
+ * the duplicate would otherwise be paid for over the wire.
+ *
+ * **Only somebody currently playing.** The search reaches back through every
+ * person MLB has ever listed — `names=jenk` answers with Fergie and Fats
+ * Jenkins beside Walker — and a retired man is not somebody this app has a page
+ * for, so `active === false` is dropped. That is the same test `espn.ts`'s
+ * prospect fallback applies, and for the same reason.
+ *
+ * **The upstream caps at 50 and this caps at 8**, so a two-letter surname is
+ * knowingly a slice. That is why `PLAYER_SEARCH_MIN` exists: a query long
+ * enough to name somebody comes back under the upstream's own cap, where a
+ * short one would be a lottery. Measured: `walker jenk` → 1 row, `jenk` → 25
+ * before the active filter, `ohtan` → 1.
+ */
+export async function searchPlayers(query: string): Promise<SeasonPlayer[]> {
+  const q = query.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (q.length < PLAYER_SEARCH_MIN) return [];
+  const hit = playerSearchCache.get(q);
+  if (hit && Date.now() - hit.fetchedAt < PLAYER_SEARCH_TTL) return hit.players;
+
+  const [people, teamNames, season] = await Promise.all([
+    searchPeople([q]),
+    getTeamNamesById(),
+    // The list this answer is the complement of. It is an hour-cached
+    // in-memory array by the time any client is typing — the same client
+    // fetched it at boot — so this is a `Set` build rather than a request.
+    getSeasonPlayers(),
+  ]);
+  const known = new Set(season.map((p) => p.id));
+  const players: SeasonPlayer[] = [];
+  for (const p of people) {
+    if (players.length >= PLAYER_SEARCH_MAX) break;
+    if (!p.id || !p.fullName || p.active === false || known.has(p.id)) continue;
+    players.push(...searchRows(p, teamNames));
+  }
+
+  // Oldest key out first, which `Map` iteration gives for free.
+  if (playerSearchCache.size >= PLAYER_SEARCH_KEYS) {
+    const oldest = playerSearchCache.keys().next();
+    if (!oldest.done) playerSearchCache.delete(oldest.value);
+  }
+  playerSearchCache.set(q, { players, fetchedAt: Date.now() });
+  return players;
+}
+
+const playerByIdCache = new Map<number, { players: SeasonPlayer[]; fetchedAt: number }>();
+
+/**
+ * **One player by his MLB id**, whether or not the season's list has ever
+ * carried him.
+ *
+ * The search above answers a *name*; this answers a **key**, and the two are
+ * needed for different halves of the same act. A reader picks Sebastian Walcott
+ * out of the field, the app puts `player=batter-806964` in the URL — and every
+ * surface downstream of that resolves the key against the lists the client
+ * holds, which is exactly where a man who came off a search and not off a list
+ * is lost. Measured before this existed: the press set the URL and the page
+ * rendered **nothing at all**, `detailsPlayer` returning null for a key neither
+ * source could name. That is the "I can see his name but I can't click on him"
+ * this whole change is about, and it is the half a search route alone does not
+ * fix.
+ *
+ * It is also what makes a **link** work. `?player=batter-806964` pasted into a
+ * fresh tab has no search behind it and never will, so a fallback that lived in
+ * the search results would leave a shared link opening on a blank page — which
+ * `docs/claude/client.md` already recorded as the standing behavior for a
+ * prospect and is the thing being retired here.
+ *
+ * **The season list first**, so the common case costs nothing and the row a
+ * page opens on is the same row every other surface is drawing. `people` is
+ * asked only for an id it does not hold, and answers `[]` for an id MLB does
+ * not know — a page opening on nothing is still the right answer for a key
+ * naming nobody.
+ */
+export async function getPlayerRows(id: number): Promise<SeasonPlayer[]> {
+  const season = await getSeasonPlayers();
+  const known = season.filter((p) => p.id === id);
+  if (known.length > 0) return known;
+
+  const cached = playerByIdCache.get(id);
+  if (cached && Date.now() - cached.fetchedAt < PLAYER_SEARCH_TTL) return cached.players;
+
+  const url =
+    `https://statsapi.mlb.com/api/v1/people?personIds=${id}` +
+    `&hydrate=currentTeam&fields=${PEOPLE_FIELDS}`;
+  const [res, teamNames] = await Promise.all([fetch(url, { headers: UA }), getTeamNamesById()]);
+  // **A 404 is an answer, not a failure.** MLB returns one for an id nobody
+  // has, which is what a mistyped or long-dead `player=` key is; it means the
+  // same thing as an empty `people` array and is cached the same way, so a
+  // bogus link costs one upstream request an hour rather than one per open.
+  // Anything else genuinely is a failure and 502s through `asyncRoute`.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`MLB Stats API people returned ${res.status} for ${id}`);
+  }
+  const data = res.ok ? ((await res.json()) as { people?: SearchPerson[] }) : {};
+  const person = (data.people ?? [])[0];
+  // No `active` test here, unlike the search: a key names one man rather than
+  // matching a substring, so a retired homonym cannot be picked up by mistake —
+  // and a page opened on a retired player is a page about a retired player,
+  // which is a fair thing for a link to be.
+  const players = person?.id && person.fullName ? searchRows(person, teamNames) : [];
+  playerByIdCache.set(id, { players, fetchedAt: Date.now() });
   return players;
 }
 
@@ -605,10 +847,51 @@ const playerTeamCache = new Map<number, PlayerTeamInfo & { fetchedAt: number }>(
 interface PeopleTeamResponse {
   people?: {
     id: number;
-    currentTeam?: { id?: number };
+    /** `parentOrgId` is present only on a **minor-league** club, and it is the
+     *  major-league organization that owns it — see `majorClubOf`. */
+    currentTeam?: { id?: number; parentOrgId?: number };
     pitchHand?: { code?: string };
     primaryPosition?: { abbreviation?: string };
   }[];
+}
+
+/**
+ * **The major-league club a player belongs to, from whichever club MLB
+ * currently has him on.**
+ *
+ * `hydrate=currentTeam` answers with where he is *standing today*, and for a
+ * great many players that is a minor-league affiliate: a man optioned to Triple
+ * A, a prospect who has never been called up, a major leaguer on a rehab
+ * assignment. MLB puts `parentOrgId` on exactly those clubs and on no others,
+ * so the rule is one line — the parent if there is one, his own club otherwise.
+ *
+ * **Measured, and it is not an edge case.** Of the 1,415 players on
+ * `sports/1/players?season=2026` on 2026-08-28, **435 come back on a
+ * minor-league club** from this very call — Roman Anthony on the Worcester Red
+ * Sox, Adael Amador on the Albuquerque Isotopes, Kevin Alcántara on the Iowa
+ * Cubs. Every one of them was carrying an affiliate's id as his `teamId`, and
+ * that id is not a club this app can draw: `teamLogoUrl(533)` 404s, so
+ * `TeamMark` fell back to its dash and the player page's club door read
+ * `— His club →` with a link to a team page for a club that is not in the
+ * thirty. Roman Anthony's page, opened off the research board, is the case that
+ * found it.
+ *
+ * It is also what `RosterInfo.teamId` is *for*. The comment on `getRosterInfo`
+ * says the id exists so a report can tie a player to his club's games "even when
+ * they're off the active roster (suspended, on the IL, optioned)" — and
+ * *optioned* is precisely the state in which the un-parented id tied him to
+ * nothing, his affiliate playing no games this app reads. The same holds for the
+ * 40-man status looked up beside it: `getTeamRosterStatus` is asked for a club
+ * id, and only the major-league one has a 40-man to answer with.
+ *
+ * **Nothing here guesses.** A player MLB files under no club at all is still
+ * null, the join-to-null rule; the parent is read off MLB's own row rather than
+ * inferred from an affiliate table this app would have to keep.
+ */
+export function majorClubOf(
+  team: { id?: number; parentOrgId?: number } | undefined,
+): number | null {
+  return team?.parentOrgId ?? team?.id ?? null;
 }
 
 /** Each id's current team, throwing hand and listed position, batched into one
@@ -626,14 +909,16 @@ async function getPlayerTeamIds(ids: number[]): Promise<Map<number, PlayerTeamIn
     try {
       const url =
         `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
-        `&hydrate=currentTeam&fields=people,id,currentTeam,pitchHand,code,primaryPosition,abbreviation`;
+        // `parentOrgId` is one more leaf on a call already being made, and it is
+        // what turns an affiliate into the club this app can draw — `majorClubOf`.
+        `&hydrate=currentTeam&fields=people,id,currentTeam,parentOrgId,pitchHand,code,primaryPosition,abbreviation`;
       const res = await fetch(url, { headers: UA });
       if (!res.ok) throw new Error(`people/currentTeam returned ${res.status}`);
       const data = (await res.json()) as PeopleTeamResponse;
       const seen = new Set<number>();
       for (const p of data.people ?? []) {
         playerTeamCache.set(p.id, {
-          teamId: p.currentTeam?.id ?? null,
+          teamId: majorClubOf(p.currentTeam),
           throws: p.pitchHand?.code ?? null,
           position: p.primaryPosition?.abbreviation ?? null,
           fetchedAt: now,

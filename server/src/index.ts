@@ -51,6 +51,9 @@ import {
   getPlayerStats,
   getSeasonPlayers,
   getTeamList,
+  searchPlayers,
+  getPlayerRows,
+  PLAYER_SEARCH_MIN,
   resolveVideoUrl,
 } from './mlbStats.js';
 import {
@@ -213,6 +216,70 @@ app.get(
     const season = new Date().getFullYear();
     const players = await getSeasonPlayers(season);
     res.json({ season, players });
+  }),
+);
+
+/**
+ * **The other players a typed name finds** — every prospect and minor leaguer
+ * MLB has an id for and the route above has never carried.
+ *
+ * `/api/players` is one list of 1,415 major leaguers, fetched at boot and
+ * matched against with no request per keystroke; that is the right shape for
+ * the population it covers and it cannot be the shape for this one. MLB lists
+ * tens of thousands of people and offers no list of them — only a search — so
+ * this route is a query rather than a table, and the client asks it only for
+ * what it could not answer itself.
+ *
+ * **A query, so it is `?q=` and not a path segment**, and short queries are the
+ * client's own business: `searchPlayers` answers `[]` below
+ * `PLAYER_SEARCH_MIN` characters without asking MLB anything, and the length is
+ * published on the payload so the field can hold its wait rather than guess at
+ * the number.
+ *
+ * **It 502s through `asyncRoute` like everything else and the client swallows
+ * it.** This is the "a failure costs its own column, never the request" rule
+ * read from the client's side: the header search's answer is the season list it
+ * already holds, and these rows are one more column on it — a dead MLB search
+ * costs the reader the prospects and leaves every other name he can type
+ * exactly as it was, with no banner for a half of a control that still works.
+ */
+app.get(
+  '/api/players/search',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    res.json({ q, min: PLAYER_SEARCH_MIN, players: await searchPlayers(q) });
+  }),
+);
+
+/**
+ * **One player by his MLB id** — the row a `player=` key needs when neither
+ * list the client holds can name him.
+ *
+ * Registered *after* `/api/players/search`, which is what keeps the literal
+ * path from being read as an id — Express takes the first route that matches.
+ * The digits are then checked in the handler rather than in the path, because
+ * **Express 5 does not take an inline pattern**: `'/api/players/:id(\\d+)'` is
+ * the v4 spelling, and path-to-regexp v8 throws on it at *registration*, which
+ * takes the whole server down on boot rather than failing the one route
+ * (observed: the dev server exited and every `curl` got `Connection refused`).
+ * A non-numeric segment is a 400, so the two guards still say the same thing.
+ *
+ * An id MLB does not know answers `{ players: [] }` and **not** a 404: the
+ * caller's question is "who is this key, if anybody", and *nobody* is an
+ * answer to it. A page that opens on nothing is what a key naming nobody
+ * should get, and it is what the client already does with an unresolvable one.
+ */
+app.get(
+  '/api/players/:id',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'id must be an MLB player id' });
+      return;
+    }
+    res.json({ players: await getPlayerRows(id) });
   }),
 );
 

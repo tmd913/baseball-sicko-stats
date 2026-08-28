@@ -218,6 +218,36 @@ export const api = {
     return request('/api/players');
   },
   /**
+   * **The players a typed name finds that `players()` above has never carried**
+   * — prospects, and anyone else MLB lists outside the season's major-league
+   * roster.
+   *
+   * The one search in this app that costs a request. The list above is fetched
+   * at boot and matched against locally on every keystroke, which is what a
+   * 1,415-row answer buys; this population has no list — MLB offers only a
+   * search over it — so the query goes to the server. It answers `[]` for a
+   * query shorter than the `min` it returns, without asking MLB anything.
+   *
+   * **The rows the season list already holds are not in it**, so the caller
+   * appends rather than merges: what comes back is by construction the part of
+   * the answer it did not have.
+   */
+  async searchPlayers(q: string): Promise<{ q: string; min: number; players: SeasonPlayer[] }> {
+    return request(`/api/players/search?q=${encodeURIComponent(q)}`);
+  },
+  /**
+   * **One player by his MLB id** — what a `player=` key falls back to when
+   * neither list the client holds can name him.
+   *
+   * A row per kind, exactly as `players()` gives them, so the answer merges
+   * into the same array. An id MLB does not know answers with an empty list
+   * rather than an error: a key naming nobody is a page that opens on nothing,
+   * which is what it already did.
+   */
+  async playerById(id: number): Promise<{ players: SeasonPlayer[] }> {
+    return request(`/api/players/${id}`);
+  },
+  /**
    * Every club's next four weeks, with whoever each side has announced — what
    * the Schedule view draws on both wide tables.
    *
