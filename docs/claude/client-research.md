@@ -514,10 +514,32 @@ two payloads is identical.
 
 **Where each sits follows from what it is.** The Lists button is welded to the
 Watchlist toggle in the *which players* run, a watchlist being a set of players.
-The Searches button reads **last** in the *tools* run, after everything a saved
-search is made of: Search, Filters and Watchlist decide who is in the table,
-Schedule decides what the table is about them, Columns and Ranks decide how it is
-drawn — and a saved search is all of them at once, under a name.
+**And Searches sits straight after it**, in the same run.
+
+*(It read **last** in the *tools* run for a while, and the argument is kept: "after
+everything a saved search is made of: Search, Filters and Watchlist decide who is
+in the table, Schedule decides what the table is about them, Columns and Ranks
+decide how it is drawn — and a saved search is all of them at once, under a name."
+That is a good answer to* what is a search made of*, and it turned out to be the
+wrong question.)*
+
+The right one is **what the reader is doing when they reach for it**, and it is
+the same thing they are doing at the watchlist chooser: opening a dialog of saved
+things to pick one. Those two are the only controls on this bar that do that —
+they are two configurations of one component and they open the same box in the
+same place. Beside each other, `Lists ⌄` and `Searches ⌄` read as the pair they
+are; nine buttons apart they read as two unrelated disclosures that happen to
+look alike. Measured at 1400, all three runs still fit without scrolling
+(1356 = 1356 on each); at 390 both runs scrolled before the move and both scroll
+after it, and `document.body.scrollWidth` is 390 either way.
+
+**And the Searches count is gone.** `Searches 3` wore the shape the include
+buttons and the funnel wear, where a number says *how much of this control is in
+force* — three filters are narrowing the board, five men are on the watchlist.
+Nothing is in force here: having three saved searches is not a state the board is
+in, and the badge put a lit-looking figure on the one control in the run that is
+doing nothing at all until it is pressed. The watchlist's own count stays,
+because that one counts rows on the board.
 
 **A split button, not one button doing two things.** The toggle's job has not
 changed; what is new is that "the watchlist" names one of several, so the caret

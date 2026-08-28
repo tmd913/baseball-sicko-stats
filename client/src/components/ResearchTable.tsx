@@ -3276,6 +3276,62 @@ export function ResearchTable({
       {watchlistCount > 0 && <span className="research-toggle-count">{watchlistCount}</span>}
     </button>
   ) : null;
+  /**
+   * **The saved searches, beside the watchlist chooser rather than last in the
+   * tools run.**
+   *
+   * *(It read last in that run, and the paragraph is kept: "after everything
+   * they are made of. Search, Filters and Watchlist decide who is in the table;
+   * Schedule decides what the table is about them; Columns and Ranks decide how
+   * it is drawn — and this one is* all of them at once, under a name*, so it
+   * belongs after the controls it stands in for rather than among them." That is
+   * a good argument about **what a search is made of**, and it turned out to be
+   * the wrong question.)*
+   *
+   * The right one is *what the reader is doing when they reach for it*, and it
+   * is the same thing they are doing at the watchlist chooser: opening a dialog
+   * of **saved things** to pick one. Those two are the only controls on this bar
+   * that do that — they are two configurations of one component
+   * (`ResearchLists.tsx`) and they open the same box in the same place. Beside
+   * each other, `Lists ⌄` and `Searches ⌄` read as the pair they are; nine
+   * buttons apart they read as two unrelated disclosures that happen to look
+   * alike.
+   *
+   * **And the count is gone.** `Searches 3` was the shape the include buttons
+   * and the funnel wear, where a number says *how much of this control is in
+   * force* — three filters are narrowing the board, five men are on the
+   * watchlist. Nothing is in force here: having three saved searches is not a
+   * state the board is in, and the badge put a lit-looking figure on the one
+   * control in the run that is doing nothing at all until it is pressed. The
+   * watchlist's own count stays, that one being a count of rows on the board.
+   */
+  const searchesButton = !teams ? (
+    <SavedButton
+      label="Searches"
+      title="Saved readings of this board — apply, save, share"
+      open={searchesOpen}
+      onToggle={() => setPanel('searches', !searchesOpen)}
+      /* **A mark, because the condensed run is marks.** That run hides every
+         label and squares the button; with no glyph this one collapsed to its
+         own caret alone — a bare `⌄` in a row where Search is a magnifier and
+         Filters a funnel. A bookmark is what a *saved* thing looks like, and it
+         is distinct from both. */
+      glyph={
+        <svg
+          viewBox="0 0 16 16"
+          width="15"
+          height="15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 2.4h8a.6.6 0 0 1 .6.6v10.6L8 10.9l-4.6 2.7V3a.6.6 0 0 1 .6-.6Z" />
+        </svg>
+      }
+    />
+  ) : null;
   const teamsToggle = (
     <button
       type="button"
@@ -3449,6 +3505,13 @@ export function ResearchTable({
               />
             </div>
           )}
+          {/* **Straight after the split**, and ahead of the ownership sets
+              rather than behind them: the two saved-thing controls are a pair,
+              and a pair is read together. Off the bar on the team reading for
+              the reason the split beside it is — a saved search names a position
+              and an ownership set, and a board of thirty clubs has neither, so a
+              reading applied there would be a control lying about its reach. */}
+          {searchesButton}
           {!teams && (
           <div className="research-include" role="group" aria-label="Which players">
             {INCLUDE_ORDER.filter(
@@ -3780,46 +3843,9 @@ export function ResearchTable({
              * *rows* and a schedule of the shortstops with 300+ PA is exactly
              * the question this board is opened with.
              */}
-            {/* **Saved searches read last in the run**, after everything they
-                are made of. Search, Filters and Watchlist decide who is in the
-                table; Schedule decides what the table is about them; Columns
-                and Ranks decide how it is drawn — and this one is *all of them
-                at once, under a name*, so it belongs after the controls it
-                stands in for rather than among them.
-
-                Off the bar on the team reading, like the two below it and for
-                the same reason: a saved search names a position and an
-                ownership set, and a board of thirty clubs has neither, so a
-                reading applied there would be a control lying about its own
-                reach. */}
-            {!teams && (
-              <SavedButton
-                label="Searches"
-                title="Saved readings of this board — apply, save, share"
-                count={saved.searches.length}
-                open={searchesOpen}
-                onToggle={() => setPanel('searches', !searchesOpen)}
-                /* **A mark, because the condensed run is marks.** That run hides
-                   every label and squares the button; with no glyph this one
-                   collapsed to its own caret alone — a bare `⌄` in a row where
-                   Search is a magnifier and Filters a funnel. A bookmark is what
-                   a *saved* thing looks like, and it is distinct from both. */
-                glyph={
-                  <svg
-                    viewBox="0 0 16 16"
-                    width="15"
-                    height="15"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M4 2.4h8a.6.6 0 0 1 .6.6v10.6L8 10.9l-4.6 2.7V3a.6.6 0 0 1 .6-.6Z" />
-                  </svg>
-                }
-              />
-            )}
+            {/* *(Saved searches stood here and are in the first run now, beside
+                the watchlist chooser — see `searchesButton`, which keeps the
+                paragraph that put them here.)* */}
             {/**
              * **Compare, and it is two controls in one place rather than two
              * buttons.**
