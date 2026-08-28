@@ -327,9 +327,25 @@ export function useResource<T>(
      *  do, its effect blanking on `[teamId, start, end]` before every read.
      *
      *  On by default because it is the app's rule rather than an option. Turn
-     *  it off only where the old answer would be *wrong* rather than stale —
-     *  nothing in the app so far. */
+     *  it off where the old answer would be *wrong* rather than stale: a
+     *  percentile card belonging to a different man is not a stale answer to
+     *  the question on screen, it is an answer to a different one. */
     keepPrevious?: boolean;
+    /** **How far `keepPrevious` reaches.** Two keys in one family are two
+     *  questions about the same subject, and carrying an answer between them is
+     *  the date bar's case; two families are two subjects, and carrying between
+     *  those is drawing the wrong man.
+     *
+     *  The player page is what this is for and it needs both readings at once:
+     *  the percentile card is keyed on the man *and the cut*, so pressing
+     *  `vs LHP` should leave the season card up until the new one lands — which
+     *  it did — while opening a different player must blank it, which the page
+     *  used to do by hand in an eleven-line reset effect. Family
+     *  `${kind}-${playerId}` says exactly that in one string.
+     *
+     *  Absent means one family: everything carries, which is the report's case
+     *  and the ordinary one. */
+    family?: string;
     /** How long an answer already in hand is considered current for on mount.
      *  The default is `LIVE_POLL_MS`, which is the app's own definition of it —
      *  see `lib.ts`, and `useResumed`, which asks the same question about a
@@ -344,7 +360,7 @@ export function useResource<T>(
   /** Edit the held answer in place — see `setResource`. */
   set: (update: (prev: T | undefined) => T) => void;
 } {
-  const { staleMs = LIVE_POLL_MS, keepPrevious = true } = opts;
+  const { staleMs = LIVE_POLL_MS, keepPrevious = true, family } = opts;
 
   const readRef = useRef(read);
   readRef.current = read;
@@ -398,14 +414,15 @@ export function useResource<T>(
    *  rather than on the entry: it is a fact about what *this* component last
    *  drew, and two components crossing keys at different moments have different
    *  answers to it. */
-  const held = useRef<T | undefined>(undefined);
+  const held = useRef<{ value: T; family: string | undefined } | undefined>(undefined);
   const shown = snap as Resource<T>;
-  if (shown.value !== undefined) held.current = shown.value;
+  if (shown.value !== undefined) held.current = { value: shown.value, family };
+  else if (held.current && held.current.family !== family) held.current = undefined;
   const out: Resource<T> =
     keepPrevious && shown.value === undefined && held.current !== undefined
       ? {
           ...shown,
-          value: held.current,
+          value: held.current.value,
           // It is an answer on screen with a read behind it, which is the
           // badge's state and never the block wait's.
           loading: false,

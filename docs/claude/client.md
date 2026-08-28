@@ -1982,14 +1982,16 @@ gz), CSS unchanged. That is the layer plus the first surface on it; the sign
 should turn over as the reads that each keep their own guard, flag and clock
 move onto it — `PlayerDetails` alone has nine.
 
+**`PlayerDetails`'s nine reads followed**, and with them the second live
+instance of the `LeagueTeam` fault — an open player page froze while the roster
+row behind it moved. See *The page's nine reads are nine keys* and *The player
+page had no clock* in **`client-player-page.md`**, which also carry `family` and
+`staleMs`, the two options that page needed and the report did not.
+
 **Still on their own fetches**, in the order they are worth moving: the ten
 `hooks.ts` contexts (already fetched once in App and broadcast, which is the
-right semantics and the wrong plumbing), `PlayerDetails`'s nine per-tab reads
-(the highest guard density in the codebase, and **the file where the
-`LeagueTeam` fault is still live** — `api.playerDay` fires once at open behind a
-`dayReq.current === req` mark and there is no poll and no `useResumed`, so an
-open player page freezes while the roster row behind it moves), `GamePage`'s two
-module-level caches, and `TeamDetails`.
+right semantics and the wrong plumbing), `GamePage`'s two module-level caches,
+and `TeamDetails`.
 
 ### Where the rest of the client's documentation lives
 

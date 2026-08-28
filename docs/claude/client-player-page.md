@@ -532,6 +532,125 @@ deliberate unmark-on-failure is argued where it sits.
 **Bundle: 549.91 → 549.74 KB of JS** (162.93 → 162.96 gzipped), CSS unchanged —
 seven cleanups removed and a guard put back, which nets to nothing.
 
+### The page's nine reads are nine keys, and the day among them has a clock
+
+**This page was nine `useState` triples, eight `*Req.current` marks, two
+sequence numbers and an eleven-line reset effect**, and every one of those parts
+existed to answer a question `resource.ts` answers once — see *One entry per
+server resource* in the client shell. What is left is nine `useResource` calls
+and a reset effect containing `setTab('overview')`.
+
+**The mark and the reset were this page's two standing hazards**, and both are
+recorded above:
+
+- **the mark** is what hung the percentile tab for the life of the page, and the
+  fix — make the ref the test rather than a `live` flag — is written out in
+  *Leaving a tab mid-read hung it, for ever*. There is no mark now. A read is
+  decided by the entry's own state, an answer lands in the entry whether or not
+  anybody is still watching, and coming back to the tab finds it.
+- **the reset** had to name eleven things, and the record of it getting that
+  wrong is the passage about the Batting/Pitching switch: it watched `playerId`
+  alone until that switch existed, so crossing it left the other half of a
+  two-way player on screen. Nothing needs naming now — the kind and the player
+  are *in* each key, so the other half of Ohtani is a different question.
+
+**A null key is the lazy rule.** `tab === 'percentiles' ? key : null` is the
+whole of it, and the reasoning above it is unchanged: the percentile card is a
+Savant player-page scrape at 1.07s cold against 0.16s for the splits, so it
+stays off the burst that opening anybody fires, and `splits` stays eager because
+the Overview's season strip reads it.
+
+**Re-measured, opening a player and then crossing all eight tabs twice:**
+
+| | before | after |
+| --- | --- | --- |
+| opening a player | 9 player requests | **5** |
+| first sweep of every tab | 3 | 3 |
+| second sweep | 0 | **1** |
+
+The open halves because dev's StrictMode double-mount is deduped by the store —
+production was already 5. **The 1 on the second sweep is the day, and it is the
+point rather than the cost**: see below.
+
+**`family` is what a cut change is and a player change is not.** The percentile
+card and the Stats window table are keyed on the man *and* the cut, and the page
+has always kept the season card up while `vs LHP` lands — while a different man
+must blank it. One key cannot say both, so `useResource` takes a family
+(`${kind}-${playerId}`) that `keepPrevious` may not cross. Measured with the
+percentile read held 2s: pressing `vs LHP` keeps **35 bars** up across
++300/+600/+900/+1500ms on one request; crossing the Batting/Pitching switch on
+Ohtani takes the card to **0 bars in the same commit** as the URL becoming
+`pitcher-660271`, and the page lands on Overview with `Arsenal` in the strip.
+
+**And the hang stays fixed, checked the way it was found** — the percentile read
+held 2.5s in the page, on a player whose card was cold:
+
+| | after |
+| --- | --- |
+| press and stay (control) | 36 bars |
+| away at +600ms, back at +1000ms | **35 bars**, no wait left standing |
+| away and back three times over one read | **29 bars** |
+
+The store's dedupe is what makes the crossings free: coming back finds the read
+still in flight and joins it rather than starting a second.
+
+**A season is not a thing that moves while you are looking at it**, so the eight
+season-shaped reads take a `staleMs` of five minutes and the day does not. The
+store's default is `LIVE_POLL_MS`, which is the app's own definition of *this
+page is current* and the right number for exactly one read here; with it,
+crossing all eight tabs and crossing them again cost **3 requests on the second
+sweep** where the page had always cost 0, the first sweep having taken longer
+than twenty seconds to walk. Five minutes rather than for ever, which is the
+other thing it could be: for ever matches what the old marks did *within one
+page*, but the answers now outlive the page, so it would mean a game log that
+never gained today's last row. Five minutes is longer than a reading of a player
+and shorter than a game.
+
+### The player page had no clock, and the roster behind it did
+
+**Reported as the same fault the matchup page was**, and it is the same fault:
+`api.playerDay` fired once when the tab opened, behind a `dayReq.current === req`
+mark that made a second read impossible, and there was no poll and no
+`useResumed` in the file. So a player page opened during a live game drew that
+moment's line for as long as it stayed open — **while the roster row behind the
+overlay moved every twenty seconds**, off the same `/api/report` the server
+builds this day from. Two surfaces drawing one man on two clocks, one of which
+had stopped.
+
+**Measured before and after**, with his game rewritten to read as live and the
+`/day` requests timestamped in the page, over 63 seconds:
+
+| | reads |
+| --- | --- |
+| before | `20:31:47`, `20:31:47` — **and nothing for the next 63s** |
+| after | `20:35:55`, `20:36:15`, `20:36:35`, `20:36:55` |
+
+Gaps of 20s, 20s, 20s. (The doubled read before is StrictMode; the store dedupes
+it, which is why after is one.)
+
+**The roster's clock, not the league's**, for the reason `LeagueTeam` gives: this
+is a `PlayerReport` whose fastest-moving half is a plate appearance.
+**Gated on a real live game** read off his own day, so a man whose game is final
+has nothing to re-read and a page left open overnight does not ask every twenty
+seconds to be told so. **Quiet** by rule 1 — the store counts a poll apart from
+a read somebody started, so nothing on the page blanks or spins for it.
+
+**Only the day.** The game log, the news, the arsenal and the percentile card
+are season-shaped and do not move with a pitch; the Overview's five-game preview
+comes off the log and stays where it is until the game is final, which is what
+the log itself says.
+
+**One read fewer on the Batting/Pitching switch, as a side effect worth
+naming.** Crossing it fired 7 requests and now fires 6: `news` is keyed by
+**player alone**, which is what the comment above it always said it should be —
+*"news is a fact about a person, so a two-way player has one list rather than
+two"* — and which the reset effect used to defeat by nulling its ref along with
+everything else.
+
+**Bundle**: 784.89 → 785.06 kB raw, 231.31 → 231.37 gzipped against the branch
+before it, and **785.11 → 785.06 raw** against `main` — the layer has now paid
+for itself in raw bytes, nine reads in.
+
 ### An empty percentile card had one message, and it needed three causes told apart
 
 **A percentile card is a rank against a population, and there is more than one

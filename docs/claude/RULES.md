@@ -224,8 +224,17 @@ exactly this.
 
 **An answer is carried across a change of key.** Stepping the date bar asks for
 a *different* resource, and blanking the pane while it lands is the same curtain
-rule 1 forbids. `keepPrevious` is on by default; turn it off only where the old
-answer would be *wrong* rather than stale.
+rule 1 forbids. `keepPrevious` is on by default; turn it off where the old
+answer would be *wrong* rather than stale — a percentile card belonging to a
+different man is not a stale answer to the question on screen. Where both hold
+at once, `family` says how far the carrying reaches: a cut is a different
+question about the same man and carries, a different man does not.
+
+**A resource says how long its answer is current for.** The default `staleMs` is
+`LIVE_POLL_MS`, the app's own definition of it. A season-shaped read wants
+longer — the player page's eight take five minutes, measured, because
+re-entering a tab must be free and the default made a second sweep of the tabs
+cost three requests where the page had always cost none.
 
 **This is not a store of application state and must not become one.** A key
 names a thing the server can be asked for. Which data a view shows still goes in

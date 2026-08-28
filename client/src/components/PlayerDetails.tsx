@@ -6,25 +6,19 @@ import {
   type ReactElement,
 } from 'react';
 import { api } from '../api';
+import { useResource, useResourcePoll } from '../resource';
 import type {
   BatterGameLog,
   GameLogGap,
   PitcherGameLog,
-  PitcherSeasonStats,
   PlayerCut,
-  PlayerPercentiles,
   PercentileMetric,
   PlayerKind,
-  PlayerNews,
   PlayerReport,
-  PlayerWindows,
-  ProjectedStarts,
   ResearchRow,
   ScheduleWindow,
   SeasonArsenal,
-  SeasonStats,
   SplitCut,
-  XwobaSeries,
 } from '../types';
 import { PLAYER_CUTS } from '../types';
 import {
@@ -33,6 +27,7 @@ import {
   handCell,
   headshotUrl,
   isRotationStarter,
+  LIVE_POLL_MS,
   savantPlayerUrl,
   statusCorner,
 } from '../lib';
@@ -493,6 +488,29 @@ function DetailsPhoto({
 }
 
 /**
+ * **How long a season-shaped answer on this page is treated as current.**
+ *
+ * The store's default is `LIVE_POLL_MS` — the app's own definition of "this
+ * page is current" — and it is the right number for the day beside it and the
+ * wrong one for everything else here. Measured with it: crossing all eight
+ * tabs once and then crossing them again cost **3 requests on the second
+ * sweep** where the page had always cost **0**, the first sweep having taken
+ * longer than twenty seconds to walk. Re-entering a tab must be free — that
+ * is this page's own rule, and the percentile card is a 1–2s Savant scrape.
+ *
+ * Five minutes rather than for ever, which is the other thing it could be.
+ * For ever matches what the old `*Req` marks did *within one page*, but the
+ * answers now outlive the page, so it would also mean a game log that never
+ * gained today's last row for as long as the tab stayed open — where closing
+ * the page and opening it again used to re-read. Five minutes is longer than
+ * a reading of a player and shorter than a game.
+ *
+ * The **day** is deliberately not on it: it keeps the store's default and
+ * polls on the roster's twenty seconds while he is batting.
+ */
+const SEASON_MS = 5 * 60_000;
+
+/**
  * **Who he plays for, and the door to them** — under the portrait, in the
  * page's own head rather than on the Overview tab where it began.
  *
@@ -791,112 +809,224 @@ export function PlayerDetails({
   // is what the tab is for and it is the cheap half of the two requests the
   // page already makes on open: `getPlayerDay` is one day of one player, and
   // every layer under it is a cache the feed and the boards are already filling.
-  const [day, setDay] = useState<PlayerReport | null>(null);
-  const [dayError, setDayError] = useState<string | null>(null);
-  const [dayLoading, setDayLoading] = useState(false);
-  // Keyed by kind as well as player, the way the game log's is: a two-way
-  // player's bat and his arm are two days, and neither may stand in for the
-  // other.
-  const dayReq = useRef<string | null>(null);
   /**
-   * The percentile card, **lazy on first open of its own tab** like every other
-   * tab on this page — and it was the one exception, fetched eagerly on mount
-   * whatever the reader was looking at.
+   * **This page's nine reads, as nine keys on the resource store** — see
+   * `resource.ts`. What stood here was nine `useState` triples, eight
+   * `*Req.current` marks, two sequence numbers and an eleven-line reset effect
+   * to clear all of it when the player changed.
    *
-   * It is also the most expensive read the page makes: a Savant player-page
-   * scrape, measured at **1.07s cold** against 0.16s for the splits and 0.05s
-   * for the day and the game log. So opening anybody fired five requests at
-   * once, the dearest of them for a card that is not the tab the page opens on
-   * — and behind one Lambda those five do not overlap so much as queue.
+   * **The mark and the reset are what the key replaces**, and they were the
+   * page's two standing hazards:
    *
-   * `splits` beside it stays eager and that is not an inconsistency: the
+   * - a mark set *before* the answer landed is what hung the percentile tab for
+   *   the life of the page — leaving the tab mid-read ran the cleanup, the
+   *   answer was thrown away with the mark still standing, and coming back
+   *   found the mark and returned early with `loading` true and no second
+   *   request coming. The fix was to make the ref the test rather than a `live`
+   *   flag; here there is no mark at all. A read is decided by the entry's own
+   *   state, an answer lands in the entry whether or not anybody is still
+   *   watching, and coming back to the tab finds it there.
+   * - the reset effect had to name **eleven** things, and the record of it
+   *   getting that wrong is in the comment that survives below: it watched
+   *   `playerId` alone until the Batting/Pitching switch existed, so crossing
+   *   the switch left the other half of a two-way player on screen. Nothing
+   *   needs naming now — the kind and the player are *in* each key, so the
+   *   other half of Ohtani is a different question with a different answer.
+   *
+   * **A null key is "this tab is not open"**, which is the whole of the lazy
+   * rule this page keeps. `percentiles` is the read it matters most for: a
+   * Savant player-page scrape measured at **1.07s** cold against 0.16s for the
+   * splits and 0.05s for the day, so it stays off the burst that opening
+   * anybody fires. `splits` is deliberately keyless-gated — eager — because the
    * Overview's own season strip reads it, so it *is* the visible tab's data.
+   *
+   * **`family` is what a cut change is and a player change is not.** The
+   * percentile card and the Stats window table are keyed on the man *and* the
+   * cut, and pressing `vs LHP` must leave the season card up until the new one
+   * lands while opening a different man must not — see `resource.ts`.
    */
-  const [data, setData] = useState<PlayerPercentiles | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  // Keyed by kind as well as player, the way the day and the game log are: the
-  // card is a batting one or a pitching one.
-  const pctReq = useRef<string | null>(null);
-  /** Which read is the newest. The cut control can be pressed again before its
-   *  answer is back, and only the newest may write the card. */
-  const pctSeq = useRef(0);
-  // The season line and platoon splits are fetched here (not passed in) so the
-  // details view works for any player, whether or not they're on the watchlist.
-  const [splits, setSplits] = useState<{
-    season: SeasonStats | null;
-    vsLeft: SeasonStats | null;
-    vsRight: SeasonStats | null;
-  } | null>(null);
-  const [pitcherSplits, setPitcherSplits] = useState<{
-    season: PitcherSeasonStats | null;
-    vsLeft: PitcherSeasonStats | null;
-    vsRight: PitcherSeasonStats | null;
-  } | null>(null);
-  const [splitsError, setSplitsError] = useState<string | null>(null);
-  const [splitsLoading, setSplitsLoading] = useState(true);
-  // The Stats tab's window table: this player's row on each of the research
-  // board's five windows. Lazy on first open like the three heavy tabs below —
-  // it is five reads of blobs the warmer already keeps hot, so the cost is a
-  // round trip rather than an upstream, but it is a round trip nobody who never
-  // opens the tab should pay. Keyed by kind as well as player, the way the game
-  // log's is: a two-way player's bat and his arm are two boards.
-  const [windows, setWindows] = useState<PlayerWindows | null>(null);
-  const [windowsError, setWindowsError] = useState<string | null>(null);
-  const [windowsLoading, setWindowsLoading] = useState(false);
-  const windowsReq = useRef<string | null>(null);
-  /** Which read is the newest. A cut is a control that gets pressed again
-   *  before its answer is back, and only the newest may write these rows. */
-  const windowsSeq = useRef(0);
-  // His news. Lazy on first open like the tabs below it — and, like the game
-  // log, lazy for the **Overview** too, which previews the top three of the
-  // same list. One read serves both, which is what stops the preview and the
-  // tab ever showing different items.
-  //
-  // Keyed by **player alone**, where the day, the log and the window table are
-  // keyed by kind as well: news is a fact about a person, so a two-way player
-  // has one list rather than two.
-  const [news, setNews] = useState<PlayerNews | null>(null);
-  const [newsError, setNewsError] = useState<string | null>(null);
-  const [newsLoading, setNewsLoading] = useState(false);
-  const newsReq = useRef<number | null>(null);
+  const who = `${kind}-${playerId}`;
+
+  /** His day. The Overview's, and the Schedule tab's — two tabs, one read, so
+   *  they cannot show different games. The cheap half of what the page makes on
+   *  open: one day of one player, every layer under it a cache the feed and the
+   *  boards are already filling. No date is sent — the server's own baseball
+   *  day is the one definition of "today" the app should have, and a tab left
+   *  open past the 3am rollover would otherwise keep asking for yesterday. */
+  const dayKey = tab === 'overview' || tab === 'schedule' ? `playerDay:${who}` : null;
+  const dayRes = useResource(
+    dayKey,
+    () => api.playerDay(playerId, kind).then((d) => d.player),
+    { keepPrevious: false },
+  );
+  const day = dayRes.value ?? null;
+  const dayError = dayRes.error?.message ?? null;
+  const dayLoading = dayRes.loading;
   /**
-   * His rotation — the **Projected Starts** block, which the Overview and the
-   * Schedule tab now draw as one component, so the read is held here rather
-   * than inside it. That is the shape the news and the game log already have
-   * and it buys the same two things: the two tabs cannot show different turns,
-   * and re-entering either costs no request. Keyed by **player alone**, the way
-   * news is: a rotation slot is a fact about a person, and only one of his two
-   * kinds could ever have one.
+   * **And it re-reads itself while he is batting**, on the roster's own twenty
+   * seconds.
+   *
+   * This page had **no poll at all**, and the fault is `LeagueTeam`'s exactly:
+   * the read fired once when the tab opened, behind a `dayReq.current === req`
+   * mark that made a second one impossible, so a player page opened during a
+   * live game drew that moment's line for as long as it stayed open — while the
+   * roster row *behind the overlay* moved every twenty seconds off the same
+   * `/api/report` the same server builds this from. Two surfaces drawing one
+   * man on two clocks, one of which had stopped, which is the thing the app's
+   * one-clock rule exists to prevent.
+   *
+   * **The roster's clock**, because this is the roster's fact: a `PlayerReport`
+   * whose fastest-moving half is a plate appearance. **Gated on a real live
+   * game** read off his own day, so a man whose game is final has nothing to
+   * re-read and a page left open overnight does not ask every twenty seconds to
+   * be told so. **Quiet** by rule 1 — the store counts a poll apart from a read
+   * somebody started, so nothing on the page blanks or spins for it.
+   *
+   * Only the day. The game log, the news, the arsenal and the percentile card
+   * are season-shaped and do not move with a pitch; the Overview's five-game
+   * preview comes off the log and stays where it is until the game is final,
+   * which is what the log itself says.
    */
-  const [starts, setStarts] = useState<ProjectedStarts | null>(null);
-  const [startsLoading, setStartsLoading] = useState(false);
-  const [startsFailed, setStartsFailed] = useState(false);
-  const startsReq = useRef<number | null>(null);
-  // The season xwOBA series backs the Charts tab's one chart. It's a heavier Savant
-  // fetch, so it's loaded lazily — only once that tab is first opened.
-  const [xwoba, setXwoba] = useState<XwobaSeries | null>(null);
-  const [xwobaError, setXwobaError] = useState<string | null>(null);
-  const [xwobaLoading, setXwobaLoading] = useState(false);
-  // The season arsenal backs the pitcher-only Arsenal tab — another heavy Savant
-  // fetch, so it's lazy in the same way.
-  // The season game log backs the Game Log tab — a whole season of rows, so it
-  // loads lazily on first open like the two above it.
-  const [gameLog, setGameLog] = useState<
+  const dayLive = day?.games.some((g) => g.status.state === 'live') ?? false;
+  useResourcePoll(dayKey, dayLive ? LIVE_POLL_MS : null);
+  /**
+   * Whether he works out of the rotation — `lib.ts::isRotationStarter`, the
+   * app's one definition of it, read off the day report. It decides which block
+   * the Overview draws in its second slot — his Projected Starts, or the first
+   * five of his club's fixtures. Read here as well as in the component so the
+   * *key* below can be gated on it: a batter has no rotation to ask about, and
+   * a null key is how this page says so.
+   */
+  const wantStarts = day !== null && isPitcher && isRotationStarter(day);
+
+  /** The percentile card — the most expensive read the page makes, and the one
+   *  the lazy rule was written for. The cut is part of the question and so part
+   *  of the key; the man is the family, so a cut change keeps the card up and a
+   *  new man blanks it. */
+  const pctRes = useResource(
+    tab === 'percentiles' ? `percentiles:${who}:${pctCut ?? 'all'}` : null,
+    () => api.percentiles(playerId, kind, pctCut),
+    { family: who, staleMs: SEASON_MS },
+  );
+  const data = pctRes.value ?? null;
+  const error = pctRes.error?.message ?? null;
+  const loading = pctRes.loading;
+
+  /* The season line and platoon splits are fetched here (not passed in) so the
+     details view works for any player, whether or not they're on the watchlist.
+     Two hooks with one live key between them rather than one hook over a union:
+     a batter's splits and a pitcher's are different shapes, and the kind that
+     is not on screen simply has no key. */
+  const batSplitsRes = useResource(
+    isPitcher ? null : `splits:batter:${playerId}`,
+    () => api.splits(playerId),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const pitSplitsRes = useResource(
+    isPitcher ? `splits:pitcher:${playerId}` : null,
+    () => api.pitcherSplits(playerId),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const splits = batSplitsRes.value ?? null;
+  const pitcherSplits = pitSplitsRes.value ?? null;
+  const splitsError = (isPitcher ? pitSplitsRes.error : batSplitsRes.error)?.message ?? null;
+  const splitsLoading = isPitcher ? pitSplitsRes.loading : batSplitsRes.loading;
+
+  /** The Stats tab's window table: this player's row on each of the research
+   *  board's five windows. Five reads of blobs the warmer already keeps hot, so
+   *  the cost is a round trip rather than an upstream — but a round trip nobody
+   *  who never opens the tab should pay. Keyed and familied like the percentile
+   *  card, and for the same two reasons. */
+  const windowsRes = useResource(
+    tab === 'stats' ? `playerWindows:${who}:${statsCut ?? 'all'}` : null,
+    () => api.playerWindows(playerId, kind, statsCut),
+    { family: who, staleMs: SEASON_MS },
+  );
+  const windows = windowsRes.value ?? null;
+  const windowsError = windowsRes.error?.message ?? null;
+  const windowsLoading = windowsRes.loading;
+
+  /** His news — the News tab's items and the Overview's preview of the top
+   *  three. One read for both, which is what stops the preview and the tab ever
+   *  showing different items. Keyed by **player alone**, where the day, the log
+   *  and the window table are keyed by kind as well: news is a fact about a
+   *  person, so a two-way player has one list rather than two. */
+  const newsRes = useResource(
+    tab === 'news' || tab === 'overview' ? `playerNews:${playerId}` : null,
+    () => api.playerNews(playerId),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const news = newsRes.value ?? null;
+  const newsError = newsRes.error?.message ?? null;
+  const newsLoading = newsRes.loading;
+
+  /** His rotation — the **Projected Starts** block. Read here rather than
+   *  inside the component so the Overview and the Schedule tab cannot show
+   *  different turns and re-entering either costs no request. Keyed by player
+   *  alone, the way news is: a rotation slot is a fact about a person, and only
+   *  one of his two kinds could ever have one.
+   *
+   *  A failed read costs this block and nothing else — every other block on the
+   *  Overview is already drawn, and the Schedule tab says so. */
+  const startsRes = useResource(
+    wantStarts && tab === 'overview' ? `projectedStarts:${playerId}` : null,
+    () => api.projectedStarts(playerId),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const starts = startsRes.value ?? null;
+  const startsLoading = startsRes.loading;
+  const startsFailed = startsRes.error != null;
+  /**
+   * **"Nobody has asked yet" is a wait, not an answer.** `loading` goes up in
+   * an effect, which runs *after* the paint that first mounts the block — so
+   * for one frame the block holds no rotation, no failure and no read in
+   * flight, which is exactly the state its own refusal branch draws
+   * `Couldn't read his club's schedule.` for. Rolling it into the flag the
+   * block is given means the beat before the request goes out is drawn as the
+   * beat before the request goes out: nothing at all, `WAIT_DELAY` not having
+   * elapsed.
+   */
+  const startsPending = startsLoading || (starts === null && !startsFailed);
+
+  /** The season xwOBA series behind the Charts tab — a heavier Savant fetch.
+   *  Keyed on the kind as well as the man, which the old `xwobaReq` was not:
+   *  it held the id alone, so crossing the Batting/Pitching switch relied on
+   *  the reset effect to clear it and on nothing else. */
+  const xwobaRes = useResource(
+    tab === 'charts' ? `xwoba:${who}` : null,
+    () => api.xwoba(playerId, kind),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const xwoba = xwobaRes.value ?? null;
+  const xwobaError = xwobaRes.error?.message ?? null;
+  const xwobaLoading = xwobaRes.loading;
+
+  /** The season game log — the Game Log tab's rows, and the last five of them
+   *  as the Overview's preview. One read serves both, so crossing from the
+   *  summary to the full log is free and the two can never show different
+   *  rows. */
+  const gameLogRes = useResource<
     | { kind: 'batter'; games: BatterGameLog[]; gaps: GameLogGap[] }
     | { kind: 'pitcher'; games: PitcherGameLog[] }
-    | null
-  >(null);
-  const [gameLogError, setGameLogError] = useState<string | null>(null);
-  const [gameLogLoading, setGameLogLoading] = useState(false);
-  const [arsenal, setArsenal] = useState<SeasonArsenal | null>(null);
-  const [arsenalError, setArsenalError] = useState<string | null>(null);
-  const [arsenalLoading, setArsenalLoading] = useState(false);
-  const arsenalReq = useRef<number | null>(null);
-  const xwobaReq = useRef<number | null>(null);
-  // Keyed by kind as well as player: a two-way player's two logs are two
-  // different requests, and the batter's must not stand in for the pitcher's.
-  const gameLogReq = useRef<string | null>(null);
+  >(
+    tab === 'gamelog' || tab === 'overview' ? `gameLog:${who}` : null,
+    () => (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId)),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const gameLog = gameLogRes.value ?? null;
+  const gameLogError = gameLogRes.error?.message ?? null;
+  const gameLogLoading = gameLogRes.loading;
+
+  /** The season arsenal behind the pitcher-only Arsenal tab — another heavy
+   *  Savant fetch, lazy in the same way. */
+  const arsenalRes = useResource(
+    tab === 'arsenal' ? `arsenal:${playerId}` : null,
+    () => api.arsenal(playerId),
+    { keepPrevious: false, staleMs: SEASON_MS },
+  );
+  const arsenal = arsenalRes.value ?? null;
+  const arsenalError = arsenalRes.error?.message ?? null;
+  const arsenalLoading = arsenalRes.loading;
 
   /**
    * Each tab's read, held back by `WAIT_DELAY` before it is allowed to say so.
@@ -956,77 +1086,6 @@ export function PlayerDetails({
     return () => ro.disconnect();
   }, [data]);
 
-  useEffect(() => {
-    // **The cut is part of the question**, so it is part of the mark — the same
-    // move the Stats tab's read makes, and for the same reason: a ref set to a
-    // bare "yes" would answer `vs LHP` with the season card and never re-ask.
-    const req = `${kind}-${playerId}-${pctCut ?? 'all'}`;
-    if (tab !== 'percentiles' || pctReq.current === req) return;
-    pctReq.current = req;
-    // …and the sequence number decides whose answer may land. A cut is a
-    // control a reader presses twice in three seconds, and this is the slowest
-    // read on the page, so a `Home` returning after a `vs LHP` would otherwise
-    // write the wrong card under a lit pill. Not a cleanup flag: an effect
-    // teardown must never unmark a read in flight, which is the hang recorded
-    // below.
-    const seq = ++pctSeq.current;
-    setLoading(true);
-    setError(null);
-    // Whether the answer lands is decided by the ref, not by a `live` flag the
-    // effect cleanup clears — and that is the whole of the fix for a tab that
-    // hung. Switching away mid-read runs the cleanup, so a `live` gate threw the
-    // answer away while the mark stood; coming back found the mark, returned
-    // early, and left `loading` true with no second request coming — the wait up
-    // for ever. Reproduced by leaving the tab while this read was in flight; the
-    // scrape behind it is the slowest on the page, which is why it is the tab the
-    // hang was reported against.
-    //
-    // The ref is the honest test of "is this still the read on screen": it is
-    // nulled and re-marked only when the player or the kind changes, which is
-    // exactly when a landing answer is stale. `.then(ok, err)` rather than
-    // `.catch().finally()` so the error path can null the ref *after* clearing
-    // the wait, a `finally` reading a ref its own `catch` had just nulled being
-    // the way this fix goes wrong.
-    api.percentiles(playerId, kind, pctCut).then(
-      (d) => {
-        if (pctReq.current !== req || pctSeq.current !== seq) return;
-        setData(d);
-        setLoading(false);
-      },
-      (e: unknown) => {
-        if (pctReq.current !== req || pctSeq.current !== seq) return;
-        setError(e instanceof Error ? e.message : 'Failed to load');
-        setLoading(false);
-        pctReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [tab, playerId, kind, pctCut]);
-
-  useEffect(() => {
-    let live = true;
-    setSplitsLoading(true);
-    setSplitsError(null);
-    setSplits(null);
-    setPitcherSplits(null);
-    const req = isPitcher
-      ? api.pitcherSplits(playerId).then((d) => {
-          if (live) setPitcherSplits(d);
-        })
-      : api.splits(playerId).then((d) => {
-          if (live) setSplits(d);
-        });
-    req
-      .catch((e: unknown) => {
-        if (live) setSplitsError(e instanceof Error ? e.message : 'Failed to load');
-      })
-      .finally(() => {
-        if (live) setSplitsLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [playerId, isPitcher]);
-
   // Reset the (lazily-loaded) rolling series when the player changes.
   //
   // **And the tab with them, which this page only now has to answer for.** Until
@@ -1067,267 +1126,7 @@ export function PlayerDetails({
   // day under it and the `Arsenal` tab in the strip.
   useEffect(() => {
     setTab('overview');
-    xwobaReq.current = null;
-    setXwoba(null);
-    setXwobaError(null);
-    arsenalReq.current = null;
-    setArsenal(null);
-    setArsenalError(null);
-    gameLogReq.current = null;
-    setGameLog(null);
-    setGameLogError(null);
-    dayReq.current = null;
-    setDay(null);
-    setDayError(null);
-    pctReq.current = null;
-    setData(null);
-    setError(null);
-    windowsReq.current = null;
-    setWindows(null);
-    setWindowsError(null);
-    newsReq.current = null;
-    setNews(null);
-    setNewsError(null);
-    startsReq.current = null;
-    setStarts(null);
-    setStartsFailed(false);
   }, [playerId, kind]);
-
-  // The Overview tab's day, lazily on first open (which for this tab is the
-  // page opening). No date is sent: the server's own baseball day is the one
-  // definition of "today" the app should have, and a tab left open past the 3am
-  // rollover would otherwise keep asking for yesterday.
-  useEffect(() => {
-    const req = `${kind}-${playerId}`;
-    // **Two tabs want it and it is one read.** The Schedule tab turns on two
-    // facts the day report carries and nothing else on this page does — his
-    // club, and whether `isRotationStarter` places him in a rotation — so it
-    // asks for the same report under the same key rather than fetching a second
-    // copy free to disagree. In practice the Overview has already had it (this
-    // is the tab the page opens on); what the second test buys is the case that
-    // matters, a **failed** day read, where the error path nulls the ref and
-    // pressing Schedule is then a retry.
-    if ((tab !== 'overview' && tab !== 'schedule') || dayReq.current === req) return;
-    dayReq.current = req;
-    setDayLoading(true);
-    setDayError(null);
-    // The ref decides whether the answer lands, never a cleanup flag — see the
-    // percentile read above, where the hang that rule is written for is set out.
-    api.playerDay(playerId, kind).then(
-      (d) => {
-        if (dayReq.current !== req) return;
-        setDay(d.player);
-        setDayLoading(false);
-      },
-      (e: unknown) => {
-        if (dayReq.current !== req) return;
-        setDayError(e instanceof Error ? e.message : 'Failed to load');
-        setDayLoading(false);
-        dayReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [tab, playerId, kind]);
-
-  /**
-   * Whether he works out of the rotation — `lib.ts::isRotationStarter`, the
-   * app's one definition of it, read off the day report. It decides which block
-   * the Overview draws in its second slot — his Projected Starts, or the first
-   * five of his club's fixtures. Read here as well as in the component so the
-   * *read* below can be gated on it: a batter has no rotation to ask about.
-   */
-  const wantStarts = day !== null && isPitcher && isRotationStarter(day);
-  /**
-   * **"Nobody has asked yet" is a wait, not an answer**, and this is the one
-   * thing the hoist above had to add. `startsLoading` is set in an effect, which
-   * runs *after* the paint that first mounts the block — so for one frame the
-   * block held no rotation, no failure and no read in flight, which is exactly
-   * the state its own refusal branch draws `Couldn’t read his club’s schedule.`
-   * for. Rolling it into the flag the block is given means the beat before the
-   * request goes out is drawn as the beat before the request goes out: nothing
-   * at all, `WAIT_DELAY` not having elapsed.
-   */
-  const startsPending = startsLoading || (starts === null && !startsFailed);
-  /**
-   * His rotation, lazily and once — on either of the two tabs that draw it.
-   *
-   * It was `ProjectedStartsBlock`'s own effect until that block was drawn on
-   * two tabs, at which point mounting it fetched: a tab switch away and back
-   * was a fresh read, and two of them in development, StrictMode
-   * double-invoking an effect guarded only by a `live` flag its cleanup
-   * cleared. Measured before the move, pressing Schedule three times fired
-   * **6** requests.
-   *
-   * **The Schedule tab no longer draws that block** — it draws his club's
-   * fixtures with his turns marked off the shared window's own rotation, which
-   * is the grid's reading and keeps a row here and a cell there from placing a
-   * turn on two different days. So the gate is the Overview alone again. That
-   * is not a narrowing in practice, the Overview being the tab this page opens
-   * on, and it is one in principle: the rotation is read for the block that
-   * draws it.
-   *
-   * The ref is the test and there is no cleanup flag, which is this page's
-   * standing rule and the hang it is written for — see the percentile read
-   * above. The error path nulls the ref, so re-opening the tab retries.
-   */
-  useEffect(() => {
-    if (!wantStarts || tab !== 'overview') return;
-    if (startsReq.current === playerId) return;
-    startsReq.current = playerId;
-    setStartsLoading(true);
-    setStartsFailed(false);
-    api.projectedStarts(playerId).then(
-      (d) => {
-        if (startsReq.current !== playerId) return;
-        setStarts(d);
-        setStartsLoading(false);
-      },
-      () => {
-        if (startsReq.current !== playerId) return;
-        // A failed read costs this block and nothing else — every other block
-        // on the Overview is already drawn, and the Schedule tab says so.
-        setStartsFailed(true);
-        setStartsLoading(false);
-        startsReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [wantStarts, tab, playerId]);
-
-  // The Stats tab's five window rows, lazily on first open — and **again each
-  // time the reader picks a cut**, the cut being part of what was asked for.
-  //
-  // Two guards, and they answer different questions. The **ref** is the one
-  // every lazy read on this page carries: it is what stops the request being
-  // sent twice, and it is set to what was asked for rather than to a bare "yes"
-  // so that a *different* question re-asks. The **sequence number** is what
-  // decides whose answer may land — a cut is a control a reader presses twice
-  // in three seconds, and a slow `vs LHP` returning after a fast `Home` would
-  // otherwise write the wrong five rows under a lit pill. Neither is a cleanup
-  // flag: an effect teardown must never unmark a read in flight, which is the
-  // hang the percentile read above records.
-  useEffect(() => {
-    const req = `${kind}-${playerId}-${statsCut ?? 'all'}`;
-    if (tab !== 'stats' || windowsReq.current === req) return;
-    windowsReq.current = req;
-    const seq = ++windowsSeq.current;
-    setWindowsLoading(true);
-    setWindowsError(null);
-    api.playerWindows(playerId, kind, statsCut).then(
-      (d) => {
-        if (windowsSeq.current !== seq) return;
-        setWindows(d);
-        setWindowsLoading(false);
-      },
-      (e: unknown) => {
-        if (windowsSeq.current !== seq) return;
-        setWindowsError(e instanceof Error ? e.message : 'Failed to load');
-        setWindowsLoading(false);
-        windowsReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [tab, playerId, kind, statsCut]);
-
-  // Same lazy load for the Game Log tab — and for the **Overview**, which draws
-  // the last five of its rows. One read serves both, which is the point of
-  // hanging it here rather than inside the preview: crossing from the summary to
-  // the full log is then free, and the two can never show different rows.
-  useEffect(() => {
-    const req = `${kind}-${playerId}`;
-    if ((tab !== 'gamelog' && tab !== 'overview') || gameLogReq.current === req) return;
-    gameLogReq.current = req;
-    setGameLogLoading(true);
-    setGameLogError(null);
-    // The ref decides whether the answer lands, never a cleanup flag — see the
-    // percentile read above, where the hang that rule is written for is set out.
-    (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId)).then(
-      (d) => {
-        if (gameLogReq.current !== req) return;
-        setGameLog(d);
-        setGameLogLoading(false);
-      },
-      (e: unknown) => {
-        if (gameLogReq.current !== req) return;
-        setGameLogError(e instanceof Error ? e.message : 'Failed to load');
-        setGameLogLoading(false);
-        gameLogReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [tab, playerId, isPitcher, kind]);
-
-  // The News tab's items, and the Overview's preview of them. One read for
-  // both, the rule the game log above it follows and for the same reason: the
-  // preview is the top of this very list, so two reads could show two lists.
-  useEffect(() => {
-    if ((tab !== 'news' && tab !== 'overview') || newsReq.current === playerId) return;
-    newsReq.current = playerId;
-    setNewsLoading(true);
-    setNewsError(null);
-    // The ref decides whether the answer lands, never a cleanup flag — see the
-    // percentile read above, where the hang that rule is written for is set out.
-    api.playerNews(playerId).then(
-      (d) => {
-        if (newsReq.current !== playerId) return;
-        setNews(d);
-        setNewsLoading(false);
-      },
-      (e: unknown) => {
-        if (newsReq.current !== playerId) return;
-        setNewsError(e instanceof Error ? e.message : 'Failed to load');
-        setNewsLoading(false);
-        newsReq.current = null; // allow a retry on re-open
-      },
-    );
-    // `playerId` as well as the tab, the way the four reads above it are keyed:
-    // the reset effect nulls the ref when the player changes, and on deps of
-    // `[tab]` alone nothing would then re-run it — a page opened on a new player
-    // from the Overview would keep an empty News tab until some tab was pressed.
-  }, [tab, playerId]);
-
-  // Same lazy load for the Arsenal tab.
-  useEffect(() => {
-    if (tab !== 'arsenal' || arsenalReq.current === playerId) return;
-    arsenalReq.current = playerId;
-    setArsenalLoading(true);
-    setArsenalError(null);
-    // The ref decides whether the answer lands, never a cleanup flag — see the
-    // percentile read above, where the hang that rule is written for is set out.
-    api.arsenal(playerId).then(
-      (d) => {
-        if (arsenalReq.current !== playerId) return;
-        setArsenal(d);
-        setArsenalLoading(false);
-      },
-      (e: unknown) => {
-        if (arsenalReq.current !== playerId) return;
-        setArsenalError(e instanceof Error ? e.message : 'Failed to load');
-        setArsenalLoading(false);
-        arsenalReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [tab, playerId]); // as above: the ref is nulled on a player change, so the deps must see one
-
-  // Fetch the season xwOBA series the first time the Charts tab is opened for
-  // this player (xwobaReq tracks which player we've already requested).
-  useEffect(() => {
-    if (tab !== 'charts' || xwobaReq.current === playerId) return;
-    xwobaReq.current = playerId;
-    setXwobaLoading(true);
-    setXwobaError(null);
-    // The ref decides whether the answer lands, never a cleanup flag — see the
-    // percentile read above, where the hang that rule is written for is set out.
-    api.xwoba(playerId, kind).then(
-      (d) => {
-        if (xwobaReq.current !== playerId) return;
-        setXwoba(d);
-        setXwobaLoading(false);
-      },
-      (e: unknown) => {
-        if (xwobaReq.current !== playerId) return;
-        setXwobaError(e instanceof Error ? e.message : 'Failed to load');
-        setXwobaLoading(false);
-        xwobaReq.current = null; // allow a retry on re-open
-      },
-    );
-  }, [tab, playerId, kind]);
 
   return (
     // The Game Log makes the overlay a fixed-height column so only its table
