@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import { useResource, useResourcePoll } from './resource';
 import { SignOutButton, Splash } from './auth';
 import {
   MAX_LISTS,
@@ -213,6 +214,11 @@ import type { LeagueTab } from './components/LeagueView';
 import MlbView, { MLB_TABS } from './components/MlbView';
 import type { MlbTab } from './components/MlbView';
 import type { StandingsGroup } from './components/MlbStandings';
+
+/** The report before the first one lands. A module constant rather than a fresh
+ *  `[]` per render: `reports` feeds a dozen `useMemo`s and a new empty array
+ *  every render would rebuild every one of them. */
+const EMPTY_REPORTS: PlayerReport[] = [];
 
 // How long a press-triggered mark keeps spinning at a minimum — the fantasy
 // popover's `Refresh from ESPN`, and the league page's own Refresh through it.
@@ -583,22 +589,10 @@ export default function App() {
    *  report on. Called `watchlist` until the two lists were told apart; the
    *  watchlist proper is `watchlistKeys` below, and is the research board's. */
   const [roster, setRoster] = useState<WatchPlayer[]>([]);
-  const [reports, setReports] = useState<PlayerReport[]>([]);
-  const [reportLoading, setReportLoading] = useState(false);
-  /* The report's read, held back by `WAIT_DELAY` — nobody pressed anything to
-     start this one, so it owes the reader nothing until it is slow enough to
-     be worth saying. The same hook now guards every block wait in the app. */
-  const showLoading = useDelayedFlag(reportLoading);
-  /* Whether the very first report read has settled — read or failed, and set
-     once in `loadReport`'s `finally` and never back to false. This is not the
-     same question `reportLoading` answers: that one re-arms on every later
-     load (a date change, a roster edit), and gating the tab pills on
-     `!reportLoading` would blank the whole row again each time. What the pills
-     need is "has an answer come back at all" — settled either way, so a
-     failed first read still gets its tabs rather than losing them for the
-     session, and a genuinely empty roster still lands on the lone Research
-     pill once the answer is in. See `initialLoadSettled` below. */
-  const [reportSettled, setReportSettled] = useState(false);
+  /* `reports`, `reportLoading`, `showLoading` and `reportSettled` are no longer
+     declared here: the report is a **resource** now (`resource.ts`), and the
+     hook that reads it is declared beside `usingFantasy` and `fantasyTeamId`,
+     which are half of what decides which report it is. Search `reportKey`. */
   const [rosterLoaded, setRosterLoaded] = useState(false);
   /**
    * The **watchlist** — `${kind}-${id}` keys the user is following on the
@@ -3865,6 +3859,117 @@ export default function App() {
   const fantasyTeamId = usingFantasy ? espnTeamId : null;
 
   /**
+   * **The roster's report, as one key on the resource store** — see
+   * `resource.ts`. This is the app's most expensive read and the one most
+   * things on screen are drawn from, and it is now the same object wherever it
+   * is read rather than a copy per reader.
+   *
+   * **The key is the whole of what the answer depends on**, which is what the
+   * old effect's dependency array was and could only approximate:
+   *
+   * - the **range**, which is what a step of the date bar changes;
+   * - the **source**, and with it the team, because `PUT /api/espn/team`
+   *   answers with a new status and nothing else about the league moves —
+   *   without the id in the key the app kept showing the old team's players;
+   * - and, on the saved roster, **the roster itself**, spelled as its player
+   *   keys in order. Content rather than a revision counter, so a roster edited
+   *   and put back is the answer the app already has rather than a new
+   *   question; and the order is in it because the report comes back in it.
+   *   The fantasy key leaves it out — that report is about ESPN's roster and
+   *   the saved list has nothing to say about it.
+   *
+   * **A race the app used to run is now unrunnable rather than guarded.** The
+   * old note above `loadReport` records it: several report reads are in flight
+   * at once on an ordinary load, and *"a `saved` read begun on a roster of
+   * nobody can land after the `fantasy` read that replaced it and set the
+   * report back to an empty list"* — which is what accepting an invite did, and
+   * what "two tabs and no page content" was. A sequence number made the loser
+   * harmless. Two keys make it impossible: the saved read writes the saved
+   * entry, and the view is reading the fantasy one.
+   *
+   * **A null key is the boot gate**, and it holds for the three reasons it
+   * always has — each one a request that would be about something nobody is
+   * going to be shown:
+   *
+   * - **the saved preference decides which roster this is about**, so the first
+   *   read waits for it unless the URL has already said. Without this every
+   *   plain visit by a fantasy user spent its most expensive request on the
+   *   wrong list: measured on the live app, `/api/report?…` at 38ms and
+   *   `/api/report?…&source=fantasy` at 48ms, against one read on the same load
+   *   with `roster=fantasy` in the URL;
+   * - a session that opens on `roster=fantasy` waits for the **connection
+   *   status**, because firing now would read the saved watchlist, render it,
+   *   and replace it a moment later — a flash of the wrong list of players,
+   *   which is worse than a slightly longer wait;
+   * - and one that opens on `?preset=Matchup` waits for the league to say
+   *   **which days those are**. Same argument, with the dates rather than the
+   *   roster as the thing not yet known.
+   */
+  const reportReady =
+    (prefsSettled || rosterSourceFromUrl) &&
+    !(rosterSource === 'fantasy' && !espnStatusSettled) &&
+    !(matchupFromUrl && !matchupWindowSettled);
+  const reportKey = !reportReady
+    ? null
+    : usingFantasy
+      ? `report:fantasy:${fantasyTeamId ?? ''}:${start}:${end}`
+      : `report:saved:${start}:${end}:${roster.map(playerKey).join(',')}`;
+  const reportRes = useResource(reportKey, () =>
+    api.report(start, end, usingFantasy ? 'fantasy' : 'saved').then((r) => r.players),
+  );
+  const reports = reportRes.value ?? EMPTY_REPORTS;
+  /** A read the reader started is in flight. The poll and the resume are quiet
+   *  and deliberately absent from it — see `resource.ts`, where the two kinds
+   *  of read are counted separately for exactly this. */
+  const reportLoading = reportRes.loading || reportRes.updating;
+  /* The report's read, held back by `WAIT_DELAY` — nobody pressed anything to
+     start this one, so it owes the reader nothing until it is slow enough to
+     be worth saying. The same hook now guards every block wait in the app. */
+  const showLoading = useDelayedFlag(reportLoading);
+  /* Whether a report read has settled — read or failed. This is not the same
+     question `reportLoading` answers: that one re-arms on every later load (a
+     date change, a roster edit), and gating the tab pills on `!reportLoading`
+     would blank the whole row again each time. What the pills need is "has an
+     answer come back at all" — settled either way, so a failed first read still
+     gets its tabs rather than losing them for the session, and a genuinely
+     empty roster still lands on the lone Research pill once the answer is in.
+     See `initialLoadSettled` below. */
+  const reportSettled = reportRes.settled;
+  /* The banner is the error's business and the rows are not its to take away:
+     the resource leaves the last answer standing and this puts the sentence at
+     the top of the page, which is what `loadReport`'s own `catch` did. A stale
+     failure never reaches here — only the newest read may write an entry. */
+  useEffect(() => {
+    if (reportRes.error) setError(reportRes.error.message);
+  }, [reportRes.error]);
+  /**
+   * **An edit to the report the app is holding, without asking for it again** —
+   * the reorder screen's drag and the row that goes the moment it is tapped.
+   * Both are cases where the client knows the next answer and a round trip
+   * would only redraw what is already right; the write that follows is what
+   * re-reads it.
+   *
+   * Through a ref so the identity is stable across a change of key, which is
+   * what lets the two callbacks below keep the empty dependency arrays they
+   * have always had.
+   */
+  const setReportsFn = useRef(reportRes.set);
+  setReportsFn.current = reportRes.set;
+  const setReports = useCallback(
+    (next: PlayerReport[]) => setReportsFn.current(() => next),
+    [],
+  );
+  /** Ask for the report again now, past the store's dedupe — the resume, and
+   *  the fantasy refresh, which is the one press that knows something no cache
+   *  can. Stable across a change of key, for the reason above. */
+  const reloadFn = useRef(reportRes.reload);
+  reloadFn.current = reportRes.reload;
+  const reloadReport = useCallback(
+    (o: { quiet?: boolean } = {}) => reloadFn.current(o),
+    [],
+  );
+
+  /**
    * Read the fantasy team from ESPN. `refresh` skips the server's ten-minute
    * cache; the previous roster is left in place while the read is in flight, so
    * a re-read never blanks the slot chips.
@@ -5933,120 +6038,11 @@ export default function App() {
     ],
   );
 
-  /**
-   * The sequence number is what `loadFantasyRoster` carries and is here for the
-   * same reason in a sharper shape: **several report reads are in flight at
-   * once on an ordinary load**, and without it the slowest one wins whatever it
-   * is about. The effect below fires on the range, the saved roster and the
-   * ESPN status settling, and then again the moment `usingFantasy` flips — so
-   * a `saved` read begun on a roster of nobody can land *after* the `fantasy`
-   * read that replaced it and set the report back to an empty list.
-   *
-   * That is not a corner: it is exactly what accepting an invite does. The
-   * saved reads are fired against an empty roster while the join is still in
-   * flight, the fantasy read that follows the team pick is a cold ESPN league
-   * plus a cold report, and a page drawn from the loser of that race is a
-   * fantasy team with nobody on it — which is what "two tabs and no page
-   * content" was. The same race is reachable from the fantasy popover's own
-   * toggle, so the guard is on the read rather than on the flow.
-   *
-   * `quiet` refreshes in the background (live polling) without flashing the
-   * loading UI; the foreground load on date/roster change is not quiet.
-   */
-  const reportRead = useRef(0);
-  const reportInFlight = useRef(0);
-  const loadReport = useCallback(
-    (quiet = false, refresh = false) => {
-      if (!quiet) {
-        reportInFlight.current += 1;
-        setReportLoading(true);
-      }
-      const seq = ++reportRead.current;
-      return api
-        .report(start, end, usingFantasy ? 'fantasy' : 'saved', refresh)
-        .then((r) => {
-          if (seq === reportRead.current) setReports(r.players);
-        })
-        .catch((e: Error) => {
-          // A stale failure is no more worth bannering than a stale answer is
-          // worth drawing — the read that superseded it is the one on screen.
-          if (seq === reportRead.current) setError(e.message);
-        })
-        .finally(() => {
-          // The wait is cleared when the **last** foreground read finishes
-          // rather than when any one of them does: a stale response clearing
-          // it would take the block wait off a page that still has nothing on
-          // it, which is the same blank the guard above exists to prevent,
-          // arrived at from the other side. A count rather than the sequence
-          // number, because a quiet poll bumps that and never touches this.
-          if (!quiet && --reportInFlight.current === 0) setReportLoading(false);
-          // Settled either way — a failed read still counts as an answer, so
-          // the tab pills below don't wait forever for one that isn't coming.
-          // Setting this to `true` on every call (quiet ones included) is a
-          // no-op once it already is, which is the whole of "at least once".
-          setReportSettled(true);
-        });
-    },
-    [start, end, usingFantasy],
-  );
-
-  // Refresh report when the date range, the roster, or which list is being
-  // read changes. `roster` is still a dependency in fantasy mode — it costs
-  // one refetch on a change that can't happen while the editor is hidden, and
-  // dropping it would mean a switch back showing the pre-edit list.
-  useEffect(() => {
-    /**
-     * **The saved preference decides which roster this is about, so the first
-     * read waits for it** — unless the URL has already said, in which case
-     * nothing `/api/prefs` can hold could change the answer.
-     *
-     * Without it every plain visit spent its most expensive request on the
-     * wrong list. `rosterSource` starts at `saved` because that is the default
-     * a URL with no `roster=` on it means, the effect fired on the very first
-     * render, and `/api/prefs` then landed with `fantasy` and fired it again —
-     * so a fantasy user's boot was **two** full report reads, the first of them
-     * about a roster nobody was going to be shown. Measured on the live app,
-     * bare URL: `/api/report?…` at 38ms and `/api/report?…&source=fantasy` at
-     * 48ms, against one read on the same load with `roster=fantasy` in the URL.
-     * The wasted one is not free anywhere and is least free where it hurts —
-     * cold, it is seconds of MLB data, and it competes with the real read for
-     * the one Lambda behind them both.
-     *
-     * What it costs is one round trip on a load whose answer is `saved`, and
-     * `/api/prefs` is a single small read fired at the same instant the report
-     * would have been. The saved-roster user waits for that and nothing else.
-     *
-     * This is the same argument as the line below it, one question earlier: a
-     * session that opens on `roster=fantasy` waits for the connection status,
-     * because firing now would read the saved watchlist, render it, and replace
-     * it a moment later — a flash of the wrong list of players, which is worse
-     * than a slightly longer wait. The preference deserved the same treatment
-     * and had never been given it.
-     */
-    if (!prefsSettled && !rosterSourceFromUrl) return;
-    if (rosterSource === 'fantasy' && !espnStatusSettled) return;
-    /* And a session that opens on `?preset=Matchup` waits for the league to say
-       which days those are. It is the same argument as the two lines above it
-       — a read fired now would be about a range nobody is going to be shown,
-       and would be replaced a moment later by the one they asked for — with the
-       difference that here the *dates* rather than the roster are the thing not
-       yet known. It costs nothing to anybody else: `matchupFromUrl` is false on
-       every load that did not name the preset. */
-    if (matchupFromUrl && !matchupWindowSettled) return;
-    loadReport();
-    // `fantasyTeamId` because the report is *about* that team's players: pick a
-    // different one on the Fantasy league page and this is what re-reads it.
-  }, [
-    loadReport,
-    roster,
-    rosterSource,
-    prefsSettled,
-    rosterSourceFromUrl,
-    espnStatusSettled,
-    matchupFromUrl,
-    matchupWindowSettled,
-    fantasyTeamId,
-  ]);
+  /* `loadReport` and the effect that fired it stood here — a `useCallback` with
+     its own sequence number and an in-flight counter, and an effect whose four
+     early `return`s were the boot gate. All of it is `reportKey` and
+     `useResource` now, up beside `fantasyTeamId`: the key is the dependency
+     array, a null key is the gate, and the guard is the store's. */
 
   /**
    * **My own row on this period's board** — the one the board says carries my
@@ -7750,9 +7746,9 @@ export default function App() {
     return fresh.then(() => {
       if (!usingFantasy) return;
       loadFantasyRoster();
-      loadReport();
+      void reloadReport({ quiet: false });
     });
-  }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, loadReport]);
+  }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, reloadReport]);
 
   /**
    * The same read, from the fantasy popover — one press from any view.
@@ -7891,14 +7887,18 @@ export default function App() {
   useEffect(() => {
     projectedRef.current = rosterProjected;
   });
+  useResourcePoll(reportKey, hasRealLiveGame ? LIVE_POLL_MS : null);
+  /* The projection rides the same clock but is not the same resource, so it
+     keeps a timer of its own — one that fires on the same gate and the same
+     interval, which is what "the played half and the projected half of every
+     row move together" asks for. */
   useEffect(() => {
     if (!hasRealLiveGame) return;
     const t = setInterval(() => {
-      loadReport(true);
       if (projectedRef.current) loadRosterProjection(true);
     }, LIVE_POLL_MS);
     return () => clearInterval(t);
-  }, [hasRealLiveGame, loadReport, loadRosterProjection]);
+  }, [hasRealLiveGame, loadRosterProjection]);
 
   /**
    * **Reopening the app shows what a reload would show.**
@@ -7949,7 +7949,7 @@ export default function App() {
     const now = baseballToday();
     const rolled = now !== today;
     setToday(now);
-    loadReport(true);
+    void reloadReport();
     if (projectedRef.current) loadRosterProjection(true);
     // Which players are where in today's lineup, and who moved overnight. Both
     // leave their last answer standing while the read is out.
@@ -7964,7 +7964,7 @@ export default function App() {
     }
   }, [
     today,
-    loadReport,
+    reloadReport,
     loadRosterProjection,
     usingFantasy,
     loadFantasyRoster,

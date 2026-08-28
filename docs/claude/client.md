@@ -1873,6 +1873,124 @@ Before it there were two answers — the Overview printed the string raw, so a
 column headed `K%` read `.261`, which is a share drawn in the notation this app
 reserves for a slash line.
 
+### One entry per server resource, and the report is the first to take it
+
+**The client's own state was never the problem.** `App.tsx` holds it and the URL
+persists it; every mutation is already funnelled through one place and
+`queueUserWrite` already serializes the writes. What was in as many places as
+there were readers is the other half — **an answer off the server**, fetched
+again by each component that wanted one.
+
+Measured before `resource.ts` existed: **84 hand-written sequence guards**
+(`Req.current` / `Seq.current`) across six files, 47 loading flags and 34 error
+flags, every one of them the same three lines re-derived. Correctness of the
+whole depended on each component's author remembering the one-clock rule, rule 1
+of the loading system, and the guard — and the record is that several didn't:
+
+- **`LeagueTeam` had no poll at all** until one was written by hand, and its own
+  comment names what that cost: *"a team page opened at seven o'clock was still
+  drawing seven o'clock's lines at ten"*, while the Roster view — the same
+  component over the same shape of report — moved every twenty seconds.
+  Reported as the matchup page being out of sync with everything else.
+- **It also blanked on every mount.** `setReport(null)` before each read, so
+  leaving a team page and stepping back onto it drew `Reading this team's games`
+  over rows the app already had — rule 1's own "never over data", broken in the
+  one file whose loading comment claimed to keep it.
+
+Both are properties of **where a fetch lives** rather than of what it fetches,
+which is why they are fixed once in a layer rather than in each caller.
+
+**A key is the whole of a resource's identity.** `useResource(key, read)` gives
+every subscriber of one key the same object, one request and one clock; a null
+key is *not yet*, which is what the boot gates became. The store keeps five
+things the callers used to keep individually — the sequence guard, the in-flight
+dedupe, the two loading flags, the error, and when the answer landed.
+
+**Two kinds of read, counted separately**, because the app has always had two
+and only one of them may say so on screen: a **loud** read is one somebody's
+action started — a step of the date bar, a change of roster, a press of refresh
+— and a **quiet** one is the poll, the resume and the invalidation, which by
+rule 1 leave no mark at all. `loading` and `updating` are read off the loud
+count alone, which is what keeps the `Updating` badge off the page every twenty
+seconds during a live game.
+
+**`keepPrevious` is rule 1 read one step further than a single key can read
+it.** Stepping the date bar does not re-read a resource — it asks for *a
+different one*, and a keyed cache has nothing for the new key. Blanking there is
+the same curtain over the same rows that "never over data" forbids, so the hook
+carries the last answer across the change and reports it as `updating` rather
+than `loading`. Measured on the Roster at 1280 with 1.5s of latency injected in
+front of `/api/report`, stepping to the previous day:
+
+| | rows | block wait | badge |
+| --- | --- | --- | --- |
+| +220ms | 30 | no | — |
+| +440ms | 30 | no | `Updating` |
+| +1320ms | 30 | no | `Updating` |
+| +1540ms | **32** | no | `Updating` |
+| +1760ms | 32 | no | — |
+
+The rows never drop, the badge arrives one `WAIT_DELAY` after the press, and the
+new answer replaces the old in one commit.
+
+**What it is worth, measured on the flow that reported the fault.** Opening a
+matchup's team page, returning to the Matchup tab and opening it again, three
+times, counting `/api/report` and `/api/espn/rosters`:
+
+| | first open | second | third | total |
+| --- | --- | --- | --- | --- |
+| before | 4 | 4 | 4 | **12** |
+| after | 2 | **0** | **0** | **2** |
+
+(The four is dev's StrictMode double-mount, which production halves to two; the
+zeroes are zero either way.) And a plain boot went from **8 `/api/report`
+requests to 7** — two subscribers of one key joining one read, where before they
+each asked.
+
+**A race the app used to run is now unrunnable rather than guarded.** The note
+above the old `loadReport` records it: several report reads are in flight at
+once on an ordinary load, and *"a `saved` read begun on a roster of nobody can
+land after the `fantasy` read that replaced it and set the report back to an
+empty list"* — which is what accepting an invite did, and what "two tabs and no
+page content" was. A sequence number made the loser harmless. Two keys make it
+impossible: the saved read writes the saved entry and the view is reading the
+fantasy one.
+
+**The report's key is what its dependency array was, spelled honestly.** The
+range; the source, and with it the team, because `PUT /api/espn/team` answers
+with a new status and nothing else about the league moves; and, on the saved
+roster, **the roster itself as its player keys in order** — content rather than
+a revision counter, so a roster edited and put back is the answer the app
+already has rather than a new question, and the order is in it because the
+report comes back in it. The fantasy key leaves the roster out: that report is
+about ESPN's roster and the saved list has nothing to say about it.
+
+**The cache outliving the component is the point of it, but "for ever" is a
+different promise.** An entry with a subscriber is never evicted; the idle ones
+are held to 32, oldest answer first. A reader stepping the date bar across a
+month would otherwise leave a report per day behind it, and a report is the
+largest thing this client holds.
+
+**What has not moved, and must not.** URL-as-state, `queueUserWrite`,
+`Loading.tsx` and every `WAIT_DELAY`/`MIN_SPIN` number are untouched and
+orthogonal. **This is not a store of application state and must not become
+one** — a key names a thing the server can be asked for, and what is on screen
+stays where it is.
+
+**Bundle**: 785.11 → 787.06 kB raw, 230.85 → 231.73 gzipped (+1.95 kB, +0.88
+gz), CSS unchanged. That is the layer plus the first surface on it; the sign
+should turn over as the reads that each keep their own guard, flag and clock
+move onto it — `PlayerDetails` alone has nine.
+
+**Still on their own fetches**, in the order they are worth moving: the ten
+`hooks.ts` contexts (already fetched once in App and broadcast, which is the
+right semantics and the wrong plumbing), `PlayerDetails`'s nine per-tab reads
+(the highest guard density in the codebase, and **the file where the
+`LeagueTeam` fault is still live** — `api.playerDay` fires once at open behind a
+`dayReq.current === req` mark and there is no poll and no `useResumed`, so an
+open player page freezes while the roster row behind it moves), `GamePage`'s two
+module-level caches, and `TeamDetails`.
+
 ### Where the rest of the client's documentation lives
 
 This file was one 443KB document and is now six, because `CLAUDE.md` sets a 150k
