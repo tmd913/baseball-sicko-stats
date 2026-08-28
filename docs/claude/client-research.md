@@ -647,6 +647,69 @@ a reading — the paging, which panels were open, the half-typed condition in th
 filter builder. Those are where the reader had got to, not what they were
 looking at.
 
+### A row's actions are icon buttons, which is the third answer
+
+They were **three 12px glyphs** (`✎ ⤴ ✕`) against the row's right edge, then
+**one press and a `⋯`** opening a drawer of labeled chips. They are icon buttons
+on the row again, and the paragraph that threw the glyphs out is what this
+drawing had to avoid repeating: *"a pencil at that size against `--faint` is a
+smudge, and nothing said what any of them did until you hovered, which a touch
+device never does… a 22×24px target, where this app's own icon buttons are 30px
+and its chips 28."*
+
+**Both faults were size, and neither was iconography.** At the app's own **30px**
+— the header's gear, the dialog's ✕, the roster's remove button — with a 15px
+glyph inside, they are aimable and they are the shape this app already uses for a
+wordless control. Each carries a `title` *and* an `aria-label`, which is the whole
+of what a wordless control owes: a tooltip for a pointer, a label for everything
+else, and neither of them the only copy. Measured: four buttons at **30×30** on a
+search's row, three on a list's, the row **36px** tall either way inside a 414px
+dialog, and the `⋯` and its menu drawer gone (`.rl-more` count **0**).
+
+**The `⋯` went with them**, and so did the menu it opened: a drawer whose whole
+content was four labels is a press spent on reaching the press. Rename and Share
+still open a drawer, each being a *field* rather than a press — opened by its own
+icon now, which is one gesture shorter to the same box, and `Back` closes it
+where it used to return to a menu that is no longer there.
+
+**`Update to this board` is an icon rather than a chip, and both destructive
+controls keep their word.** This app's rule is that identity never rests on hue,
+so a red ✕ cannot be the whole of *armed* — and `RemoveButton` had already
+answered that, being a ✕ at rest and the **word** `Remove?` once armed, the
+button widening to hold it. Both of these follow it exactly: measured, the delete
+goes 30 → **59.8px** at `Delete?` and the update 30 → **64.6** at `Update?`, and
+arming either disarms the other, opening a drawer disarms both.
+
+The update arms at all because the move made it cheaper: it was a labeled chip
+two presses deep and it is now one press on a 30px target beside three that do
+not overwrite anything, and it is still *the one gesture here that destroys
+something*. It takes the accent rather than `--strikeout`, replacing a reading
+being a different act from destroying a thing.
+
+### A name is capped at 60, and the button that shows it is capped at 160px
+
+`MAX_NAME_LEN` is **60** and always was — the server enforces it on all four
+routes with `400 name must be 1-60 characters`, and both name fields carried
+`maxLength={60}` as a literal, agreeing with it by coincidence. It is the
+mirrored constant in `client/src/types.ts` now, beside `MAX_LISTS` and
+`MAX_SEARCHES`, and this is the one of the three the client genuinely *enforces*
+rather than labels: a name too long to store cannot be typed, where without it
+the request goes, comes back 400 and is swallowed into a `console.error`.
+
+**What was missing is the other end.** A 60-character name is legal, and the
+Watchlist toggle names the active list: measured at 1400 with a 58-character list
+on it, the label went **60.8 → 356.9px** and the capsule **176.8 → 473** — a third
+of the window for one control, and on a phone the whole of the first run. Nothing
+breaks, the run scrolling; it is simply absurd.
+
+So the **display** is capped where the name is not — `min(160px, 34vw)` with an
+ellipsis, which is the answer `.rl-shared-name` and `.research-undo-name` already
+give for the same string in two other places. A list is allowed to be called
+something descriptive; it is the button that must not grow to fit it, and the
+full name stays in the toggle's `title` and in the chooser beside it. Measured
+after: the label **160 at 1400 and 132.6 at 390**, the capsule **276.1 / 248.7**,
+the text ellipsised, and the default `Watchlist` untouched at **60.8**.
+
 ### The two that are lists, not lines
 
 `client-dialogs.md` named **the research board's panels** among the two things

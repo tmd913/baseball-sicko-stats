@@ -23267,6 +23267,30 @@ html[data-theme='light'] .league-table thead th {
   color: var(--text);
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
+/* **The lit half names the active list, and a name is the reader's own text.**
+   A watchlist may be called anything up to `MAX_NAME_LEN`, and 60 characters is
+   a legal name that wrecks the run it sits in: measured at 1400 with a
+   58-character list on the button, the label went **60.8 → 356.9px** and the
+   capsule **176.8 → 473** — a third of the window for one control, and on a
+   phone the whole of the first run. The row scrolls, so nothing breaks; it is
+   simply absurd.
+
+   So the *display* is capped where the name is not. This is the same answer
+   `.rl-shared-name` and `.research-undo-name` already give for the same string
+   in two other places, and the reason it is a display cap rather than a shorter
+   `maxLength`: a list is allowed to be called something descriptive, and it is
+   the **button** that must not grow to fit it. The full name stays reachable —
+   the toggle's `title` carries it, and the chooser beside it lists them all.
+
+   `min()` against the viewport so a phone decides its own: 160px at 1400 and
+   132.6 at 390, against the 60.8 the default `Watchlist` measures, so nothing
+   that fits today is touched. */
+.rl-split .research-toggle-label {
+  max-width: min(160px, 34vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* The chooser half. *(This block read: "the caret-only half — square-ish rather
    than pill-shaped padding, so it reads as a handle on the button beside it
    rather than as a second button." It is kept, this file's rule for superseded
@@ -23377,8 +23401,8 @@ html[data-theme='light'] .league-table thead th {
   min-width: 0;
   gap: 2px;
 }
-/* The name is the press, and it is the whole row less the `⋯`. Flexible so the
-   trailing marks keep their width and the name ellipsizes instead — a list
+/* The name is the press, and it is the whole row less its actions. Flexible so
+   the trailing marks keep their width and the name ellipsizes instead — a list
    called something long must not push its own count off the panel. */
 .rl-pick {
   flex: 1 1 auto;
@@ -23503,31 +23527,91 @@ html[data-theme='light'] .league-table thead th {
 .rl-row.is-active .rl-count {
   color: color-mix(in srgb, var(--accent) 70%, var(--faint));
 }
-/* The one trailing control. A 30px square, which is what every icon button in
-   this app is, against the 22×24 the three glyphs it replaces shared between
-   them. */
-.rl-more {
+/* **The row's actions, back on the row as icon buttons.** *(A single `.rl-more`
+   stood here — "the one trailing control, a 30px square, which is what every
+   icon button in this app is, against the 22×24 the three glyphs it replaces
+   shared between them". The 30px is the half that survives, and it is the half
+   that matters: the three glyphs were thrown out for being **small**, not for
+   being glyphs, and at the app's own size in the app's own box they are the
+   same shape as the header's gear and the dialog's ✕.)*
+
+   `flex: none` on the group so the names ellipsize and the buttons never do;
+   `gap: 2px`, the row's own, so four of them read as one run rather than four
+   controls. */
+.rl-icons {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+}
+/* **The button, and it widens for a word.** `min-width` rather than `width`,
+   because two of these grow into `Update?` and `Delete?` once armed — the shape
+   `.remove-btn` already has for the same reason and on the same gesture. `14px`
+   of side padding is what holds those words off the edge; at rest the glyph is
+   centred in the 30px the padding and the min-width agree on. */
+.rl-icon {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  min-width: 30px;
   height: 30px;
-  padding: 0;
+  padding: 0 7px;
   border: none;
+  border-radius: var(--control-radius-inner);
   background: none;
   color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 @media (hover: hover) {
-  .rl-more:hover {
+  .rl-icon:hover {
     color: var(--text);
     background: color-mix(in srgb, var(--text) 8%, transparent);
   }
 }
-.rl-more.is-open {
+.rl-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Its drawer is open — the same lit ground `.rl-more` used to take, on whichever
+   of the two icons opened it. */
+.rl-icon.is-open {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* **The share icon says the state as well as the action**, which is what the
+   chip did in words (`Sharing` rather than `Share`). A wordless control cannot
+   say it in words, so it says it in the ink — beside the `⤴` the row already
+   wears while a link is out, which is the second copy that keeps this off hue
+   alone. */
+.rl-icon.is-on {
+  color: var(--accent);
+}
+/* **Armed.** Both of these carry a word at this point, so the color is the
+   second thing they say rather than the only one — the rule that made
+   `RemoveButton` grow `Remove?` instead of just turning red. The red is
+   `--strikeout`, the app's own for a destructive control; the update's is the
+   accent, it replacing a reading rather than destroying a thing. */
+@media (hover: hover) {
+  .rl-icon-del:hover {
+    color: var(--strikeout);
+    background: color-mix(in srgb, var(--strikeout) 12%, transparent);
+  }
+}
+.rl-icon-del.is-armed,
+.rl-icon-del.is-armed:hover {
+  color: var(--strikeout);
+  background: color-mix(in srgb, var(--strikeout) 16%, transparent);
+}
+.rl-icon-update.is-armed,
+.rl-icon-update.is-armed:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 /* The drawer under an opened row: the action strip, or whichever action has

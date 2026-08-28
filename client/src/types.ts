@@ -1493,6 +1493,18 @@ export interface SavedSearch {
  */
 export const MAX_LISTS = 20;
 export const MAX_SEARCHES = 30;
+/**
+ * **How long a name may be**, mirrored from the same file for the same reason —
+ * and this one the client genuinely enforces rather than labels: the two fields
+ * that take a name carry it as `maxLength`, so a name too long for the server
+ * cannot be typed rather than being typed, sent, refused with
+ * `400 name must be 1-60 characters` and swallowed into a `console.error`.
+ *
+ * It was the literal `60` in both of those fields, twice, agreeing with the
+ * server by coincidence. One constant, mirrored once, is the same arrangement
+ * the two caps above already have.
+ */
+export const MAX_NAME_LEN = 60;
 
 export interface SharedItem {
   kind: 'list' | 'search';
