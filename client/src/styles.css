@@ -21954,7 +21954,14 @@ html[data-theme='light'] .league-table thead th {
    whole block because every figure in it is one. The same dashed border
    `.lg-matchup.lg-proj` takes, and for the same reason: marking each of twelve
    cells would be one claim made twelve times. */
-.ov-day-proj {
+.ov-day-proj,
+/* **The mark is on the cards, not on the box holding them** — which is the
+   whole of a fault this shipped with for one build: the parent kept the
+   `is-proj` class after its own border was taken away, and `border-style`
+   without a width resolves to the initial `medium`, so the projected reading
+   drew a **3px** dashed rectangle round a group of two solid cards. Two cards
+   is what the reading is drawn on, so two cards is what carries the mark. */
+.ov-leaders.is-proj > .ov-leader-side {
   border-style: dashed;
 }
 /* The head reads like the app's own date face — the qualifier in small caps
@@ -22009,12 +22016,27 @@ html[data-theme='light'] .league-table thead th {
   padding-top: 6px;
   border-top: 1px solid var(--border);
 }
-/* A projected figure is muted where a measured one is not. It is a second mark
-   inside a block the dashed border has already marked, and it is worth it: the
-   category line is the one row a reader's eye crosses between the three blocks,
-   so the difference has to be legible without the border in view. */
+/* **A projected figure is drawn at full strength, and it used to be muted.**
+
+   The note that stood here said: *a projected figure is muted where a measured
+   one is not — a second mark inside a block the dashed border has already
+   marked, and worth it, the category line being the one row a reader's eye
+   crosses between the three blocks.* The reasoning about the *mark* is still
+   right and it is why the dashed border and the `PROJECTED` tag stay. What it
+   did not weigh is what the second mark costs the figure it is made on:
+   `--muted` on a 15px tabular number is a number you have to look at twice, and
+   it was reported off the shipped page in those words — **hard to read**.
+
+   The app's rule is that an estimate never wears the same clothes as a
+   measurement, and it does not: the whole block is dashed and the head says
+   `PROJECTED`. Neither of those is spent on legibility, which is what makes
+   them the right marks and this the wrong one. **A mark must not be paid for in
+   the readability of the thing it marks** — the same trade the `.ov-perf-val`
+   note below now records for the value column, and the same one this file
+   already makes when it says a broken border rather than a hue is what says
+   *ours*. */
 .ov-cat-val.is-proj {
-  color: var(--muted);
+  color: var(--text);
 }
 
 /* ---- Which day the row is showing --------------------------------------
@@ -22028,13 +22050,6 @@ html[data-theme='light'] .league-table thead th {
   display: flex;
   justify-content: center;
   gap: 6px;
-  /* **A dot a day, and the row is a period long now rather than three.** A
-     fortnight is fourteen of them — 14 × 8px plus thirteen 6px gaps is 190,
-     against the 276 a 320px window leaves inside the app's gutters — so the
-     ordinary case needs nothing. The wrap is the backstop rather than the
-     design: a league whose period ran past twenty days would take a second line
-     here instead of bursting the page sideways. */
-  flex-wrap: wrap;
   /* A row of 8px dots is a 30px target in a 12px box, which is nobody's thumb.
      The padding is the target and the dot is the mark — the same split the
      app's icon squares make between a `--control-h` box and a 17px glyph. */
@@ -22192,8 +22207,12 @@ html[data-theme='light'] .league-table thead th {
   color: var(--text);
   padding-left: 4px;
 }
+/* **And so is a projected value.** It was `--muted`, and the worst case was the
+   one the ranked dialog made: a muted figure sitting on a `--rank-bg` chip is
+   two washes over one number. The dashed block and the `PROJECTED` tag are the
+   marks; see `.ov-cat-val.is-proj`, where the reversal is argued. */
 .ov-perf-val.is-proj {
-  color: var(--muted);
+  color: var(--text);
 }
 
 /* ---- A block's own empty states and its foot ---------------------------- */
@@ -22314,64 +22333,324 @@ html[data-theme='light'] .league-table thead th {
     flex: 1 1 0;
     scroll-snap-align: none;
   }
-  /* **A row longer than three days stays a carousel at every width**, which is
-     the same sentence the section above makes about the phone read the other
-     way round: the desktop layout is what a carousel that *fits* looks like, so
-     a row that does not fit has to go on being one. `is-span` is the class the
-     view puts on at four cards or more (a matchup period, where the three named
-     days are three of fourteen); at exactly three it is absent and every rule
-     above stands untouched, so the shape this page shipped with is unchanged by
-     construction rather than by inspection.
-
-     Two classes against one, so these win on specificity wherever they sit —
-     but they are written after what they override anyway, the file's own rule
-     about media queries adding none.
-
-     A third of the row apiece, arithmetic rather than `1 1 0`: three cards have
-     to be the width they would have been if there were only three, or the row
-     would fit as many as it could and the reader would lose the *card* as the
-     unit the snap is about. `24px` is the two 12px gaps between the three, and
-     it is the row's own `gap` — the one number here that is written twice, and
-     it is written twice because a `calc` cannot read it back off the box. */
-  .ov-days.is-span {
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    align-items: stretch;
-    margin-inline: calc(-1 * var(--table-bleed, 0px));
-    padding-inline: var(--table-bleed, 0px);
-    scroll-padding-inline: var(--table-bleed, 0px);
-  }
-  .ov-days.is-span > .ov-day {
-    flex: 0 0 calc((100% - 24px) / 3);
-    scroll-snap-align: center;
-  }
 }
 
+
+/* ---- The matchup so far, both sides in one card --------------------------
+   **The card is `.ov-day`'s own box**, and it is the same box because it is the
+   same kind of thing: a bordered panel holding two lists of `PerformerRow`s. It
+   is not folded onto that selector, because `.ov-day` is a *carousel item* —
+   `flex: 0 0 100%` and `scroll-snap-align` are half of what it is, and this
+   card sits in the page's own column flex. What is shared is the surface, and
+   the surface is four declarations.
+
+   **One card with two halves rather than two cards**, because the reading *is*
+   the comparison: two lists a gutter apart are read across, and two cards a
+   heading apart are read one after the other. */
+.ov-leaders {
+  display: grid;
+  gap: 12px;
+  /* The two sides are one height, so the doors under them line up — the same
+     reason the carousel stretches its three cards. A side with two men and a
+     side with nine would otherwise put its `Rank all` button halfway up the
+     card. */
+  align-items: stretch;
+}
+/* **The switch sits with the words, not at the far end of the line.**
+
+   It was pushed to the right edge with `margin-inline-start: auto`, which is
+   what this stylesheet does with a control that has a *row* to itself. This one
+   has a heading beside it, and a control at the opposite end of a heading reads
+   as belonging to the box under it rather than to the words it is next to —
+   with two headings and two carousels above, the eye has to travel the width of
+   the page to find out what it switches. Beside the note, the three read as one
+   phrase: what the block is, over which days, on which reading.
+
+   The wrapper stays rather than folding into `.view-switch`, which is a shared
+   object: this is where *this* heading puts it, and the alignment is this
+   heading's business. */
+.ov-heading-switch {
+  /* The switch is a control among small caps: on the row's baseline it rides a
+     pixel high, the tabs' own padding being taller than the text beside them. */
+  align-self: center;
+}
+
+/* **How the roster is running, in three counts that add up to the door's own
+   number.** A row rather than a block: it is one line about the whole side, and
+   the three cells are read across as a shape before any of them is read as a
+   figure. It shares the line the `Value` label is on — see `.ov-perfs-head-row`,
+   whose two ends those now are.
+
+   The glyphs are emoji, which is the one place in this app they appear — a hot
+   face, a level one and a cold one say *hot*, *level* and *cold* in a way three
+   words at 11px in a 300px column do not, and the row has to survive being
+   glanced at rather than read. Each cell carries its own `title`, and the row an
+   `aria-label`, so nothing is said by the picture alone.
+
+   **Bigger than the label beside it, deliberately.** They are on one line and
+   they are not the same kind of thing: `VALUE` names a column and is read once;
+   these *are* a reading and are what the eye should land on. 14px against 11 is
+   the same step the card already makes between a performer's line and his
+   name. */
+.ov-heat {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  /* 13 against the glyph's 16 and the `VALUE` label's 11. The count is a figure
+     *attached to* the mark beside it rather than a reading in its own right —
+     at 14 the two carried equal weight and the badge read as a pair, where what
+     it is is a mark with a number on it. */
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* **Each count is a badge of its own**, where the three were three pairs a
+   12px gap apart on a bare line. Two glyphs and two digits with nothing round
+   them read as one run the eye has to be told where to cut — the same fault the
+   trending card's three windows record, and the same fix one step simpler: a
+   box each rather than rules between them, three being few enough that a box is
+   cheaper than a table.
+
+   `--panel-2` inside a `--border`, and **fully round** — the shape this app
+   reserves for a thing you read, where the control radius is for a thing you
+   press. The same two tokens the ranked dialog's own chip resolves to at the
+   middle of its scale, so a badge on this page means one thing whichever block
+   it is on.
+
+   **Deliberately not tinted.** The scale is already in the reader's hand: the
+   emoji carries hot and cold, and painting the box behind it would be the same
+   statement made twice — the rule that keeps the day cards' value column
+   monochrome, applied to a row where the *glyph* is doing what a hue would. */
+.ov-heat-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  /* An emoji has its own metrics and sits a shade high against tabular digits;
+     the line box is declared so the row's height cannot change with the font
+     the platform hands it. */
+  line-height: 20px;
+}
+/* The glyph a step above the count it labels — an emoji at the digits' own size
+   reads smaller than they do, having no cap height to share with them. */
+.ov-heat-cell > span {
+  font-size: 16px;
+  line-height: 1;
+}
+/* **The team name has the line to itself.** It shared the `Value` label's row
+   and is not a column heading: it is what the whole side *is*, and half this
+   league's names are long enough to crowd anything beside them in a 300px
+   column. `.ov-perfs-head`'s own type, one line up. */
+.ov-leader-name {
+  display: block;
+  margin-bottom: 6px;
+}
+/* **A count of nought keeps its badge and loses its ink.** The three cells are a
+   breakdown, so a side with no cold men has to say `🥶 0` — a row that dropped a
+   cell would be read as a different set of counts, and the shape is the reading.
+   The box stays for that reason and the figure dims; the glyph goes with it,
+   `opacity` being the only thing that reaches an emoji's own colors. */
+.ov-heat-cell.is-none {
+  color: var(--faint);
+}
+.ov-heat-cell.is-none > span {
+  opacity: 0.45;
+}
+
+/* **Each side is a card of its own, and there is no card around them.**
+
+   They were two columns of **one** box with a rule between them, which is the
+   drawing a day card's `BATTERS` and `PITCHERS` blocks take — and that is the
+   right mark for *two parts of one thing*. These are not two parts of one
+   thing: they are two rosters belonging to two managers, and the reading is the
+   comparison between them. A rule says *and*; two cards say *against*.
+
+   *(Both were then put inside a parent card, and the parent came out again. It
+   bought nothing the section heading was not already buying — a heading is what
+   says where a block begins on this page, and every other block here is drawn
+   straight onto the page under one — and it cost a second border and a second
+   ground around two boxes that are the same two boxes without it. It is also
+   what forced the sides onto `--panel-2`: a card on a card needs a different
+   ground, and two cards on the page do not.)*
+
+   So a side is `.ov-day`'s own surface — the same border, radius, gradient and
+   padding a day card takes, because it is the same kind of object on the same
+   page. Not folded onto that selector: half of what `.ov-day` is is `flex: 0 0
+   100%` and `scroll-snap-align`, which belong to a carousel item and not to
+   this.
+
+   The column flex is what lets the foot's `margin-top: auto` push the door to
+   the bottom of a short side — the rule `.ov-day-foot` already carries, working
+   here for the same reason it works in a stretched carousel card. */
+.ov-leader-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  padding: 10px 12px;
+}
+/* **Two across from 720, and 720 is measured — from the other direction.**
+
+   It was declared at 620 and the measurement moved it. The number that decides
+   is not where two columns *fit*, it is where a column is wide enough to hold a
+   performer row, and the app's own floor for that is **276px** — a day card at
+   a 320px window, the narrowest this row is drawn anywhere else in the app.
+
+   Measured on the live league, forcing the two-up layout at each width and
+   reading the content box off the rendered card:
+
+   | window | card | content | the six lines |
+   | --- | --- | --- | --- |
+   | 620 | 282 | **256** | 26px apiece — every one wrapped |
+   | 719 (one column) | 675 | 649 | 13px apiece |
+   | 720 | 332 | **306** | 13, 13, 13, 26, 26, 13 |
+
+   256 is under the floor and 306 clears it. Two columns *narrower than the one
+   they replaced* is the layout getting worse at a breakpoint, which is the
+   fault; a wrap at 306 is not — `.ov-perf-line` wraps rather than clipping and
+   two lines is its documented worst case at every width this app draws it. */
+@media (min-width: 720px) {
+  .ov-leaders {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* *(The trough between the two used to be padding rather than `gap`, so that a
+   divider drawn on the second side could sit near the middle of it without
+   making that side's content box narrower than the first's — measured, `Rank
+   all` came out 536px against 513px at 1200, two identical controls visibly
+   different sizes. Two cards need no divider, so the trough is the grid's own
+   `gap` again and the tracks are equal by construction.)* */
+
+/* ---- The ranked dialog's own head ---------------------------------------
+   **The name over the days, with the badge beside it.** It was one line —
+   `Baldy's Bozos — Aug 28 – Sep 6 ↗ PROJECTED` — and those are not three facts
+   of equal weight held apart by a dash: the name is *whose list this is* and
+   the dates are *what it is over*, which is the lead-over-date relationship the
+   day cards' own heads already draw and draw this way.
+
+   `.app-dialog-head h2` supplies the type for the first line; the second is the
+   card head's own `--faint` sub-line. The badge is `.lg-logo` outright, at the
+   size the League page's rows draw it. */
+.ov-ranked-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.ov-ranked-title-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ov-ranked-who {
+  /* The one elastic thing in the head, so a long team name ellipsizes into the
+     slack rather than pushing the ✕ off the end. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-ranked-sub {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+}
+/* The `PROJECTED` qualifier sits on the dates rather than on the name, and at
+   the sub-line's own weight — it qualifies *which days*, not whose they are. */
+.ov-ranked-sub .ov-day-proj-tag {
+  margin-left: 6px;
+}
 
 /* ---- The whole day, ranked, over the page -------------------------------
-   The dialog a card's `Rank all N` opens: the same category line, the same
-   rows, the same order, every man in the lineup instead of three.
+   The dialog a card's `Rank all N` opens: the same rows, the same order, every
+   man in the lineup instead of three.
 
    **Narrower than the app's default dialog**, which is `min(720px, 100%)`. This
-   is a *card*, moved: at 720 a rank, a 26px face, a name and a signed number
-   sit at the two ends of a line with four inches of nothing between them, which
+   is a *card*, moved: at 720 a rank, a 26px face, a name and a signed number sit
+   at the two ends of a line with four inches of nothing between them, which
    reads as a table missing its columns rather than as a list. 460 is the card's
    own widest measured draw (365 at 1200) plus room for the batting lines that
-   wrap in it at 12px of type. */
+   wrap in it at 12px of type.
+
+   *(The day's category totals were drawn at the head of this box and are not
+   any more — they are on the card the press came from, and here they spent the
+   top of a phone-height dialog pushing the list the reader pressed for under the
+   fold. The rules that fitted `.lg-cats` under a dialog head went with them.)* */
 .ov-ranked-box {
   width: min(460px, 100%);
+  /* **The chip's two ends, declared here** — the split `columnRanks.tsx`
+     already makes and the League table and the board's team reading already
+     follow: the function computes the *strength* and the sheet owns the color,
+     so a surface that wants the scale says so in one line rather than by
+     copying a `color-mix`. Red at the top of the matchup and blue at the
+     bottom, which is `--strikeout` and `--walk` — the same two inks those two
+     surfaces resolve to. */
+  --rank-hot: var(--strikeout);
+  --rank-cold: var(--walk);
 }
-/* **The line loses its own rule at the top of a dialog, and keeps its air.**
-   `.lg-cats` carries a `border-top` because on a card it separates the day's
-   totals from the head above them; here the head is the dialog's own, and that
-   already ends in one — two 1px rules 9px apart, which reads as a box the
-   heading is sitting in rather than as a division. The padding stays: what it
-   holds apart is the total and the men it is a total of. */
-.ov-ranked-box .app-dialog-body > .lg-cats {
+/* **The value wears the chip, where the board puts it under the rank.**
+
+   That board draws the pill on its own line because it has 44 columns and
+   cannot spend twenty pixels a cell across; a dialog four hundred pixels wide
+   with one figure a row has the room, and the figure *is* the ranked thing —
+   there is no ordinal under it to color instead. Fully round, which is the
+   shape this app reserves for things you read (a control radius is for things
+   you press), and the same `--rank-bg` the pill takes.
+
+   `--panel-2` is the neutral the mix passes through, so a man in the middle of
+   the matchup wears the plain chip the card's own hover ground already uses
+   rather than nothing at all — the row of figures reads as one column of chips
+   with a scale through it, not as a handful of colored ones among bare
+   numbers. */
+.ov-perf-val.is-chip {
+  /* **12px where a card's value is 13**, which is the pill's own doing: a chip
+     is a box round the figure, so at the card's size the number plus its
+     padding stands taller than the two-line identity beside it and the row's
+     rhythm follows the chip instead of the man. A point down and the pill's
+     outside edge sits where the bare number's did on a card, which is the same
+     trade `.trend-win-val` makes inside its own box. */
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--rank-bg, var(--panel-2));
+  /* The cell was `padding-left: 4px` to clear the row's grid gap; the chip's
+     own padding replaces it, and the 4px comes back outside the pill so the
+     numbers still line up under the `Value` label. */
+  margin-left: 4px;
+  padding-left: 8px;
+}
+/* **The label row is a caption on the list, and in here it was floating between
+   two things.** Measured off the rendered dialog: **26px** above `22 RANKED` /
+   `VALUE` and **18px** below it, against a 13px line — a label with more air
+   round it than height, three times over.
+
+   The two numbers are borrowed rather than chosen. `.ov-perfs-head-row` carries
+   `margin-top: 14px` because on a **card** it separates the list from the
+   category totals above it, and there are no totals in here (see the note above
+   this section); `.ov-perfs` adds 8 under it and the row's own 4px cell padding
+   adds a fifth pixel on top of that. Neither number is about this box.
+
+   So the label sits in the body's own 12px of padding and takes **4px** under
+   it — the gap between two rows of the list it heads, which is what a caption on
+   a list should be nearer to than to the head of the dialog. Measured after:
+   **26 → 12px** above and **18 → 14** below. (The box itself does not move: at
+   22 rows it is already against `.app-dialog-box`'s `min(80dvh, 720px)` cap, so
+   what the fourteen pixels buy is a row and a half of list rather than a shorter
+   dialog.) */
+.ov-ranked-box .ov-perfs-head-row {
   margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-  padding-bottom: 10px;
+}
+.ov-ranked-box .ov-perfs {
+  margin-top: 4px;
 }
 /* The two sentences under the list, where the card has no room for either: how
    many men in the lineup had no game, and how many the league scores nothing
