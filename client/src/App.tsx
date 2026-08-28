@@ -27,9 +27,6 @@ import type {
   MlbStandings,
   PlayerKind,
   PlayerReport,
-  PlayerStatus,
-  ClubStatus,
-  RecentNews,
   ResearchRow,
   ResearchWindow,
   MatchupWindow,
@@ -37,7 +34,6 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
-  ParkFactor,
   PlayerCut,
   SavedList,
   SavedSearch,
@@ -1484,38 +1480,29 @@ export default function App() {
    * components down inside dialogs, which is what makes it a context rather
    * than a prop (see `hooks.ts`).
    */
-  const [parkFactors, setParkFactors] = useState<Map<number, ParkFactor> | null>(null);
-  const [parksLoading, setParksLoading] = useState(false);
-  const [parksError, setParksError] = useState<string | null>(null);
+  /**
+   * **Lazy, and asked for by whoever needs one.** A session that opens no team
+   * page and previews no game never pays for the table; `need()` is what the
+   * first surface that wants a park calls, and until one does the key is null.
+   *
+   * **A failed read may be asked for again.** The flag is cleared on the error,
+   * so the next surface that wants a park sets it and the read runs again.
+   * Nothing retries on its own, which is rule 1: this is a garnish, not the
+   * page. That is the whole reason the flag survives the move to the store —
+   * a key alone cannot express "ask again when somebody next wants this".
+   */
   const [parksWanted, setParksWanted] = useState(false);
   const needParkFactors = useCallback(() => setParksWanted(true), []);
+  const parksRes = useResource(parksWanted ? 'parkFactors' : null, () => api.parkFactors());
   useEffect(() => {
-    if (!parksWanted || parkFactors) return;
-    let canceled = false;
-    setParksLoading(true);
-    setParksError(null);
-    api
-      .parkFactors()
-      .then((pf) => {
-        if (canceled) return;
-        setParkFactors(new Map(pf.parks.map((p) => [p.venueId, p])));
-      })
-      .catch((e: Error) => {
-        if (!canceled) {
-          setParksError(e.message);
-          // A failed read may be asked for again — the next surface that wants
-          // a park sets the flag and this effect runs. Nothing retries on its
-          // own, which is rule 1: this is a garnish, not the page.
-          setParksWanted(false);
-        }
-      })
-      .finally(() => {
-        if (!canceled) setParksLoading(false);
-      });
-    return () => {
-      canceled = true;
-    };
-  }, [parksWanted, parkFactors]);
+    if (parksRes.error) setParksWanted(false);
+  }, [parksRes.error]);
+  const parkFactors = useMemo(
+    () => (parksRes.value ? new Map(parksRes.value.parks.map((p) => [p.venueId, p])) : null),
+    [parksRes.value],
+  );
+  const parksLoading = parksRes.loading;
+  const parksError = parksRes.error?.message ?? null;
   /** The one object the context carries, memoized so every leaf reading it does
    *  not re-render on an unrelated render of `App`. */
   const parkRead = useMemo(
@@ -4399,35 +4386,52 @@ export default function App() {
    * A failure is swallowed: this decorates a headshot, and the board it sits on
    * is the thing the user actually came for.
    */
-  const [playerStatuses, setPlayerStatuses] = useState<Map<number, PlayerStatus> | null>(null);
+  /**
+   * **What is true of every player today** — his roster status and where his
+   * club's game has him — as one key on the resource store.
+   *
+   * **It was re-read on every entry**, the effect listing `[view, detailsKey]`
+   * and nothing standing between one navigation and the next request. That is
+   * defensible for a small answer and this is **453,622 bytes**, the largest
+   * response the app asks for: measured on an ordinary browse — open four men,
+   * closing each, then two entries to the research board — **six reads, 2.6MB**,
+   * of a map that had not changed between the first and the sixth.
+   *
+   * The freshness it wants is real (a lineup posts in the afternoon) and it is
+   * **`LIVE_POLL_MS`**, which is the app's own answer to "how stale a page is
+   * this app willing to consider current" and needed no new number. So an
+   * entry inside twenty seconds of the last one draws what the app has, and one
+   * after it re-reads. The two maps are built once per answer rather than once
+   * per entry, which is the other half of what six reads cost: ~1,300 entries
+   * and thirty, rebuilt each time.
+   *
+   * A failure is swallowed — this decorates a name, and the table under it is
+   * what the reader came for. The store keeps it on the entry; nothing here
+   * banners it.
+   */
+  const statusesRes = useResource(
+    view === 'research' || detailsKey !== null ? 'statuses' : null,
+    () => api.statuses(),
+  );
+  const playerStatuses = useMemo(
+    () =>
+      statusesRes.value
+        ? new Map(Object.entries(statusesRes.value.players).map(([id, st]) => [Number(id), st]))
+        : null,
+    [statusesRes.value],
+  );
   /** **The same day keyed by club**, off the same response — thirty entries,
    *  what the board's `Opp` column falls back to for a man today's boxscores do
    *  not carry. Held beside the player map rather than inside it because it
    *  answers a different question about a different subject; see
    *  `ClubStatusContext`. */
-  const [clubStatuses, setClubStatuses] = useState<Map<number, ClubStatus> | null>(null);
-  const statusesInFlight = useRef(false);
-  const loadStatuses = useCallback(() => {
-    // Returns a promise so a caller can wait on it — an in-flight read
-    // resolves immediately rather than sending a second copy of itself.
-    if (statusesInFlight.current) return Promise.resolve();
-    statusesInFlight.current = true;
-    return api
-      .statuses()
-      .then(({ players, clubs }) => {
-        setPlayerStatuses(new Map(Object.entries(players).map(([id, st]) => [Number(id), st])));
-        setClubStatuses(new Map(Object.entries(clubs).map(([id, st]) => [Number(id), st])));
-      })
-      .catch((e: Error) => console.error('player statuses unavailable:', e.message))
-      .finally(() => {
-        statusesInFlight.current = false;
-      });
-  }, []);
-
-  useEffect(() => {
-    if (view !== 'research' && detailsKey === null) return;
-    loadStatuses();
-  }, [view, detailsKey, loadStatuses]);
+  const clubStatuses = useMemo(
+    () =>
+      statusesRes.value
+        ? new Map(Object.entries(statusesRes.value.clubs).map(([id, st]) => [Number(id), st]))
+        : null,
+    [statusesRes.value],
+  );
 
   /**
    * Who in the league has been in the news today or yesterday — the mark beside
@@ -4451,23 +4455,21 @@ export default function App() {
    * A failure is swallowed, like the statuses read: this decorates a name, and
    * the table under it is what the reader came for.
    */
-  const [recentNews, setRecentNews] = useState<Map<number, RecentNews> | null>(null);
+  const recentNewsRes = useResource('recentNews', () => api.recentNews());
+  const recentNews = useMemo(
+    () =>
+      recentNewsRes.value
+        ? new Map(Object.entries(recentNewsRes.value).map(([id, n]) => [Number(id), n]))
+        : null,
+    [recentNewsRes.value],
+  );
   /* Once on mount — and once more whenever the app is reopened, which is the
      one thing that can put a *day* between two calls of it and so the one thing
-     that can change the answer. See `refreshOnResume`. */
-  const loadRecentNews = useCallback(
-    () =>
-      api
-        .recentNews()
-        .then((byId) =>
-          setRecentNews(new Map(Object.entries(byId).map(([id, n]) => [Number(id), n]))),
-        )
-        .catch((e: Error) => console.error('recent news unavailable:', e.message)),
-    [],
-  );
-  useEffect(() => {
-    void loadRecentNews();
-  }, [loadRecentNews]);
+     that can change the answer. See `refreshOnResume`. A stable identity across
+     renders, so that callback's dependency list is unchanged. */
+  const recentNewsReload = useRef(recentNewsRes.reload);
+  recentNewsReload.current = recentNewsRes.reload;
+  const loadRecentNews = useCallback(() => recentNewsReload.current(), []);
 
   /** How each roster % has moved, one entry per span the server found a
    *  baseline for. Null without a league, and also when it has no history at
@@ -7954,9 +7956,9 @@ export default function App() {
     // Which players are where in today's lineup, and who moved overnight. Both
     // leave their last answer standing while the read is out.
     if (usingFantasy) loadFantasyRoster();
-    // Gated exactly as its own effect is — a request for a map only these two
-    // surfaces draw is a request the roster views would never make.
-    if (view === 'research' || detailsKey !== null) loadStatuses();
+    // The statuses map is not here and that is not an omission: it is a key on
+    // the store now, and coming back to a page that wants it finds an entry
+    // older than `LIVE_POLL_MS` and re-reads on its own.
     void loadRecentNews();
     if (rolled) {
       refreshSchedule();
@@ -7970,7 +7972,6 @@ export default function App() {
     loadFantasyRoster,
     view,
     detailsKey,
-    loadStatuses,
     loadRecentNews,
     refreshSchedule,
     refreshResearch,
