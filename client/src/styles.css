@@ -13065,6 +13065,14 @@ button.start-line:focus-visible {
   font-weight: 600;
   color: var(--muted);
 }
+/* **The line that says an applied search replaced this board**, and it is the
+   same object as the projected line one selector up: a caption in the head
+   naming the state the table is in, with the way out of it beside the words.
+   Folded onto that rule rather than given its own that agree today — the
+   stylesheet's standing rule, and the reason `.kind-switch` is on
+   `.view-switch`. What it adds is nothing at all; the class exists so the name
+   inside it can be capped, and so the next thing that has to tell the two lines
+   apart has a handle to do it with. */
 .research-proj-line {
   /* The gap to the count under it. `margin` rather than a gap on the head,
      which would space every line in it — the panels above included, whose own
@@ -13086,6 +13094,25 @@ button.start-line:focus-visible {
   font-weight: 800;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+/* A search's name is the reader's own text and can be anything they typed, so
+   it is capped and ellipsised the way `.rl-shared-name` caps the same string
+   one box over — a 40-character name would otherwise push `Undo` off the right
+   of a phone. `min-width: 0` on the span that holds it, or the cap cannot bite:
+   a flex item does not shrink below its content's min-content width unless it
+   is told to. */
+.research-undo-line > span:first-child {
+  min-width: 0;
+}
+.research-undo-name {
+  display: inline-block;
+  max-width: min(320px, 55vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: var(--text);
+  font-weight: 800;
 }
 /* **The projection key, moved off the toggle and onto the line that makes the
    claim** — see `ResearchTable.tsx` at the toggle for why, and the block

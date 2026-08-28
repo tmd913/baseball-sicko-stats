@@ -783,6 +783,12 @@ export interface SavedControls {
   onRenameList: (id: string, name: string) => void;
   onDeleteList: (id: string) => void;
   onApplySearch: (search: SavedSearch) => void;
+  /** The name of the saved search that replaced the reader's own board, or null
+   *  where nothing has. Applying is the one press on this board that throws a
+   *  reading away in one gesture, so it is the one that owes a way back — see
+   *  `searchUndo` in `App.tsx`, and `undoLine` below for where it is said. */
+  undoSearchName: string | null;
+  onUndoSearch: () => void;
   onSaveSearch: (name: string) => void;
   onReplaceSearch: (id: string) => void;
   onRenameSearch: (id: string, name: string) => void;
@@ -4633,6 +4639,47 @@ export function ResearchTable({
     </div>
   ) : null;
 
+  /**
+   * **The way back out of an applied saved search**, and it takes the projected
+   * line's shape because it is the same object: a line in the head saying what
+   * the board is in, with the way out of it beside the words rather than under
+   * them. Folded onto that selector rather than given rules that agree today —
+   * the stylesheet's standing rule.
+   *
+   * **The tense is the shared notice's, and for its reason.** A search is a
+   * reading that was *applied*; the board is the reader's own to change from
+   * here, and a line reading `Showing Closers` would go on claiming so after
+   * they had re-sorted and re-filtered it into something else. `Opened from`
+   * stays true however far they take it — which is exactly what makes the
+   * button beside it worth pressing, since the further they have taken it the
+   * less they can reconstruct what was there before.
+   *
+   * **`Undo` rather than `Clear`**, one word off its neighbour, because they do
+   * different things: `Clear` takes a lens off and leaves the board, and this
+   * puts a whole board back. The two lines are never drawn together by
+   * accident, either — a search remembers `projected`, so applying one that was
+   * saved unprojected takes the lens off with it.
+   *
+   * It is not drawn on the team reading, where a search cannot be applied.
+   */
+  const undoSearchName = saved.undoSearchName;
+  const undoLine = undoSearchName && !teams ? (
+    <div className="research-proj-line research-undo-line">
+      <span>
+        <span className="research-proj-lead">Opened from</span> ·{' '}
+        <strong className="research-undo-name">{undoSearchName}</strong>
+      </span>
+      <button
+        type="button"
+        className="research-clear"
+        onClick={saved.onUndoSearch}
+        title="Back to the board you had before this search was applied"
+      >
+        Undo
+      </button>
+    </div>
+  ) : null;
+
   const controls = (
     <>
     <div className="view-tools">
@@ -4877,6 +4924,11 @@ export function ResearchTable({
               now.** Both printed the same sentence off the same `filters`
               array; only one of them could be pressed. See `panels` above. */}
           {panels}
+          {/* **The provenance line before the reading line**, which is the
+              order the two are read in: *where this board came from*, then
+              *what the figures in it are*. A search remembers the lens, so
+              where both are drawn the second is a consequence of the first. */}
+          {undoLine}
           {projSpanLine}
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
