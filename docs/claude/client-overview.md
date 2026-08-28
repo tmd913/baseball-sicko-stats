@@ -1775,7 +1775,7 @@ pixel, the door **0px** under it (the foot's own 10px of padding is the gap), th
 two sides one height at every width the two-up layout draws, and page-body
 overflow 0.
 
-### Hot, level and cold — two measured pairs of cuts
+### Hot, neutral and cold — two measured pairs of cuts
 
 **The reading is value *per appearance*, not the total.** A total says who has
 given the most, which is what the three rows already say; *hot* is a question
@@ -1791,7 +1791,7 @@ about the arithmetic rather than about the week, every counting category
 contributing zero or more, so the only way down is a rate below the league's and
 the only way up has no ceiling.
 
-| cuts | hot / level / cold |
+| cuts | hot / neutral / cold |
 | --- | --- |
 | ±0.50 (symmetric) | 14 / 28 / **1** |
 | **+0.50 / 0** | **14 / 17 / 12** |
@@ -1820,7 +1820,7 @@ figures. **A count of nought is drawn and dimmed rather than dropped**, for the
 same reason: a row that lost a cell would be read as a different set of counts.
 
 **The glyphs are emoji, and this is the only place in the app they appear.** A hot
-face (🥵), a level one (😐) and a cold one (🥶) say it in a way three words at 11px
+face (🥵), a neutral one (😐) and a cold one (🥶) say it in a way three words at 11px
 in a 300px column do not, and this row has to survive being glanced at rather than
 read. Each cell carries its own `title` and the row an `aria-label`, so nothing is
 said by the picture alone.

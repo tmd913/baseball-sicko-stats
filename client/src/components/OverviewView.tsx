@@ -1121,7 +1121,7 @@ function heatTally(performers: Performer[], projected: boolean): Record<Heat, nu
  *  rather than three faces: a flame, a bar and a block of ice read as a scale
  *  at 12px where three round faces read as one smudge. */
 const HEAT_MARK: Record<Heat, string> = { hot: '🥵', neutral: '😐', cold: '🥶' };
-const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'level', cold: 'cold' };
+const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'neutral', cold: 'cold' };
 
 /**
  * **One side of the matchup block**: whose men they are, the three who have
@@ -1266,7 +1266,12 @@ function LeaderSide({
           {performers.length > 0 && (
             <p
               className="ov-heat"
-              aria-label={`${heat.hot} hot, ${heat.neutral} level, ${heat.cold} cold`}
+              /* Off `HEAT_WORD` rather than spelled again, so the three words
+                 a screen reader hears and the three the dialog's own label
+                 prints cannot come to disagree. */
+              aria-label={(['hot', 'neutral', 'cold'] as const)
+                .map((k) => `${heat[k]} ${HEAT_WORD[k]}`)
+                .join(', ')}
             >
               {/* **Each badge is a door onto its own three.**
 
