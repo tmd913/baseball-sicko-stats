@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../api';
 import { FantasyRosterContext, useDelayedFlag } from '../hooks';
+import { useResource, useResourcePoll } from '../resource';
 import {
   isInjured,
   LIVE_POLL_MS,
@@ -19,12 +20,7 @@ import type { FeedLens } from './FeedFilters';
 import { SummaryTable } from './SummaryTable';
 import type { ScheduleIndex } from './schedule';
 import { playerKey } from '../types';
-import type {
-  EspnRosterPlayer,
-  EspnStandingsTeam,
-  PlayerReport,
-  RosterProjection,
-} from '../types';
+import type { EspnStandingsTeam, RosterProjection } from '../types';
 
 /**
  * One manager's team over a span the reader picks — **the app's own Roster and
@@ -167,126 +163,98 @@ export default function LeagueTeam({
   chrome?: ReactNode;
   onOpenDetails: (key: string) => void;
 }) {
-  const [report, setReport] = useState<PlayerReport[] | null>(null);
   /**
-   * **Which of this team's players were in its lineup on each day of the
-   * range** — what `Starters` reads, and it rides on the report rather than on
-   * a second request.
+   * **This page's two reads, as two keys on the resource store** — see
+   * `resource.ts`. What used to be here was a `Promise.all` in an effect, a
+   * `setReport(null)` before it, a hand-written poll and two sequence guards;
+   * all four are properties of *where* a fetch lives rather than of what it
+   * fetches, and all four now live in one place.
    *
-   * `fantasyWatchlist` reads one roster per day to work out which days each man
-   * was *held* for, so the lineups fall out of work `/api/report` already does:
-   * the filter costs this page no upstream read at all. It also means the
-   * lineups describe exactly the rows beside them, which two reads a moment
-   * apart could not promise.
+   * **Two keys rather than one**, which is a change from the `Promise.all` and
+   * is what lets only the half that moves be polled: the report tracks a plate
+   * appearance and the roster behind the slot chips is a fact about the end of
+   * the span. One compound key would have re-read ESPN's rosters every twenty
+   * seconds to be told the same nine names. The page still draws them together
+   * — see the gate below — so nothing a reader sees is any different.
+   *
+   * `espnRosters` is keyed on the day it anchors to rather than on the range,
+   * because that is what it is a fact about: two spans ending on the same date
+   * are one answer, and the matchup's other surfaces can share it.
+   *
+   * **Which of this team's players were in its lineup on each day of the
+   * range** rides on the report rather than on a second request — what
+   * `Starters` reads. `fantasyWatchlist` reads one roster per day to work out
+   * which days each man was *held* for, so the lineups fall out of work
+   * `/api/report` already does: the filter costs this page no upstream read at
+   * all. It also means the lineups describe exactly the rows beside them, which
+   * two reads a moment apart could not promise.
    *
    * Null where the per-day read failed or an older server answered, and there
    * the filter falls back to the end-of-range roster below — one lineup applied
    * to the range, which is what the app did before per-day lineups existed.
    */
-  const [lineups, setLineups] = useState<Record<string, string[]> | null>(null);
-  const [roster, setRoster] = useState<EspnRosterPlayer[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const shown = useRef<ShownByStream>({});
-  const waiting = useDelayedFlag(loading);
-
-  /**
-   * **No ref guard on this effect**, and that is a rule rather than an
-   * omission: marking a request as asked before it is answered is what left the
-   * old Rosters toggle spinning for ever under StrictMode — React mounts, tears
-   * down and re-runs, so the first pass's answer is discarded by its own
-   * cleanup and the second pass sees the mark and returns. The dependency array
-   * is the whole of the guard, and it names exactly what the answer depends on.
-   *
-   * The two reads are one `Promise.all` because they are one page: the report
-   * is what the tables draw and the roster is where each player's slot chip
-   * comes from, and drawing the first without the second would put every chip
-   * on the page a beat after the rows they sit in.
-   */
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    setError(null);
-    setReport(null);
-    setLineups(null);
-    setRoster(null);
-    Promise.all([
-      api.report(start, end, 'fantasy', false, teamId),
-      // The roster **at the end of the span**, which is what a slot is a fact
-      // about — the same anchor the app's own chips take. A read that fails
-      // costs the chips and not the page, so it resolves to null rather than
-      // rejecting the pair.
+  const reportKey = `report:fantasy:${teamId}:${start}:${end}`;
+  const reportRes = useResource(reportKey, () =>
+    api.report(start, end, 'fantasy', false, teamId),
+  );
+  /** The roster **at the end of the span**, which is what a slot is a fact
+   *  about — the same anchor the app's own chips take. A read that fails costs
+   *  the chips and not the page, so it resolves to null rather than rejecting:
+   *  the resource holds `null` as an answer, and the page draws without them. */
+  const rosterRes = useResource(
+    `espnRosters:${teamId}:${end}`,
+    () =>
       api
         .espnRosters([teamId], end)
         .then((r) => r.rosters[String(teamId)] ?? null)
         .catch(() => null),
-    ])
-      .then(([rep, ros]) => {
-        if (!live) return;
-        setReport(rep.players);
-        setLineups(rep.lineups ?? null);
-        setRoster(ros);
-      })
-      .catch((e: Error) => live && setError(e.message))
-      .finally(() => live && setLoading(false));
-    return () => {
-      live = false;
-    };
-  }, [teamId, start, end]);
+  );
+
+  const report = reportRes.value?.players ?? null;
+  const lineups = reportRes.value?.lineups ?? null;
+  const roster = rosterRes.value ?? null;
+  const error = reportRes.error?.message ?? null;
+  const shown = useRef<ShownByStream>({});
+  /**
+   * **Both halves, because the page is one page.** The `Promise.all` this
+   * replaces is what kept a slot chip from landing a beat after the row it sits
+   * in, and splitting the reads would have given that up for nothing. The wait
+   * is behind the app's own delay, so a warm answer never flashes one — and
+   * with the answers now outliving the component, stepping back onto a team
+   * page draws what the app already had rather than a wait over an empty box.
+   */
+  const waiting = useDelayedFlag(reportRes.loading || rosterRes.loading);
 
   /**
-   * **And it re-reads itself while one of his men is batting**, on the roster's
-   * own twenty seconds.
+   * **It re-reads itself while one of his men is batting**, on the
+   * roster's own twenty seconds.
    *
-   * This page had **no poll at all**. The two reads above run on
+   * This page had no poll at all before one was written by hand here, and
+   * the fault it left is worth keeping the record of: the reads ran on
    * `[teamId, start, end]` and nothing else, so a team page opened at seven
-   * o'clock was still drawing seven o'clock's lines at ten — while the matchup
-   * card directly above it moved every minute (`LEAGUE_POLL_MS`) and the app's
-   * own Roster view, which is *the same component over the same shape of
-   * report*, moved every twenty seconds. Reported as the matchup page being out
-   * of sync with everything else, and that is exactly what it was: one page
-   * drawing two clocks, one of which had stopped.
+   * o'clock was still drawing seven o'clock's lines at ten — while the
+   * matchup card directly above it moved every minute (`LEAGUE_POLL_MS`)
+   * and the app's own Roster view, which is *the same component over the
+   * same shape of report*, moved every twenty seconds. Reported as the
+   * matchup page being out of sync with everything else, and that is
+   * exactly what it was: one page drawing two clocks, one of which had
+   * stopped.
    *
    * **The roster's clock, not the league's**, because these rows are the
-   * roster's rows: `SummaryTable` over a `PlayerReport`, whose fastest-moving
-   * fact is a plate appearance. `LEAGUE_POLL_MS` is a minute because it tracks
-   * a *week's* totals off ESPN's own board; nothing about that number applies
-   * to a table of H/AB. Two components drawing one object on two clocks is the
-   * thing the app's one-clock rule exists to prevent — see `LIVE_POLL_MS`.
+   * roster's rows: `SummaryTable` over a `PlayerReport`, whose
+   * fastest-moving fact is a plate appearance. `LEAGUE_POLL_MS` is a minute
+   * because it tracks a *week's* totals off ESPN's own board; nothing about
+   * that number applies to a table of H/AB.
    *
-   * **Gated on a real live game**, which is `App.tsx`'s own test for the same
-   * poll (`hasRealLiveGame`) read off this page's own report: a team whose men
-   * are all done for the night has nothing to re-read, and a matchup left open
-   * overnight must not ask every twenty seconds to be told so. The gate moves
-   * on its own as the answer lands — the last game going final takes the poll
-   * down with it.
-   *
-   * **Quiet, by rule 1**: nothing is blanked, `loading` is not raised, and a
-   * tick that fails leaves the last good answer standing with no banner. Only
-   * the report is re-read — the roster behind the slot chips is a fact about
-   * the end of the span and does not move with a plate appearance.
-   *
-   * **Sequence-numbered**, so a slow tick cannot land on a fresh one: the
-   * effect's own `live` flag covers a crossing to the other manager, and this
-   * covers two ticks of the same team overtaking each other.
+   * **Gated on a real live game**, which is `App.tsx`'s own test for the
+   * same poll (`hasRealLiveGame`) read off this page's own report: a team
+   * whose men are all done for the night has nothing to re-read, and a
+   * matchup left open overnight must not ask every twenty seconds to be
+   * told so. The gate moves on its own as the answer lands — the last game
+   * going final takes the poll down with it.
    */
   const anyLive = report?.some((r) => r.games.some((g) => g.status.state === 'live')) ?? false;
-  const pollSeq = useRef(0);
-  useEffect(() => {
-    if (!anyLive) return;
-    const t = setInterval(() => {
-      const seq = ++pollSeq.current;
-      api
-        .report(start, end, 'fantasy', false, teamId)
-        .then((rep) => {
-          if (seq !== pollSeq.current) return;
-          setReport(rep.players);
-          setLineups(rep.lineups ?? null);
-        })
-        .catch((e: Error) => console.error(`team page poll failed:`, e.message));
-    }, LIVE_POLL_MS);
-    return () => clearInterval(t);
-  }, [anyLive, teamId, start, end]);
+  useResourcePoll(reportKey, anyLive ? LIVE_POLL_MS : null);
 
   /** The per-day lineup map, as `projectStarters` wants it — **player keys**,
    *  a seat having a side of the ball (see `espn.ts::startedKeys`). Collapsed to

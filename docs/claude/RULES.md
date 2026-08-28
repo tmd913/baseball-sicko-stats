@@ -202,6 +202,35 @@ and keeps the element's own iOS bounce, which is the thing being complained
 about. Declared on `html` unconditionally, and on every scroller, in the axes
 that box genuinely scrolls.
 
+### Reading from the server
+
+**A server resource is one entry, shared by everybody reading it.**
+`resource.ts` keys an answer by what it depends on, and every subscriber of one
+key gets the same object, one request and one clock. Adding a fetch to a
+component means adding a key, not another `useState` + `useEffect` +
+`Req.current` triplet — there were **84** of those before the layer existed, and
+the two faults they cost are recorded in *The client shell*: a page with no poll
+drawing an hour-old report beside one drawing a live one, and a page blanking
+its own rows on every mount.
+
+**A null key is "not yet."** The gates that hold a read until the app knows what
+it is about — which roster, which league, which days — are a key that is null
+until they answer, not an early `return` in an effect.
+
+**A quiet read leaves no mark.** The poll, the resume and an invalidation after
+a write are quiet; only a read somebody's action started may raise the block
+wait or the `Updating` badge. The two are counted separately in the store for
+exactly this.
+
+**An answer is carried across a change of key.** Stepping the date bar asks for
+a *different* resource, and blanking the pane while it lands is the same curtain
+rule 1 forbids. `keepPrevious` is on by default; turn it off only where the old
+answer would be *wrong* rather than stale.
+
+**This is not a store of application state and must not become one.** A key
+names a thing the server can be asked for. Which data a view shows still goes in
+the URL, and a fact about the person still goes in `UserPrefs`.
+
 ### Loading
 
 1. **Never over data.** If the pane has rows, the read is quiet. The only marks

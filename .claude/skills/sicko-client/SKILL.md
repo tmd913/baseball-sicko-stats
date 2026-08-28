@@ -19,7 +19,8 @@ particular.
 ## What to read
 
 - **Read `docs/claude/client.md`** before editing `App.tsx`, `hooks.ts`,
-  `lib.ts`, `api.ts`, `PlayerAdder.tsx`, `Loading.tsx` or `simulate.ts`, or
+  `lib.ts`, `api.ts`, `resource.ts`, `PlayerAdder.tsx`, `Loading.tsx` or
+  `simulate.ts`, or
   before adding a URL param, a saved preference or a view. It covers: the two
   lists (roster vs watchlist) and which controls ask "is he on my roster *now*";
   player keys (`${kind}-${id}`, a two-way player is two entries); the three
@@ -28,6 +29,8 @@ particular.
   why Mobile Safari's own toolbar stays put on the two board views, and what
   giving up the fixed-height column would cost;
   per-page scroll memory and why restoring is one write before paint;
+  **one entry per server resource** (`resource.ts`) — what a key is, why a null
+  key is the boot gate, the quiet/loud split and `keepPrevious`;
   `overscroll-behavior` and `touch-action`; the whole loading system; the kind
   tabs; the header search and `searchFold`; the hide-injured filter; and the
   `.xxx`-versus-percent rule.
