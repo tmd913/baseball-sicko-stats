@@ -624,6 +624,14 @@ export default function App() {
   /** **The reader's own list, always** — what the star on a row reflects and
    *  writes to, whether or not somebody else's list is being shown over it. */
   const watchlistKeys = useMemo(() => new Set(activeList?.keys ?? []), [activeList]);
+  /** The lists as the last commit left them, for `applySearchBoard` — which is
+   *  stable and reads them once, at the moment somebody applies a search, to
+   *  ask whether a stored list id is one this reader actually owns. A dependency
+   *  would rebuild that callback on every star press. */
+  const listsRef = useRef<SavedList[]>(lists);
+  useEffect(() => {
+    listsRef.current = lists;
+  }, [lists]);
   const [error, setError] = useState<string | null>(null);
   // The player whose details view (percentile rankings) is open, seeded from the
   // URL so a shared/reloaded link reopens it once that player's report loads.
@@ -5698,6 +5706,13 @@ export default function App() {
       turn: turnDays ? turnDaysParam(turnDays) : null,
       sched: scheduleSpan,
       ranks: showRanks,
+      /* **Which watchlist the star was pointing at** — see
+         `ResearchSearchBoard.list`. Written whether or not the Watchlist button
+         is on, the active list being what fills the star on every row of the
+         board either way. `undefined` where the boot read has not landed or the
+         reader has no lists at all, which is the same "no opinion" an older
+         search carries. */
+      list: activeList?.id,
     };
   }, [
     researchPos,
@@ -5712,6 +5727,7 @@ export default function App() {
     turnDays,
     scheduleSpan,
     showRanks,
+    activeList,
   ]);
 
   /**
@@ -5769,6 +5785,24 @@ export default function App() {
         showRanksTouched.current = true;
         setShowRanksState(b.ranks);
       }
+      /* **Which watchlist the star points at, and this one *does* write to the
+         record** — the single exception to the paragraph above, and it is not a
+         relaxation of that rule but the consequence of where the fact lives.
+         The other three are client state the server merely remembers; the
+         active list is the server's own (`store.ts::setWatchlisted` resolves it
+         there, a press on a row having no room to name a list), so setting it
+         locally would leave the star drawn from one list and writing to
+         another. There is no local-only version of this to set.
+
+         **Narrowed to a list this reader owns**, which is what keeps a shared
+         search from touching anything: a list id belongs to one person, so
+         somebody else's search names nothing here and the reader's own list
+         stands — a join fails to null, never to a guess. `undefined` is a search
+         saved before the field existed and has no opinion either.
+
+         `setActiveListId` is the same call the chooser makes, so the write, the
+         reconciliation and the fallback are one path rather than two. */
+      if (b.list && listsRef.current.some((l) => l.id === b.list)) setActiveListId(b.list);
       if (b.cols) {
         const write = b.projected ? setProjCols : setResearchCols;
         write((prev) => ({ ...prev, [kind]: b.cols as string[] }));
@@ -5790,7 +5824,9 @@ export default function App() {
         shown: freshResearchUi().shown,
       }));
     },
-    [],
+    // `setActiveListId` is itself stable and the lists are read through a ref,
+    // so this callback is still the constant every caller of it assumes.
+    [setActiveListId],
   );
 
   /**

@@ -741,6 +741,35 @@ export interface ResearchSearchBoard {
    * becoming your saved default.
    */
   ranks?: boolean;
+  /**
+   * **Which watchlist was the active one** — the id of the reader's own list
+   * the star was pointing at when the board was saved.
+   *
+   * `watchlist` a few fields up is whether the *button* was on; this is **which
+   * list it was on**, and the two are a different question. A reader with
+   * `Closers`, `Streamers` and `Deep SP` has three boards behind one lit button,
+   * and a search that remembered the button and not the list re-opened on
+   * whichever list happened to be selected — the same "the same search from two
+   * boards gives two different tables" that `ranks` records one field up, on a
+   * control that changes the *rows* rather than the badges.
+   *
+   * It matters with the button **off** as well as on: the active list is what
+   * fills the star on every row of the board, and what the next press of one
+   * writes to.
+   *
+   * **Optional, and absent means "no opinion"** — a search saved before this
+   * field existed leaves the reader's list exactly as it finds it, the app's own
+   * rule that an unrecognized value falls back rather than emptying the view.
+   *
+   * **And it is narrowed against the reader's own lists on the way in**, which
+   * is what makes a *shared* search safe: a list id is one person's, so a search
+   * somebody else saved names a list this reader does not have, and the apply
+   * leaves theirs alone rather than pointing the star at nothing. That is *a
+   * join fails to null, never to a guess* — see `applySearchBoard`, which is
+   * also where the one thing this field does that its three neighbors do not is
+   * argued: applying it **writes to the record**.
+   */
+  list?: string;
 }
 
 const ALL_POSITIONS = new Set<string>(POSITIONS.map((p) => p.key));
@@ -821,6 +850,11 @@ export function readSearchBoard(raw: unknown): ResearchSearchBoard | null {
     // Three states, not two: `true`, `false`, and **absent** — a search saved
     // before the field existed, which leaves the reader's own setting alone.
     ranks: typeof r.ranks === 'boolean' ? r.ranks : undefined,
+    // A string or nothing. Whether the string names a list *this reader owns*
+    // is not decided here — this function narrows a stored board against what
+    // the build understands, and which lists exist is a fact about the reader.
+    // `applySearchBoard` is where that test lives.
+    list: typeof r.list === 'string' && r.list ? r.list : undefined,
   };
 }
 
