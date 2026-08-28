@@ -762,12 +762,16 @@ function RankedDialog({
   /**
    * **Whose list it is**, where that is not simply *the reader's own day*.
    *
-   * Null draws neither name nor badge and leaves the subject alone on one line,
-   * which is what a dialog opened off your own day card passes: it is about you
-   * by construction, and a mark that would be on every row marks nothing — the
-   * same rule that suppresses `Your matchup`'s tag on the card at the top of
-   * this page. The matchup block passes it on **both** sides, there being two
-   * of them and the whole reading being which is which.
+   * Null draws neither name nor badge and leaves the subject alone on one line.
+   * **Only a reader with no league passes it now.** It used to be what your own
+   * day card passed — on the argument that the box is about you by
+   * construction, and that a mark which would be on every row marks nothing,
+   * the same rule that suppresses `Your matchup`'s tag on the card at the top
+   * of this page. That rule is about a mark inside a list; this is the head of
+   * a box, and two of these boxes are opened one after the other on a page
+   * whose whole reading is *which of us*. Both blocks name both sides, so the
+   * two dialogs a manager opens in a row are told apart by the same crest they
+   * already know off the scoreboard card.
    */
   who: string | null;
   /** His row off the board, for the badge beside the name. `TeamLogo` draws the
@@ -3067,8 +3071,29 @@ export default function OverviewView({
             span={false}
             projected={(ranked.opp ? oppProjected : isProjected)[ranked.day]}
             performers={(ranked.opp ? oppPerf : perf)[ranked.day]}
-            who={ranked.opp ? opponentName : null}
-            whoTeam={oppTeamId != null ? teams.get(oppTeamId) : undefined}
+            /* **Both sides of the carousel wear their own head**, where your
+               own day card's dialog used to pass `null` and open on a bare
+               `Today, Aug 28`.
+
+               The rule that argued for the bare form is real and is stated on
+               `who` — a mark that would be on every row marks nothing — but it
+               is about a mark *inside* a list, and this is the head of a box.
+               Two of these are opened one after the other on this page (your
+               card, then the opponent's), and the reading a manager is making
+               is *which of us*; a title that says whose list it is only on one
+               of the two makes the reader supply the other from memory. The
+               `Matchup leaders` block above already names both sides for
+               exactly that reason, so this is the day cards catching up to it
+               rather than a new idea.
+
+               `myTeamId != null` is the gate rather than `who` itself: with no
+               league connected there is no team, no name worth printing (the
+               fallback is the literal word `You`) and no opponent card to be
+               told apart from — so that reader keeps the subject alone on one
+               line, which is the whole of what the old branch was right
+               about. */
+            who={ranked.opp ? opponentName : myTeamId != null ? myName : null}
+            whoTeam={teams.get((ranked.opp ? oppTeamId : myTeamId) ?? -1)}
             pool={poolOf(
               rankDay(perf[ranked.day], isProjected[ranked.day]),
               rankDay(oppPerf[ranked.day], oppProjected[ranked.day]),

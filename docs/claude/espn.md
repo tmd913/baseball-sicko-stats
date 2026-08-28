@@ -106,6 +106,30 @@ every person MLB has ever listed; a retired homonym cannot be on a fantasy
 roster but can very easily make a live prospect ambiguous and so cost him his
 match. All five of the league's unmatched men come back `active: true`.
 
+**A prospect is filed under the organization that owns him, not the affiliate he
+is standing on.** The row `extendIndex` builds carries a `teamId` and a `team`,
+and the `teamId` has always been the **parent** — it has to be, since the club
+test compares against `ESPN_TO_MLB_TEAM`, which is written in major-league ids —
+while `team` was `currentTeam.name`, the affiliate. That was argued as the only
+honest thing to print beside his name, and the flaw in it is that this row is not
+only printed: it *is* the club everywhere else it is read, so the name said
+`St. Paul Saints` while the cap beside it on his player page was drawn from an
+id that has no cap, and no reader was ever shown the two halves at once. The
+name now comes off `getTeamNames()` under the parent's id, so the two halves of
+one row name one club. Where he actually is has not gone anywhere: his News tab
+prints `St. Paul Saints activated OF Walker Jenkins` off MLB's own feed, which is
+where a sentence about an affiliate belongs.
+
+**This is no longer the only way to reach him, and the reasoning above is why it
+is still here.** `mlbStats.ts` now exports `searchPeople` — the same call, one
+implementation — and a `/api/players/search` route over it, so the header search
+finds *any* prospect and not only the ones somebody in the reader's league
+rosters (see `client.md`). `extendIndex` is untouched by that and stays: it
+answers a different question. The route resolves a **typed name** for a reader,
+where this resolves the **roster rows ESPN handed us** so that `owned`, the
+padlock, the roster % and the matchup pages have an id to key on. A search
+nobody types would fill none of them.
+
 **What it costs: one request.** `people/search` takes the whole batch — `names=`
 is comma-joined, up to `PROSPECT_BATCH` (40) at a time — and `fields=` trims the
 row from 1,203 bytes to 205. The five names together are **1,201 bytes**, and
@@ -335,6 +359,160 @@ board gains no row and was never going to**: none of the six has a major-league
 stat line, so the board's universe does not contain them — this is a fact for
 the page, the search result and the roster views, which is where they became
 visible in the first place.
+
+### The pool's own join is extended, and the floor is ownership
+
+**Reported as: "why don't I see Walker Jenkins in the research table? I should
+be able to see him at the top of the 1D roster percentage delta sort."** Two
+separate walls, and the section above is standing at the second of them saying
+so: he had no board row, and he had no trend to be sorted by even if he had.
+
+**The sentence this undoes is the one at the head of the section above** — *the
+fallback cannot be extended to `getPlayerPool`, that would mean asking MLB about
+three thousand names to answer for five*. It is true of the **whole pool** and
+false of the part of it anybody rosters, and nothing had ever measured the
+difference. Measured now, against the live 3,929-row pool: **2,507 rows fail the
+name join**, and cut by ownership that collapses to **790 above 0%, 37 above
+0.5%, 18 above 1%**. So `getPlayerPool` runs a second pass over the rows
+`matchPlayer` declined **that clear `POOL_JOIN_FLOOR` (0.5%)** — one
+`people/search` batch, the call `extendIndex` already makes, once every six
+hours for every user of the installation.
+
+**And it is not a prospect feature.** More than half the list is a major
+leaguer with no 2026 line, and the board was missing him for exactly the same
+reason — its rows come off MLB's season leaderboard, so its population is *men
+with a stat line*. The top of the list is **Ryan Pepiot at 30.4% rostered**,
+then Joe Musgrove 9.5, Spencer Schwellenbach 9.1, Jordan Westburg 8.5, and only
+then Walker Jenkins at 8.4. A floor written in ownership does not have to tell
+the two apart, which is why it is written in ownership.
+
+**What the id buys is not a name but a key.** `byEspnId` already had the name and
+the percentage; what it could not reach was the **daily snapshot**, which is
+keyed by MLB id. With one, these men are in `pct`, in the snapshot, and in the
+trend — the one thing the ESPN-id route could not give them, and the thing a
+manager sorts by.
+
+**It cannot change a match that already worked.** Only rows the first pass
+declined are asked about; `extendIndex` writes only under keys the base index
+leaves empty; and an ambiguity the club cannot separate is *declined* by
+`matchMlbPlayer` rather than left unanswered, so it never reaches the second
+pass at all. The contest between two ESPN rows claiming one id is built from
+`found` **after both passes**, so `claimant` arbitrates the extended names on
+exactly the same evidence.
+
+Measured on the live league: `rosterPct` goes from **1,403 keys to 1,443**, and
+`beyondMlb` from 5 rows to **32**.
+
+#### The deploy that reaches them must not invent a riser
+
+**`diffAgainst`'s rule is that a player missing from the baseline rose from
+nothing**, and the paragraph arguing it rests on ESPN's list being the active
+major-league population — so a name arriving on it is a call-up and his whole
+percentage really is the movement. That stops being the whole story here: these
+men were rostered at the same percentage yesterday and every day before it, and
+the only thing that changed is that this app can now name them.
+
+Left alone it does exactly what `snapshotKey`'s two version notes are both
+about, by a third route. Measured before the guard: **Walker Jenkins at the top
+of the `Δ1d` sort reading `+8.4 +8.4 +8.4 +8.4`** — his whole percentage in
+every window, for up to thirty days, at the top of the very column the reader
+opened.
+
+So `diffAgainst` takes the extended set and, for an id in it, reads an absent
+baseline as **withheld** (`null`, a dash) rather than as a rise. It needs no
+version bump and costs nobody else a column: the first snapshot written after
+the deploy carries these men, so 1D is real tomorrow, 3D in three days, 30D in a
+month, and every other player on the board is untouched throughout. A genuine
+call-up inside that set loses his first day's rise to a dash, which is the
+direction every join in this file fails in.
+
+#### …and day one is ESPN's own change, used as the missing baseline
+
+**Reported as: "I need to be able to see deltas for prospects on the same day,
+at least for the 1D delta."** The withhold above is honest and it is also a
+dash, and a dash on the day a prospect is being picked up is the day the column
+is worth reading.
+
+**The standing claim is that the delta is ours, not ESPN's**, because their
+`percentChange` rides only on payloads this app cannot justify. Both halves
+survive: it is still ours for all 1,400 men the snapshot can name, and the
+payloads are still what they were. What is new is that the **league** endpoint
+honors `filterIds` when a `limit` and a sort ride with it — `filterIds` alone is
+a 400 (`Filter: Limit request must be accompanied by a sort`) — so naming three
+players costs **10,008 bytes** where the cookie-free season-wide read ignores
+the filter outright and returns **211,301,476**. `players_wl` is leaner still
+(805 bytes for three) and carries no `percentChange`, which is what sends this
+to the heavier view.
+
+**And their window is no longer undocumented.** Regressed against our own
+same-day figure over the 118 men we hold one for, the slope is **0.944** — the
+same quantity, same sign, same units, on a window anchored differently: theirs
+rolls back from now, ours runs from the first read of the previous baseball day.
+On the 49 who moved more than a point the ratio is typically 0.86–0.93 (Grant
+Holmes 7.85 against 8.4, Michael Wacha 3.52 against 3.8, Shane McClanahan 4.09
+against 4.4). The widest disagreements are on men moving hundredths, where our
+own tenth-rounding is the larger term. **At the top of the sort, which is what
+this is for, the two agree closely.**
+
+**So it is used as a baseline, not as a delta.** `was = now − change`, filled
+into the 1D baseline map for the extended ids the day genuinely holds nothing
+for; the number the column then prints is `diffAgainst`'s own arithmetic over a
+baseline that has a source. Three consequences worth stating:
+
+- **The 1D window only.** ESPN publishes one change figure and it is one day's,
+  so it can stand in for the day-back baseline and for nothing else. 3D and out
+  stay withheld until real history reaches them.
+- **One day per player.** Tomorrow the snapshot written this morning *is* the 1D
+  baseline, so this is a bootstrap that self-replaces rather than a second
+  measurement living permanently in one column.
+- **A stored value is never overwritten**, nor is an explicit `null`: only a day
+  that holds nothing at all for that man is filled, which is the same
+  no-baseline-creep rule `snapshotRosterPct` is written under.
+
+**A global fact fetched with one reader's cookies**, which is the uncomfortable
+part and is stated rather than hidden. `percentChange` is ESPN's league-wide
+figure and does not vary by who asks; the cookies are the entry ticket to an
+endpoint, not a parameter of the answer. So it is cached globally on the pool's
+own six-hour TTL and whichever connected league is read first in a window pays
+for it — and a reader with no league sees no trend column at all, so there is
+nobody the cache could serve who could not have filled it. `MAX_CHANGE_IDS`
+(128, four times today's 32) keeps a floor that one day admits far more men from
+quietly turning this into the 211MB read, and **says so** when it bites.
+
+Measured on the live league: `/api/espn/ownership` cold **0.43 / 0.31s** with
+the extra read in it, warm 0.01s. Driven on the board, `Δ1d` descending with
+every include on: **Tristan Peters +8.4, Walker Jenkins +6.0, Jac Caglianone,
+Daylen Lile, Connor Norby +2.1** — where the same sort the day before drew him a
+dash. Δ3d and out still read `—` for him.
+
+**`snapshotRosterPct` fills a missing id rather than only writing a missing
+blob**, which is what makes *tomorrow* rather than the day after. Write-once is
+about a value being **rewritten** — a baseline creeping toward the current value
+shrinks every delta measured against it — and that is untouched: an id already
+in the blob is never touched again, and an explicitly `null` (withheld) one is
+left alone so filling it cannot resurrect the delta it exists to suppress. What
+is new is that an id the blob has *never* held gets written. Measured: today's
+`2026-08-28` blob held **1,411** ids and none of the 32, so without this the 1D
+column would have read tomorrow off a baseline that still could not name them
+and drawn a second day of dashes; after one request it holds **1,443**.
+
+#### `noTrend` is what is left on the ESPN-id path
+
+The client used to derive the trend suppression from `beyondMlb`'s ids, which
+was right while the two sets were one. They parted here: most of `beyondMlb` is
+now **in** the global map and has a real baseline, so deriving it there would
+blank the exact columns this change exists to fill. `EspnOwnership.noTrend` is
+the set that genuinely has none — the men *this* league rosters who are under
+the floor, reached by ESPN's own id off this league's roster rows and present in
+no day of the global map. On the live league it is currently **empty**.
+
+`beyondMlb` grows to match: the per-league half stays filtered to `owned` (an
+hour of league reads leaves other leagues' prospects on the shared index, and
+they would be strangers in this reader's search), while the global half rides
+unfiltered, because every one of those men is going to be **drawn as a board
+row** and without a name he would be a row of dashes with an id. They are not
+strangers in the sense that filter is about: the floor is ownership, so each is
+a man some league is holding.
 
 ### The ownership read asks for tomorrow, because a move lands on the next period
 

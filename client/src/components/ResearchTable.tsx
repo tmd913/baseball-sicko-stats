@@ -41,6 +41,7 @@ import {
   useGameDoor,
   useHandedness,
   usePlayerStatus,
+  ClubStatusContext,
   usePublishedHeight,
   useScoringCategories,
 } from '../hooks';
@@ -1576,6 +1577,10 @@ export function ResearchTable({
   // the rows already read it a row at a time through `usePlayerStatus`, and a
   // second route to the same map is a second thing to keep in step.
   const statuses = useContext(PlayerStatusContext);
+  // …and the same day by club, which is what the column falls back to for a man
+  // today's boxscores do not carry — see `OpponentCell`. Off the context beside
+  // the map above and for the identical reason.
+  const clubStatuses = useContext(ClubStatusContext);
   const allColumns = useMemo(() => {
     const base = kind === 'pitcher' ? PITCHER_COLUMNS : BATTER_COLUMNS;
     return base
@@ -1593,7 +1598,7 @@ export function ResearchTable({
       // The one column whose cells read something other than the row. Injected
       // here for the reason a trend column's label is: the array above is the
       // canonical *order*, and runtime is where the data to fill it arrives.
-      .map((c) => (c.key === OPPONENT_KEY ? opponentColumn(statuses) : c))
+      .map((c) => (c.key === OPPONENT_KEY ? opponentColumn(statuses, clubStatuses) : c))
       // A window with no baseline is dropped rather than dashed, and so is
       // every one of them on a cold install: a column of zeroes would read as
       // "nobody is moving", which is a claim where the truth is an absence.

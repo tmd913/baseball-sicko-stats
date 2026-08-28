@@ -61,6 +61,15 @@ league. Five rows on the live 12-team league, ~600 bytes.
 on screen: a prospect who has since been called up is on both lists, and his
 major-league row carries his club where the other carries his affiliate.
 
+**`beyondMlb` is two sets now, and the second is not filtered to this league.**
+It was the league's own rostered prospects and nothing else; `getPlayerPool`
+extending its own join over `POOL_JOIN_FLOOR` added a **global** half — every
+man over 0.5% rostered anywhere that MLB's season list cannot name, 32 rows on
+the live league against the 5 it used to be. Those ride unfiltered because the
+research board is going to draw a row for each of them whether or not anybody
+here holds him, and without a name that row is dashes with an id. See
+**The pool's own join is extended** in `espn.md`.
+
 **It is `seasonPlayers` by reference when there is nothing to add**, which is
 every session with no league connected — the memo returns the very array, so
 nothing downstream of it recomputes and a reader with no ESPN league is
@@ -79,6 +88,94 @@ actually is**, in MLB's own words, rather than the major-league organization tha
 owns him — `Arkansas Travelers`, not `Seattle Mariners`, because he has never
 played for the latter and the meta line is the one place the row could quietly
 say he had.
+
+**That last paragraph was wrong, and the row now names the organization.**
+`jesus made` returns `Jesús Made · Milwaukee Brewers · SS`. The argument above
+treats the club as a *printed line* and it is not only one: `SeasonPlayer` has
+carried a `teamId` beside it since the team page was built, that id has always
+been the **parent** organization (`espn.ts` has no choice — `ESPN_TO_MLB_TEAM`
+is written in major-league ids), and every reader that draws the club draws it
+from the id. So the two halves of one row named two different clubs, and the
+reader was shown one half in the search and the other half everywhere else. It
+is not a question of which club is the more honest to print; it is that a row
+whose name and id disagree is a join waiting to be made wrongly. Where he
+actually is has not gone anywhere — his page's News tab prints `St. Paul Saints
+activated OF Walker Jenkins` off MLB's own feed, which is where a sentence about
+an affiliate belongs.
+
+### The header search reaches past the season list, one query at a time
+
+**`beyondMlb` closes the prospect gap for a league, and there is a great deal
+more of it than a league.** `/api/players` is 1,415 major leaguers; MLB has ids
+for tens of thousands of people. A reader could find Walker Jenkins only if
+somebody in his own fantasy league happened to roster him, and a reader with no
+league connected could not reach a prospect by any route this app has.
+
+**MLB publishes no list of that population, only a search over it**, so this is
+the one search in the app that costs a request. `PlayerAdder` keeps its local
+pass over `players` on every keystroke and adds a **debounced** second half:
+`GET /api/players/search?q=` at three characters or more, 250ms after the last
+keystroke, sequence-numbered so a slow query cannot land under a longer one. The
+server drops anybody the season list already holds before replying, so the rows
+are appended rather than merged — and appended **below** the local matches, so
+nothing already on screen moves when they arrive (*Reserve the box, don't move
+the page*, read for a list that grows downward).
+
+**They arrive into the menu's budget, not beside it.** `MENU_ROWS` (8) was the
+local matches' cap and is now the whole menu's: the dropdown has no max-height
+and no scroller — it is a list at the width of the field — and eight names is
+already the most it can be without reading as a page. Measured before the cap
+covered both halves: `griff` drew **13 rows** on a 430px phone, past the fold
+and over the page behind it. So a query that already names eight major leaguers
+shows no prospects, and one more character is what narrows it — which is the
+same bargain the local cap has always struck, and it costs nothing on the query
+a reader actually types to reach a prospect: `walker jenkins` and `konnor
+griffin` each return exactly one row.
+
+**No head over them and no mark on them.** They are players, in the same row,
+with the same club-and-position meta line; that a man is at St. Paul rather than
+at Target Field is on that line and on his empty Stats tab, not a category the
+menu has to teach a reader before it will hand him the name.
+
+**The empty state waits for the search to be over.** A prospect matches nothing
+locally by construction, so the one query that reaches MLB is exactly the one
+with no rows to sit under while it is out — and `No players or teams match
+"Walker Jenkins"` is a claim about the league printed a fifth of a second before
+his row arrives to contradict it. `useDelayedFlag` puts `Reading every player MLB
+lists` in that slot instead (the ball carries the tense, so no ellipsis), and the
+none-line is drawn only when nothing is in flight. Over rows, the read is
+**silent** — rule 1.
+
+### `?player=` had to grow the same reach, or the press did nothing
+
+**The search route alone leaves the press broken, and this is the bug the whole
+change was reported as.** Picking `Sebastian Walcott` out of the field put
+`?player=batter-806964` in the URL and rendered **nothing at all**:
+`detailsPlayer` resolves a key against `reports` and `knownPlayers`, and a man
+who came off a search and not off a list is in neither. Measured, before the
+fallback below existed: the URL changed, the overlay never mounted.
+
+So `knownPlayers` takes a third source — **`foundPlayers`**, filled by
+`GET /api/players/:id` for any key neither list can name, keyed by id because
+the answer is a row per kind and a two-way player is two of them. It fires only
+once `playersLoading` has settled (the boot read is empty for the first second,
+and a miss then is not a miss), asks each id once through a `useRef` set — the
+state already held, so a StrictMode remount asks once — and fails silently, the
+page opening on nothing exactly as it did before. **In an ordinary session it
+sends no request at all**: every key resolves off the two lists already there.
+
+**It answers for the recents as well as for `player=`, and that is not scope
+creep but the same fault twice.** `PlayerAdder` drops a remembered key that
+resolves to nobody — the right rule, on the grounds that a man the search cannot
+find by typing would open on nothing — and the moment the search *could* find
+him by typing, that rule started quietly deleting rows a reader had earned. Five
+keys at most (`RECENT_PLAYERS`), and the loop over `[detailsKey,
+...recentPlayers]` is one pass.
+
+**It is what makes a link work**, which a fallback inside the search results
+could not: `?player=batter-806964` pasted into a fresh tab has no search behind
+it. The paragraph above that says such a key "renders nothing at all" is the
+behavior this retires.
 
 ### Four tabs, and the Feed became a reading of the Roster
 
@@ -1605,7 +1702,7 @@ The settings toggle is `.settings-toggle`, **folded into `.sim-toggle`'s selecto
 
 **Edit players is a menu entry rather than a header button**, which is where it lived until now — a pencil in `.header-tools`, labeled from 641px up. It is a control reached once in a session, by a user who has decided to reorder or drop somebody, and it was holding ~84px of the one row in the app whose budget is measured in whether a 418px search field fits (see above: the header now goes to one line 40px narrower than it did, *and* has gained the refresh button). **It renders whenever there is at least one player on the saved roster** — `rosterKeys.size > 0 && !usingFantasy` — and each half of that is worth stating, the first having been wrong for as long as the entry existed. It used to ask for **more than one**, which is a rule about *reordering* applied to a screen that also **removes**: one player is nothing to put in an order, and he is very much somebody to drop, which is precisely the state a reader is in when they have just cleared the list and want the last man gone too. So clearing the roster hid the way back into the screen, and adding a player back did not restore it — the entry only reappeared at two, which reads as the app losing a control rather than as a rule. **Zero is still hidden**, and that is the one threshold worth keeping: there is nothing to order and nobody to remove, and the Roster view already meets that reader with `Your roster is empty` over a button opening the search, which is the errand they actually have — where an entry leading to a screen with no rows would be a mode whose only content is its own way out. **And it counts `rosterKeys`, the live saved roster, rather than `reports`.** The report is the roster as it *stood over the days in view*, so over a range it carries the men dropped inside it (see **The roster is a range of rosters** in `auth-and-storage.md`) — measured on a roster cleared this morning over a ten-day range, `reports.length` is 2 and the old test opened the screen on **nought rows**, that being the very set `editPlayers` narrows to. Counting the set the screen itself edits is what makes the entry present exactly when there is something behind it, and it is upstream of hide-injured **by construction** where `reports` was only by accident: dropping an injured player is what this screen is for, so the entry to it must not be filtered away with him. The other half of the test is unchanged and correct — a list of ours rather than ESPN's, since ESPN owns that list and a screen offering to rearrange it would be offering something it can't do. On the press it does the same two things: **the reorder screen only exists on the Roster page**, so pressing it from anywhere else switches there rather than flipping a mode with nothing on screen to show for it — it moved off the Games view with everything else when that view went, and Roster is where it belonged anyway, being the page about the roster as a *list* rather than as a stream. One thing had to move with it: `.app.summary-mode` makes the page a fixed-height flex column with `overflow: hidden`, which is right for a table that scrolls itself and wrong for a long list of draggable rows, so the class is now `view === 'summary' && !editMode`, and the search bar is closed on the way in so it isn't restored on the way out of a mode it was never visible in. It also **closes the popover**, which it must: edit mode hides the gear, and a menu left open would be floating over a screen that has hidden everything it belongs to. Edit mode is still transient — deliberately not in the URL — and still clears on a view switch. The fantasy popover beside it is built from exactly these parts — `.settings-popover` for the box, `.settings-toggle` for "Use my fantasy team", `.help-btn` for "League settings" — by folding the class onto the same element rather than restyling a second menu to match, so the two are one menu cut two ways.
 
-**Every search box in the app matches on a folded name** (`lib.ts::searchFold`), because a fifth of this league's surnames carry an accent and nobody types one. `garcia` finds García, `pena` finds Peña, `jimenez` finds both Jiménezes — and the reverse holds, which is the half that is easy to forget and the half a phone keyboard's autocorrect produces: typing `Suárez` used to find the two men MLB spells with the accent and hide the three it spells without, so *both* spellings returned a partial list and neither reader could tell. There are two of these boxes and they now answer identically: the header's roster search (`PlayerAdder`, over the ~1,400-row season roster, in the header form and the phone search bar alike) and the research board's own search over the whole league (`ResearchTable`, name **and** club abbreviation).
+**Every search box in the app matches on a folded name** (`lib.ts::searchFold`), because a fifth of this league's surnames carry an accent and nobody types one. `garcia` finds García, `pena` finds Peña, `jimenez` finds both Jiménezes — and the reverse holds, which is the half that is easy to forget and the half a phone keyboard's autocorrect produces: typing `Suárez` used to find the two men MLB spells with the accent and hide the three it spells without, so *both* spellings returned a partial list and neither reader could tell. There are two of these boxes and they now answer identically: the header's roster search (`PlayerAdder`, over the ~1,400-row season roster, in the header form and the phone search bar alike) and the research board's own search over the whole league (`ResearchTable`, name **and** club abbreviation). *(The header's box has since gained a second half that is **not** folded — the debounced `/api/players/search` over every player MLB lists. The fold is a client-side matching rule and the remote half does its matching upstream, on MLB's own substring search; what the two share is that the query is `trim`ed and space-collapsed before either is asked. See **The header search reaches past the season list** above.)*
 
 **The fold is: NFKD, drop the combining marks, lowercase, remove every non-alphanumeric.** That last step is what lets one `includes` answer the whole punctuation question at once rather than a rule per mark — `Crow-Armstrong`, `O'Neill`, `J.T. Realmuto` and `Ronald Acuña Jr.` become `crowarmstrong`, `oneill`, `jtrealmuto` and `ronaldacunajr`, so `crow armstrong` / `crow-armstrong` / `crowarmstrong` are one query, `o neill` / `o'neill` / `oneill` are one, `j.t.` and `jt` are one, and `acuna jr` and `acuña jr.` are one. Note the **suffix is kept** where the server's `normalizeName` strips it: that one is matching two whole names against each other and wants `Luis Garcia Jr.` and `Luis García` to meet, where this one is matching a *fragment into* a name — strip `jr` here and a search for it is a search for nothing.
 

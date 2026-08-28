@@ -38,7 +38,8 @@ import { mapLimit } from './limit.js';
 // The 30-club table every abbreviation in the app is drawn from — 24h cached
 // and already fetched for a player's own club badge, so a transactions row's
 // `MIL` costs nothing new.
-import { getTeamAbbrevs } from './mlbStats.js';
+import { getTeamAbbrevs, getTeamNames, kindsOf, majorClubOf, searchPeople } from './mlbStats.js';
+import type { SearchPerson } from './mlbStats.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamHitting.ts / expectedStats.ts /
@@ -454,24 +455,6 @@ export async function getMlbIndex(): Promise<MlbIndex> {
  */
 const PROSPECT_BATCH = 40;
 
-/** MLB's own search, trimmed with `fields` — 253 bytes for one name against the
- *  1,203 the untrimmed row costs, and `hydrate=currentTeam` is what carries the
- *  club (and, for a minor leaguer, `parentOrgId`, which is the currency the
- *  club test is written in). */
-const PEOPLE_FIELDS =
-  'people,id,fullName,active,currentTeam,id,name,parentOrgId,' +
-  'primaryPosition,code,abbreviation,batSide,pitchHand';
-
-interface SearchPerson {
-  id?: number;
-  fullName?: string;
-  active?: boolean;
-  currentTeam?: { id?: number; name?: string; parentOrgId?: number };
-  primaryPosition?: { code?: string; abbreviation?: string };
-  batSide?: { code?: string };
-  pitchHand?: { code?: string };
-}
-
 /** Normalized name → what the search answered with, or an **empty list** where
  *  it answered with nobody. A miss is remembered exactly as a hit is, so a name
  *  ESPN carries and MLB has never heard of is asked once an hour rather than
@@ -483,24 +466,11 @@ let prospectFetchedAt = 0;
  *  once and six cold ones would ask MLB the same question six times. */
 const prospectInFlight = new Map<string, Promise<void>>();
 
-async function searchPeople(names: string[]): Promise<SearchPerson[]> {
-  const url =
-    'https://statsapi.mlb.com/api/v1/people/search' +
-    `?names=${encodeURIComponent(names.join(','))}` +
-    `&hydrate=currentTeam&fields=${PEOPLE_FIELDS}`;
-  const res = await fetch(url, { headers: UA });
-  if (!res.ok) throw new Error(`MLB Stats API people/search returned ${res.status}`);
-  const data = (await res.json()) as { people?: SearchPerson[] };
-  return data.people ?? [];
-}
-
-/** The kinds rule `getMlbIndex` and `getSeasonPlayers` both use, stated once. */
-function kindsOf(code: string | undefined): PlayerKind[] {
-  return code === 'Y' ? ['batter', 'pitcher'] : code === '1' ? ['pitcher'] : ['batter'];
-}
-
 async function resolveProspects(keys: string[]): Promise<void> {
-  const people = await searchPeople(keys);
+  // The thirty clubs by id, so a prospect's parent organization can be *named*
+  // and not merely numbered — see `team` below. Already fetched and 24h cached
+  // for every cap logo in the app, so this is a map lookup.
+  const [people, teamNames] = await Promise.all([searchPeople(keys), getTeamNames()]);
   const found = new Map<string, IndexEntry[]>();
   for (const p of people) {
     // **Only somebody currently playing.** The search reaches back through
@@ -523,12 +493,29 @@ async function resolveProspects(keys: string[]): Promise<void> {
       // Kade Anderson's Arkansas Travelers (574) has to read as Seattle (136).
       // A major leaguer the season list has dropped has no parent and his own
       // club id is already the right one.
-      teamId: p.currentTeam?.parentOrgId ?? p.currentTeam?.id ?? null,
+      teamId: majorClubOf(p.currentTeam),
       kinds: kindsOf(p.primaryPosition?.code),
-      // Where he actually is, in MLB's own words — `Arkansas Travelers` rather
-      // than a major-league club he has never played for, which is the only
-      // honest thing to print beside his name in a search.
-      team: p.currentTeam?.name ?? '',
+      /**
+       * **The organization that owns him, named** — `Minnesota Twins`, not
+       * `St. Paul Saints`.
+       *
+       * It was the affiliate, on the argument that this is "where he actually
+       * is, in MLB's own words … the only honest thing to print beside his name
+       * in a search". The flaw in that is that this field is not only printed:
+       * it rides on the `SeasonPlayer` the client keys everything off, beside a
+       * `teamId` that has always been the **parent** (the line above, and it has
+       * to be — `ESPN_TO_MLB_TEAM` is written in major-league ids). So the two
+       * halves of one row named two different clubs, and every reader that draws
+       * both — the cap over a player page's club door, the team page that door
+       * opens — was working from the id while the reader was reading the name.
+       * `Arkansas Travelers` beside a Mariners cap is not more honest than
+       * `Seattle Mariners`; it is the same row saying two things.
+       *
+       * Where he actually is has not gone anywhere — his page's News tab prints
+       * `St. Paul Saints activated OF Walker Jenkins` off MLB's own feed, which
+       * is the place a sentence about an affiliate belongs.
+       */
+      team: teamNames.get(majorClubOf(p.currentTeam) ?? -1) ?? '',
       position: p.primaryPosition?.abbreviation ?? '',
       bats: p.batSide?.code ?? null,
       throws: p.pitchHand?.code ?? null,
@@ -613,6 +600,20 @@ export async function extendIndex(index: MlbIndex, names: string[]): Promise<Mlb
     }
   }
   return { ...index, byName, beyond };
+}
+
+/** One row per `${kind}-${id}`, first occurrence winning — the app's own player
+ *  key, since a two-way player is two rows under one id and both are wanted. */
+function dedupePlayers(players: SeasonPlayer[]): SeasonPlayer[] {
+  const seen = new Set<string>();
+  const out: SeasonPlayer[] = [];
+  for (const p of players) {
+    const key = `${p.kind}-${p.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
 }
 
 /** Every roster entry's name, which is what `extendIndex` needs to know which
@@ -907,7 +908,56 @@ export interface EspnPlayerPool {
    * about stored history, not about a player.
    */
   contested: number[];
+  /**
+   * **The men in this pool that MLB's season list has never carried**, as
+   * `SeasonPlayer` rows — and, unlike everything above, a *global* answer
+   * rather than a per-league one.
+   *
+   * `byEspnId` reaches these men by ESPN's own id and was the whole answer for
+   * a while, on the reasoning quoted in `espn.md`: extending the name join
+   * "would mean asking MLB about three thousand names to answer for five".
+   * That is true of the whole pool and false of the part of it anybody
+   * **rosters**. Measured on the live pool of 3,929: **2,507 rows** fail the
+   * name join, and of those only **37 are more than 0.5% owned** — one
+   * `people/search` batch, the same call `extendIndex` already makes, once
+   * every six hours for every user of the installation.
+   *
+   * What that buys is not a name (`byEspnId` had one) but a **key**: with an
+   * MLB id these men land in `pct`, `eligible` and `slots` like anybody else,
+   * which means they land in the **daily snapshot** the trend is diffed
+   * against. The trend was the one thing the ESPN-id route could not give them,
+   * and it is the thing a manager sorts by.
+   *
+   * The rows themselves ride out to the client so the research board can draw a
+   * man it has no stat line for — see `POOL_JOIN_FLOOR`.
+   */
+  beyond: SeasonPlayer[];
 }
+
+/**
+ * **How much of ESPN's pool is worth a second lookup**, as a rostered
+ * percentage.
+ *
+ * The pool is 3,929 rows and 2,507 of them fail the name join, which is why
+ * this file spent a year saying the join could not be extended. Nearly all of
+ * that is noise — organizational filler nobody in any league has ever added.
+ * Cut by ownership it collapses: **>0% is 790 rows, >0.5% is 37, >1% is 18**.
+ *
+ * 0.5 is the floor because it is where the deep prospects still are and the
+ * long tail is not. Above it: Ryan Pepiot 30.4%, Joe Musgrove 9.5, Spencer
+ * Schwellenbach 9.1, Jordan Westburg 8.5, Walker Jenkins 8.4, Corbin Burnes
+ * 6.3, Jurickson Profar 4.7 — then the prospects, Jesús Made 2.3, Leo De Vries
+ * 1.7, Charlie Condon 1.7, Franklin Arias 1.4, Josue De Paula 1.1, Seth
+ * Hernandez 0.99, Sebastian Walcott 0.96, Ryan Sloan 0.80, Eli Willits 0.65.
+ * At >1% the last six of those go, and they are precisely the men a `Δ1d` sort
+ * is for. Below 0.5 the next name down is 0.49% and the list is 750 long.
+ *
+ * **It is not two populations.** More than half the list is not a prospect at
+ * all but a major leaguer with no 2026 line — season-ending injuries — and the
+ * board was missing him for exactly the same reason. A floor written in
+ * ownership rather than in status does not have to tell them apart.
+ */
+const POOL_JOIN_FLOOR = 0.5;
 
 const ROSTER_PCT_TTL_MS = 6 * 60 * 60 * 1000;
 let poolCache: { pool: EspnPlayerPool; fetchedAt: number } | null = null;
@@ -936,12 +986,50 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
     // claimed whom**, because a name the index answers with one player can be
     // asked by two ESPN rows. See `claimant` above for the measurement.
     const found = new Map<PoolRow, IndexEntry>();
-    const claims = new Map<number, { entry: IndexEntry; rows: PoolRow[] }>();
     for (const row of rows) {
       if (!row.fullName) continue;
       const hit = matchPlayer(index, row.fullName, row.proTeamId);
-      if (!hit) continue;
-      found.set(row, hit);
+      if (hit) found.set(row, hit);
+    }
+    /**
+     * **A second pass for the names the season's list cannot answer — but only
+     * the ones somebody rosters.**
+     *
+     * `extendIndex` is the prospect fallback `getOwnership` already runs over a
+     * league's roster rows; this runs it over the *pool*, which is what makes
+     * the answer global. The objection that stood here — three thousand names
+     * to answer for five — is answered by `POOL_JOIN_FLOOR` rather than
+     * argued with: 2,507 rows fail the join and 37 of them clear 0.5% owned, so
+     * this is **one** `people/search` batch every six hours.
+     *
+     * **It cannot change a match that already worked.** Only rows `matchPlayer`
+     * declined are asked about, `extendIndex` writes only under keys the base
+     * index leaves empty, and the ambiguity rule is untouched — a name with two
+     * candidates the club cannot separate is *declined* rather than unanswered,
+     * so it never reaches this pass at all, and a name this pass finds twice is
+     * declined here on the same test.
+     */
+    const unnamed = rows.filter(
+      (r) =>
+        r.fullName &&
+        !found.has(r) &&
+        typeof r.ownership?.percentOwned === 'number' &&
+        r.ownership.percentOwned > POOL_JOIN_FLOOR,
+    );
+    const full =
+      unnamed.length > 0
+        ? await extendIndex(index, unnamed.map((r) => r.fullName as string))
+        : index;
+    for (const row of unnamed) {
+      const hit = matchPlayer(full, row.fullName as string, row.proTeamId);
+      if (hit) found.set(row, hit);
+    }
+    // **The contest is decided over both passes**, not over the first one: a
+    // name the extension answered can be asked by two ESPN rows exactly as a
+    // season-list name can, and `claimant` is what settles which of them is
+    // him. Built from `found` after both passes for that reason.
+    const claims = new Map<number, { entry: IndexEntry; rows: PoolRow[] }>();
+    for (const [row, hit] of found) {
       const at = claims.get(hit.id);
       if (at) at.rows.push(row);
       else claims.set(hit.id, { entry: hit, rows: [row] });
@@ -984,7 +1072,15 @@ export async function getPlayerPool(): Promise<EspnPlayerPool> {
     const contested = [...claims]
       .filter(([, at]) => at.rows.length > 1)
       .map(([id]) => id);
-    const pool = { pct, eligible, slots, byEspnId, contested };
+    // Only the men the extension actually *placed* — `full.beyond` holds
+    // everything `extendIndex` has merged this hour, and a name it resolved
+    // whose row then lost a contest has no key in `pct` and must not claim one
+    // here either.
+    const beyond =
+      full === index
+        ? []
+        : [...full.beyond.values()].flat().filter((p) => pct[p.id] !== undefined);
+    const pool = { pct, eligible, slots, byEspnId, contested, beyond };
     poolCache = { pool, fetchedAt: Date.now() };
     return pool;
   })().finally(() => {
@@ -1008,6 +1104,16 @@ export async function getRosterPct(): Promise<Record<number, number>> {
 // cookies, and the season-wide `kona_player_info` — which needs none — is
 // **180MB**, rejects `limit`, and rejects every stat filter there is (checked:
 // 400 on each). Their window is undocumented either way.
+//
+// **One exception, and it is a bootstrap rather than a second measurement.** The
+// league board *does* honor `filterIds` when a `limit` and a sort ride with it —
+// three ids in 10KB — and a man the extended join has only just reached has no
+// snapshot at all, so for him the choice is not between two measurements but
+// between one and a dash. `getOwnershipChange` reads that figure for exactly
+// those men and only to supply the **missing day-back baseline**, for the 1D
+// window alone; the delta is still this function's own arithmetic, and it is
+// entirely ours again the following morning. The window is no longer
+// undocumented either — measured against ours over 118 men, slope **0.944**.
 //
 // So it is computed from a **daily snapshot of the map already being fetched**.
 // That costs nothing extra — `getRosterPct` is one 940KB request the app makes
@@ -1115,13 +1221,56 @@ export const TREND_MAX_DAYS = 30 + TREND_DRIFT[30];
  */
 const snapshotKey = (date: string) => `espn-ownership-${date}-v3.json`;
 
-/** Store today's map, once. Not overwritten later in the day: a baseline that
- *  crept toward the current value would shrink every delta measured against it
- *  as the day went on, for no reason a reader could see. */
+/**
+ * Store today's map, once **per player**.
+ *
+ * Write-once was the rule for the whole blob, on the grounds that a baseline
+ * which crept toward the current value would shrink every delta measured
+ * against it as the day went on, for no reason a reader could see. That
+ * reasoning is about a value being **rewritten**, and it is untouched: an id
+ * already in the blob is never touched again.
+ *
+ * What it now also does is **fill in an id the blob does not have**, which is a
+ * different act with the opposite consequence. A man reached for the first time
+ * — because `POOL_JOIN_FLOOR` let him into the join today, or because ESPN
+ * listed him this afternoon — is absent from a blob written this morning, and
+ * under the old rule he stayed absent from it for good. `diffAgainst` then
+ * withholds him for a full extra day: measured on the local history, today's
+ * `2026-08-28` blob holds **1,411** ids and none of the 32 the extended join
+ * reached, so tomorrow's 1D column would have read them off a baseline that
+ * still could not name them and drawn a second day of dashes.
+ *
+ * Filling him in writes his current percentage as his baseline, which is what
+ * every other player's blob entry is: the value as of the first read of the day
+ * that could see him. His first delta understates by however much he moved
+ * before that read — one afternoon at most, once, and only for a man who had no
+ * delta at all under the alternative.
+ */
 async function snapshotRosterPct(pct: Record<number, number>): Promise<void> {
   const key = snapshotKey(baseballToday());
-  if ((await readBlob(key)) !== null) return;
-  await writeBlob(key, JSON.stringify(pct));
+  const raw = await readBlob(key);
+  if (raw === null) {
+    await writeBlob(key, JSON.stringify(pct));
+    return;
+  }
+  let stored: Record<number, number | null>;
+  try {
+    stored = JSON.parse(raw) as Record<number, number | null>;
+  } catch {
+    // A malformed blob is one `readSnapshot` skips the day for anyway; rewriting
+    // it whole is the repair, and today's map is exactly what it should hold.
+    await writeBlob(key, JSON.stringify(pct));
+    return;
+  }
+  let added = 0;
+  for (const [id, v] of Object.entries(pct)) {
+    // `in`, not truthiness: a withheld id is stored as an explicit `null` and
+    // filling it would resurrect the very delta that null exists to suppress.
+    if (id in stored) continue;
+    stored[id as unknown as number] = v;
+    added++;
+  }
+  if (added > 0) await writeBlob(key, JSON.stringify(stored));
 }
 
 /** A stored baseline. A `null` value is a **withheld** id — see `snapshotKey`;
@@ -1199,14 +1348,41 @@ function baselineOrder(window: TrendWindow): number[] {
  *  listed him yet", and it does not need to: both are the same claim about the
  *  same man. A baseline that were somehow *truncated* would invent a rise for
  *  everybody it lost — but a truncated blob is a malformed one, which
- *  `readSnapshot` fails to parse and skips the day for entirely. */
+ *  `readSnapshot` fails to parse and skips the day for entirely.
+ *
+ *  **`extended` is the exception, and it is the one case where absence is about
+ *  us rather than about him.** The paragraph above rests on ESPN's list being
+ *  the active major-league population, so that a name arriving on it is a
+ *  call-up. It stopped being the whole story when `getPlayerPool` began
+ *  extending its own join over `POOL_JOIN_FLOOR`: those men were rostered at
+ *  the same percentage yesterday and every day before it, and the only thing
+ *  that changed is that this app can now *name* them. Left to the rule above,
+ *  the deploy that reaches them would print each one a rise equal to his whole
+ *  percentage in all five windows — measured, before this guard: Walker Jenkins
+ *  at the top of the `Δ1d` sort with `+8.4 +8.4 +8.4 +8.4`, which is the
+ *  fabricated riser `snapshotKey`'s two version notes are both about, arriving
+ *  by a third route and sitting there for up to thirty days.
+ *
+ *  So for an id in `extended`, an absent baseline is **withheld** rather than a
+ *  rise: `null` on the wire, a dash in the cell, the app's one shape for
+ *  *nothing here knows*. It self-heals without a version bump and without
+ *  costing anybody else a column — the first snapshot written after the deploy
+ *  carries these men, so 1D is real tomorrow, 3D in three days, 30D in a month,
+ *  and every other player on the board is untouched throughout. A genuine
+ *  call-up inside that set loses his first day's rise to a dash, which is the
+ *  direction every join in this file fails in. */
 function diffAgainst(
   current: Record<number, number>,
   base: Record<number, number | null>,
+  extended: Set<number>,
 ): Record<number, number | null> {
   const delta: Record<number, number | null> = {};
   for (const [id, pct] of Object.entries(current)) {
     const key = id as unknown as number;
+    if (!(key in base) && extended.has(Number(id))) {
+      delta[Number(id)] = null;
+      continue;
+    }
     // `in` rather than a truthiness test on the value: a withheld id is stored
     // as an explicit `null`, and the whole point of storing it is that it is
     // present. `base[key] === null` alone would answer the same today and stop
@@ -1248,6 +1424,109 @@ export interface RosterTrendWindow {
  *  is a claim where the truth is an absence. */
 export type RosterTrend = RosterTrendWindow[];
 
+// ---- Day one, for a man the map has only just learned to name --------------
+
+/**
+ * **ESPN's own published change in roster %, by ESPN player id.**
+ *
+ * This file's opening argument about the trend is that **the delta is ours,
+ * not ESPN's** — their `percentChange` rides only on payloads the app cannot
+ * justify, and their window is undocumented. Both halves of that are still
+ * true and it is still ours for all 1,400 men the snapshot can name. What
+ * changed is that a handful of men have **no snapshot at all** on the day the
+ * extended join first reaches them, and for exactly those the choice is not
+ * between two measurements but between one and a dash.
+ *
+ * **The payload is affordable because the request names the players.** The
+ * cookie-free season-wide `players?view=kona_player_info` ignores an
+ * `x-fantasy-filter` outright — probed, **211,301,476 bytes** and 23,390 rows
+ * with `filterIds` set — but the **league** endpoint honors it, and it is the
+ * one this app already reads with the user's cookies. `filterIds` alone is a
+ * 400 (`Filter: Limit request must be accompanied by a sort`); with a `limit`
+ * and a `sortPercOwned` beside it, three ids come back in **10,008 bytes** and
+ * sixty in 360KB. `players_wl` is leaner still (805 bytes for three) and
+ * carries no `percentChange` at all, which is what sends this to the heavier
+ * view.
+ *
+ * **What it measures, in numbers rather than in trust.** Driven against the
+ * live league over the 118 men this app holds a same-day delta for, ESPN's
+ * figure regressed on ours gives a slope of **0.944** — the same quantity,
+ * same sign, same units, on a window anchored differently: theirs rolls back
+ * from now, ours runs from the first read of the previous baseball day. On the
+ * 49 men who moved more than a point, the ratio is typically 0.86–0.93 (Grant
+ * Holmes 7.85 against 8.4, Michael Wacha 3.52 against 3.8, Shane McClanahan
+ * 4.09 against 4.4). At the top of the sort — which is the whole of what this
+ * is for — the two agree closely; the widest disagreements are on men moving
+ * hundredths, where our own tenth-rounding is the larger term.
+ *
+ * **It is a global fact fetched with one reader's cookies**, which is the one
+ * uncomfortable part and is stated rather than hidden. `percentChange` is
+ * ESPN's league-wide figure and does not vary by who asks; the cookies are the
+ * entry ticket to an endpoint, not a parameter of the answer. So it is cached
+ * globally like the pool it patches, on the pool's own six-hour TTL, and
+ * whichever connected league is read first in a window pays for it. A reader
+ * with no league connected sees no trend column at all, so there is nobody the
+ * cache could serve who could not have filled it.
+ */
+const CHANGE_TTL_MS = ROSTER_PCT_TTL_MS;
+
+/** A ceiling on how many ids one request may name, so a floor that one day
+ *  admits far more men cannot quietly turn this into the 211MB read. It is
+ *  four times today's 32 and **says so when it bites** rather than truncating
+ *  in silence. */
+const MAX_CHANGE_IDS = 128;
+
+interface KonaPlayersResponse {
+  players?: { player?: { id?: number; ownership?: { percentChange?: number } } }[];
+}
+
+let changeCache: { by: Map<number, number>; key: string; fetchedAt: number } | null = null;
+const changeInFlight = new Map<string, Promise<Map<number, number>>>();
+
+async function getOwnershipChange(
+  creds: EspnCreds,
+  espnIds: number[],
+): Promise<Map<number, number>> {
+  const asked = espnIds.slice(0, MAX_CHANGE_IDS).sort((a, b) => a - b);
+  if (asked.length < espnIds.length) {
+    console.warn(
+      `ESPN ownership change: ${espnIds.length} ids over the ${MAX_CHANGE_IDS} cap, ` +
+        `${espnIds.length - asked.length} left without a day-one delta`,
+    );
+  }
+  const key = asked.join(',');
+  if (changeCache && changeCache.key === key && Date.now() - changeCache.fetchedAt < CHANGE_TTL_MS) {
+    return changeCache.by;
+  }
+  const running = changeInFlight.get(key);
+  if (running) return running;
+  const job = (async () => {
+    const data = await leagueGet<KonaPlayersResponse>(creds, ['kona_player_info'], null, {
+      players: {
+        filterIds: { value: asked },
+        // Both required together — the filter is a 400 without the sort, and the
+        // sort does nothing without the limit. Which sort is immaterial; every
+        // row asked for comes back.
+        limit: asked.length,
+        offset: 0,
+        sortPercOwned: { sortAsc: false, sortPriority: 1 },
+      },
+    });
+    const by = new Map<number, number>();
+    for (const row of data.players ?? []) {
+      const id = row.player?.id;
+      const change = row.player?.ownership?.percentChange;
+      if (typeof id === 'number' && typeof change === 'number') by.set(id, change);
+    }
+    changeCache = { by, key, fetchedAt: Date.now() };
+    return by;
+  })().finally(() => {
+    changeInFlight.delete(key);
+  });
+  changeInFlight.set(key, job);
+  return job;
+}
+
 /**
  * The trend windows, or null when not one of them has a baseline to measure
  * against — a cold install, whose history starts accumulating today.
@@ -1262,19 +1541,87 @@ export type RosterTrend = RosterTrendWindow[];
  * Typically that is five 19KB reads, one per window, each hitting its exact
  * day; a miss is a 404 against the cache and costs nothing.
  */
-export async function getRosterTrend(): Promise<RosterTrend | null> {
+export async function getRosterTrend(creds?: EspnCreds): Promise<RosterTrend | null> {
   const today = baseballToday();
-  const current = await getRosterPct();
+  // The pool rather than the wrapper, because the men its **extended** join
+  // reached need to be told apart from a call-up when a baseline lacks them —
+  // see `diffAgainst`. It is the same one fetch and the same six-hour cache
+  // `getRosterPct` is a thin reading of.
+  const pool = await getPlayerPool();
+  const current = pool.pct;
+  const extended = new Set(pool.beyond.map((p) => p.id));
   await snapshotRosterPct(current).catch((err: Error) =>
     console.error('ESPN ownership snapshot failed:', err.message),
   );
 
+  /**
+   * **A baseline for the men who have none, so their `Δ1d` is a number today
+   * rather than tomorrow.**
+   *
+   * The withhold rule in `diffAgainst` is right and this does not weaken it:
+   * absence still is not read as a rise from nothing. What it does is *supply
+   * the missing day* — `was = now − ESPN's own change` — so the delta this
+   * function then computes is its own arithmetic over a baseline that has a
+   * source, rather than a guess about one that does not exist.
+   *
+   * **The 1D window only, because one change figure is one day.** ESPN
+   * publishes a single `percentChange`; measured against ours it is a day's
+   * movement (slope 0.944 — see `getOwnershipChange`), so it can stand in for
+   * the day-back baseline and for nothing else. 3D and out stay withheld until
+   * real history reaches them, which is three days and out.
+   *
+   * **It lasts one day per player.** Tomorrow the snapshot written this
+   * morning is the 1D baseline and the figure is entirely ours again, so this
+   * is a bootstrap rather than a second measurement living permanently in one
+   * column.
+   *
+   * A failed read costs the seed and nothing else: the men fall back to the
+   * dash they would have had, every other player's five columns are untouched,
+   * and no error reaches the caller. Absent `creds` — the nightly warmer, which
+   * exists to write the snapshot rather than to answer anybody — skips it
+   * entirely.
+   */
+  const espnByMlb = new Map<number, number>();
+  for (const [espnId, row] of Object.entries(pool.byEspnId)) {
+    if (row.mlbId !== null && extended.has(row.mlbId)) espnByMlb.set(row.mlbId, Number(espnId));
+  }
+  let seed: Map<number, number> | null = null;
+  if (creds && espnByMlb.size > 0) {
+    const by = await getOwnershipChange(creds, [...espnByMlb.values()]).catch((err: Error) => {
+      console.error('ESPN ownership change unavailable:', err.message);
+      return null;
+    });
+    if (by) {
+      seed = new Map<number, number>();
+      for (const [mlbId, espnId] of espnByMlb) {
+        const change = by.get(espnId);
+        const now = current[mlbId];
+        if (typeof change === 'number' && typeof now === 'number') seed.set(mlbId, now - change);
+      }
+    }
+  }
+
   const resolved = await Promise.all(
     TREND_WINDOWS.map(async (window): Promise<RosterTrendWindow | null> => {
       for (const days of baselineOrder(window)) {
-        const base = await readSnapshot(daysAgo(today, days));
-        if (!base) continue;
-        return { window, days, delta: diffAgainst(current, base) };
+        const stored = await readSnapshot(daysAgo(today, days));
+        if (!stored) continue;
+        let base = stored;
+        if (window === 1 && seed) {
+          // Copied, and **only where the day genuinely holds nothing**: a
+          // stored value is the real thing and an explicit `null` is a withheld
+          // one, and overwriting either would be the baseline-creep this file
+          // refuses everywhere else.
+          const filled = { ...stored };
+          let any = false;
+          for (const [id, was] of seed) {
+            if (id in filled) continue;
+            filled[id] = was;
+            any = true;
+          }
+          if (any) base = filled;
+        }
+        return { window, days, delta: diffAgainst(current, base, extended) };
       }
       return null;
     }),
@@ -1954,6 +2301,24 @@ export interface EspnOwnership extends EspnLeagueInfo {
    * rows on the live 12-team league, ~600 bytes.
    */
   beyondMlb: SeasonPlayer[];
+  /**
+   * **The ids whose roster % has no baseline behind it**, so the client can
+   * withhold their trend instead of drawing five flat zeroes for a man nothing
+   * here knows about.
+   *
+   * A percentage reaches a player two ways. Almost all of them are in the
+   * **global** pool map, which is what the daily snapshot is taken of, so a
+   * delta against it is real. The rest are men *this* league rosters who are
+   * under `POOL_JOIN_FLOOR` — reached by ESPN's own player id off this league's
+   * roster rows, present in no day of the global map and never going to be.
+   * This is that second set.
+   *
+   * It is a field rather than something the client derives off `beyondMlb`,
+   * which is what it used to be: that list is now mostly men who **do** have a
+   * trend, and deriving the suppression from it would blank the very columns
+   * the pool's extended join exists to fill.
+   */
+  noTrend: number[];
   /** How many roster entries were read, and how many of them found an MLB
    *  player. The gap used to be almost entirely prospects who have never played
    *  a major-league game and is now almost nothing (**316 read, 316 matched**
@@ -2067,10 +2432,11 @@ export async function getOwnership(
           slots: {},
           byEspnId: {},
           contested: [],
+          beyond: [],
         };
         return empty;
       }),
-      getRosterTrend().catch((err: Error) => {
+      getRosterTrend(creds).catch((err: Error) => {
         console.error('ESPN roster trend unavailable:', err.message);
         return null;
       }),
@@ -2136,8 +2502,18 @@ export async function getOwnership(
     // league shares. And the **trend stays out** for the same reason it has to:
     // it is a diff of two days of the *global* map, and a man who is only
     // reachable through one league's roster has no baseline in yesterday's.
+    //
+    // **Most of these men now come in through the front door**, `getPlayerPool`
+    // having extended its own join for everybody over `POOL_JOIN_FLOOR` — so
+    // they are in `pool.pct`, in the daily snapshot, and in the trend. What is
+    // left on this path is the man *below* the floor whom this particular
+    // league happens to roster: a 0.2%-owned prospect nobody else has, who
+    // still gets his percentage by ESPN's id and still, correctly, gets no
+    // trend. `noTrend` below is that set and nothing more.
     const byId = new Map(Object.values(rosters).flat().map((p) => [p.mlbId, p] as const));
-    const beyondHere = [...full.beyond.keys()].filter((id) => owned[id] !== undefined);
+    const beyondHere = [...full.beyond.keys()].filter(
+      (id) => owned[id] !== undefined && pool.pct[id] === undefined,
+    );
     let rosterPct = pool.pct;
     let eligibility = pool.eligible;
     if (beyondHere.length > 0) {
@@ -2160,11 +2536,47 @@ export async function getOwnership(
       eligibility,
       trend,
       rosters,
-      // Only the men actually on a roster in *this* league: `beyond` is the
-      // index's own accumulation and an hour of league reads can leave another
-      // league's prospects on it, which would put strangers in this reader's
-      // search results.
-      beyondMlb: [...full.beyond.values()].flat().filter((p) => owned[p.id] !== undefined),
+      /**
+       * **Everyone the season's list cannot name that this reader has a reason
+       * to see**, which is now two sets rather than one.
+       *
+       * The per-league half is unchanged and still filtered to `owned`:
+       * `full.beyond` is the index's own accumulation and an hour of league
+       * reads can leave *another* league's prospects on it, which would put
+       * strangers in this reader's search results.
+       *
+       * The global half — `pool.beyond` — is not filtered, and deliberately.
+       * Those men are in `pool.pct` and therefore already have a roster % and a
+       * trend on this very payload, so the board is going to draw a row for
+       * each of them whether or not anybody here rosters him; without a name he
+       * would be a row of dashes with an id. They are not strangers in the way
+       * the paragraph above means: the floor is *ownership*, so every one of
+       * them is a man some league is holding, which is exactly the population a
+       * `Δ` sort is read for.
+       *
+       * Deduplicated on the app's own `${kind}-${id}` key, a two-way player
+       * being two rows and reachable down both paths.
+       */
+      beyondMlb: dedupePlayers([
+        ...[...full.beyond.values()].flat().filter((p) => owned[p.id] !== undefined),
+        ...pool.beyond,
+      ]),
+      /**
+       * **The ids whose roster % has no baseline behind it**, so the client can
+       * withhold their trend rather than draw five flat zeroes.
+       *
+       * It is the per-league `byEspnId` additions and only those: a percentage
+       * that came off *this* league's roster rows is in no day of the global
+       * snapshot and never will be. Everything in `pool.pct` — including the
+       * men `POOL_JOIN_FLOOR` let in — has a real baseline from the day it
+       * joined and reads like anybody else.
+       *
+       * A field rather than the client deriving it off `beyondMlb`, which is
+       * what it used to do: that list is now mostly men who *do* have a trend,
+       * so deriving it there would suppress the very columns this change
+       * exists to fill.
+       */
+      noTrend: beyondHere,
       rosterCount,
       matched,
       fetchedAt: Date.now(),

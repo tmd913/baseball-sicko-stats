@@ -1169,6 +1169,44 @@ export interface RosterStatus {
 }
 
 /**
+ * **What a club's day is**, by MLB team id — the same nine facts
+ * `PlayerStatus` carries about a game, without the four that are about a
+ * person.
+ *
+ * It exists because the two surfaces that draw a man's game had come to
+ * disagree about the same man. `PlayerStatus` is built from the day's
+ * **boxscore rosters**, so a player who is not on one has no opponent — which
+ * is right for the lineup pip and wrong for the question the research board's
+ * `Opp` column asks. The summary table has never had the problem: it draws off
+ * a report, and a report ties a player to his club's games "even when they're
+ * off the active roster (suspended, on the IL, optioned)". So Aaron Judge on
+ * the 60-day IL read `vs BOS 7:15 PM` on the Roster view and `—` on the board,
+ * on the same afternoon.
+ *
+ * Keyed by **team id** rather than by abbreviation because that is what the
+ * client holds: every row of both wide tables carries `teamId` for its cap
+ * logo, and a join on a display string is the thing this repo refuses
+ * everywhere else.
+ *
+ * Thirty entries at most, off the day the player map is already built from.
+ */
+export interface ClubStatus {
+  gameState: GameStatus['state'];
+  /** The other club's abbreviation, from this club's side. */
+  opponent: string;
+  isHome: boolean;
+  teamScore: number | null;
+  opponentScore: number | null;
+  currentInning: number | null;
+  inningState: string | null;
+  startTime: string | null;
+  /** The **other** side's announced starter, before first pitch — the same
+   *  reading `PlayerStatus.probablePitcher` carries, which is who his hitters
+   *  would face. */
+  probablePitcher: ProbablePitcher | null;
+}
+
+/**
  * What is true of a player **today** — his roster status and where his club's
  * game has him — for a view that has no `PlayerReport` to read it off.
  *
@@ -1965,6 +2003,24 @@ export interface EspnOwnership {
    * Travelers`, not a major-league club he has never played for.
    */
   beyondMlb: SeasonPlayer[];
+  /**
+   * **The ids whose roster % has no baseline behind it**, so the client can
+   * withhold their trend instead of drawing five flat zeroes for a man nothing
+   * here knows about.
+   *
+   * A percentage reaches a player two ways. Almost all of them are in the
+   * **global** pool map, which is what the daily snapshot is taken of, so a
+   * delta against it is real. The rest are men *this* league rosters who are
+   * under `POOL_JOIN_FLOOR` — reached by ESPN's own player id off this league's
+   * roster rows, present in no day of the global map and never going to be.
+   * This is that second set.
+   *
+   * It is a field rather than something the client derives off `beyondMlb`,
+   * which is what it used to be: that list is now mostly men who **do** have a
+   * trend, and deriving the suppression from it would blank the very columns
+   * the pool's extended join exists to fill.
+   */
+  noTrend: number[];
   /** Roster entries read, and how many found an MLB player. The gap was
    *  prospects who have never played a major-league game and is now almost
    *  nothing, the prospect fallback having closed it (316 of 316 on the live
