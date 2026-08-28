@@ -4121,23 +4121,27 @@ export default function App() {
 
   /**
    * **The men whose roster % came off ESPN's id rather than off the shared
-   * map** — the league's prospects, and anyone else MLB's season list has
-   * stopped carrying.
+   * map**, and who therefore have no trend and cannot have one: the trend is a
+   * diff of two days of the *global* map, and a man only one league's roster
+   * can name is in neither day of it. Left alone, `rosterPct.has(id)` would
+   * read as "he is in the map, so an absent delta is a flat one" and draw him
+   * five spans of `0.0` — a claim that he has not moved, where the truth is
+   * that nothing here knows.
    *
-   * They have a percentage and an eligibility like anybody else (the server
-   * reaches them through `byEspnId`, an identity rather than a name match), and
-   * they have **no trend and cannot have one**: the trend is a diff of two days
-   * of the *global* map, and a man only one league's roster can name is in
-   * neither day of it. Left alone, `rosterPct.has(id)` would have read as "he
-   * is in the map, so an absent delta is a flat one" and drawn him five spans
-   * of `0.0` — a claim that he has not moved, where the truth is that nothing
-   * here knows. See **Roster % for a player MLB's season list has never
-   * carried** in `docs/claude/espn.md`.
+   * **It is the server's `noTrend` now, and it used to be `beyondMlb`'s ids.**
+   * That derivation was right while the two sets were the same one; they parted
+   * when `getPlayerPool` began extending its own join for everybody over
+   * `POOL_JOIN_FLOOR`, which puts most of `beyondMlb` **into** the global map
+   * and so into the snapshot the trend is measured against. Deriving the
+   * suppression from that list now would blank the exact columns the extension
+   * exists to fill — Walker Jenkins would be back to five dashes on the sort he
+   * is supposed to be at the top of. See **Roster % for a player MLB's season
+   * list has never carried** in `docs/claude/espn.md`.
    */
-  const beyondIds = useMemo(() => {
-    const beyond = espnConnected ? ownership?.beyondMlb : null;
-    return new Set((beyond ?? []).map((p) => p.id));
-  }, [espnConnected, ownership]);
+  const beyondIds = useMemo(
+    () => new Set(espnConnected ? ownership?.noTrend ?? [] : []),
+    [espnConnected, ownership],
+  );
 
   /**
    * The positions ESPN has each player eligible at, or null with no league —
@@ -4405,9 +4409,15 @@ export default function App() {
       // answer: an id stored as `null` is one the server withheld, its baseline
       // being another player's, and `?? 0` would have flattened that into the
       // one claim it is not — that he has not moved. Absent is still flat.
+      //
+      // **And `beyondIds` is a fourth answer, which the board had never had to
+      // draw.** A man whose percentage came off *this* league's roster rows has
+      // no day in the global snapshot, so "absent is flat" is a claim about him
+      // that nothing here can make. It could be ignored while the board had no
+      // row for such a man at all; it cannot now that it draws one.
       const rosterTrends: Partial<Record<TrendWindow, number | null>> = {};
       for (const w of rosterTrend ?? []) {
-        rosterTrends[w.window] = !rosterPct?.has(r.id)
+        rosterTrends[w.window] = !rosterPct?.has(r.id) || beyondIds.has(r.id)
           ? null
           : w.delta.has(r.id)
             ? w.delta.get(r.id) ?? null
@@ -4423,7 +4433,7 @@ export default function App() {
       };
       });
     },
-    [rosterPct, rosterTrend, eligibility],
+    [rosterPct, rosterTrend, eligibility, beyondIds],
   );
 
   /**
@@ -4514,13 +4524,6 @@ export default function App() {
   /** Put the whole board back, and keep the ticks: a reader who has finished
    *  with one comparison is usually about to adjust it, not to start again. */
   const clearCompare = useCallback(() => setCompareKeys([]), []);
-
-  /** The measured board, decorated. */
-  const researchRows = useMemo(
-    () => decorateRows(research[researchCacheKey] ?? []),
-    [decorateRows, research, researchCacheKey],
-  );
-
 
   /**
    * The projected board, decorated the same way and **only for the kind on
@@ -5258,6 +5261,93 @@ export default function App() {
   }, []);
   /** …by id, which is how every one of those three reaches one. */
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+
+  /**
+   * **The rostered men the board has no stat line for**, as rows of their own.
+   *
+   * Reported as: *why don't I see Walker Jenkins in the research table? I
+   * should be able to see him at the top of the 1D roster percentage delta
+   * sort.* He wasn't there, and the cause is what the board **is**: its rows
+   * come from MLB's own season leaderboard, so its population is *men with a
+   * 2026 major-league stat line* — 714 batters and 826 pitchers. A prospect has
+   * no line, so there was no row to draw.
+   *
+   * **And it was never only prospects.** Measured against ESPN's 3,929-row
+   * pool: **790 players with any ownership at all have no board row**, 37 above
+   * 0.5%, and the top of that list is Ryan Pepiot at 30.4% rostered, Joe
+   * Musgrove at 9.5 and Jordan Westburg at 8.5 — major leaguers who have not
+   * played this season. A manager sorting by `Δ1d` is asking *who is the league
+   * picking up*, and the men being picked up hardest were the ones the board
+   * could not show.
+   *
+   * **A statless row is inert.** Every stat column is `null`, so it sorts to
+   * the bottom of every stat sort and is invisible until the reader sorts by
+   * `Ros%` or a `Δ` column — which is exactly where it is wanted. That is why
+   * this needs no control and no include button: the row's own emptiness is the
+   * filter.
+   *
+   * **Client-side, for the reason `decorateRows` is.** The research blob is
+   * cached per kind and per window and served to every user alike; ownership is
+   * a fact about a connected fantasy provider. A row that exists only because
+   * ESPN rosters somebody has no business in a shared cache.
+   *
+   * **The blank is taken from the board's own first row** rather than written
+   * out. Every key it has, this row has as `null`, so a column added to
+   * `ResearchRow` next month cannot come back as `undefined` here and read as
+   * something other than "no line" — and the identity fields are then written
+   * over the top. With an empty board there is no template and nothing to add
+   * to, which is the same answer.
+   *
+   * `positionType` is derived from the kind rather than from MLB's own
+   * `primaryPosition.type`, which this row has no source for: the two board
+   * tests are `=== 'Pitcher'` and `!== 'Pitcher'`, so kind alone puts him on
+   * exactly the right board, and a two-way player is two `SeasonPlayer` rows
+   * and lands on both. What it costs is the tooltip on a position pill for a
+   * man ESPN has no eligibility for, which on this population is nobody — the
+   * floor is ownership, and ESPN eligibility is what a rostered player has.
+   */
+  const unplayedRows = useMemo(() => {
+    // A club has played the whole span by definition, so the team reading can
+    // never be missing one.
+    if (researchTeams || !rosterPct) return [];
+    const base = research[researchCacheKey];
+    if (!base || base.length === 0) return [];
+    const have = new Set(base.map((r) => r.id));
+    const blank: Record<string, unknown> = {};
+    for (const key of Object.keys(base[0])) blank[key] = null;
+    const out: ResearchRow[] = [];
+    for (const p of knownPlayers) {
+      if (p.kind !== researchKind || have.has(p.id) || !rosterPct.has(p.id)) continue;
+      out.push({
+        ...(blank as unknown as ResearchRow),
+        id: p.id,
+        name: p.name,
+        savantName: p.savantName,
+        kind: p.kind,
+        // The **abbreviation**, which is what a board row's `team` is; the
+        // season list carries the full club name, which is a column wide.
+        team: (p.teamId !== null ? teamById.get(p.teamId)?.abbreviation : null) || '',
+        teamId: p.teamId,
+        position: p.position,
+        positionType: p.kind === 'pitcher' ? 'Pitcher' : 'Unknown',
+        games: 0,
+        starter: false,
+        qualified: false,
+      });
+    }
+    return out;
+  }, [researchTeams, rosterPct, research, researchCacheKey, knownPlayers, researchKind, teamById]);
+
+  /** The measured board, decorated — and with the rostered men it has no line
+   *  for on the end of it. Order does not survive the board's own sort, so the
+   *  concatenation says nothing; what it does say is that these rows go through
+   *  the same `decorateRows` as the rest, which is what gives them the roster %
+   *  and the deltas they are here for. */
+  const researchRows = useMemo(
+    () => decorateRows([...(research[researchCacheKey] ?? []), ...unplayedRows]),
+    [decorateRows, research, researchCacheKey, unplayedRows],
+  );
+
 
   // Load the roster once. A failure here used to be swallowed, which rendered
   // the "your roster is empty" state — actively misleading now that the list

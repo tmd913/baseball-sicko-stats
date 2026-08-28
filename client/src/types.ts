@@ -1965,6 +1965,24 @@ export interface EspnOwnership {
    * Travelers`, not a major-league club he has never played for.
    */
   beyondMlb: SeasonPlayer[];
+  /**
+   * **The ids whose roster % has no baseline behind it**, so the client can
+   * withhold their trend instead of drawing five flat zeroes for a man nothing
+   * here knows about.
+   *
+   * A percentage reaches a player two ways. Almost all of them are in the
+   * **global** pool map, which is what the daily snapshot is taken of, so a
+   * delta against it is real. The rest are men *this* league rosters who are
+   * under `POOL_JOIN_FLOOR` — reached by ESPN's own player id off this league's
+   * roster rows, present in no day of the global map and never going to be.
+   * This is that second set.
+   *
+   * It is a field rather than something the client derives off `beyondMlb`,
+   * which is what it used to be: that list is now mostly men who **do** have a
+   * trend, and deriving the suppression from it would blank the very columns
+   * the pool's extended join exists to fill.
+   */
+  noTrend: number[];
   /** Roster entries read, and how many found an MLB player. The gap was
    *  prospects who have never played a major-league game and is now almost
    *  nothing, the prospect fallback having closed it (316 of 316 on the live

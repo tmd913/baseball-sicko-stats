@@ -61,6 +61,15 @@ league. Five rows on the live 12-team league, ~600 bytes.
 on screen: a prospect who has since been called up is on both lists, and his
 major-league row carries his club where the other carries his affiliate.
 
+**`beyondMlb` is two sets now, and the second is not filtered to this league.**
+It was the league's own rostered prospects and nothing else; `getPlayerPool`
+extending its own join over `POOL_JOIN_FLOOR` added a **global** half — every
+man over 0.5% rostered anywhere that MLB's season list cannot name, 32 rows on
+the live league against the 5 it used to be. Those ride unfiltered because the
+research board is going to draw a row for each of them whether or not anybody
+here holds him, and without a name that row is dashes with an id. See
+**The pool's own join is extended** in `espn.md`.
+
 **It is `seasonPlayers` by reference when there is nothing to add**, which is
 every session with no league connected — the memo returns the very array, so
 nothing downstream of it recomputes and a reader with no ESPN league is

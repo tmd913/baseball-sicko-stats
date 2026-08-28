@@ -360,6 +360,101 @@ stat line, so the board's universe does not contain them — this is a fact for
 the page, the search result and the roster views, which is where they became
 visible in the first place.
 
+### The pool's own join is extended, and the floor is ownership
+
+**Reported as: "why don't I see Walker Jenkins in the research table? I should
+be able to see him at the top of the 1D roster percentage delta sort."** Two
+separate walls, and the section above is standing at the second of them saying
+so: he had no board row, and he had no trend to be sorted by even if he had.
+
+**The sentence this undoes is the one at the head of the section above** — *the
+fallback cannot be extended to `getPlayerPool`, that would mean asking MLB about
+three thousand names to answer for five*. It is true of the **whole pool** and
+false of the part of it anybody rosters, and nothing had ever measured the
+difference. Measured now, against the live 3,929-row pool: **2,507 rows fail the
+name join**, and cut by ownership that collapses to **790 above 0%, 37 above
+0.5%, 18 above 1%**. So `getPlayerPool` runs a second pass over the rows
+`matchPlayer` declined **that clear `POOL_JOIN_FLOOR` (0.5%)** — one
+`people/search` batch, the call `extendIndex` already makes, once every six
+hours for every user of the installation.
+
+**And it is not a prospect feature.** More than half the list is a major
+leaguer with no 2026 line, and the board was missing him for exactly the same
+reason — its rows come off MLB's season leaderboard, so its population is *men
+with a stat line*. The top of the list is **Ryan Pepiot at 30.4% rostered**,
+then Joe Musgrove 9.5, Spencer Schwellenbach 9.1, Jordan Westburg 8.5, and only
+then Walker Jenkins at 8.4. A floor written in ownership does not have to tell
+the two apart, which is why it is written in ownership.
+
+**What the id buys is not a name but a key.** `byEspnId` already had the name and
+the percentage; what it could not reach was the **daily snapshot**, which is
+keyed by MLB id. With one, these men are in `pct`, in the snapshot, and in the
+trend — the one thing the ESPN-id route could not give them, and the thing a
+manager sorts by.
+
+**It cannot change a match that already worked.** Only rows the first pass
+declined are asked about; `extendIndex` writes only under keys the base index
+leaves empty; and an ambiguity the club cannot separate is *declined* by
+`matchMlbPlayer` rather than left unanswered, so it never reaches the second
+pass at all. The contest between two ESPN rows claiming one id is built from
+`found` **after both passes**, so `claimant` arbitrates the extended names on
+exactly the same evidence.
+
+Measured on the live league: `rosterPct` goes from **1,403 keys to 1,443**, and
+`beyondMlb` from 5 rows to **32**.
+
+#### The deploy that reaches them must not invent a riser
+
+**`diffAgainst`'s rule is that a player missing from the baseline rose from
+nothing**, and the paragraph arguing it rests on ESPN's list being the active
+major-league population — so a name arriving on it is a call-up and his whole
+percentage really is the movement. That stops being the whole story here: these
+men were rostered at the same percentage yesterday and every day before it, and
+the only thing that changed is that this app can now name them.
+
+Left alone it does exactly what `snapshotKey`'s two version notes are both
+about, by a third route. Measured before the guard: **Walker Jenkins at the top
+of the `Δ1d` sort reading `+8.4 +8.4 +8.4 +8.4`** — his whole percentage in
+every window, for up to thirty days, at the top of the very column the reader
+opened.
+
+So `diffAgainst` takes the extended set and, for an id in it, reads an absent
+baseline as **withheld** (`null`, a dash) rather than as a rise. It needs no
+version bump and costs nobody else a column: the first snapshot written after
+the deploy carries these men, so 1D is real tomorrow, 3D in three days, 30D in a
+month, and every other player on the board is untouched throughout. A genuine
+call-up inside that set loses his first day's rise to a dash, which is the
+direction every join in this file fails in.
+
+**`snapshotRosterPct` fills a missing id rather than only writing a missing
+blob**, which is what makes *tomorrow* rather than the day after. Write-once is
+about a value being **rewritten** — a baseline creeping toward the current value
+shrinks every delta measured against it — and that is untouched: an id already
+in the blob is never touched again, and an explicitly `null` (withheld) one is
+left alone so filling it cannot resurrect the delta it exists to suppress. What
+is new is that an id the blob has *never* held gets written. Measured: today's
+`2026-08-28` blob held **1,411** ids and none of the 32, so without this the 1D
+column would have read tomorrow off a baseline that still could not name them
+and drawn a second day of dashes; after one request it holds **1,443**.
+
+#### `noTrend` is what is left on the ESPN-id path
+
+The client used to derive the trend suppression from `beyondMlb`'s ids, which
+was right while the two sets were one. They parted here: most of `beyondMlb` is
+now **in** the global map and has a real baseline, so deriving it there would
+blank the exact columns this change exists to fill. `EspnOwnership.noTrend` is
+the set that genuinely has none — the men *this* league rosters who are under
+the floor, reached by ESPN's own id off this league's roster rows and present in
+no day of the global map. On the live league it is currently **empty**.
+
+`beyondMlb` grows to match: the per-league half stays filtered to `owned` (an
+hour of league reads leaves other leagues' prospects on the shared index, and
+they would be strangers in this reader's search), while the global half rides
+unfiltered, because every one of those men is going to be **drawn as a board
+row** and without a name he would be a row of dashes with an id. They are not
+strangers in the sense that filter is about: the floor is ownership, so each is
+a man some league is holding.
+
 ### The ownership read asks for tomorrow, because a move lands on the next period
 
 **"Kevin Gausman was added today but the board still shows him as a free

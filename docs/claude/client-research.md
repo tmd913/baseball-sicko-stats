@@ -1570,6 +1570,78 @@ new user can use. What it shares with the summary table — the row geometry, th
 identity block, the full-page mode — is in `client-summary.md`, and the passages
 below say where they part.
 
+#### A rostered man with no stat line is a row, and the row is empty
+
+**Reported as: "why don't I see Walker Jenkins in the research table? I should
+be able to see him at the top of the 1D roster percentage delta sort."**
+
+**The cause is what the board *is*.** Its rows come from MLB's own season
+leaderboard (`stats?group=hitting&season={SEASON}&sportId=1&playerPool=ALL`), so
+its population is **men with a 2026 major-league stat line** — 714 batters and
+826 pitchers on the day this was measured. A prospect has none, so there was no
+row to draw. That is a different list from the header search's, which is why
+`/api/players/search` did not touch it.
+
+**And it was never only prospects.** Measured against ESPN's 3,929-row pool:
+**790 players with any ownership at all have no board row**, 37 above 0.5%. The
+top of that list is `Ryan Pepiot 30.4%`, `Joe Musgrove 9.5`, `Spencer
+Schwellenbach 9.1`, `Jordan Westburg 8.5` — major leaguers with no 2026 line —
+and only then Walker Jenkins at 8.4. A manager sorting by `Δ1d` is asking *who
+is the league picking up*, and the men being picked up hardest were the ones the
+board could not show.
+
+So `App.tsx::unplayedRows` synthesizes a row for every man who has a roster %
+and no row on the board on screen, and `researchRows` concatenates them before
+`decorateRows`. **+18 batters (714 → 732) and +16 pitchers (826 → 842)** on the
+live league — 2.4% and 1.9%.
+
+**A statless row is inert, and that is the whole design.** Every stat column is
+`null`; nulls sort to the bottom in both directions (the rule two bullets down),
+so these rows are invisible on every stat sort and surface only on `Ros%` and
+the `Δ` columns. That is why this needs no include button and no control: **the
+row's own emptiness is the filter.** Measured, sorted by OPS: the first six rows
+are Alvarez, Soto, Wood, Judge, Valdez, Caminero, exactly as before.
+
+**They are ordinary rows in every other respect.** `Ryan Pepiot` draws his
+`IL60` badge off `/api/statuses` and his `SP` pill off ESPN's eligibility like
+anybody else, which is what makes the row worth having rather than a name with a
+percentage.
+
+**Client-side, for the reason `decorateRows` is.** The research blob is cached
+per kind and per window and served to every user alike; a row that exists only
+because ESPN rosters somebody has no business in a shared cache.
+
+**The blank is taken from the board's own first row** rather than written out —
+every key it has, as `null` — so a column added to `ResearchRow` next month
+cannot arrive here as `undefined` and read as something other than *no line*.
+With an empty board there is no template and nothing to add to, which is the
+same answer.
+
+**`positionType` comes from the kind**, MLB's own `primaryPosition.type` having
+no source on this row. The two board tests are `=== 'Pitcher'` and
+`!== 'Pitcher'` (`isPitcherByTrade` / `isBatterByTrade`), so kind alone puts him
+on exactly the right board, and a two-way player is two `SeasonPlayer` rows and
+lands on both.
+
+**Not on the team reading and not on the projected board.** A club has played
+the whole span by definition and can never be missing a line; a projection is an
+answer about games a man is expected to play, and these rows have no projection
+to draw. `unplayedRows` returns empty for `board=teams` and is concatenated only
+onto the measured board — verified, the projected board reads `505 of 505
+batters` either side.
+
+**The percentile scales are untouched.** `rankScales` is built from the rows
+where `qualified` is true and these are all false, so the population every badge
+on the board and on the player page's Stats tab is ranked within is the same set
+it was.
+
+**Today they show a dash in the `Δ` columns and a number from tomorrow**, which
+is not this file's business but is what a reader sees: the trend is a diff of a
+daily snapshot, and the first snapshot that can name these men is the one
+written the day the join reaches them. See **The pool's own join is extended**
+in `espn.md` for why an absent baseline is *withheld* here rather than read as a
+rise from nothing.
+
   - **The player name sticks too, from 820px up** — the one place this table deliberately parts from the summary view's rule that only the headshot pins and the name scrolls away for the sake of stat columns on a phone. This table is three times as wide, and by the time you have scrolled out to Chase% or FB% there is nothing left to say whose row you are on. The offset *is* the headshot cell: the photo (global `border-box`, so its border is inside that) between two of this board's gutters, which comes to **68px** at a 42px circle and came to 63 at a 37px one. It is **derived rather than written out** — `calc(var(--row-photo) + 2 * var(--research-gutter))`, off the same variable the cells are padded with — because `63px` was a constant that went silently wrong the moment the circle grew, pinning the name five pixels under the headshot it exists to clear. Those gutters are `clamp(5px, 1.6vw, 13px)` and only reach 13px from ~813px of viewport up, which is the other half of why the breakpoint is 820 and why the calc resolves to a flat 68 everywhere the media query applies — below it the offset would be wrong **and** the pinned pair would eat two fifths of the screen. The soft edge that marks the pinned block moves out to the name (`.research-table .sum-img-col { box-shadow: none }`), since left on the headshot it would draw a seam through the middle of a pair that scrolls as one. All of it is scoped to `.research-table`, so the summary view is untouched.
   - **Every row's headshot carries today's status**, exactly as the summary table's does: the lineup pip on the top corner — a batting-order number, `SP`, a reliever's entry inning, `!` for a postponement or a posted lineup that left him out — and the status code on the bottom edge, `IL10`, `RA`, `DTD`, `OUT`, `DFA`. It matters more here than anywhere else in the app, and that is the argument for it: every other view draws players the user chose, while this one is the whole league and mostly strangers, and the question the board exists to answer is whether to pick somebody up. A man batting second tonight and a man who went on the IL this morning have the same season line, and the line was all the table showed of the difference. The facts come from `usePlayerStatus` — the league-wide `/api/statuses` map, since the board holds no `PlayerReport` for a player nobody is watching — and the marks themselves are `PhotoSpot`/`PhotoStatus` in `PhotoStatus.tsx`, shared with the summary table and the details view so the three cannot come to read differently. `statusCorner` in `lib.ts` is `lineupCorner`/`pitchingCorner` over the same five fields named apart from the game they usually arrive on (`CornerFacts`), which is what keeps one definition of what "batting 3rd" and "SP" look like rather than a second, drifting copy for the views with no report behind them. `useStatusBadge` holds the other shared rule — **MLB's status leads and ESPN's fills only the gap it leaves** (`rosterStatusBadge(...) ?? espnInjuryBadge(...)`), so day-to-day and out, which MLB has no code for, reach the board for anyone on a roster in the connected league. Absent until that one request lands, and absent afterwards for a player with nothing to say, which is most of them.
   - **Sorting** is a click on any header (`aria-sort` + a ▲▼ that is reserved in **both axes** whether or not the column is the sorted one, so clicking a header moves nothing — see the paragraph under this list, which is the same lesson twice over). A column declares which way it *opens* — `ascFirst`, set on the stats whose good end is the small one (ERA, WHIP, BB/9, a batter's K, and every Statcast column on the pitcher board, where a low xwOBA-against is the achievement). **Nulls sort to the bottom in both directions**: a blank is not a good score or a bad one, and floating them would bury the leaders. The board opens on **Ros% descending when a fantasy league is connected** — it is the first column there and the one a fantasy manager reads the league *by*, so the most widely rostered lead — and on PA (batters) / IP (pitchers) descending otherwise, which lands on names worth reading rather than the alphabet. `defaultSortKey` is computed at render rather than stored, for the reason the filter builder's default column is: `hasRosterPct` is false on the first render and anything seeded at mount would keep the answer from before the league arrived. It also requires the column to be **visible**, not merely present — hiding Ros% must not leave the board ordered by it, which is the same trap the fall-back exists for. **IP sorts on an out count, not its own string** — 6.2 is two thirds past six, so `ResearchRow.outs` rides along beside `inningsPitched` purely to order it.
