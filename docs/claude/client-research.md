@@ -651,6 +651,55 @@ the control this app's roster ✕ was rewritten to stop being. The delete **arms
 rather than asks**, the same gesture and the same red (`--strikeout`) that ✕
 already uses.
 
+### Three settings a search did not remember
+
+Reported as the feature not saving all the settings, and driven to find which.
+Three, and they failed in three different ways.
+
+**The `Starting` filter's days, and this is the one that changed the rows.** A
+board at `SP / 30d / Starting Fri 8/28 · Sun 8/30` read **32 of 418 pitchers**;
+the search saved off it, applied from another board, came back with no days and
+**203 of 418**. The narrowest filter on the board, and the search had no field
+for it. It is stored as the string `turn=` already uses (`turnDaysParam`) and
+read back with `toTurnDays`, so one format serves the link and the search — and
+the clamp that already guards an inbound `turn=` cuts a day the window no longer
+holds, so a search kept past its fortnight opens with the filter **off** rather
+than with days nobody can start on. That is the same promise a link makes, and
+for the reason `turnDays` sets out: `Starting Fri 8/28` is a fact about the
+schedule, not a rule about the reader's today.
+
+**The Schedule reading, and this one was worse than missing.**
+`applySearchBoard` read `setScheduleSpan(null)` — so a search saved off a
+schedule board came back as a stat board, measured at **80 schedule cells → 0**.
+It is `b.sched` now, and null is still what a search saved on the stats says.
+
+**The percentile badges, and this one *leaked*.** `showRanks` is neither in the
+URL nor in the search, so it simply survived whatever board the search was
+applied over: driven, a search saved with the badges **off** came back with
+**1,426** of them, because the board it was applied from had them on. The same
+search from two boards gave two different tables, which is the one thing an apply
+exists to make impossible.
+
+Two things about that third field in particular:
+
+- **It is optional, and absent means "no opinion".** A search saved before the
+  field existed has none, and the app's rule is that an unrecognized value falls
+  back rather than emptying the view — so an old search leaves the reader's
+  badges as it finds them rather than turning them off. Every new save writes a
+  definite `true` or `false`.
+- **Applying it never writes the record.** `showRanks` is a saved *preference*,
+  so the apply sets it locally with its touched ref raised — exactly what the
+  include set and the watchlist already do. Driven: applying a ranks-off search
+  from a ranks-on board drew **0** badges and left `statRanks` **true** on the
+  user's own record.
+
+**Driven end to end, twice.** A board at `SP / 30d / Starting Fri 8/28 · Sun
+8/30`, ranks off, **32 of 418** → saved → a batters board with ranks on, **475 of
+475**, 1,250 badges → applied → `pos`, `win`, `inc`, `turn`, `sched`, `cols`,
+ranks and the count all identical to the saved board, **32 of 418** with 0
+badges. And separately, a `sched=14` board saved and re-applied from a stat
+board came back `sched=14`.
+
 **Applying a search replaces the reader's work, where `openSpotlightBoard`
 deliberately does not.** That door leaves a search, a filter and a day set
 alone, because it is a *door* — it opens the board at a place. A saved search
@@ -660,11 +709,17 @@ the record**: the include set and the Watchlist button are set locally with
 their touched refs raised, exactly as that door sets the include set, so opening
 somebody's link cannot quietly become your saved default.
 
-**What a saved search remembers** is eleven fields (`ResearchSearchBoard`), and
-the test each had to pass is *would a reader who saved this be surprised to find
-it different*: position, span, ownership sets, watchlist on or off, clubs or
-players, measured or projected, columns, sort key, sort direction, filters,
-name search. What it deliberately does **not** remember is anything that is not
+**What a saved search remembers** is **fourteen** fields
+(`ResearchSearchBoard`), and the test each had to pass is *would a reader who
+saved this be surprised to find it different*: position, span, ownership sets,
+watchlist on or off, clubs or players, measured or projected, columns, sort key,
+sort direction, filters, name search, **the `Starting` filter's days, the
+Schedule reading, and whether the percentile badges are drawn**.
+
+*(It was **eleven**, and the last three are* "the saved searches feature doesn't
+seem to be saving all the settings" *run to ground — see* Three settings a search
+did not remember *below. The test never changed; what was wrong is that it had
+been applied to the controls somebody thought of rather than to the board.)* What it deliberately does **not** remember is anything that is not
 a reading — the paging, which panels were open, the half-typed condition in the
 filter builder. Those are where the reader had got to, not what they were
 looking at.
@@ -825,7 +880,7 @@ they had. The board does not remember it, the URL has been overwritten, and
 nothing on screen says a press did it.
 
 So the apply **snapshots first**. `snapshotBoard` is the same function `Save`
-reads, so what comes back is exactly the eleven fields a search remembers and
+reads, so what comes back is exactly the fourteen fields a search remembers and
 nothing else claims to be restored; it goes back out through `applySearchBoard`,
 the one place that knows how to spread one of these across nine pieces of state,
 so restoring cannot come to disagree with applying.

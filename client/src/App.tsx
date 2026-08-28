@@ -5431,6 +5431,12 @@ export default function App() {
       sortAsc: board.sortAsc,
       filters: board.filters,
       text: board.search,
+      /* **The three that were missing**, and see `ResearchSearchBoard` for what
+         each of them cost. The days go in as the URL spells them, so one format
+         serves the link and the search and `toTurnDays` reads both. */
+      turn: turnDays ? turnDaysParam(turnDays) : null,
+      sched: scheduleSpan,
+      ranks: showRanks,
     };
   }, [
     researchPos,
@@ -5442,6 +5448,9 @@ export default function App() {
     researchCols,
     projCols,
     researchUi,
+    turnDays,
+    scheduleSpan,
+    showRanks,
   ]);
 
   /**
@@ -5471,12 +5480,34 @@ export default function App() {
       setResearchTeams(b.teams);
       setResearchPos(b.pos);
       setResearchWindow(b.window);
-      setScheduleSpan(null);
+      /* **The schedule reading is restored, where this cleared it.** It read
+         `setScheduleSpan(null)` — which was the whole of why a search saved off
+         a schedule board came back as a stat board, measured at 80 schedule
+         cells → 0. A search remembers the reading now, and null is still what
+         a search that was saved on the stats says. */
+      setScheduleSpan(b.sched);
+      /* **And the days the `Starting` filter is set to**, which was the miss
+         that changed the *rows*: 32 of 418 pitchers saved, 203 of 418 restored.
+         Read with `toTurnDays`, the same parser an inbound `turn=` uses, and
+         left for the clamp effect to cut against the window — a search kept
+         past its fortnight opens with the filter off rather than with days
+         nobody can start on. */
+      setTurnDays(toTurnDays(b.turn));
       setResearchProjected(b.projected);
       researchIncludeTouched.current = true;
       setResearchIncludeState(fromIncludeKeys(b.include));
       researchWatchlistTouched.current = true;
       setResearchWatchlistState(b.watchlist);
+      /* **The badges, set locally and never written to the record.** `showRanks`
+         is a saved preference, so this takes the shape the two above it take —
+         the state set directly with its touched ref raised — and applying
+         somebody's search cannot quietly become your saved default. `undefined`
+         is a search from before the field existed: it has no opinion, so the
+         reader's own setting stands. */
+      if (b.ranks !== undefined) {
+        showRanksTouched.current = true;
+        setShowRanksState(b.ranks);
+      }
       if (b.cols) {
         const write = b.projected ? setProjCols : setResearchCols;
         write((prev) => ({ ...prev, [kind]: b.cols as string[] }));
