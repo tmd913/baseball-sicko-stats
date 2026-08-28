@@ -686,6 +686,36 @@ not overwrite anything, and it is still *the one gesture here that destroys
 something*. It takes the accent rather than `--strikeout`, replacing a reading
 being a different act from destroying a thing.
 
+### A field and its commit press are one control
+
+The footer's `New watchlist` / `Name this board` was an input and an `Add`
+button side by side with 6px between them, each with its own outline and its own
+radius, and it was reported as not reading as one thing — which it was not: a
+bordered box, a gap, then a second bordered box that only ever acts on the first.
+
+It takes the shape `.rl-split` took for the same complaint one bar over. **The
+shell is the outlined object and the two are segments inside it**, one hairline
+between them: the input gives up its border, its ground and its radius, the
+button gives up its border, and the shell lights on `:focus-within` — so the ring
+the input used to draw *inside itself* is drawn round the whole control, which is
+what "the caret is in this field" should look like when the field and its button
+are one box. The commit segment keeps its accent tint, a fill being the only
+thing left inside a shared outline that can say which half is the action.
+
+**Two callers, folded rather than repeated**: the footer's field, and the rename
+drawer's field and `Save`. Those are the same object — a name being typed and the
+press that takes it — and were two arrangements agreeing today, which is the
+condition this stylesheet's fold rule exists for.
+
+Two numbers came off `.rl-split`'s own record. The segments' outer corners are
+`calc(--control-radius-inner - 1px)`, a child rounded to its parent's radius
+leaving a hair of the parent's ground in the corner. And **the shell owns the
+height**: `box-sizing` is `border-box` app-wide, so a 36px child inside a
+1px-bordered box measured a **38px** control, 2px over `--control-h` and over
+every icon button in the same dialog. Measured after: shell **36px**, the gap
+between input and button **0**, and the shell's border going `--border` →
+`--accent` on focus.
+
 ### A name is capped at 60, and the button that shows it is capped at 160px
 
 `MAX_NAME_LEN` is **60** and always was — the server enforces it on all four

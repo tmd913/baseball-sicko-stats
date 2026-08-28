@@ -23754,10 +23754,67 @@ html[data-theme='light'] .league-table thead th {
   padding-top: 9px;
   border-top: 1px solid var(--border);
 }
+/* **A field and the press that commits it, as one control.** It was an input
+   and a button side by side with 6px between them, each with its own outline
+   and its own radius, and the two were reported as not reading as one thing —
+   which they were not: a bordered box, a gap, then a second bordered box that
+   only ever acts on the first.
+
+   So it takes the shape `.rl-split` took for the same complaint one bar over:
+   **the shell is the outlined object and the two are segments inside it**, with
+   one hairline seam between them. The input gives up its border, its ground and
+   its radius; the button gives up its border; and the shell lights on
+   `:focus-within`, so the ring the input used to draw *inside itself* is now
+   drawn round the whole control — which is what "the caret is in this field"
+   should look like when the field and its button are one box.
+
+   The commit button keeps its accent tint, because inside a shared outline a
+   fill is the only thing left that can say which segment is the action — the
+   same division of labor the split capsule's lit half has.
+
+   The segments' outer corners are `calc(--control-radius-inner - 1px)`, the
+   nesting `.rl-split` records: a child rounded to its parent's own radius
+   leaves a hair of the parent's ground in the corner, which on a tinted segment
+   is a notch of untinted `--bg`.
+
+   **Two callers, folded rather than repeated**: the footer's `New watchlist` /
+   `Name this board`, and the rename drawer's field and `Save`. They are the same
+   object — a name being typed and the press that takes it — and were two
+   arrangements agreeing today. */
 .rl-new {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  /* **The shell owns the height**, the trap `.rl-split` records one control
+     over: `box-sizing` is `border-box` app-wide, so a 36px child inside a
+     1px-bordered box is a 38px control — measured, 2px over the app's own
+     `--control-h` and over every icon button in the same dialog. The children
+     take the content box through `align-items: stretch`. */
+  height: var(--control-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+}
+.rl-new:focus-within {
+  border-color: var(--accent);
+}
+.rl-new > .rl-input {
+  border: 0;
+  border-radius: calc(var(--control-radius-inner) - 1px) 0 0
+    calc(var(--control-radius-inner) - 1px);
+  background: none;
+}
+/* The shell draws the focus now — see `:focus-within` above. A ring inside a
+   ring is the fault this weld exists to remove. */
+.rl-new > .rl-input:focus-visible {
+  outline: none;
+}
+.rl-new > .rl-act {
+  border: 0;
+  /* The seam, and it is a division rather than an edge — `--border` while the
+     shell's own ring goes accent, exactly as `.rl-split`'s does. */
+  border-left: 1px solid var(--border);
+  border-radius: 0 calc(var(--control-radius-inner) - 1px)
+    calc(var(--control-radius-inner) - 1px) 0;
 }
 .rl-note {
   margin: 0;

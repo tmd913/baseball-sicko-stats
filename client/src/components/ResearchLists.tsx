@@ -235,7 +235,11 @@ function RenameDrawer({
   };
   return (
     <div className="rl-drawer">
-      <div className="rl-acts">
+      {/* **`.rl-new`, not `.rl-acts`** — folded onto the footer's own field
+          rather than given rules that agree today, this being the same object:
+          a name being typed and the press that takes it. See the stylesheet for
+          the weld. */}
+      <div className="rl-new">
         <input
           ref={ref}
           className="rl-input"
@@ -271,7 +275,8 @@ function RenameDrawer({
   );
 }
 
-/** One row of either panel: a press, its marks, and the drawer behind `⋯`. */
+/** One row of either panel: a press, its icon buttons, and the drawer two of
+ *  them open. */
 function Row({
   thing,
   active,
