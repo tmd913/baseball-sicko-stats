@@ -1489,243 +1489,32 @@ CSS **192,020 → 192,406** and **34,187 → 34,243**.
 
 ---
 
-## The row is the whole matchup period
-
-**`Your days` reached from yesterday to tomorrow and now reaches from one end of
-the matchup to the other** — a card a day, opening on today, swiped or dotted
-between.
-
-Three days is the shape a manager *asks* after days in. It is not the shape of
-the thing they are days **of**. The card at the top of this page scores a
-**period**, the heading under it said `Aug 24 – Aug 26` against a card reading
-`through Aug 27`, and a row that stopped at tomorrow could not answer *what did
-Saturday come to* or *what is Thursday worth* about the very week the card above
-it is the total of. The reader who wanted that crossed to the Roster view and
-moved the date bar by hand — which is the exact errand the first paragraph of
-this document says the page exists to spare them.
-
-Driven on the live league, period 20 (**Aug 24 – Sep 6**, fourteen days, today
-Aug 27): **fourteen cards, fourteen dots, opening on `TODAY` at every width**,
-`Your days · Aug 24 – Sep 6` in the heading, and page-body overflow **0** at 320,
-390, 900, 1200 and 1920.
-
-### The span is the union, not the period
-
-**Widened to hold the three named days rather than replaced by them.** A
-period's edges and the three days a manager asks after do not line up: on the
-last day of a period `end` **is** today and tomorrow belongs to the next one, and
-on the first day `start` is today and yesterday belongs to the last. Taking the
-period alone would have made this page **lose the Tomorrow card twice a
-fortnight** — a card it has always had, drawn off a read it makes on entry
-either way. So `App.tsx::overviewDays` runs
-`min(period.start, yesterday) … max(period.end, tomorrow)`.
-
-**`matchupWindow`, not `matchupSpan`.** The second clamps the end back to today,
-which is right for the two roster views (a range running to the 23rd on the 18th
-is five columns of nothing on every row) and wrong here, where the days ahead are
-half the point.
-
-**`matchupWindow.next` still goes deliberately unread**, which is the same line
-the roster's Schedule view draws about a `Next matchup` pill and the spotlight's
-value rail draws about a period that has ended: a projection of a matchup that
-has not started is a different reading with a different heading.
-
-**A reader with no league keeps exactly the three days there always were**,
-which is not a special case but the same rule read at its other end — a period is
-a thing a league has. Verified by blocking `*matchup-window*` at the network
-layer and reloading: three cards, `YESTERDAY · TODAY · TOMORROW`, **365px apiece
-at 1200 with no dots, `overflow: visible`, `align-items: start` and
-`margin-inline: 0`** — the shipped layout, byte for byte.
-
-**And the length is capped at 45 days.** A backstop rather than a policy: ESPN
-publishes 7 and 14, nothing in this league comes near it, and it is written so
-that a league with some strange period degrades to a long row rather than to a
-page building a card a day for a season.
-
-### The two halves of the period cost completely different things
-
-This is the decision the reads hang off, and it is not tidiness — the two
-upstreams answer differently:
-
-- **The played half is one read for the lot.** `/api/report` over a span carries
-  every game with its own date on it and a `lineups` map keyed by date, so
-  period-start → the day before yesterday comes back in **one request** and the
-  view cuts it per day with the `lineOf` it already had. `ExtraDays.past` is
-  therefore one answer rather than a map of them.
-- **The unplayed half is one read each.** The projection engine hands back a
-  *span total* with no per-day breakdown (`RosterProjection`), so a span cannot
-  be split back apart — the same fact that already made `TOMORROW` and today's
-  own projection two requests rather than one.
-
-**Neither is on the page's settle gate**, and both are read **as the reader
-swipes to them** (`App.tsx::needOverviewDay`). Firing a fortnight of projections
-on entry would have put twelve reads behind a page whose whole discipline is that
-it arrives at once; a reader who never swipes past tomorrow pays for none of
-them, which is the same economy that keeps this page off the boot gate.
-
-**`READ_AHEAD` is 1** — the card in view and its two neighbors. Below 900 that is
-the card and its two 22px peeks; above it, with a span row, it is exactly the
-three cards on screen. So a card a reader can look at has always been asked for,
-and a swipe lands on figures rather than on a ball.
-
-### A flick was asking for every day it crossed, and `READ_SETTLE` is the fix
-
-**Measured, and it is why the constant exists.** Pressing the last dot of the
-fourteen-day row scrolls smoothly across the whole period; `active` genuinely
-takes every value on the way, the read-ahead effect fired at each one, and the
-press cost **nine projections to look at one day**. A finger flick does the same.
-The assumption that React's batching collapsed them was simply wrong — a smooth
-scroll commits every index it passes through.
-
-**200ms of no further movement is the gesture being over.** Re-measured after,
-same press, requests counted at the `fetch` layer: **two** —
-`start=2026-09-05` and `start=2026-09-06`, the card it landed on and its one
-neighbor (the other neighbor being off the end of the row).
-
-### `is-span` — a row longer than three days stays a carousel at every width
-
-**The desktop layout is what a carousel that fits looks like**, which is the
-sentence the original three-day row is built on; a row that does **not** fit has
-to go on being one. So the view puts `is-span` on `.ov-days` at four cards or
-more, and inside the 900px block that class keeps the snap, the stretch, the
-bleed and the scroll-padding, and gives each card **`(100% − 24px) / 3`** — a
-third of the row, arithmetic rather than `flex: 1 1 0`, because three cards have
-to be the width they would have been if there were only three or the row would
-fit as many as it could and the *card* would stop being the unit the snap is
-about. The `24px` is the row's own two gaps, and it is the one number written
-twice here: a `calc` cannot read `gap` back off the box.
-
-**At exactly three the class is absent and every rule above it stands
-untouched**, so the layout this page shipped with is unchanged by construction
-rather than by inspection. Driven at five widths on the live league's fourteen
-days:
-
-| window | scrollport | card | scrollable | dots | row runs |
-| --- | --- | --- | --- | --- | --- |
-| 320 | 320 | 276 × 14 | yes | 14 | 0 → 320 |
-| 390 | 390 | 346 × 14 | yes | 14 | 0 → 390 |
-| 900 | 900 | 277 × 14 | yes | 14 | 0 → 900 |
-| 1200 | 1164 | 365 × 14 | yes | 14 | 18 → 1182 |
-| 1920 | 1164 | 365 × 14 | yes | 14 | 378 → 1542 |
-
-Every card is **the width it was when there were three** — 276 / 346 / 277 / 365
-/ 365 are the five figures the three-day table in *Measured* above records — and
-no block's category line scrolls inside itself at any of them. The centering is
-exact: at 1200 the middle card runs 417 → 782 against a scrollport center of
-**600**.
-
-*(A screenshot taken with `captureBeyondViewport` shows the row a shade off
-center. That is the capture resizing the viewport and the browser re-snapping, not
-the page: measured immediately before the capture the card is centered to half a
-pixel, and immediately after it is not.)*
-
-**A dot a day, and the wrap is a backstop rather than a design.** Fourteen dots
-is 14 × 8px plus thirteen 6px gaps = **190px**, against the 276 a 320px window
-leaves inside the app's gutters — measured 276 wide and **16px high, one line**,
-at 320 and at every width above it. `flex-wrap: wrap` is there so a league whose
-period ran past twenty days takes a second line instead of bursting the page
-sideways.
-
-### Three strings assumed there were three days, and each was wrong in a different way
-
-- **The wait named the wrong thing.** `Reading your {lead}` was odd at
-  `Reading your today` and is broken at `Reading your in 6 days`: the lead is a
-  *qualifier* over a date and is only ever read as one. It names the date now —
-  `Reading Aug 30` — which is the card's own subject and is a phrase at any
-  distance from today.
-- **The projected empty state named the day inside the sentence.** `Nobody in
-  tomorrow’s lineup has a game to play` becomes `Nobody in in 6 days’s lineup`.
-  The day is the head's, two lines above and at weight, so the sentence drops it.
-- **`See the day` carried a preset that was a lie.** `openOverviewDay` read
-  `date < today ? 'Yesterday' : 'Tomorrow'`, which was exactly right for three
-  cards. On a period it would have opened the card four days back as
-  `YESTERDAY · Sun, Aug 24` with the bar three lines up calling Aug 26
-  yesterday — and **a preset is a rule, not a range**, so a link copied off that
-  page would have re-derived on the recipient's own yesterday, a different day in
-  a different week. Only the three named days get a label now. Driven: the Aug 24
-  card opens `?start=2026-08-24&end=2026-08-24&view=summary` with the face
-  reading **`Custom range · Mon, Aug 24`**, and Sep 6 opens
-  `?start=2026-09-06&end=2026-09-06&view=summary&rproj=1` with
-  **`Projected · Sun, Sep 6`**. The note above this one — *it read `preset: null`
-  at first and landed on `Custom range` for the day the bar was calling `Today`*
-  — is not reversed by this and is the same rule from the other side.
-
-### A card nobody has asked for yet draws a wait, not an empty state
-
-`Nothing to report on — no roster is being read.` is a sentence about the
-reader's account. On a lazily-read row it was appearing on cards whose **request
-had not gone out**, which is a different fact and one the reader can do nothing
-with.
-
-So an un-asked day is `loading`. The two halves need different tests, and the
-difference is worth the field:
-
-- **The forward half falls out of the map.** `futureLoading[date]` is
-  `undefined` before the read and `false` after it **either way**, so
-  `?? true` is the whole rule and a failed projection lands on the empty state
-  the card already had.
-- **The played half needs `pastSettled`**, because `past` alone says both *nobody
-  has asked* and *asked and failed*, and a spinner for the second would turn a
-  dead upstream into a card that spins for ever. It is set in the read's
-  `finally`, so a failure settles exactly like a success — the rule this page
-  already keeps for `scoreboardError`.
-
-Verified on entry at 1200: the three named cards carry figures, and **eleven
-carry the ball** until the row reaches them.
-
-### The gate takes a fifth term
-
-`overviewSettled` waits on `matchupWindowSettled` now. The carousel's length is
-that window's, so a page drawn before it lands is a three-card row that grows to
-fourteen a moment later with today sliding from the middle of three to wherever
-it falls in a fortnight — and the row's `scrollLeft` would stay where it was and
-quietly be showing a different day. It is one **103-byte** read made once per
-session that answers *no league* as readily as it answers a period, so the term
-costs nothing in either direction. (`DayCarousel`'s centering effect also keys on
-`opensOn` for the same reason, which makes it a fact rather than a hope.)
-
-Re-measured, the first load at 1200×900 with every distinct layout recorded:
-
-| | `.overview-view` height | document | day cards | headings | matchup | carousels |
-| --- | --- | --- | --- | --- | --- | --- |
-| | — | 900 | 0 | 0 | 0 | 0 |
-| | 0 | 900 | 0 | 0 | 0 | 0 |
-| | **1845** | **2041** | 28 | 4 | 1 | 2 |
-
-**Three states and one**, exactly as before. And crossing to `Research` and back
-draws **one** state at the full 1845px with no wait at any point, which is
-`ovDrawn` still holding.
-
----
-
 ## `Rank all N` opens the whole day over the page
 
 **Three rows is the card's own height and always was.** The note on `TOP_N` ends
 *a fourth is one press away — the whole roster's day is the Roster view with the
-date set to that day*, and that is true and it is the wrong press for the
+date set to that day*, and that is true and it is the wrong press for this
 question. The Roster view answers **what did each of my men do**: a wide table of
-stat columns in roster order, on another view, with the date bar moved. **Who was
-fourth** is this list with more of it — the same rows, the same arithmetic, the
+stat columns in roster order, on another view, with the date bar moved. *Who was
+fourth* is this list with more of it — the same rows, the same arithmetic, the
 same order — and asking it should not cost the reader the page they are on.
 
 So every card with anything on it offers `Rank all 14`, and it opens the whole
-day ranked in a popup: the day's own category line, then every man in the lineup
-the day ranks, numbered, with the two sentences the card has no room for.
+day ranked in a popup.
 
 **It costs no read.** `performers` is already the whole day — the card was
-slicing it — so the dialog is free, and the filter and the sort are `rankDay` for
-both, which is what makes the dialog's first three rows the card's three rows by
-construction. That function was extracted for exactly this: two copies of *who is
-on the board* are two copies that will one day disagree.
+slicing it — so the dialog is free, and the filter and the sort are one
+extracted function (`rankDay`), which is what makes the dialog's first three
+rows the card's three rows *by construction*. That extraction is the whole of
+the change to `DayBlock`: two copies of *who is on the board* are two copies
+that will one day disagree.
 
-### A popup rather than a taller card, and not a URL param
-
-**A popup**, which is the app's answer wherever a detail belongs to one thing on
-screen. The alternative was a card that grows, and a 25-row block inside a
-scroll-snap row would put a vertical scroller inside a horizontal one on a page
-that scrolls vertically as well — three scrolls under one finger, which is
-precisely the geometry `touch-action` exists to arbitrate and **cannot**, the two
-inner ones differing in neither place nor axis.
+**A popup rather than a taller card**, which is the app's answer wherever a
+detail belongs to one thing on screen. The alternative was a card that grows,
+and a 25-row block inside a scroll-snap row would put a vertical scroller inside
+a horizontal one on a page that scrolls vertically as well — three scrolls under
+one finger, which is precisely the geometry `touch-action` exists to arbitrate
+and **cannot**, the two inner ones differing in neither place nor axis.
 
 **And it is deliberately not in the URL.** *Which data a view shows belongs in
 the link* is about what the page **is** — a view, a span, a lens, a subject
@@ -1737,11 +1526,12 @@ two things*, and a param for a box only ever reachable by a press on a card it
 can be read from would have been the third `proj=`-shaped mistake this app has
 recorded.
 
-**The open card is held as a date, not as the card.** `TODAY`'s twenty-second
-tick rewrites its performers, and a dialog holding the object it was opened with
-would go on printing the afternoon it opened at while the card underneath moved
-on. Two characters of state (`{ date, opp }`) and a lookup, which is also what
-lets **one** dialog serve both carousels rather than two that would have to agree.
+**The open list is held as *which* day of *which* row**, never as the rows
+themselves: `TODAY`'s twenty-second tick rewrites its performers, and a dialog
+holding the list it was opened with would go on printing the afternoon it opened
+at while the card underneath moved on. Two characters of state (`{ day, opp }`)
+also let **one** dialog serve both carousels rather than two that would have to
+agree.
 
 ### The foot is two doors and the row is still one control wide
 
@@ -1749,8 +1539,9 @@ lets **one** dialog serve both carousels rather than two that would have to agre
 door that draws it at the width of the card **exactly as it did** — the argument
 under `.ov-day-more` about a bordered pill at card width is untouched — and the
 second door divides the row rather than stacking under it and growing every card
-in the carousel by 41px. Measured: **370px card at 390 and at 1200, unchanged**,
-the two pills **156px** each at 390 and **121px** each at 320, neither clipped.
+in the carousel by 41px. Measured: the card **370px at 390 and 1200,
+unchanged**, the two pills **156px** each at 390 and **121px** each at 320,
+neither clipped.
 
 They are in this order deliberately: `Rank all` is more of what the reader is
 already looking at and stays on the page, so it sits beside the list it extends;
@@ -1763,38 +1554,386 @@ every empty state — the same test the list itself takes.
 **460px, where the app's dialog default is `min(720px, 100%)`.** At 720 a rank, a
 26px face, a name and a signed number sit at the two ends of a line with four
 inches of nothing between them, which reads as a table missing its columns rather
-than as a list. 460 is the card's own widest measured draw (365 at 1200) plus
-room for the batting lines that wrap in it.
+than as a list.
 
-**The category line loses its rule and keeps its air.** `.lg-cats` carries a
-`border-top` because on a card it separates the day's totals from the head above
-them; here the head is the dialog's own and already ends in one, so it was two
-1px rules 9px apart — a box the heading sits in rather than a division.
+**The day's category totals are not in it, and they were.** The box opened with
+the card's own `.lg-cats` line at the head, on the argument that a dialog opened
+*out of* a card should read as more of that card rather than as a second opinion
+about the day. That argument is about *continuity* and it was answering a
+question nobody asked this box: the totals are on the card the press came from,
+four lines up and still on the page behind it, and they are the same twenty
+figures whichever day is open. What the box is for is the **list** — a ten-column
+block above it put the first rank **150px down** a 460px box and, once the list
+was scrolled, left a row of category labels sliced through the middle under the
+fixed head. So the list starts at the top.
 
-**The totals are over everybody and the list is over the men who played**, which
-is the split `rankDay` records and the reason the two are computed apart: a man
-whose club was idle belongs in the day's figures and not in its ranking.
+**The head is the name over the days, with the badge beside it.** It was one line
+— `Baldy's Bozos — Aug 28 – Sep 6 ↗ PROJECTED` — and those are not three facts of
+equal weight held apart by a dash: the name is *whose list this is*, the dates are
+*what it is over*, and that is the lead-over-date relationship the day cards' own
+heads already draw and draw the same way. The badge is `LeagueView`'s own
+`TeamLogo` (which draws the app's baseball where a logo is missing or the URL is
+dead, the ordinary case on a real league) and it is what makes the head legible at
+a glance: a fantasy team name is chosen by its manager and half of them are jokes,
+where the picture is what the reader already recognises off the scoreboard card at
+the top of the page. **A dialog with no name has no second line and no badge** —
+which is what your own day card passes, it being about you by construction.
+
+**The label row sits in the body's own padding.** Measured off the rendered
+dialog, `22 RANKED` / `VALUE` had **26px** above it and **18** below, against a
+13px line — a label with more air round it than height, three times over. Neither
+number was about this box: `.ov-perfs-head-row`'s 14px top margin exists because
+on a **card** it separates the list from the category totals above it, and there
+are no totals in here. The label takes the body's 12px above and **4px** below —
+the gap between two rows of the list it heads, which is what a caption on a list
+should be nearer to than to the head of the dialog. After: **26 → 12** above and
+**18 → 14** below. The box itself does not move, being already against
+`.app-dialog-box`'s `min(80dvh, 720px)` cap at 22 rows, so what the fourteen
+pixels buy is a row and a half of list.
 
 **The two sentences under the list are the part of the list that is missing**,
 counted apart because they are different facts about a man and the app's rule is
 that an empty state names its own cause: `14 more in the lineup had no game.` and
 `1 more is unranked — your league scores nothing this table can compute on his
-side of the ball.`
+side of the ball.` A span says `did not play`, a day names the cause, and a
+projected day says `have no game to play`.
 
-Driven on the live league at 390, `TODAY`'s foot pressed: title **`Today,
-Aug 27`**, the category line, `6 RANKED` over `VALUE`, six rows from
-`1 Sale 9.0 IP, 5 H, 0 R, 0 ER, 11 K, 0 BB, W +2.8` to `6 Ohtani 0-4, .000 OPS
-−0.2`, and `14 more in the lineup had no game.` The background is `inert` and one
-press of Escape closes it and leaves `?preset=Today&view=overview` with the
-Overview pill lit. A press on the backdrop closes it on the click.
+### The value wears a chip, and the card deliberately does not
 
-From the **opponent's** `TOMORROW`: title
-**`Baldy's Bozos — Tomorrow, Aug 28 ↗ PROJECTED`**, seventeen rows, every value
-and all ten category figures muted (`is-proj`) — an estimate never wearing the
-same clothes as a measurement, in the dialog as on the card. From a card ten days
-out: **`In 10 days, Sep 6 ↗ PROJECTED`**, `16 ranked`.
+Every value in the dialog carries `columnRanks.tsx::rankFill`'s own `--rank-bg`
+— red (`--strikeout`) at the top of the population, blue (`--walk`) at the
+bottom, the plain `--panel-2` through the middle. One function, three surfaces:
+the League rankings' badge and the research board's team reading draw the same
+scale, and the tokens resolve per surface so the sheet owns the color and the
+function owns the strength.
 
-**The bundle**: JS **773,390 → 778,270** raw and **227,600 → 229,050** gzipped;
-CSS **204,090 → 204,640** and **36,070 → 36,180** — 1.45KB of JS and 0.11KB of
-CSS over the wire, for a period-long carousel with two read shapes behind it and
-a dialog.
+**Ranked across both rosters, not this one.** A list of your own men ranked
+against your own men says only what the order already says; against the forty-odd
+on the two rosters the chip answers what the block exists for — whether your ninth
+best week beats his third. `pool` is that population, and the rank is the
+**competition** convention (`1 + strictly better`, ties sharing the top) that
+`columnRanks.tsx::rankOf` and `espn.ts::rankAll` already use.
+
+**And the day cards stay monochrome**, which is the app's rule rather than an
+inconsistency. *Color is spent on state, not on emphasis*: on a card of **three**
+rows the order is the whole reading and a scale down three of them is the ranking
+said twice. In a list of twenty-two ranked against forty-five the scale genuinely
+*is* a reading the order cannot give — which is exactly the ground the League
+rankings' badge is argued on.
+
+**The chipped figure is 12px where a card's is 13**, which is the pill's own
+doing: a chip is a box round the number, so at the card's size it stands taller
+than the two-line identity beside it and the row's rhythm follows the box instead
+of the man. A point down and the pill's outside edge sits where the bare number's
+did — the same trade `.trend-win-val` makes inside its own box.
+
+Driven at 1200 on the live league, the reader's own side: 22 rows, **22 chipped**,
+`+2.8` at `srgb(0.487 0.306 0.272)` down through `+0.0` to `−0.6` at
+`srgb(0.293 0.404 0.570)`, and the values still right-aligned to the `VALUE`
+label to the pixel.
+
+---
+
+## Matchup leaders
+
+**The block under `Their days`: who has actually won the week, both sides, as two
+cards.**
+
+It is the question the two blocks above it leave open. The card at the top of the
+page says you are down five categories to four; the day cards say how Tuesday
+went. Neither says **which men** did it over the days the scoreboard is scoring —
+which is the thing a manager asks next, about their own roster and about the one
+they are playing.
+
+Driven on the live league (period 20, Aug 24 – Sep 6, five days played):
+`Brian&Tom's Excellent Adventure` **🥵 5 😐 10 🥶 7**, `Sale +2.8`, `Turang +1.7`,
+`Stewart +1.6`, `Rank all 22`; against `Baldy's Bozos` **🥵 9 😐 7 🥶 5**,
+`Alonso +4.3`, `Langford +2.9`, `Rodríguez +2.9`, `Rank all 21`.
+
+### It is one read apiece, and it is on the settle gate
+
+`/api/report` over the matchup span, once for each manager — a **span** read
+rather than a day read, and one apiece rather than one a day, because that route
+answers a range with every game's own date on it and a `lineups` map keyed by
+date. So the view can score each day against the lineup that was actually set for
+it and add the days up.
+
+Measured against the running server over the five played days: **395ms cold and
+11–24ms warm**, 888KB and 874KB uncompressed. It is the heaviest read this page
+makes and it is made twice — and both are on `overviewSettled`, with the
+opponent's four, because the block is a heading and a card and *a heading that
+appears a beat after the page it belongs to* is precisely the reflow that gate
+exists to prevent. `ovSpanFired` goes up even where there is no span, so a dead
+matchup-window read settles rather than spinning.
+
+**Its own effect**, because its deps are not the opponent's four: those wait on a
+board with a two-sided matchup, these wait on that *and* on `matchupSpan`, which
+comes off `/api/espn/matchup-window`. Folded together, a window landing second
+would have re-fired four day reads for nothing.
+
+**`matchupSpan`** — the period clamped to today, which is what *so far* means and
+is the same span the roster's `Matchup` preset takes, so the block and that table
+cannot come to disagree about which days the week has had.
+
+### The value is the sum of his days, and it is one call
+
+`spanPerformer` cuts by the lineup **that was set for each day**, one day at a
+time, which is the whole reason it is a loop: ESPN banks a man only on the periods
+he held a starting slot for, and a week's lineup is seven different lineups. A day
+he did not play adds nothing and is not in the line, so the row under his name is
+*what he did while started*.
+
+**The value, though, is one `dayValue` on the summed line — and it is the sum of
+his days by arithmetic rather than by luck.** Every contribution is linear in the
+counts: a counting category is his count, and a rate category is *numerator above
+baseline* (`H − lgAVG × AB`, `lgERA × IP / 9 − ER`), which sums over days to the
+same expression on the totals. Written as a per-day loop first and checked against
+the shortcut; the two agreed to the last place, which is what says the shortcut is
+one. So `+5.0` here means the same thing about a player-day as `+1.0` does on a
+day card.
+
+### Each side is a card, and there is no card around them
+
+They were two columns of **one** box with a rule between them, which is the mark a
+day card's `BATTERS` and `PITCHERS` blocks take — the right mark for *two parts of
+one thing*. These are not two parts of one thing: they are two rosters belonging
+to two managers, and the reading is the comparison. A rule says *and*; two cards
+say *against*.
+
+*(Both were then put inside a parent card, and the parent came out again. It
+bought nothing the section heading was not already buying — a heading is what says
+where a block begins on this page — and it cost a second border and a second
+ground around two boxes that are the same two boxes without it. It is also what
+had forced the sides onto `--panel-2`: a card on a card needs a different ground,
+and two cards on the page do not.)*
+
+So a side is `.ov-day`'s own surface, and not folded onto that selector: half of
+what `.ov-day` is is `flex: 0 0 100%` and `scroll-snap-align`, which belong to a
+carousel item and not to this.
+
+**Two across from 720, and 720 is measured from the other direction.** It was
+declared at 620 and the measurement moved it. The number that decides is not where
+two columns *fit*, it is where a column is wide enough to hold a performer row —
+and the app's own floor for that is **276px**, a day card at a 320px window, the
+narrowest that row is drawn anywhere else in the app.
+
+| window | card | content | the six lines |
+| --- | --- | --- | --- |
+| 620 | 282 | **256** | 26px apiece — every one wrapped |
+| 719 (one column) | 675 | 649 | 13px apiece |
+| 720 | 332 | **306** | 13, 13, 13, 26, 26, 13 |
+| 1200 | 554 | 528 | 13px apiece |
+
+Two columns *narrower than the one they replaced* is the layout getting worse at a
+breakpoint, which is the fault; a wrap at 306 is not — `.ov-perf-line` wraps
+rather than clipping and two lines is its documented worst case at every width.
+The two doors are the same width at every one of them (302/302 at 390, 306/306 at
+720, 528/528 at 1200), and page-body overflow is 0.
+
+*(An earlier draft put the trough between the columns in `padding` rather than
+`gap`, so a divider drawn on the second side could sit near the middle of it
+without making that side's content box narrower than the first's — measured,
+`Rank all` came out **536px against 513px** at 1200, two identical controls
+visibly different sizes. Two cards need no divider, so the trough is the grid's
+own `gap` and the tracks are equal by construction.)*
+
+### The head is a name, then a row that is a reading and a label
+
+**The team name has the line to itself.** It shared the `Value` label's row, and
+it is not a column heading: it is what the whole side *is*, and half this league's
+names are long enough (`Brian&Tom's Excellent Adventure`) to crowd anything beside
+them in a 300px column.
+
+**The row under it holds the heat counts on the left and `VALUE` on the right** —
+which is what the row already was, *the line that says what the rows under it
+are*, now holding both halves of that. It costs the card a line rather than adding
+one. The counts are **14px against the label's 11**, deliberately unequal: `VALUE`
+names a column and is read once, and the counts *are* a reading.
+
+### Hot, level and cold — two measured pairs of cuts
+
+**The reading is value *per appearance*, not the total.** A total says who has
+given the most, which is what the three rows already say; *hot* is a question
+about form, and a man who has played six days and one who has played two are not
+comparable until the days are divided out. `line.games` is the divisor on both
+readings — days started and played on the summary side, days the engine would
+start him on the projected one.
+
+**Played: `+0.50` and `0`.** Measured over both rosters (43 men who had played,
+5 days): min **−0.52**, p25 **−0.04**, median **+0.14**, p75 **+0.61**, max
+**+2.80**, mean **+0.35**. Strongly right-skewed, and it floors near −0.5 — a fact
+about the arithmetic rather than about the week, every counting category
+contributing zero or more, so the only way down is a rate below the league's and
+the only way up has no ceiling.
+
+| cuts | hot / level / cold |
+| --- | --- |
+| ±0.50 (symmetric) | 14 / 28 / **1** |
+| **+0.50 / 0** | **14 / 17 / 12** |
+
+A category that fires once in forty-three is not a category. At `+0.5 / 0` the two
+sides read 5/10/7 against 9/7/5, which is the shape of a matchup one manager is
+winning.
+
+**Projected: `+0.70` and `+0.35`, and both are positive**, because a projection is
+an *expectation* and there is no such thing as a negative one. Measured over the
+same two rosters across the ten days the period had left (45 men with an
+appearance projected): min **+0.135**, p25 **+0.326**, median **+0.451**, p75
+**+0.706**, max **+1.409**, mean **+0.528**. The played cuts applied here give
+**cold = 0 on both sides** — the very fault the asymmetry above was chosen to
+avoid, arrived at from the other end. At `0.70 / 0.35` it is **12 / 19 / 14**, the
+two cuts sitting at that distribution's own quartiles.
+
+So *hot* means the same **kind** of thing on both readings — near the top of what
+this population does per appearance — and deliberately not the same number, the
+two populations having different floors. The switch says which reading is in force
+and the heading's note says over which days.
+
+**The three add up to the door's own count**, both being the men the block ranks,
+which is what lets the row read as a breakdown rather than as three unrelated
+figures. **A count of nought is drawn and dimmed rather than dropped**, for the
+same reason: a row that lost a cell would be read as a different set of counts.
+
+**The glyphs are emoji, and this is the only place in the app they appear.** A hot
+face (🥵), a level one (😐) and a cold one (🥶) say it in a way three words at 11px
+in a 300px column do not, and this row has to survive being glanced at rather than
+read. Each cell carries its own `title` and the row an `aria-label`, so nothing is
+said by the picture alone.
+
+**Each count is a badge of its own**, where the three were three pairs a 12px gap
+apart on a bare line: two glyphs and two digits with nothing round them read as
+one run the eye has to be told where to cut — the same fault the trending card's
+three windows record, and the same fix one step simpler (a box each rather than
+rules between them, three being few enough that a box is cheaper than a table).
+`--panel-2` inside a `--border`, fully round — the shape this app reserves for a
+thing you read, and the same two tokens the ranked dialog's chip resolves to at
+the middle of its scale, so a badge on this page means one thing whichever block
+it is on. **Deliberately not tinted**: the emoji is already carrying hot and cold,
+and painting the box behind it would be the same statement made twice.
+
+**The count is 13px against the glyph's 16 and the `VALUE` label's 11.** It was
+14, where the number and the mark carried equal weight and the badge read as a
+*pair* — what it is is a mark with a number on it.
+
+**And a man with nothing projected is not on the projected list.** `rankDay`
+deliberately skips the played-men filter for a projected block — a projected *day*
+is a fraction of one game — but over a whole span *no appearances at all* is an
+honest absence (`ProjectedPlayerLine.chances` of nought: a club with no game left,
+a starter whose turn does not fall in the span, a man the plan benches
+throughout). Left in, five of them sat at the foot of the list at `+0.0` and,
+worse, counted as **cold** — a reading about form made about somebody who is not
+going to play.
+
+### The switch: `Summary` and `Projected`
+
+Two readings of one question rather than two blocks: *who is winning me this week*
+and *who is going to*. A manager reads the second against the first — a cold
+roster with a good week ahead is a different Wednesday from a cold roster with
+three off-days.
+
+- **`.view-switch` outright**, the app's own switch and the same one the
+  spotlight's two readings take.
+- **In the heading, beside the note rather than at the far end of the line.** It
+  was pushed right with `margin-inline-start: auto`, which is what this stylesheet
+  does with a control that has a *row* to itself; this one has a heading beside
+  it, and with two headings and two carousels above, a control at the opposite end
+  of the line makes the eye travel the width of the page to find out what it
+  switches. Beside the note the three read as one phrase: what the block is, over
+  which days, on which reading. Measured: the switch at **x = 237** inside a
+  1120px heading at 720 and 1200, and on a second line of its own at 320 and 390
+  (heading 57px against 36), where the row wraps.
+- **The note changes with it** — `Aug 24 – Aug 28` against `through Sep 6` —
+  because it is a different set of days and `+5.0` means nothing until you know
+  how many.
+- **The cards go dashed**, which is the app's standing rule that an estimate never
+  wears the same clothes as a measurement.
+- **Offered only where there is something behind both sides of it**: past the end
+  of a period there are no days left, and a control with one live option marks
+  nothing.
+
+**`lead=proj` in the URL**, the summary writing nothing — a lens changes what the
+numbers are, so a link that carries it describes a different card. A **fourth**
+name rather than a reuse of `proj`, `rproj` or `rankproj`, none of which means
+this. **And it goes off with the page**, beside those three: a projected reading is
+a press about the page it was made on, and a page opens measured unless a link
+says otherwise. Driven — press `Projected`, cross to `Roster`, come back — the URL
+returns to `?view=overview` with `Summary` lit.
+
+**Its reads are made on the first press and kept**, which is the League page's own
+rule for a tab and this page's own rule for itself: one `/api/projection/roster`
+apiece over **`valueSpan`** — deliberately the spotlight's own span, so the two
+forward-looking blocks on this page look at the same days. A reader who never
+presses the switch pays nothing; one who crosses back and forth does not pay
+twice. Keyed rather than latched, so the day rolling over or the week stepping to
+another opponent re-reads and a re-entry does not, and the answers stay on screen
+until the new ones land.
+
+**The projected mark is on the two cards, not on the box holding them** — which
+this shipped wrong for one build: the container kept the `is-proj` class after its
+own border was taken away, and `border-style` with no width resolves to the
+initial `medium`, so the projected reading drew a **3px** dashed rectangle round a
+group of two solid cards.
+
+### A projected figure is drawn at full strength, and it used to be muted
+
+The rule that stood was: *a projected figure is muted where a measured one is not
+— a second mark inside a block the dashed border has already marked, and worth
+it, the category line being the one row a reader's eye crosses between the three
+blocks*. The reasoning about the **mark** is still right, and it is why the dashed
+border and the `PROJECTED` tag stay.
+
+What it did not weigh is what the second mark costs the figure it is made on.
+`--muted` on a 15px tabular number is a number you have to look at twice, and it
+was reported off the shipped page in exactly those words — **hard to read**. The
+worst case was the one the ranked dialog then made: a muted value sitting on a
+`--rank-bg` chip is two washes over one number.
+
+The app's rule is that an estimate never wears the same clothes as a measurement,
+and it does not: the whole block is dashed and the head says `PROJECTED`. Neither
+of those is paid for in legibility, which is what makes them the right marks and
+this the wrong one. **A mark must not be paid for in the readability of the thing
+it marks** — the same trade this file already makes when it says a broken border
+rather than a hue is what says *ours*. `.ov-cat-val.is-proj` and
+`.ov-perf-val.is-proj` are `--text` now.
+
+### Absent rather than empty
+
+On every way it can have no subject — no league, no matchup, a bye, no matchup
+window, or a read that failed — which is the same three-way absence `Their days`
+above it already takes plus the two reads' own. A heading over a message saying
+there is nothing to compare is chrome for a week that has not got one.
+
+---
+
+## The row that reached the whole matchup, and why it does not any more
+
+**`Your days` was extended to a card a day across the whole matchup period, and it
+was pulled back to the three.** It is recorded because the machinery was real and
+measured, and because the reason it came out is a fact about the page rather than
+about the code.
+
+It worked: fourteen cards on the live period, fourteen dots (190px of the 276 a
+320px window leaves), the three named days wherever they fell, opening on today at
+every width, an `is-span` class that kept the row a carousel above 900 with each
+card at a third of the row so the desktop layout at *three* cards was unchanged by
+construction. The reads were two shapes — one `/api/report` for the whole played
+half (a span answers with each game's own date and a lineup per date) and one
+projection **each** for the unplayed one (the engine hands back a span total with
+no per-day breakdown) — both lazy, off the settle gate, with a 200ms `READ_SETTLE`
+after a flick was measured asking for **nine projections to look at one day**.
+
+**What it got wrong was the offer, not the drawing.** Fourteen cards is a
+fortnight to swipe through to reach the two a manager opens this page for, eleven
+of them estimates, and the days *behind* today are a fact the `Matchup leaders`
+block now states in two cards without any swiping at all. The forward half was
+worse: a projection of a day nine days out is an estimate of an estimate, and this
+app already has two surfaces for the days ahead that say so in their headings.
+
+So the row is yesterday, today and tomorrow again — and the two things the
+experiment left behind are the ones worth keeping: the `Rank all N` door on every
+card, and a block that answers *what has this week come to* without a carousel at
+all.
+
+**The bundle**, against the commit this replaced (which carried the period-long
+row): JS **778,270 → 782,310** raw and **229,050 → 229,980** gzipped; CSS
+**204,640 → 205,750** and **36,180 → 36,360**.
