@@ -26,6 +26,7 @@ import type { Arsenal, BattedBallMix, SeasonArsenals } from './pitcherArsenal.js
 import { getLeaguePitchAverage } from './pitchLeague.js';
 import { toSavantName } from './names.js';
 import type {
+  ClubStatus,
   FacedBatter,
   PlayerStatus,
   RosterStatus,
@@ -1853,8 +1854,15 @@ function gameFacts(
     gameState: status.state,
     opponent,
     isHome,
-    teamScore: isHome ? status.homeScore : status.awayScore,
-    opponentScore: isHome ? status.awayScore : status.homeScore,
+    // **Null before first pitch**, because MLB reports a scheduled game as
+    // `0–0` and the cell drew it: `@ DET 0–0 6:40 PM` on every away row of an
+    // evening slate, a line score for a game nobody has played beside the time
+    // it starts. `null` is what `OpponentCell` already reads as "no score
+    // yet" — the same test it applies to a game with no boxscore at all — so
+    // this needs nothing on the client. The summary table never had it, drawing
+    // its own cell off a report rather than off this map, so the two now agree.
+    teamScore: scheduled ? null : isHome ? status.homeScore : status.awayScore,
+    opponentScore: scheduled ? null : isHome ? status.awayScore : status.homeScore,
     currentInning: live ? status.currentInning : null,
     inningState: live ? status.inningState : null,
     startTime: scheduled ? status.startTime : null,
@@ -2045,4 +2053,65 @@ export async function getPlayerStatuses(
     if (!saysSomething(status)) statuses.delete(id);
   }
   return statuses;
+}
+
+/**
+ * **What each club's day is**, by MLB team id — the game facts alone, with
+ * nothing in them about a person.
+ *
+ * `getPlayerStatuses` above answers "where does today's game have *him*", and
+ * it can only answer for a man who is **on a boxscore roster**: it walks
+ * `homePlayerIds` / `awayPlayerIds` and the two announced probables, so a
+ * player who is optioned, on the IL, or in the minors entirely is not in the
+ * map with an opponent, and the research board's `Opp` column drew him a dash.
+ *
+ * That put two surfaces at odds about one man. The summary table draws its
+ * opponent cell off a **report**, and a report ties a player to his club's
+ * games "even when they're off the active roster (suspended, on the IL,
+ * optioned)" — the very thing `RosterInfo.teamId` exists for. Measured on the
+ * same afternoon: Aaron Judge (60-day IL) read `vs BOS 7:15 PM · vs LHP
+ * Sandoval` on the Roster view and `—` on the board. Reported against Walker
+ * Jenkins, who is the same fault one step further out — a man on no 40-man at
+ * all, so not even in the status map.
+ *
+ * So the board falls back to **his club's** game, which is what the roster view
+ * has always shown him, and this is that fact in the shape the board can use.
+ * Thirty entries, keyed by team id because that is what a board row carries;
+ * off `getDay`, which is already parsed and cached for the map above, so it
+ * costs one pass over at most fifteen games and **no upstream request**.
+ *
+ * `currentOf` picks the club's game exactly as the player map picks his, so a
+ * doubleheader reads the same way on both.
+ */
+export async function getClubStatuses(
+  date: string = baseballToday(),
+): Promise<Map<number, ClubStatus>> {
+  const day = await getDay(date);
+  const byClub = new Map<number, { game: DayGame; isHome: boolean }[]>();
+  const note = (teamId: number | null, game: DayGame, isHome: boolean) => {
+    if (teamId === null) return;
+    const at = byClub.get(teamId);
+    if (at) at.push({ game, isHome });
+    else byClub.set(teamId, [{ game, isHome }]);
+  };
+  for (const game of day.games) {
+    note(game.homeTeamId, game, true);
+    note(game.awayTeamId, game, false);
+  }
+  const clubs = new Map<number, ClubStatus>();
+  for (const [teamId, entries] of byClub) {
+    const pick = currentOf(entries, (e) => e.game.status.state);
+    if (!pick) continue;
+    const { game, isHome } = pick;
+    const facts = gameFacts(
+      game.status,
+      isHome,
+      isHome ? game.awayTeam : game.homeTeam,
+      // The **other** side's probable, which is who this club's hitters face —
+      // the same reading the player map takes, written from the club's side.
+      isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
+    );
+    clubs.set(teamId, facts as ClubStatus);
+  }
+  return clubs;
 }

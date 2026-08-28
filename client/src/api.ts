@@ -26,6 +26,7 @@ import type {
   PlayerWindows,
   PlayerStatus,
   RecentNews,
+  ClubStatus,
   ResearchIncludeKey,
   SavedList,
   SavedSearch,
@@ -860,10 +861,21 @@ export const api = {
    * the same for every user, so it is built once server-side and shared. Only
    * the players with a status worth drawing are in it, so an id that is absent
    * means "active, and nothing posted yet".
+   *
+   * **And `clubs`, the same day keyed by team id** — thirty entries, what the
+   * board's `Opp` column falls back to for a man today's boxscores do not
+   * carry. `players` is built from those boxscores, so an optioned man, one on
+   * the IL, or a prospect in the minors entirely has no opponent in it; the
+   * summary table has always drawn him his *club's* game off his report, and
+   * this is what lets the board agree. One response rather than two routes:
+   * both maps are cut from one `getDay`, and the caller that wants either
+   * wants both.
    */
-  async statuses(): Promise<Record<string, PlayerStatus>> {
-    const { players } = await request<{ players: Record<string, PlayerStatus> }>('/api/statuses');
-    return players;
+  async statuses(): Promise<{
+    players: Record<string, PlayerStatus>;
+    clubs: Record<string, ClubStatus>;
+  }> {
+    return request('/api/statuses');
   },
   /**
    * Who in the league has news today or yesterday, keyed by MLB player id — the

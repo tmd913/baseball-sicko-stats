@@ -5,7 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { requireUser, userId } from './auth.js';
 import { addDays, baseballToday } from './etDate.js';
 import { mapLimit } from './limit.js';
-import { getPlayerDay, getPlayerStatuses, getReport, withEstimators } from './savant.js';
+import {
+  getClubStatuses,
+  getPlayerDay,
+  getPlayerStatuses,
+  getReport,
+  withEstimators,
+} from './savant.js';
 import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
 import { getCutPercentiles } from './percentileCuts.js';
@@ -2346,8 +2352,14 @@ app.get(
   '/api/statuses',
   requireUser,
   asyncRoute(async (_req, res) => {
-    const statuses = await getPlayerStatuses();
-    res.json({ players: Object.fromEntries(statuses) });
+    // **Two maps, one day.** `clubs` is what the research board's `Opp` column
+    // falls back to for a man today's boxscores do not carry — optioned, on the
+    // IL, or in the minors entirely — which is what the summary table has
+    // always shown him off his report. Both come off the same cached `getDay`,
+    // so the second costs one pass over at most fifteen games; thirty entries
+    // against the player map's ~1,300. See `getClubStatuses`.
+    const [players, clubs] = await Promise.all([getPlayerStatuses(), getClubStatuses()]);
+    res.json({ players: Object.fromEntries(players), clubs: Object.fromEntries(clubs) });
   }),
 );
 

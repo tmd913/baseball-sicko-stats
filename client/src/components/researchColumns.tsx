@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { TREND_WINDOWS } from '../types';
 import type {
+  ClubStatus,
   EspnCategory,
   PlayerKind,
   PlayerStatus,
@@ -458,27 +459,57 @@ export const TREND_COLUMNS: Column[] = TREND_WINDOWS.map(trendColumn);
  */
 export const OPPONENT_KEY = 'opponent';
 
-/** What one player's cell reads, given today's status for him. */
-function OpponentCell({ status }: { status: PlayerStatus | null | undefined }) {
-  if (!status?.opponent) return <>{'—'}</>;
-  const scheduled = status.gameState === 'scheduled';
-  const matchup = `${status.isHome ? 'vs' : '@'} ${status.opponent}`;
+/**
+ * **His game, or failing that his club's.**
+ *
+ * `PlayerStatus` is built from the day's **boxscore rosters**, so a man who is
+ * optioned, on the IL, or in the minors entirely has no opponent in it — and
+ * this column drew him a dash while the summary table, three tabs away, drew
+ * him `vs BOS 7:15 PM · vs LHP Sandoval` off his report, which ties a player to
+ * his club's games "even when they're off the active roster". Measured on one
+ * afternoon: Aaron Judge, 60-day IL, both readings at once. Reported against
+ * Walker Jenkins, the same fault one step further out — a prospect on no 40-man
+ * at all, so not in the status map under any key.
+ *
+ * So the fallback is his **club's** day (`ClubStatusContext`, thirty entries
+ * off the same request), which is what the other two surfaces have always
+ * shown him. The row already carries the `teamId` to look it up by — for its
+ * cap logo — and for a minor leaguer that id is his parent organization, which
+ * is the club whose games the rest of the app files him under.
+ *
+ * **Nothing else on the row changes**, and that is what keeps it honest: he
+ * still carries his `IL60` badge (or, for a man on no 40-man, no badge and an
+ * empty stat line), and the cell still says only what it ever said — *this is
+ * the game his club is playing today*. It never says he is in it: the lineup
+ * pip on his headshot is what says that, and he has none.
+ */
+function OpponentCell({
+  status,
+  club,
+}: {
+  status: PlayerStatus | null | undefined;
+  club: ClubStatus | null | undefined;
+}) {
+  const game = status?.opponent ? status : club ?? null;
+  if (!game?.opponent) return <>{'—'}</>;
+  const scheduled = game.gameState === 'scheduled';
+  const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
   const score =
-    status.teamScore !== null && status.opponentScore !== null
-      ? `${status.teamScore}–${status.opponentScore}`
+    game.teamScore !== null && game.opponentScore !== null
+      ? `${game.teamScore}–${game.opponentScore}`
       : null;
-  const time = scheduled ? formatStartTime(status.startTime) : null;
-  const sp = scheduled ? status.probablePitcher : null;
+  const time = scheduled ? formatStartTime(game.startTime) : null;
+  const sp = scheduled ? game.probablePitcher : null;
   // A postponement has no score and no inning, and this map carries no
   // `detailedState` to spell it out with — `PPD` is what fits, in the amber the
   // summary table's own postponed cell takes.
   const detail = scheduled
     ? null
-    : status.gameState === 'live'
-      ? inningLabel(status.inningState, status.currentInning)
-      : status.gameState === 'postponed'
+    : game.gameState === 'live'
+      ? inningLabel(game.inningState, game.currentInning)
+      : game.gameState === 'postponed'
         ? 'PPD'
-        : status.gameState === 'final'
+        : game.gameState === 'final'
           ? 'Final'
           : null;
   return (
@@ -498,14 +529,19 @@ function OpponentCell({ status }: { status: PlayerStatus | null | undefined }) {
   );
 }
 
-export const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Column => ({
+export const opponentColumn = (
+  statuses: Map<number, PlayerStatus> | null,
+  clubs: Map<number, ClubStatus> | null,
+): Column => ({
   key: OPPONENT_KEY,
   label: 'Opp',
   group: 'Today',
   title:
     "Today's game — “@” away, “vs” at home, with the opposing starter before first pitch and the score from his side of it once there is one. Sorts alphabetically, which groups your players by tonight's game",
-  format: (r) => <OpponentCell status={statuses?.get(r.id)} />,
-  text: (r) => statuses?.get(r.id)?.opponent ?? null,
+  format: (r) => <OpponentCell status={statuses?.get(r.id)} club={gameOf(r, clubs)} />,
+  // The sort and the search read the same fallback the cell draws, or a row
+  // would group under a club it is not showing.
+  text: (r) => statuses?.get(r.id)?.opponent ?? gameOf(r, clubs)?.opponent ?? null,
   // Nothing numeric to compare, and nothing to threshold — see `Column.text`.
   value: () => null,
   // The cell is words on two lines rather than a number, and its live inning is
@@ -513,9 +549,16 @@ export const opponentColumn = (statuses: Map<number, PlayerStatus> | null): Colu
   // both, the same hook the trend columns use for their rise and fall.
   cellClass: (r) => {
     const st = statuses?.get(r.id);
-    return st?.opponent ? `research-opp research-opp-${st.gameState ?? 'none'}` : 'research-opp';
+    const game = st?.opponent ? st : gameOf(r, clubs);
+    return game?.opponent ? `research-opp research-opp-${game.gameState ?? 'none'}` : 'research-opp';
   },
 });
+
+/** His club's day, by the `teamId` the row already carries for its cap logo.
+ *  Null on a row MLB files under no club, which is the join-to-null rule one
+ *  cell wide. */
+const gameOf = (r: ResearchRow, clubs: Map<number, ClubStatus> | null): ClubStatus | null =>
+  r.teamId === null ? null : clubs?.get(r.teamId) ?? null;
 
 /** Which window a column key belongs to, for the two places that have to tell a
  *  trend column from an ordinary one without re-deriving the names. */
@@ -581,7 +624,7 @@ export const BATTER_COLUMNS: Column[] = [
   ...TREND_COLUMNS,
   // The statuses map is injected in `allColumns`, the way a trend column's
   // measured label is — the canonical order belongs in this array.
-  opponentColumn(null),
+  opponentColumn(null, null),
   { key: 'games', label: 'G', group: 'Counting', title: 'Games played', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'pa', label: 'PA', title: 'Plate appearances', format: (r) => count(r.pa), value: (r) => r.pa },
   { key: 'ab', label: 'AB', title: 'At bats', format: (r) => count(r.ab), value: (r) => r.ab },
@@ -624,7 +667,7 @@ export const PITCHER_COLUMNS: Column[] = [
   WIN_PCT_COLUMN,
   ROSTER_PCT_COLUMN,
   ...TREND_COLUMNS,
-  opponentColumn(null),
+  opponentColumn(null, null),
   { key: 'games', label: 'G', group: 'Counting', title: 'Games pitched', format: (r) => count(r.games), value: (r) => r.games },
   { key: 'gamesStarted', label: 'GS', title: 'Games started', format: (r) => count(r.gamesStarted), value: (r) => r.gamesStarted },
   // Shown as thirds ("158.1") and ordered on the out count behind it — 6.2 is

@@ -1169,6 +1169,44 @@ export interface RosterStatus {
 }
 
 /**
+ * **What a club's day is**, by MLB team id — the same nine facts
+ * `PlayerStatus` carries about a game, without the four that are about a
+ * person.
+ *
+ * It exists because the two surfaces that draw a man's game had come to
+ * disagree about the same man. `PlayerStatus` is built from the day's
+ * **boxscore rosters**, so a player who is not on one has no opponent — which
+ * is right for the lineup pip and wrong for the question the research board's
+ * `Opp` column asks. The summary table has never had the problem: it draws off
+ * a report, and a report ties a player to his club's games "even when they're
+ * off the active roster (suspended, on the IL, optioned)". So Aaron Judge on
+ * the 60-day IL read `vs BOS 7:15 PM` on the Roster view and `—` on the board,
+ * on the same afternoon.
+ *
+ * Keyed by **team id** rather than by abbreviation because that is what the
+ * client holds: every row of both wide tables carries `teamId` for its cap
+ * logo, and a join on a display string is the thing this repo refuses
+ * everywhere else.
+ *
+ * Thirty entries at most, off the day the player map is already built from.
+ */
+export interface ClubStatus {
+  gameState: GameStatus['state'];
+  /** The other club's abbreviation, from this club's side. */
+  opponent: string;
+  isHome: boolean;
+  teamScore: number | null;
+  opponentScore: number | null;
+  currentInning: number | null;
+  inningState: string | null;
+  startTime: string | null;
+  /** The **other** side's announced starter, before first pitch — the same
+   *  reading `PlayerStatus.probablePitcher` carries, which is who his hitters
+   *  would face. */
+  probablePitcher: ProbablePitcher | null;
+}
+
+/**
  * What is true of a player **today** — his roster status and where his club's
  * game has him — for a view that has no `PlayerReport` to read it off.
  *

@@ -11,6 +11,7 @@ import type { RefObject } from 'react';
 import { LIVE_POLL_MS } from './lib';
 import { STANDARD_5X5 } from './categoryValue';
 import type {
+  ClubStatus,
   EspnCategory,
   ParkFactor,
   PlayerGame,
@@ -162,6 +163,20 @@ export const PlayerStatusContext = createContext<Map<number, PlayerStatus> | nul
 export function usePlayerStatus(id: number): PlayerStatus | null {
   return useContext(PlayerStatusContext)?.get(id) ?? null;
 }
+
+/**
+ * **The same day keyed by club**, by MLB team id — thirty entries, off the same
+ * request as the map above.
+ *
+ * A second context rather than a field on the first, because it answers a
+ * different question about a different subject: `PlayerStatusContext` says
+ * where today's game has *him*, and can only answer for a man on a boxscore
+ * roster; this says what his *club* is doing, which is the answer for a player
+ * who is optioned, on the IL, or in the minors entirely. The research board's
+ * `Opp` column reads the first and falls back to the second, which is what the
+ * summary table has always drawn off a report — see `getClubStatuses`.
+ */
+export const ClubStatusContext = createContext<Map<number, ClubStatus> | null>(null);
 
 /**
  * Where the connected ESPN league will let each player be started, by MLB id —

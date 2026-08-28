@@ -27,6 +27,7 @@ import type {
   PlayerKind,
   PlayerReport,
   PlayerStatus,
+  ClubStatus,
   RecentNews,
   ResearchRow,
   ResearchWindow,
@@ -129,6 +130,7 @@ import {
   FantasyRosterContext,
   MutedContext,
   PlayerStatusContext,
+  ClubStatusContext,
   HandednessContext,
   GameDoorContext,
   ParkFactorsContext,
@@ -4293,6 +4295,12 @@ export default function App() {
    * is the thing the user actually came for.
    */
   const [playerStatuses, setPlayerStatuses] = useState<Map<number, PlayerStatus> | null>(null);
+  /** **The same day keyed by club**, off the same response — thirty entries,
+   *  what the board's `Opp` column falls back to for a man today's boxscores do
+   *  not carry. Held beside the player map rather than inside it because it
+   *  answers a different question about a different subject; see
+   *  `ClubStatusContext`. */
+  const [clubStatuses, setClubStatuses] = useState<Map<number, ClubStatus> | null>(null);
   const statusesInFlight = useRef(false);
   const loadStatuses = useCallback(() => {
     // Returns a promise so a caller can wait on it — an in-flight read
@@ -4301,9 +4309,10 @@ export default function App() {
     statusesInFlight.current = true;
     return api
       .statuses()
-      .then((byId) =>
-        setPlayerStatuses(new Map(Object.entries(byId).map(([id, st]) => [Number(id), st]))),
-      )
+      .then(({ players, clubs }) => {
+        setPlayerStatuses(new Map(Object.entries(players).map(([id, st]) => [Number(id), st])));
+        setClubStatuses(new Map(Object.entries(clubs).map(([id, st]) => [Number(id), st])));
+      })
       .catch((e: Error) => console.error('player statuses unavailable:', e.message))
       .finally(() => {
         statusesInFlight.current = false;
@@ -9975,6 +9984,7 @@ export default function App() {
     <MutedContext.Provider value={muteAudio}>
     <FantasyRosterContext.Provider value={fantasySlots}>
     <PlayerStatusContext.Provider value={playerStatuses}>
+      <ClubStatusContext.Provider value={clubStatuses}>
     {/* Where the connected league will let each player be started — read by the
         summary table's identity block, which is three components down from here
         and is the only leaf that wants it. Null with no league, which is what
@@ -11701,6 +11711,7 @@ export default function App() {
     </RecentNewsContext.Provider>
     </EligibilityContext.Provider>
     </ScoringCategoriesContext.Provider>
+      </ClubStatusContext.Provider>
     </PlayerStatusContext.Provider>
     </FantasyRosterContext.Provider>
     </MutedContext.Provider>

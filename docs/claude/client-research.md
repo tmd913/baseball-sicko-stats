@@ -1570,6 +1570,49 @@ new user can use. What it shares with the summary table — the row geometry, th
 identity block, the full-page mode — is in `client-summary.md`, and the passages
 below say where they part.
 
+#### The `Opp` column falls back to his club's game
+
+**Reported as: "for Walker Jenkins it doesn't show anything in the Opp column
+even though his team is playing today."** He was right, and the cause reaches
+much further than a prospect.
+
+**Two surfaces had come to disagree about the same man.** The column reads
+`/api/statuses`, which is built from the day's **boxscore rosters** — a man who
+is optioned, on the IL, or in the minors entirely is not on one, so he has no
+opponent in that map. The summary table draws its own opponent cell off a
+**report**, and a report ties a player to his club's games *even when they're
+off the active roster (suspended, on the IL, optioned)* — the very thing
+`RosterInfo.teamId` exists for. Measured on one afternoon: **Aaron Judge**, on
+the 60-day IL, read `vs BOS 7:15 PM · vs LHP Sandoval` on the Roster view and
+`—` on the board.
+
+So `/api/statuses` gained a second map — **`clubs`, thirty entries keyed by MLB
+team id**, cut from the same `getDay` the player map is, at no upstream cost —
+and `OpponentCell` reads the player's own game where he has one and his club's
+where he does not. The row already carries the `teamId` to look it up by, for
+its cap logo; for a minor leaguer that id is his parent organization, which is
+the club the rest of the app files him under. `text` and `cellClass` read the
+same fallback, or a row would sort and color under a game it is not showing.
+
+**The row says nothing new about him**, which is what keeps it honest. He still
+carries his `IL60` badge, or — on no 40-man at all — no badge and an empty stat
+line. The cell says what it always said: *this is the game his club is playing
+today*. What says a man is **in** it is the lineup pip on his headshot, and he
+has none.
+
+Driven on the live board: Walker Jenkins `vs CWS 8:10 PM · RHP Castillo`, Juan
+Soto `IL10 · vs HOU 7:10 PM · RHP Brown`, Ketel Marte `IL10 · @ SF 10:15 PM ·
+RHP Tidwell`, and a live game still reads `vs CIN 1–0 · Top 2`.
+
+**And a scheduled game stopped printing `0–0`.** MLB reports one as nil-nil
+rather than as no score, so every away row of an evening slate read
+`@ DET 0–0 6:40 PM` — a line score for a game nobody has played, beside the
+time it starts. `gameFacts` nulls both scores while the game is `scheduled`, the
+same shape it already applies to the inning, and `OpponentCell` needed no
+change: `null` is what it already reads as *no score yet*. The summary table
+never had the fault, drawing off a report rather than off this map, so this is
+the same convergence as the paragraphs above.
+
 #### A rostered man with no stat line is a row, and the row is empty
 
 **Reported as: "why don't I see Walker Jenkins in the research table? I should
