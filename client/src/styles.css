@@ -22028,6 +22028,13 @@ html[data-theme='light'] .league-table thead th {
   display: flex;
   justify-content: center;
   gap: 6px;
+  /* **A dot a day, and the row is a period long now rather than three.** A
+     fortnight is fourteen of them — 14 × 8px plus thirteen 6px gaps is 190,
+     against the 276 a 320px window leaves inside the app's gutters — so the
+     ordinary case needs nothing. The wrap is the backstop rather than the
+     design: a league whose period ran past twenty days would take a second line
+     here instead of bursting the page sideways. */
+  flex-wrap: wrap;
   /* A row of 8px dots is a 30px target in a 12px box, which is nobody's thumb.
      The padding is the target and the dot is the mark — the same split the
      app's icon squares make between a `--control-h` box and a 17px glyph. */
@@ -22199,7 +22206,15 @@ html[data-theme='light'] .league-table thead th {
   margin: 10px 2px;
 }
 .ov-day-foot {
-  display: block;
+  /* **Two doors share the foot and the row is still one control wide.** Equal
+     columns, so a card with one door draws it at the width of the card exactly
+     as it did before there were two — the shape `.ov-day-more` below argues
+     for is unchanged, and the second door divides the row rather than stacking
+     under it and growing every card in the carousel by 41px. */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
   /* **`auto` above the 8px, which is what the carousel's stretch made
      necessary.** The three cards are one height there (`align-items: stretch`),
      so a day with nothing to report — `No games played yet.` at 4am, one line
@@ -22299,8 +22314,71 @@ html[data-theme='light'] .league-table thead th {
     flex: 1 1 0;
     scroll-snap-align: none;
   }
+  /* **A row longer than three days stays a carousel at every width**, which is
+     the same sentence the section above makes about the phone read the other
+     way round: the desktop layout is what a carousel that *fits* looks like, so
+     a row that does not fit has to go on being one. `is-span` is the class the
+     view puts on at four cards or more (a matchup period, where the three named
+     days are three of fourteen); at exactly three it is absent and every rule
+     above stands untouched, so the shape this page shipped with is unchanged by
+     construction rather than by inspection.
+
+     Two classes against one, so these win on specificity wherever they sit —
+     but they are written after what they override anyway, the file's own rule
+     about media queries adding none.
+
+     A third of the row apiece, arithmetic rather than `1 1 0`: three cards have
+     to be the width they would have been if there were only three, or the row
+     would fit as many as it could and the reader would lose the *card* as the
+     unit the snap is about. `24px` is the two 12px gaps between the three, and
+     it is the row's own `gap` — the one number here that is written twice, and
+     it is written twice because a `calc` cannot read it back off the box. */
+  .ov-days.is-span {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    align-items: stretch;
+    margin-inline: calc(-1 * var(--table-bleed, 0px));
+    padding-inline: var(--table-bleed, 0px);
+    scroll-padding-inline: var(--table-bleed, 0px);
+  }
+  .ov-days.is-span > .ov-day {
+    flex: 0 0 calc((100% - 24px) / 3);
+    scroll-snap-align: center;
+  }
 }
 
+
+/* ---- The whole day, ranked, over the page -------------------------------
+   The dialog a card's `Rank all N` opens: the same category line, the same
+   rows, the same order, every man in the lineup instead of three.
+
+   **Narrower than the app's default dialog**, which is `min(720px, 100%)`. This
+   is a *card*, moved: at 720 a rank, a 26px face, a name and a signed number
+   sit at the two ends of a line with four inches of nothing between them, which
+   reads as a table missing its columns rather than as a list. 460 is the card's
+   own widest measured draw (365 at 1200) plus room for the batting lines that
+   wrap in it at 12px of type. */
+.ov-ranked-box {
+  width: min(460px, 100%);
+}
+/* **The line loses its own rule at the top of a dialog, and keeps its air.**
+   `.lg-cats` carries a `border-top` because on a card it separates the day's
+   totals from the head above them; here the head is the dialog's own, and that
+   already ends in one — two 1px rules 9px apart, which reads as a box the
+   heading is sitting in rather than as a division. The padding stays: what it
+   holds apart is the total and the men it is a total of. */
+.ov-ranked-box .app-dialog-body > .lg-cats {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  padding-bottom: 10px;
+}
+/* The two sentences under the list, where the card has no room for either: how
+   many men in the lineup had no game, and how many the league scores nothing
+   computable for. `.ov-day-empty`'s own type, folded rather than restated. */
+.ov-ranked-box .ov-day-empty {
+  margin-bottom: 0;
+}
 
 /* **The tab strip has a fifth tab, and the narrow end is where five words stop
    fitting.**

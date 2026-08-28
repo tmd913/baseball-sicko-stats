@@ -41,7 +41,7 @@
  *
  * See `docs/claude/client-overview.md`.
  */
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   EspnCategory,
@@ -72,6 +72,7 @@ import {
 // is one place for it to be decided.
 import { formatTrend, trendDirection } from './researchColumns';
 import { LoadingBlock } from './Loading';
+import { Modal } from './Modal';
 import { useDelayedFlag } from '../hooks';
 import { useOverflowArrows } from './TabStrip';
 import { MatchupCard, categoryGroups, fmtValue } from './LeagueView';
@@ -86,30 +87,54 @@ import { ProjectedGlyph } from './Projection';
 const TOP_N = 3;
 
 /**
- * **The three days, in the order they happened.**
+ * **The days the row draws, in the order they happened — and it is the whole
+ * matchup period now, not three days of it.**
  *
  * They were drawn `Today · Yesterday · Tomorrow` — the order a manager *asks*
  * after them — and that reads as a list where the row is a **carousel**, whose
  * whole grammar is that left is back and right is forward. Chronological is
- * what a swipe means, and it costs nothing: the row opens on `Today` (below),
- * so what leads is unchanged and what has moved is where the other two are. It
- * reads the same way on a desk, where left-to-right through three columns is a
- * timeline rather than a ranking.
+ * what a swipe means, and it costs nothing: the row still opens on `Today`, so
+ * what leads is unchanged and what has moved is where the other days are.
+ *
+ * **What has changed is how many of them there are.** Three days is the shape a
+ * manager *asks* after; it is not the shape of the thing they are days of. The
+ * card at the top of this page scores a **period**, and a row that stopped at
+ * tomorrow could not answer *what did Saturday come to* or *what is Thursday
+ * worth* about the very week that card is a total of — which left the reader
+ * setting the date bar by hand on another view, the exact errand this page
+ * exists to spare them.
+ *
+ * So the row is the period's own `start … end`, a card a day, and the three
+ * named days are wherever they happen to fall in it. **A reader with no league
+ * keeps exactly the three there always were**, which is not a special case but
+ * the same rule read at its other end: a period is a thing a league has, and
+ * without one there is no span to draw. `App.tsx::overviewDays` is where the
+ * list is derived and where that fallback lives.
  */
-const DAYS = ['yesterday', 'today', 'tomorrow'] as const;
-type DayKey = (typeof DAYS)[number];
 
-/** **Today is the one the row opens on**, and the index is derived from the
- *  array rather than written as `1`, so re-ordering `DAYS` cannot leave the
- *  opening card behind. */
-const OPENS_ON = DAYS.indexOf('today');
+/** Whole days from `a` to `b`, both `YYYY-MM-DD`. In UTC, for `addDays`'s own
+ *  reason — no DST boundary may round a date the wrong way. */
+function daysApart(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+}
 
-/** Title case, for the dots' own labels — the card heads are small caps. */
-const DAY_WORD: Record<DayKey, string> = {
-  yesterday: 'Yesterday',
-  today: 'Today',
-  tomorrow: 'Tomorrow',
-};
+/**
+ * **What a card calls its day.**
+ *
+ * The three named days keep their words, those being what a manager asks after,
+ * and the rest of the period counts from today. Counting rather than naming the
+ * weekday is the reading a row you *swipe* wants: `3 DAYS AGO` says where in
+ * the week you have got to, where `WED` makes the reader work that out against
+ * a date on the line below — and the date is on that line either way, so the
+ * weekday would have been the one fact said twice.
+ */
+function dayWord(date: string, today: string): string {
+  const n = daysApart(today, date);
+  if (n === 0) return 'Today';
+  if (n === -1) return 'Yesterday';
+  if (n === 1) return 'Tomorrow';
+  return n < 0 ? `${-n} days ago` : `In ${n} days`;
+}
 
 /** An empty batting line, for a pitcher's row reaching the batter's summary —
  *  which cannot happen and is what the fallback is for. Its own constant rather
@@ -419,7 +444,36 @@ function PerformerRow({
 }
 
 /**
- * One of the three day blocks.
+ * **Which men a day ranks, best first.**
+ *
+ * Written once because it is now read twice — the card takes the first three of
+ * it and the dialog takes the lot — and two copies of a filter are two copies
+ * that will one day disagree about who is on the board. Both halves matter:
+ *
+ * **The list is of men who *played*, which is a filter the totals do not
+ * take.** A man in the lineup whose club was idle contributes 0 to every
+ * counting category and nothing at all to the rates, so counting him in the
+ * day's figures is right and costs nothing — and ranking him is not: a score of
+ * exactly `+0.0` for having done nothing sorts **above** a man who went
+ * 0-for-4, whose OPS contribution is genuinely negative.
+ *
+ * Found at 4am ET the morning after the page shipped, which is the hour that
+ * makes it visible: the baseball day had rolled to a card with no games played
+ * on it, and `TODAY` listed three men at `0-0` and `+0.0` under a category line
+ * of noughts — where the block has a sentence for exactly that state and was
+ * one empty list away from saying it.
+ *
+ * **A projected block takes no such filter**: every line in it is a fraction of
+ * a game nobody has played, which is the whole point of it.
+ */
+function rankDay(performers: Performer[] | null, projected: boolean): Performer[] {
+  return (performers ?? [])
+    .filter((p) => p.value !== null && (projected || anyPlay(p.line)))
+    .sort((a, b) => b.value! - a.value!);
+}
+
+/**
+ * One of the day blocks.
  *
  * **Every state it can be in names its own cause**, which is four: no roster to
  * report on, a read still in flight with nothing on screen, a day whose lineup
@@ -439,8 +493,10 @@ function DayBlock({
   onOpenPlayer,
   onSeeDay,
   seeDayTitle,
+  onRankAll,
 }: {
-  /** `TODAY`, `YESTERDAY`, `TOMORROW` — the qualifier over the date, which is
+  /** `TODAY`, `YESTERDAY`, `TOMORROW`, `3 DAYS AGO` — the qualifier over the
+   *  date, which is
    *  the app's own date face read in the same order (`.date-face-lead` over
    *  `.date-face-range`). */
   lead: string;
@@ -469,36 +525,31 @@ function DayBlock({
    *  made over is not the more useful fact — which is the opponent's carousel,
    *  whose foot opens a page about somebody the reader is not. */
   seeDayTitle?: string;
+  /**
+   * **The other door, and it does not leave the page.**
+   *
+   * `Top Performers` is three rows because three is the block's own height, and
+   * the note on `TOP_N` has always said the fourth man is one press away — on
+   * the *Roster view*, over that day, which is a different table with different
+   * columns in a different order, reached by leaving the Overview. That is the
+   * right door for *what did each of my men do*; it is a long way round for
+   * *who was fourth*, which is this list with more of it.
+   *
+   * So the card offers the list itself: the same rows, the same arithmetic, the
+   * same order, every man in the lineup instead of three, in a popup over the
+   * page the reader is on. Null draws no button, which is what the empty states
+   * pass — there is nothing to rank.
+   */
+  onRankAll: (() => void) | null;
 }) {
   const total = useMemo(
     () => addLines((performers ?? []).map((p) => p.line)),
     [performers],
   );
-  /**
-   * **The list is of men who *played*, which is a filter the totals do not
-   * take.** A man in the lineup whose club was idle contributes 0 to every
-   * counting category and nothing at all to the rates, so counting him in the
-   * day's figures is right and costs nothing — and ranking him is not: a score
-   * of exactly `+0.0` for having done nothing sorts **above** a man who went
-   * 0-for-4, whose OPS contribution is genuinely negative.
-   *
-   * Found at 4am ET the morning after this shipped, which is the hour that
-   * makes it visible: the baseball day had rolled to a card with no games
-   * played on it, and `TODAY` listed three men at `0-0` and `+0.0` under a
-   * category line of noughts — where the block has a sentence for exactly that
-   * state and was one empty list away from saying it.
-   *
-   * A projected block takes no such filter: every line in it is a fraction of a
-   * game nobody has played, which is the whole point of it.
-   */
-  const top = useMemo(
-    () =>
-      (performers ?? [])
-        .filter((p) => p.value !== null && (projected || anyPlay(p.line)))
-        .sort((a, b) => b.value! - a.value!)
-        .slice(0, TOP_N),
-    [performers, projected],
-  );
+  /** Everybody the day ranks, and the three the card has room for — see
+   *  `rankDay`, which is the one place the filter and the sort are stated. */
+  const all = useMemo(() => rankDay(performers, projected), [performers, projected]);
+  const top = all.slice(0, TOP_N);
 
   return (
     <section className={projected ? 'ov-day ov-day-proj' : 'ov-day'}>
@@ -516,7 +567,13 @@ function DayBlock({
 
       {performers === null ? (
         loading ? (
-          <LoadingBlock>Reading your {lead.toLowerCase()}</LoadingBlock>
+          /* **A wait names what is being read**, and what it names is the date.
+             It read `Reading your {lead}`, which was `Reading your today` on
+             one of three cards and is `Reading your in 6 days` on one of
+             fourteen — the lead is a *qualifier* over a date and only ever read
+             as one. The date is the card's own subject and is a phrase at any
+             distance from today. */
+          <LoadingBlock>Reading {prettyGameDate(date)}</LoadingBlock>
         ) : (
           <p className="ov-day-empty">Nothing to report on — no roster is being read.</p>
         )
@@ -533,8 +590,13 @@ function DayBlock({
                   different and the card holds both: `games` counts fixtures
                   that are under way or over, `anyPlay` asks whether anything
                   has happened in them. */}
+              {/* **The day is not named in the sentence**, where it was
+                  (`Nobody in tomorrow’s lineup…`). That worked while every card
+                  was one of three words and does not survive a period —
+                  `Nobody in in 6 days’s lineup` — and the fact was the head's
+                  anyway, two lines above and at weight. */}
               {projected
-                ? `Nobody in ${lead.toLowerCase()}’s lineup has a game to play.`
+                ? 'Nobody in the lineup has a game to play.'
                 : anyPlay(total)
                   ? 'Nobody in the lineup has done anything worth ranking yet.'
                   : total.games > 0
@@ -606,21 +668,180 @@ function DayBlock({
               `title` of the list it qualifies, and in this file's own note on
               `STANDARD_5X5` for the reader with no league, whose block is the
               one case where the answer is not what they'd assume. */}
-          {onSeeDay && (
+          {(onSeeDay || (onRankAll && all.length > 0)) && (
+            /* **Two doors share the foot, and the row is still one control
+                wide.** `.ov-day-foot` is a grid of equal columns, so a card
+                with one door draws it at the width of the card exactly as it
+                did — the shape the note on `.ov-day-more` argues for is
+                unchanged, and a second door divides the row rather than
+                stacking under it and growing every card in the carousel.
+
+                They are deliberately in this order: `Rank all` is more of what
+                the reader is already looking at and stays on the page, so it
+                sits beside the list it extends; `See the day` leaves for
+                another view and goes last, which is where this app puts a door
+                out. */
             <footer className="ov-day-foot">
-              <button
-                type="button"
-                className="ov-day-more"
-                onClick={() => onSeeDay(date)}
-                title={seeDayTitle ?? categoriesTitle}
-              >
-                See the day
-              </button>
+              {onRankAll && all.length > 0 && (
+                <button
+                  type="button"
+                  className="ov-day-more"
+                  onClick={onRankAll}
+                  /* The heading's own sentence with the count in front of
+                     it — `Ranked over your league's 10 categories — R · HR · …`
+                     is exactly what this list is, and it is already written
+                     once for the three rows above. */
+                  title={`All ${all.length}, ${categoriesTitle[0].toLowerCase()}${categoriesTitle.slice(1)}`}
+                >
+                  Rank all {all.length}
+                </button>
+              )}
+              {onSeeDay && (
+                <button
+                  type="button"
+                  className="ov-day-more"
+                  onClick={() => onSeeDay(date)}
+                  title={seeDayTitle ?? categoriesTitle}
+                >
+                  See the day
+                </button>
+              )}
             </footer>
           )}
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * **The whole day, ranked, over the page rather than instead of it.**
+ *
+ * `Top Performers` names three men because three is the card's own height, and
+ * the note on `TOP_N` has always ended *a fourth is one press away — the whole
+ * roster's day is the Roster view with the date set to that day*. That is true
+ * and it is the wrong press for this question. The Roster view answers *what
+ * did each of my men do*: a wide table of stat columns in roster order, on
+ * another view, with the date bar moved. **Who was fourth** is this list with
+ * more of it — the same rows, the same arithmetic, the same order — and asking
+ * it should not cost the reader the page they are on.
+ *
+ * **A popup rather than a taller card**, which is the app's own answer wherever
+ * a detail belongs to one thing on screen (see *Popups, overlays and the Escape
+ * ladder*). The alternative was a card that grows: a 25-row block inside a
+ * scroll-snap row would put a vertical scroller inside a horizontal one, on a
+ * page that scrolls vertically as well — three scrolls under one finger, which
+ * is the geometry `touch-action` exists to arbitrate and cannot, the two inner
+ * ones differing in neither place nor axis.
+ *
+ * **It is not in the URL, and that is a deliberate reading of the rule.** *Which
+ * data a view shows belongs in the link* is about what the page **is** — a view,
+ * a span, a lens, a subject (`player=`, `team=`, `mup=`). This is a drill-down
+ * on one card of one row, opened and closed inside a reading the URL already
+ * describes in full, and it is the same shape as every other panel in this app
+ * that stays out of the query string: the Columns dialog, the stat filter
+ * builder, `InfoKey`. Two params must never mean two things, and a param for a
+ * box that is only ever opened by a press on a card it can be read from would
+ * have been the third `proj=`-shaped mistake this app has already recorded.
+ *
+ * **Everything it draws, the card had.** No read is made for it: `performers`
+ * is the whole day already — the card was slicing it — so the dialog is free,
+ * and it cannot come to disagree with the three rows behind it because the
+ * filter and the sort are `rankDay` for both.
+ */
+function RankedDayDialog({
+  card,
+  who,
+  categories,
+  categoriesTitle,
+  onOpenPlayer,
+  onClose,
+}: {
+  card: DayCardData;
+  /** Whose day it is, where that is not the reader — the opponent's carousel.
+   *  Null draws no name, a dialog opened off your own cards being about you by
+   *  construction, which is the same rule that suppresses `Your matchup`'s tag
+   *  on the one card at the top of this page. */
+  who: string | null;
+  categories: EspnCategory[];
+  categoriesTitle: string;
+  onOpenPlayer: (id: number) => void;
+  onClose: () => void;
+}) {
+  const all = useMemo(() => rankDay(card.performers, card.projected), [card]);
+  /** The day's own totals, exactly as the card prints them — over **everybody**
+   *  in the lineup rather than over the men on the list, which is the split
+   *  `rankDay` records: a man whose club was idle belongs in the figures and
+   *  not in the ranking. */
+  const total = useMemo(
+    () => addLines((card.performers ?? []).map((p) => p.line)),
+    [card.performers],
+  );
+  /**
+   * **The two ways a man in the lineup is not on the list**, counted apart
+   * because they are different facts about him and the card has room for
+   * neither. A day that ranks nine of eleven should say what the other two
+   * were — the app's own rule that an empty state names its own cause, applied
+   * to the part of a list that is missing rather than to the whole of one.
+   */
+  const scorable = (card.performers ?? []).filter((p) => card.projected || anyPlay(p.line));
+  const idle = (card.performers?.length ?? 0) - scorable.length;
+  const unscored = scorable.length - all.length;
+
+  return (
+    <Modal
+      title={
+        <>
+          {who ? `${who} — ` : ''}
+          {card.word}, {prettyGameDate(card.date)}
+          {card.projected ? (
+            <span className="ov-day-proj-tag">
+              <ProjectedGlyph size={12} /> PROJECTED
+            </span>
+          ) : null}
+        </>
+      }
+      titleId="ov-ranked-title"
+      className="ov-ranked-box"
+      onClose={onClose}
+    >
+      {/* The same line the card carries, and the same component drawing it —
+          the dialog opens *out of* a card and has to read as more of it rather
+          than as a second opinion about the day. */}
+      <CategoryLine categories={categories} line={total} projected={card.projected} />
+      <div className="ov-perfs-head-row">
+        <h4 className="ov-perfs-head" title={categoriesTitle}>
+          {all.length} ranked
+        </h4>
+        <span className="ov-perfs-val-head" title={categoriesTitle}>
+          Value
+        </span>
+      </div>
+      <ol className="ov-perfs">
+        {all.map((p, i) => (
+          <li key={p.key}>
+            <PerformerRow
+              rank={i + 1}
+              p={p}
+              projected={card.projected}
+              categories={categories}
+              onOpenPlayer={onOpenPlayer}
+            />
+          </li>
+        ))}
+      </ol>
+      {idle > 0 && (
+        <p className="ov-day-empty">
+          {idle} more in the lineup {card.projected ? 'have no game to play.' : 'had no game.'}
+        </p>
+      )}
+      {unscored > 0 && (
+        <p className="ov-day-empty">
+          {unscored} more {unscored === 1 ? 'is' : 'are'} unranked — your league scores nothing this
+          table can compute on {unscored === 1 ? 'his' : 'their'} side of the ball.
+        </p>
+      )}
+    </Modal>
   );
 }
 
@@ -1319,22 +1540,118 @@ function SpotlightSection({
  * overflow, nothing scrolls, nothing snaps and the dots are not drawn. The
  * desktop layout is what a carousel that fits looks like.
  */
+/** One card of the row, as the view hands it to the carousel: the day, what to
+ *  call it, whether it is an estimate, and what it has to draw. Built in
+ *  `OverviewView` so the two carousels are one shape scored one way. */
+interface DayCardData {
+  date: string;
+  /** `TODAY`, `3 DAYS AGO` — the card head's own small caps. */
+  lead: string;
+  /** The same word in title case, for a dot's label and a dialog's title. */
+  word: string;
+  projected: boolean;
+  loading: boolean;
+  performers: Performer[] | null;
+}
+
+/**
+ * **The days of the period that are not one of the three the page reads on
+ * entry**, and what each of the two halves costs.
+ *
+ * The split is not tidiness, it is the two upstreams answering differently:
+ *
+ * - **Played days are one read for the lot.** `/api/report` over a span carries
+ *   every game with its own date and a `lineups` map keyed by date, so the
+ *   whole back half of a fortnight comes out of one request — which is why this
+ *   is a single answer rather than a map of them.
+ * - **Unplayed days are one read each.** The projection engine hands back a
+ *   *span total* with no per-day breakdown (`RosterProjection`), so a span
+ *   cannot be split back apart and each day has to be asked for on its own.
+ *   Hence the map, and hence `READ_AHEAD`.
+ *
+ * Neither is on the page's own settle gate: a reader who never swipes past
+ * tomorrow pays for neither, which is the same rule that keeps the whole
+ * Overview off the boot gate.
+ */
+export interface ExtraDays {
+  past: { players: PlayerReport[]; lineups: Record<string, string[]> | null } | null;
+  pastLoading: boolean;
+  /**
+   * **Has the played half been answered, one way or the other?** — which
+   * `past` alone cannot say, `null` meaning both *not asked yet* and *asked and
+   * failed*. The card draws a wait for the first and its empty state for the
+   * second, so the two have to be told apart: a day nobody has asked for has an
+   * answer coming, and a day whose read failed has not.
+   *
+   * The forward half needs no twin of this. Its map is keyed by date and
+   * `futureLoading[date]` is `undefined` before the read and `false` after it
+   * either way, so the same distinction falls out of the lookup.
+   */
+  pastSettled: boolean;
+  future: Record<string, RosterProjection>;
+  futureLoading: Record<string, boolean>;
+}
+
+/**
+ * **How far either side of the card in view the row reads ahead.**
+ *
+ * One, and it is a judgment about what a swipe costs rather than a round
+ * number. Every day past tomorrow is a projection of its own — the engine hands
+ * back a span total with no per-day breakdown, so a fortnight is a fortnight of
+ * requests — and firing them all on entry would put twelve reads behind a page
+ * whose whole discipline is that it arrives at once. Firing none until the card
+ * is centered would show a wait on every swipe.
+ *
+ * One ahead is the first number that hides the read behind the gesture: the
+ * neighbor is asked for while the reader is still looking at the card they are
+ * on, and a swipe lands on figures. The reader who never swipes pays nothing,
+ * which is the same rule that keeps this whole page off the boot gate.
+ */
+const READ_AHEAD = 1;
+
+/**
+ * **…and how long the row waits for the scroll to stop first.**
+ *
+ * Measured, and the measurement is why it exists: pressing the last dot of a
+ * fourteen-day row scrolls smoothly across the whole period, `active` genuinely
+ * takes every value on the way, and the effect below fired at each one — **nine
+ * projections asked for to look at one day**. A flick does the same thing with
+ * a finger.
+ *
+ * 200ms of no further movement is the gesture being over. It is short enough
+ * that a reader who swipes one card and stops has asked for the next before
+ * they have finished looking at this one, and long enough that the cards a
+ * flick merely *crosses* are never asked for at all. Re-verified after: the
+ * same press asks for three days rather than eleven.
+ */
+const READ_SETTLE = 200;
+
 function DayCarousel({
-  dates,
-  perf,
-  loading,
-  isProjected,
+  cards,
+  days,
+  opensOn,
+  onNeed,
   categories,
   categoriesTitle,
   onOpenPlayer,
   onSeeDay,
   seeDayTitle,
+  onRankDay,
   label,
 }: {
-  dates: Record<DayKey, string>;
-  perf: Record<DayKey, Performer[] | null>;
-  loading: Record<DayKey, boolean>;
-  isProjected: Record<DayKey, boolean>;
+  /** Every day of the period, in date order. */
+  cards: DayCardData[];
+  /** The same days as bare dates, and the read-ahead effect's dependency —
+   *  `cards` is rebuilt on every render (the figures in it move) where this is
+   *  `App`'s own memo and changes only when the period does. */
+  days: string[];
+  /** Which of them the row opens on — today, where today is in the period. */
+  opensOn: number;
+  /** **This day is on screen or next to it.** What that costs is the app's
+   *  business, not the row's: see `App.tsx::needOverviewDay`, where a day
+   *  before yesterday is one read for the whole back half of the period and a
+   *  day past tomorrow is one projection of its own. */
+  onNeed: (date: string) => void;
   categories: EspnCategory[];
   categoriesTitle: string;
   onOpenPlayer: (id: number) => void;
@@ -1342,6 +1659,11 @@ function DayCarousel({
   /** The foot's own `title`, where the row's door is about somebody other than
    *  the reader — see `DayBlock`. */
   seeDayTitle?: string;
+  /** Open this card's whole ranked list over the page — see
+   *  `RankedDayDialog`. The row raises it rather than each block, there being
+   *  one dialog at a time and the row being what knows which card it came
+   *  from. */
+  onRankDay: (card: DayCardData) => void;
   /** What the row is, for the two labels a screen reader gets — the row's own
    *  and its dots'. Two carousels on one page cannot both be called
    *  "Yesterday, today and tomorrow". */
@@ -1360,7 +1682,7 @@ function DayCarousel({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const { state, measure } = useOverflowArrows(boxRef, wrapRef);
   const over = state.over;
-  const [active, setActive] = useState(OPENS_ON);
+  const [active, setActive] = useState(opensOn);
 
   /**
    * **Put card `i` in the middle of the scrollport.**
@@ -1416,43 +1738,82 @@ function DayCarousel({
   }, [measure]);
 
   /**
-   * **The row opens on Today**, and it opens there *before paint* — a layout
-   * effect, so nobody sees Yesterday for a frame and watches it slide.
+   * **The row opens on today**, and it opens there *before paint* — a layout
+   * effect, so nobody sees the day before it for a frame and watches it slide.
    *
-   * **Keyed on `over`**, which is what makes it fire at the two moments it has
-   * to and no other. On mount the hook measures in its own layout effect,
-   * `over` goes false → true, and this runs on the flush that follows, still
-   * before paint. The other moment is a window crossing 900px from a desk width
-   * down to a phone one, where a row that could not scroll now can and would
-   * otherwise sit at `scrollLeft: 0` showing Yesterday.
+   * **Keyed on `over` and on `opensOn`**, which is what makes it fire at the
+   * moments it has to and no other. On mount the hook measures in its own
+   * layout effect, `over` goes false → true, and this runs on the flush that
+   * follows, still before paint. The second moment is a window crossing the
+   * breakpoint from a desk width down to a phone one, where a row that could
+   * not scroll now can and would otherwise sit at `scrollLeft: 0`.
+   *
+   * **`opensOn` is the third**, and it is new with the period: the row is three
+   * days long until the matchup window answers and the whole period after it,
+   * which moves today from the middle of three cards to wherever it falls in
+   * fourteen. Without it the row would keep its `scrollLeft` and quietly be
+   * showing a different day. (In practice it fires once — the page's own gate
+   * waits on that window — and the dependency is what makes that a fact rather
+   * than a hope.)
    *
    * It deliberately does **not** re-center on anything else. A reader who has
-   * swiped to Tomorrow and is reading it must not be carried back to Today
+   * swiped to Thursday and is reading it must not be carried back to today
    * because a projection landed — the same rule as *never over data*, one axis
    * over.
    */
   useLayoutEffect(() => {
     if (!over) return;
-    center(OPENS_ON, 'auto');
-    setActive(OPENS_ON);
-  }, [over, center]);
+    center(opensOn, 'auto');
+    setActive(opensOn);
+  }, [over, opensOn, center]);
+
+  /**
+   * **Read the card in view and its neighbors** — see `READ_AHEAD`.
+   *
+   * On `active` rather than on a scroll handler, and **behind `READ_SETTLE`**,
+   * which is what makes a flick across six days ask for the one it stops on
+   * rather than for all six it crossed. (React's batching was assumed to do
+   * that on its own and does not: a smooth scroll commits every index it passes
+   * through, which was measured at nine projections for one press of the last
+   * dot.) `onNeed` is idempotent by contract — App holds what it has asked
+   * for — so a re-entry costs nothing.
+   */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      for (let i = active - READ_AHEAD; i <= active + READ_AHEAD; i++) {
+        if (i >= 0 && i < days.length) onNeed(days[i]);
+      }
+    }, READ_SETTLE);
+    return () => clearTimeout(t);
+  }, [active, days, onNeed]);
 
   return (
     <div className="ov-carousel" ref={wrapRef}>
-      <div className="ov-days" ref={boxRef} onScroll={onScroll} aria-label={label}>
-        {DAYS.map((d) => (
+      {/* **`is-span` is the row being longer than a desk can hold**, and it is
+          the measurement rather than the count that the stylesheet acts on: at
+          three cards this class is absent and the row is the three columns it
+          has always been above 900px, at four or more it stays a carousel at
+          every width and shows three of them at a desk. */}
+      <div
+        className={cards.length > 3 ? 'ov-days is-span' : 'ov-days'}
+        ref={boxRef}
+        onScroll={onScroll}
+        aria-label={label}
+      >
+        {cards.map((c, i) => (
           <DayBlock
-            key={d}
-            lead={d.toUpperCase()}
-            date={dates[d]}
-            projected={isProjected[d]}
+            key={c.date}
+            lead={c.lead}
+            date={c.date}
+            projected={c.projected}
             categories={categories}
             categoriesTitle={categoriesTitle}
-            performers={perf[d]}
-            loading={loading[d]}
+            performers={c.performers}
+            loading={c.loading}
             onOpenPlayer={onOpenPlayer}
             onSeeDay={onSeeDay}
             seeDayTitle={seeDayTitle}
+            onRankAll={() => onRankDay(cards[i])}
           />
         ))}
       </div>
@@ -1461,17 +1822,23 @@ function DayCarousel({
           showing all three days would be a control for a scroll that cannot
           happen. They are buttons as well as a position — a pointer user has no
           swipe, and the peek at the card edges is the only other thing saying
-          there is more of the row than this. */}
+          there is more of the row than this.
+
+          **A dot a day, whatever the period's length.** A fortnight is fourteen
+          of them, which is 190px of the 276 a 320px window leaves — measured,
+          and it is why they are not a scroller of their own. `flex-wrap` is the
+          safety rather than the design: a league whose period ran past twenty
+          days would wrap a second line rather than burst the page. */}
       {over && (
         <div className="ov-dots" role="group" aria-label={`Which day — ${label}`}>
-          {DAYS.map((d, i) => (
+          {cards.map((c, i) => (
             <button
-              key={d}
+              key={c.date}
               type="button"
               className={`ov-dot${i === active ? ' is-on' : ''}`}
               aria-current={i === active ? 'true' : undefined}
-              aria-label={`${DAY_WORD[d]} — ${prettyGameDate(dates[d])}`}
-              title={`${DAY_WORD[d]} — ${prettyGameDate(dates[d])}`}
+              aria-label={`${c.word} — ${prettyGameDate(c.date)}`}
+              title={`${c.word} — ${prettyGameDate(c.date)}`}
               onClick={() => center(i, 'smooth')}
             />
           ))}
@@ -1506,6 +1873,11 @@ export default function OverviewView({
   loadingTomorrow,
   loadingTodayProjection,
   knownPlayers,
+  days,
+  extra,
+  oppExtra,
+  onNeedDay,
+  onNeedOppDay,
   trending,
   highValue,
   spotlight,
@@ -1591,6 +1963,22 @@ export default function OverviewView({
   /** For the projected block's names: a projected line carries a key, an id and
    *  a kind and no name at all, the engine having no business holding one. */
   knownPlayers: SeasonPlayer[];
+  /**
+   * **Every day the two carousels draw, in date order** — the matchup period,
+   * widened to hold yesterday, today and tomorrow wherever the period's own
+   * edges fall. Derived in `App.tsx::overviewDays`, which is where the widening
+   * is argued; three days exactly for a reader with no league.
+   */
+  days: string[];
+  /** The days that are not one of the three named ones, and what they cost —
+   *  see `ExtraDays`. */
+  extra: ExtraDays;
+  oppExtra: ExtraDays;
+  /** **This day is on screen or next to it.** Idempotent by contract: App holds
+   *  what it has already asked for, so the carousel may say it as often as it
+   *  likes. */
+  onNeedDay: (date: string) => void;
+  onNeedOppDay: (date: string) => void;
   dates: { today: string; yesterday: string; tomorrow: string };
   onOpenPlayer: (id: number) => void;
   onSeeDay: (date: string) => void;
@@ -1793,29 +2181,34 @@ export default function OverviewView({
   const todayProj = scoreProjected(todayProjection, dates.today);
   const todayIsProjected = todayPerf !== null && !todayStarted && todayProj !== null;
 
-  /** **The three days as three lookups**, so the row is a `map` over `DAYS`
-   *  rather than three hand-written blocks in an order that has to be kept in
-   *  step with the array beside it. It is the same values either way; what it
-   *  buys is that `DAYS` is the *only* place the order is stated. */
-  const perf: Record<DayKey, Performer[] | null> = {
-    yesterday: yesterdayPerf,
-    today: todayIsProjected ? todayProj : todayPerf,
-    tomorrow: scoreProjected(tomorrow, dates.tomorrow),
-  };
-  const loading: Record<DayKey, boolean> = {
-    yesterday: loadingYesterday,
-    // **Two reads behind one card, and one wait.** Until both have answered, a
-    // block drawn off either is a block the other may be about to replace —
-    // which is the flicker the app's loading discipline exists to prevent, and
-    // the only case on this page where a card waits on more than its own read.
-    today: loadingToday || (todayPerf !== null && !todayStarted && loadingTodayProjection),
-    tomorrow: loadingTomorrow,
-  };
-  /** Which of the three are estimates: Tomorrow always, Today until it starts. */
-  const isProjected: Record<DayKey, boolean> = {
-    yesterday: false,
-    today: todayIsProjected,
-    tomorrow: true,
+  /**
+   * **The three named days as three lookups, keyed by their dates.**
+   *
+   * They are the days this page has always read on entry and they keep every
+   * rule they had; what has changed is that the row is longer than they are, so
+   * they are looked up by date rather than by position. `cardsFor` below fills
+   * everything else in from the period.
+   */
+  const named: Record<string, Omit<DayCardData, 'date' | 'lead' | 'word'>> = {
+    [dates.yesterday]: {
+      performers: yesterdayPerf,
+      loading: loadingYesterday,
+      projected: false,
+    },
+    [dates.today]: {
+      performers: todayIsProjected ? todayProj : todayPerf,
+      // **Two reads behind one card, and one wait.** Until both have answered, a
+      // block drawn off either is a block the other may be about to replace —
+      // which is the flicker the app's loading discipline exists to prevent, and
+      // the only case on this page where a card waits on more than its own read.
+      loading: loadingToday || (todayPerf !== null && !todayStarted && loadingTodayProjection),
+      projected: todayIsProjected,
+    },
+    [dates.tomorrow]: {
+      performers: scoreProjected(tomorrow, dates.tomorrow),
+      loading: loadingTomorrow,
+      projected: true,
+    },
   };
 
   /**
@@ -1838,22 +2231,108 @@ export default function OverviewView({
   const oppTodayProj = scoreProjected(oppTodayProjection, dates.today);
   const oppTodayIsProjected = oppTodayPerf !== null && !oppTodayStarted && oppTodayProj !== null;
 
-  const oppPerf: Record<DayKey, Performer[] | null> = {
-    yesterday: scorePlayed(oppYesterday, dates.yesterday, oppYesterdayLineup),
-    today: oppTodayIsProjected ? oppTodayProj : oppTodayPerf,
-    tomorrow: scoreProjected(oppTomorrow, dates.tomorrow),
+  const oppNamed: Record<string, Omit<DayCardData, 'date' | 'lead' | 'word'>> = {
+    [dates.yesterday]: {
+      performers: scorePlayed(oppYesterday, dates.yesterday, oppYesterdayLineup),
+      loading: oppLoadingYesterday,
+      projected: false,
+    },
+    [dates.today]: {
+      performers: oppTodayIsProjected ? oppTodayProj : oppTodayPerf,
+      loading:
+        oppLoadingToday || (oppTodayPerf !== null && !oppTodayStarted && oppLoadingTodayProjection),
+      projected: oppTodayIsProjected,
+    },
+    [dates.tomorrow]: {
+      performers: scoreProjected(oppTomorrow, dates.tomorrow),
+      loading: oppLoadingTomorrow,
+      projected: true,
+    },
   };
-  const oppLoading: Record<DayKey, boolean> = {
-    yesterday: oppLoadingYesterday,
-    today:
-      oppLoadingToday || (oppTodayPerf !== null && !oppTodayStarted && oppLoadingTodayProjection),
-    tomorrow: oppLoadingTomorrow,
+
+  /**
+   * **Every card of the row, from three named days and the rest of the
+   * period.**
+   *
+   * One function called twice, which is the guarantee the two carousels are
+   * scored the same way — the same one `DayCarousel`, `DayBlock` and
+   * `categoryValue.ts` already make, one level up.
+   *
+   * The three that were always read are looked up; the others fall to their
+   * side of today. **A day before today is played and a day after it is an
+   * estimate**, which is the same test `lineOf` and the projected block already
+   * turn on, and it needs no clock of its own: `dates.today` is `App`'s
+   * baseball day and moves on resume with everything else on this page.
+   */
+  const cardsFor = (
+    lookup: Record<string, Omit<DayCardData, 'date' | 'lead' | 'word'>>,
+    ex: ExtraDays,
+    lineups: Map<string, Set<string>>,
+  ): DayCardData[] =>
+    days.map((date) => {
+      const word = dayWord(date, dates.today);
+      const head = { date, word, lead: word.toUpperCase() };
+      const known = lookup[date];
+      if (known) return { ...head, ...known };
+      if (date < dates.today) {
+        return {
+          ...head,
+          projected: false,
+          // **One read for the whole back half of the period.** `/api/report`
+          // over a span carries each game's own date and a lineup per date, so
+          // every played card of the row comes out of one answer — which is
+          // why `ExtraDays.past` is one field rather than a map.
+          performers: ex.past ? scorePlayed(ex.past.players, date, lineups.get(date) ?? null) : null,
+          /* **A card nobody has asked for yet is a card with an answer
+             coming**, and it draws the wait rather than the empty state — which
+             would otherwise read `no roster is being read`, a sentence about
+             the reader's account rather than about a request that has not gone
+             out. The read fires as the row reaches it (`READ_AHEAD`), so the
+             ball is only ever drawn on a card in view or one peek from it. */
+          loading: ex.pastLoading || !ex.pastSettled,
+        };
+      }
+      return {
+        ...head,
+        projected: true,
+        // …and one read *each* for the forward half, the engine having no
+        // per-day breakdown to hand back over a span. See `READ_AHEAD`.
+        performers: scoreProjected(ex.future[date] ?? null, date),
+        // `undefined` is *not asked yet* and `false` is *answered, one way or
+        // the other* — see `ExtraDays.pastSettled`, which is the same
+        // distinction where a map cannot make it.
+        loading: ex.futureLoading[date] ?? true,
+      };
+    });
+
+  /** The played span's lineups as sets, once rather than per card. A **missing
+   *  date** is *we could not read that day*, not *nobody started* — the block
+   *  then counts everybody, which is what the app did before per-day lineups
+   *  existed. */
+  const lineupsOf = (ex: ExtraDays): Map<string, Set<string>> => {
+    const m = new Map<string, Set<string>>();
+    for (const [d, keys] of Object.entries(ex.past?.lineups ?? {})) m.set(d, new Set(keys));
+    return m;
   };
-  const oppProjected: Record<DayKey, boolean> = {
-    yesterday: false,
-    today: oppTodayIsProjected,
-    tomorrow: true,
-  };
+
+  const cards = cardsFor(named, extra, lineupsOf(extra));
+  const oppCards = cardsFor(oppNamed, oppExtra, lineupsOf(oppExtra));
+  /** **Today is the one the row opens on**, and the index is looked up rather
+   *  than written, so a period that starts today and one that started a
+   *  fortnight ago both open where the reader is. */
+  const opensOn = Math.max(0, days.indexOf(dates.today));
+
+  /**
+   * **Which card's whole ranked list is open**, held as a *date* rather than as
+   * the card itself — so the dialog follows the day it is about exactly as the
+   * card behind it does. `TODAY`'s twenty-second tick rewrites the performers,
+   * and a dialog holding the card it was opened with would go on printing the
+   * afternoon it opened at while the card underneath moved on.
+   */
+  const [ranked, setRanked] = useState<{ date: string; opp: boolean } | null>(null);
+  const rankedCard = ranked
+    ? ((ranked.opp ? oppCards : cards).find((c) => c.date === ranked.date) ?? null)
+    : null;
 
   /**
    * **The page arrives all at once, or not at all.**
@@ -1947,20 +2426,24 @@ export default function OverviewView({
           matchup heading's `through Aug 25` an inch above. */}
       <h2 className="ov-heading">
         Your days
+        {/* **The note is the span**, which is the one fact a carousel takes
+            away — and it is the row's own two ends rather than the three days
+            it used to be, a period being what the row now reaches across. */}
         <span className="ov-heading-note">
-          {prettyDate(dates.yesterday)} – {prettyDate(dates.tomorrow)}
+          {prettyDate(days[0])} – {prettyDate(days[days.length - 1])}
         </span>
       </h2>
       <DayCarousel
-        dates={dates}
-        perf={perf}
-        loading={loading}
-        isProjected={isProjected}
+        cards={cards}
+        days={days}
+        opensOn={opensOn}
+        onNeed={onNeedDay}
         categories={categories}
         categoriesTitle={categoriesTitle}
         onOpenPlayer={onOpenPlayer}
         onSeeDay={onSeeDay}
-        label="Your days — yesterday, today and tomorrow"
+        onRankDay={(c) => setRanked({ date: c.date, opp: false })}
+        label="Your days — every day of this matchup"
       />
 
       {/* **And the same three days for whoever you are playing**, at the foot
@@ -2006,19 +2489,20 @@ export default function OverviewView({
             <span className="ov-heading-note">{opponentName}</span>
           </h2>
           <DayCarousel
-            dates={dates}
-            perf={oppPerf}
-            loading={oppLoading}
-            isProjected={oppProjected}
+            cards={oppCards}
+            days={days}
+            opensOn={opensOn}
+            onNeed={onNeedOppDay}
             categories={categories}
             categoriesTitle={categoriesTitle}
             onOpenPlayer={onOpenPlayer}
             onSeeDay={onSeeOppDay}
+            onRankDay={(c) => setRanked({ date: c.date, opp: true })}
             /* `possessive`, not `+ "’s"`: half this league's names end in an
                `s` and `Baldy's Bozos’s` reads as a typo — the same rule and the
                same function a slot chip's title on his page already takes. */
             seeDayTitle={`Read ${possessive(opponentName)} roster over this day`}
-            label={`${opponentName} — yesterday, today and tomorrow`}
+            label={`${opponentName} — every day of this matchup`}
           />
         </>
       )}
@@ -2044,6 +2528,21 @@ export default function OverviewView({
         onOpenPlayer={onOpenPlayer}
         onSeeMore={onSeeMore}
       />
+      {/* **The whole of a day, ranked, over the page** — see
+          `RankedDayDialog`. It is raised here rather than inside a carousel so
+          the two rows share one box: there is one of these open at a time, and
+          which row it came from is two characters of state rather than a second
+          dialog that would have to agree with the first. */}
+      {rankedCard && (
+        <RankedDayDialog
+          card={rankedCard}
+          who={ranked?.opp ? opponentName : null}
+          categories={categories}
+          categoriesTitle={categoriesTitle}
+          onOpenPlayer={onOpenPlayer}
+          onClose={() => setRanked(null)}
+        />
+      )}
     </div>
   );
 }
