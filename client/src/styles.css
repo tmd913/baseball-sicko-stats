@@ -8973,6 +8973,22 @@ button.start-line:focus-visible {
 .research-scroll > .empty-state {
   margin-inline: var(--table-bleed, 0px);
 }
+/* **And the banner needs air over it here, where the app-wide rule gives it
+   none.** `.error-banner` carries a `margin-bottom` and no top, which is right
+   on every other surface it appears on: `App` draws it **above** the tools row,
+   against the pinned chrome, so its one margin is the gap to the controls under
+   it. This pane is the one place it lands the other way up — after the band,
+   before the table — and there the same rule reads as lopsided: measured with a
+   forced 503, **14px above and 18 below**, the 14 being the band's own closing
+   air and the 18 the banner's.
+
+   So the top makes up the difference rather than restating the number: the band
+   has already spent `--tools-band-gap` of the 18, and this is the rest of it.
+   `max()` because a band gap raised past 18 would otherwise pull the banner up
+   into the row it is news about. Measured after: 18 above and 18 below. */
+.research-scroll > .error-banner {
+  margin-top: max(0px, calc(18px - var(--tools-band-gap)));
+}
 /* In the page it has to bleed for itself, which the pane did on its behalf. One
    pair of declarations, the same token: the band runs to the edges of the box
    it is in on every surface, and its content lines up with the gutter the rest
