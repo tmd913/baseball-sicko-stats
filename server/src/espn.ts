@@ -1105,6 +1105,16 @@ export async function getRosterPct(): Promise<Record<number, number>> {
 // **180MB**, rejects `limit`, and rejects every stat filter there is (checked:
 // 400 on each). Their window is undocumented either way.
 //
+// **One exception, and it is a bootstrap rather than a second measurement.** The
+// league board *does* honor `filterIds` when a `limit` and a sort ride with it —
+// three ids in 10KB — and a man the extended join has only just reached has no
+// snapshot at all, so for him the choice is not between two measurements but
+// between one and a dash. `getOwnershipChange` reads that figure for exactly
+// those men and only to supply the **missing day-back baseline**, for the 1D
+// window alone; the delta is still this function's own arithmetic, and it is
+// entirely ours again the following morning. The window is no longer
+// undocumented either — measured against ours over 118 men, slope **0.944**.
+//
 // So it is computed from a **daily snapshot of the map already being fetched**.
 // That costs nothing extra — `getRosterPct` is one 940KB request the app makes
 // regardless — and it means the number has a definition the app can print: the
@@ -1414,6 +1424,109 @@ export interface RosterTrendWindow {
  *  is a claim where the truth is an absence. */
 export type RosterTrend = RosterTrendWindow[];
 
+// ---- Day one, for a man the map has only just learned to name --------------
+
+/**
+ * **ESPN's own published change in roster %, by ESPN player id.**
+ *
+ * This file's opening argument about the trend is that **the delta is ours,
+ * not ESPN's** — their `percentChange` rides only on payloads the app cannot
+ * justify, and their window is undocumented. Both halves of that are still
+ * true and it is still ours for all 1,400 men the snapshot can name. What
+ * changed is that a handful of men have **no snapshot at all** on the day the
+ * extended join first reaches them, and for exactly those the choice is not
+ * between two measurements but between one and a dash.
+ *
+ * **The payload is affordable because the request names the players.** The
+ * cookie-free season-wide `players?view=kona_player_info` ignores an
+ * `x-fantasy-filter` outright — probed, **211,301,476 bytes** and 23,390 rows
+ * with `filterIds` set — but the **league** endpoint honors it, and it is the
+ * one this app already reads with the user's cookies. `filterIds` alone is a
+ * 400 (`Filter: Limit request must be accompanied by a sort`); with a `limit`
+ * and a `sortPercOwned` beside it, three ids come back in **10,008 bytes** and
+ * sixty in 360KB. `players_wl` is leaner still (805 bytes for three) and
+ * carries no `percentChange` at all, which is what sends this to the heavier
+ * view.
+ *
+ * **What it measures, in numbers rather than in trust.** Driven against the
+ * live league over the 118 men this app holds a same-day delta for, ESPN's
+ * figure regressed on ours gives a slope of **0.944** — the same quantity,
+ * same sign, same units, on a window anchored differently: theirs rolls back
+ * from now, ours runs from the first read of the previous baseball day. On the
+ * 49 men who moved more than a point, the ratio is typically 0.86–0.93 (Grant
+ * Holmes 7.85 against 8.4, Michael Wacha 3.52 against 3.8, Shane McClanahan
+ * 4.09 against 4.4). At the top of the sort — which is the whole of what this
+ * is for — the two agree closely; the widest disagreements are on men moving
+ * hundredths, where our own tenth-rounding is the larger term.
+ *
+ * **It is a global fact fetched with one reader's cookies**, which is the one
+ * uncomfortable part and is stated rather than hidden. `percentChange` is
+ * ESPN's league-wide figure and does not vary by who asks; the cookies are the
+ * entry ticket to an endpoint, not a parameter of the answer. So it is cached
+ * globally like the pool it patches, on the pool's own six-hour TTL, and
+ * whichever connected league is read first in a window pays for it. A reader
+ * with no league connected sees no trend column at all, so there is nobody the
+ * cache could serve who could not have filled it.
+ */
+const CHANGE_TTL_MS = ROSTER_PCT_TTL_MS;
+
+/** A ceiling on how many ids one request may name, so a floor that one day
+ *  admits far more men cannot quietly turn this into the 211MB read. It is
+ *  four times today's 32 and **says so when it bites** rather than truncating
+ *  in silence. */
+const MAX_CHANGE_IDS = 128;
+
+interface KonaPlayersResponse {
+  players?: { player?: { id?: number; ownership?: { percentChange?: number } } }[];
+}
+
+let changeCache: { by: Map<number, number>; key: string; fetchedAt: number } | null = null;
+const changeInFlight = new Map<string, Promise<Map<number, number>>>();
+
+async function getOwnershipChange(
+  creds: EspnCreds,
+  espnIds: number[],
+): Promise<Map<number, number>> {
+  const asked = espnIds.slice(0, MAX_CHANGE_IDS).sort((a, b) => a - b);
+  if (asked.length < espnIds.length) {
+    console.warn(
+      `ESPN ownership change: ${espnIds.length} ids over the ${MAX_CHANGE_IDS} cap, ` +
+        `${espnIds.length - asked.length} left without a day-one delta`,
+    );
+  }
+  const key = asked.join(',');
+  if (changeCache && changeCache.key === key && Date.now() - changeCache.fetchedAt < CHANGE_TTL_MS) {
+    return changeCache.by;
+  }
+  const running = changeInFlight.get(key);
+  if (running) return running;
+  const job = (async () => {
+    const data = await leagueGet<KonaPlayersResponse>(creds, ['kona_player_info'], null, {
+      players: {
+        filterIds: { value: asked },
+        // Both required together — the filter is a 400 without the sort, and the
+        // sort does nothing without the limit. Which sort is immaterial; every
+        // row asked for comes back.
+        limit: asked.length,
+        offset: 0,
+        sortPercOwned: { sortAsc: false, sortPriority: 1 },
+      },
+    });
+    const by = new Map<number, number>();
+    for (const row of data.players ?? []) {
+      const id = row.player?.id;
+      const change = row.player?.ownership?.percentChange;
+      if (typeof id === 'number' && typeof change === 'number') by.set(id, change);
+    }
+    changeCache = { by, key, fetchedAt: Date.now() };
+    return by;
+  })().finally(() => {
+    changeInFlight.delete(key);
+  });
+  changeInFlight.set(key, job);
+  return job;
+}
+
 /**
  * The trend windows, or null when not one of them has a baseline to measure
  * against — a cold install, whose history starts accumulating today.
@@ -1428,7 +1541,7 @@ export type RosterTrend = RosterTrendWindow[];
  * Typically that is five 19KB reads, one per window, each hitting its exact
  * day; a miss is a 404 against the cache and costs nothing.
  */
-export async function getRosterTrend(): Promise<RosterTrend | null> {
+export async function getRosterTrend(creds?: EspnCreds): Promise<RosterTrend | null> {
   const today = baseballToday();
   // The pool rather than the wrapper, because the men its **extended** join
   // reached need to be told apart from a call-up when a baseline lacks them —
@@ -1441,11 +1554,73 @@ export async function getRosterTrend(): Promise<RosterTrend | null> {
     console.error('ESPN ownership snapshot failed:', err.message),
   );
 
+  /**
+   * **A baseline for the men who have none, so their `Δ1d` is a number today
+   * rather than tomorrow.**
+   *
+   * The withhold rule in `diffAgainst` is right and this does not weaken it:
+   * absence still is not read as a rise from nothing. What it does is *supply
+   * the missing day* — `was = now − ESPN's own change` — so the delta this
+   * function then computes is its own arithmetic over a baseline that has a
+   * source, rather than a guess about one that does not exist.
+   *
+   * **The 1D window only, because one change figure is one day.** ESPN
+   * publishes a single `percentChange`; measured against ours it is a day's
+   * movement (slope 0.944 — see `getOwnershipChange`), so it can stand in for
+   * the day-back baseline and for nothing else. 3D and out stay withheld until
+   * real history reaches them, which is three days and out.
+   *
+   * **It lasts one day per player.** Tomorrow the snapshot written this
+   * morning is the 1D baseline and the figure is entirely ours again, so this
+   * is a bootstrap rather than a second measurement living permanently in one
+   * column.
+   *
+   * A failed read costs the seed and nothing else: the men fall back to the
+   * dash they would have had, every other player's five columns are untouched,
+   * and no error reaches the caller. Absent `creds` — the nightly warmer, which
+   * exists to write the snapshot rather than to answer anybody — skips it
+   * entirely.
+   */
+  const espnByMlb = new Map<number, number>();
+  for (const [espnId, row] of Object.entries(pool.byEspnId)) {
+    if (row.mlbId !== null && extended.has(row.mlbId)) espnByMlb.set(row.mlbId, Number(espnId));
+  }
+  let seed: Map<number, number> | null = null;
+  if (creds && espnByMlb.size > 0) {
+    const by = await getOwnershipChange(creds, [...espnByMlb.values()]).catch((err: Error) => {
+      console.error('ESPN ownership change unavailable:', err.message);
+      return null;
+    });
+    if (by) {
+      seed = new Map<number, number>();
+      for (const [mlbId, espnId] of espnByMlb) {
+        const change = by.get(espnId);
+        const now = current[mlbId];
+        if (typeof change === 'number' && typeof now === 'number') seed.set(mlbId, now - change);
+      }
+    }
+  }
+
   const resolved = await Promise.all(
     TREND_WINDOWS.map(async (window): Promise<RosterTrendWindow | null> => {
       for (const days of baselineOrder(window)) {
-        const base = await readSnapshot(daysAgo(today, days));
-        if (!base) continue;
+        const stored = await readSnapshot(daysAgo(today, days));
+        if (!stored) continue;
+        let base = stored;
+        if (window === 1 && seed) {
+          // Copied, and **only where the day genuinely holds nothing**: a
+          // stored value is the real thing and an explicit `null` is a withheld
+          // one, and overwriting either would be the baseline-creep this file
+          // refuses everywhere else.
+          const filled = { ...stored };
+          let any = false;
+          for (const [id, was] of seed) {
+            if (id in filled) continue;
+            filled[id] = was;
+            any = true;
+          }
+          if (any) base = filled;
+        }
         return { window, days, delta: diffAgainst(current, base, extended) };
       }
       return null;
@@ -2261,7 +2436,7 @@ export async function getOwnership(
         };
         return empty;
       }),
-      getRosterTrend().catch((err: Error) => {
+      getRosterTrend(creds).catch((err: Error) => {
         console.error('ESPN roster trend unavailable:', err.message);
         return null;
       }),

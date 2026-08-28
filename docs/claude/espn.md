@@ -426,6 +426,65 @@ month, and every other player on the board is untouched throughout. A genuine
 call-up inside that set loses his first day's rise to a dash, which is the
 direction every join in this file fails in.
 
+#### …and day one is ESPN's own change, used as the missing baseline
+
+**Reported as: "I need to be able to see deltas for prospects on the same day,
+at least for the 1D delta."** The withhold above is honest and it is also a
+dash, and a dash on the day a prospect is being picked up is the day the column
+is worth reading.
+
+**The standing claim is that the delta is ours, not ESPN's**, because their
+`percentChange` rides only on payloads this app cannot justify. Both halves
+survive: it is still ours for all 1,400 men the snapshot can name, and the
+payloads are still what they were. What is new is that the **league** endpoint
+honors `filterIds` when a `limit` and a sort ride with it — `filterIds` alone is
+a 400 (`Filter: Limit request must be accompanied by a sort`) — so naming three
+players costs **10,008 bytes** where the cookie-free season-wide read ignores
+the filter outright and returns **211,301,476**. `players_wl` is leaner still
+(805 bytes for three) and carries no `percentChange`, which is what sends this
+to the heavier view.
+
+**And their window is no longer undocumented.** Regressed against our own
+same-day figure over the 118 men we hold one for, the slope is **0.944** — the
+same quantity, same sign, same units, on a window anchored differently: theirs
+rolls back from now, ours runs from the first read of the previous baseball day.
+On the 49 who moved more than a point the ratio is typically 0.86–0.93 (Grant
+Holmes 7.85 against 8.4, Michael Wacha 3.52 against 3.8, Shane McClanahan 4.09
+against 4.4). The widest disagreements are on men moving hundredths, where our
+own tenth-rounding is the larger term. **At the top of the sort, which is what
+this is for, the two agree closely.**
+
+**So it is used as a baseline, not as a delta.** `was = now − change`, filled
+into the 1D baseline map for the extended ids the day genuinely holds nothing
+for; the number the column then prints is `diffAgainst`'s own arithmetic over a
+baseline that has a source. Three consequences worth stating:
+
+- **The 1D window only.** ESPN publishes one change figure and it is one day's,
+  so it can stand in for the day-back baseline and for nothing else. 3D and out
+  stay withheld until real history reaches them.
+- **One day per player.** Tomorrow the snapshot written this morning *is* the 1D
+  baseline, so this is a bootstrap that self-replaces rather than a second
+  measurement living permanently in one column.
+- **A stored value is never overwritten**, nor is an explicit `null`: only a day
+  that holds nothing at all for that man is filled, which is the same
+  no-baseline-creep rule `snapshotRosterPct` is written under.
+
+**A global fact fetched with one reader's cookies**, which is the uncomfortable
+part and is stated rather than hidden. `percentChange` is ESPN's league-wide
+figure and does not vary by who asks; the cookies are the entry ticket to an
+endpoint, not a parameter of the answer. So it is cached globally on the pool's
+own six-hour TTL and whichever connected league is read first in a window pays
+for it — and a reader with no league sees no trend column at all, so there is
+nobody the cache could serve who could not have filled it. `MAX_CHANGE_IDS`
+(128, four times today's 32) keeps a floor that one day admits far more men from
+quietly turning this into the 211MB read, and **says so** when it bites.
+
+Measured on the live league: `/api/espn/ownership` cold **0.43 / 0.31s** with
+the extra read in it, warm 0.01s. Driven on the board, `Δ1d` descending with
+every include on: **Tristan Peters +8.4, Walker Jenkins +6.0, Jac Caglianone,
+Daylen Lile, Connor Norby +2.1** — where the same sort the day before drew him a
+dash. Δ3d and out still read `—` for him.
+
 **`snapshotRosterPct` fills a missing id rather than only writing a missing
 blob**, which is what makes *tomorrow* rather than the day after. Write-once is
 about a value being **rewritten** — a baseline creeping toward the current value
