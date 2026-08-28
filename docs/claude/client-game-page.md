@@ -667,6 +667,59 @@ its own through `onTabChange` and it lands in a ref.
 re-render the whole app on every navigation to change a value two callbacks
 read.
 
+### The two module caches are two keys, and one of them was never written
+
+**`gameCache` and `playsCache` were module-level `Map`s**, kept for a measured
+reason that still holds: a page stepped back onto must render at its **full
+height in the first commit**, or the browser clamps `DetailsShell`'s restored
+scroll offset to 0 against an empty box. Both are keys on the resource store now
+(*One entry per server resource*, in the client shell), which holds an answer
+past the component that asked for it and hands it back synchronously on the next
+mount — the same property, in a cache the rest of the app can see, invalidate
+and bound.
+
+**And one of them did not actually keep its promise.** `gameCache.set(gamePk, g)`
+sat *inside* the read's own guard —
+
+```
+if (!alive || reqRef.current !== req) return;
+gameCache.set(gamePk, g);
+```
+
+— so an answer that landed after the reader had left was discarded **along with
+the cache write it was going to make**. Which is precisely the case the cache
+exists for: open a game, get bored, go back, come back.
+
+**Measured, with the game report held 2s in the page**, opening a game from the
+MLB scoreboard, pressing Back before it lands, and opening it again:
+
+| | +130ms | +400ms | +900ms |
+| --- | --- | --- | --- |
+| before | `Reading the game` | `Reading the game` | `Reading the game` |
+| after | **the page, 1047 chars** | the page | the page |
+
+The first open is a block wait on both, correctly — there is nothing to draw.
+
+**And the ordinary open costs half what it did**: 2 `/api/games/:pk` reads per
+open before, 1 after. The two were dev's StrictMode double-mount against an
+effect with nothing to dedupe against; the store's in-flight join is what
+removes it.
+
+**`staleMs: 0` on the report, which is what the old paragraph promised**: *"It
+says nothing about freshness. Every mount still issues its read, and a live game
+still polls; what the cache changes is what is on screen while that is in
+flight."* That sentence is now the configuration.
+
+**The Plays tab keeps `playsAsked`'s bargain without the ref.** That was a mark
+set *before* the read — a once-per-mount gate rather than a test of what had
+landed, which the file was careful to say out loud because it is the shape that
+has hung this app four times. The key replaces both halves: the store's dedupe
+is what stops the tab and a half-inning dialog making two requests of it, and
+**`SEASON_STALE_MS`** is what decides a re-entry. Five minutes rather than the
+store's twenty seconds because of this read's size — ~150KB against the report's
+11.5 — so crossing to the Box Score and back must not re-buy it. Measured: 1
+read on first open, **0** on re-entry, before and after.
+
 ### A page comes back as it was left
 
 A step onto a page carries **which tab** it was showing and **where its scroller

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
+import { useResource } from '../resource';
 import {
   fmt,
   formatStartTime,
   inningLabel,
   prettyGameDate,
+  SEASON_STALE_MS,
   surname,
   teamColor,
   teamLogoUrl,
@@ -20,14 +22,12 @@ import { buildScheduleIndex, gamesOn, OpponentPress, opponentText, spanPhrase } 
 import type { PitcherLookup } from './schedule';
 import type {
   PlayerKind,
-  PlayerWindows,
   ResearchRow,
   ScheduleGame,
   ScheduleWindow,
   SeasonPlayer,
   SplitCut,
   TeamGameResult,
-  TeamHitting,
   TeamInfo,
 } from '../types';
 
@@ -250,40 +250,25 @@ export function TeamDetails({
    * *is* the default tab and it draws this, so laziness would buy nothing and
    * cost the strip a wait on the tab that opens.
    */
-  const [windows, setWindows] = useState<PlayerWindows | null>(null);
-  const [windowsError, setWindowsError] = useState<string | null>(null);
-  const [windowsLoading, setWindowsLoading] = useState(false);
   /**
-   * Which read is on screen, as the request's own key.
+   * **Keyed by club and side**, which is what the `windowsReq` ref spelled and
+   * what the store now holds the answer under. The ref carried a paragraph
+   * about never being marked before the answer lands — the StrictMode hang the
+   * whole app has met four times — and a key cannot be marked at all: a read is
+   * decided by the entry's own state, and only the newest may write it.
    *
-   * **Never marked before it is answered**, the rule `hooks.ts` and the player
-   * page's percentile tab both carry: React StrictMode mounts, tears down and
-   * re-runs, so a mark set on the way *out* of an effect whose cleanup discards
-   * the answer leaves the second pass returning early and the wait up for ever.
-   * Here the mark is the sequence test as well — a stale answer is one whose key
-   * is no longer the current one, and only the newest may write.
+   * Not lazy, and that is argued above: the Overview *is* the default tab and
+   * it draws this, so laziness would buy nothing and cost the strip a wait on
+   * the tab that opens.
    */
-  const windowsReq = useRef<string | null>(null);
-  useEffect(() => {
-    const req = `${team.id}:${side}`;
-    if (windowsReq.current === req) return;
-    windowsReq.current = req;
-    setWindowsLoading(true);
-    setWindowsError(null);
-    api.teamWindows(team.id, side).then(
-      (w) => {
-        if (windowsReq.current !== req) return;
-        setWindows(w);
-        setWindowsLoading(false);
-      },
-      (e: Error) => {
-        if (windowsReq.current !== req) return;
-        setWindowsError(e.message);
-        setWindowsLoading(false);
-        windowsReq.current = null; // allow a retry on a tab or side change
-      },
-    );
-  }, [team.id, side]);
+  const windowsRes = useResource(
+    `teamWindows:${team.id}:${side}`,
+    () => api.teamWindows(team.id, side),
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
+  );
+  const windows = windowsRes.value ?? null;
+  const windowsError = windowsRes.error?.message ?? null;
+  const windowsLoading = windowsRes.loading;
 
   /** The season row, which is what the head's record and the Overview's strip
    *  read. `null` until the read lands, and on a club that a board is missing. */
@@ -303,35 +288,19 @@ export function TeamDetails({
    * control costs nothing, and `OpponentBody` reads the other four spans itself
    * (keyed by side there too).
    */
-  const [splits, setSplits] = useState<TeamHitting | null>(null);
-  const [splitsError, setSplitsError] = useState(false);
-  /* **A state flag rather than the request ref**, and the difference is one the
-     app's loading rules make explicit: the ref is not reactive, so a wait
-     tested against it is tested on a render that has already happened — the
-     effect runs *after* the first paint, and the next render is the answer
-     landing. Read off the ref, the block wait could never appear at all. */
-  const [splitsLoading, setSplitsLoading] = useState(false);
-  const splitsReq = useRef<string | null>(null);
-  useEffect(() => {
-    const req = `${team.id}:${side}`;
-    if (tab !== 'splits' || splitsReq.current === req) return;
-    splitsReq.current = req;
-    setSplitsError(false);
-    setSplitsLoading(true);
-    api.teamSplits(team.id, 'season', side === 'pitcher' ? 'pitching' : 'batting').then(
-      (b) => {
-        if (splitsReq.current !== req) return;
-        setSplits(b);
-        setSplitsLoading(false);
-      },
-      () => {
-        if (splitsReq.current !== req) return;
-        splitsReq.current = null;
-        setSplitsError(true);
-        setSplitsLoading(false);
-      },
-    );
-  }, [tab, team.id, side]);
+  const splitsRes = useResource(
+    tab === 'splits' ? `teamSplits:${team.id}:${side}` : null,
+    () => api.teamSplits(team.id, 'season', side === 'pitcher' ? 'pitching' : 'batting'),
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
+  );
+  const splits = splitsRes.value ?? null;
+  const splitsError = splitsRes.error != null;
+  /* A flag off the store rather than off a ref, and the difference is one the
+     app's loading rules make explicit: a ref is not reactive, so a wait tested
+     against it is tested on a render that has already happened. This is state,
+     and it moves the render that starts the read and the render the answer
+     lands on. */
+  const splitsLoading = splitsRes.loading;
   /* Rule 2 of the loading system: a block wait only where there is nothing to
      show yet, and only past `WAIT_DELAY` — a club already read comes back in a
      tick, and a wait that flashes reads as the page breaking. */
@@ -1032,35 +1001,17 @@ function StarterName({
  * batting reading of a 5–3 win.
  */
 function TeamResults({ team, onOpenGame }: { team: TeamInfo; onOpenGame: GameDoor | null }) {
-  const [games, setGames] = useState<TeamGameResult[] | null>(null);
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(false);
-  /* Never marked before it is answered — the rule this file already keeps twice
-     over: StrictMode mounts, tears down and re-runs, so a mark set on the way
-     *out* of an effect whose cleanup discards the answer leaves the second pass
-     returning early and the wait up for ever. The mark is the sequence test
-     too: a stale answer is one whose key is no longer current. */
-  const req = useRef<string | null>(null);
-  useEffect(() => {
-    const key = String(team.id);
-    if (req.current === key) return;
-    req.current = key;
-    setLoading(true);
-    setError(false);
-    api.teamGames(team.id).then(
-      (g) => {
-        if (req.current !== key) return;
-        setGames(g);
-        setLoading(false);
-      },
-      () => {
-        if (req.current !== key) return;
-        req.current = null; // allow a retry on the next open of the tab
-        setError(true);
-        setLoading(false);
-      },
-    );
-  }, [team.id]);
+  /* Keyed on the club alone — **not** on the side switch, and that is a fact
+     about games rather than an omission: a club's result is its result, and
+     there is no batting reading of a 5–3 win. */
+  const gamesRes = useResource(`teamGames:${team.id}`, () => api.teamGames(team.id), {
+    keepPrevious: false,
+    staleMs: SEASON_STALE_MS,
+  });
+  const games = gamesRes.value ?? null;
+  const error = gamesRes.error != null;
+  const loading = gamesRes.loading;
+
   /* Rule 2: a block wait only where there is nothing to show, and only past
      `WAIT_DELAY` — a club already read comes back in a tick, and a wait that
      flashes reads as the page breaking. */

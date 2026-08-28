@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { formatStartTime, inningLabel, LIVE_POLL_MS, prettyGameDate } from '../lib';
+import { useResource, useResourcePoll } from '../resource';
+import {
+  formatStartTime,
+  inningLabel,
+  LIVE_POLL_MS,
+  prettyGameDate,
+  SEASON_STALE_MS,
+} from '../lib';
 import { useDelayedFlag, useTeamDoor } from '../hooks';
 import type { GamePageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
@@ -90,8 +97,15 @@ import type {
  * live game still polls; what the cache changes is what is on screen while that
  * is in flight, which is rule 1 of the loading system — *never over data*.
  */
-const gameCache = new Map<number, GameReport>();
-const playsCache = new Map<number, PlayerReport[]>();
+/* `gameCache` and `playsCache` stood here — two module-level `Map`s, kept so a
+   page stepped back onto would render at its full height in the **first**
+   commit rather than as an empty box the browser clamps a restored scroll to 0
+   against. Both are the resource store's now (`resource.ts`), which holds an
+   answer past the component that asked for it and hands it back synchronously
+   on the next mount, and which — unlike a module `Map` nothing else can see —
+   can be invalidated and is bounded. The paragraph above is why they existed
+   and still describes what the keys below buy.
+*/
 /**
  * …and **how far down the game the Plays tab was opened**, by `gamePk`.
  *
@@ -164,9 +178,6 @@ export function GamePage({
    * they did ask for.
    */
   const [halfOpen, setHalfOpen] = useState<HalfRef | null>(null);
-  const [game, setGame] = useState<GameReport | null>(() => gameCache.get(gamePk) ?? null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   /**
    * **Which read is on screen**, so a stale answer cannot land on a fresh one.
@@ -176,56 +187,36 @@ export function GamePage({
    * itself and every answer would look current. Only the newest may write state
    * or raise the banner.
    */
-  const reqRef = useRef(0);
-  useEffect(() => {
-    let alive = true;
-    const read = (quiet: boolean) => {
-      const req = (reqRef.current += 1);
-      if (!quiet) setLoading(true);
-      api.game(gamePk).then(
-        (g) => {
-          if (!alive || reqRef.current !== req) return;
-          gameCache.set(gamePk, g);
-          setGame(g);
-          setError(null);
-          setLoading(false);
-        },
-        (e: Error) => {
-          if (!alive || reqRef.current !== req) return;
-          // **A failed re-read leaves the last answer standing.** The banner is
-          // for a page with nothing on it; a poll that missed a beat is not
-          // news, and blanking a box score the reader is in the middle of would
-          // be the loading rule broken in its own words.
-          if (!quiet) setError(e.message);
-          setLoading(false);
-        },
-      );
-    };
-    read(false);
-    return () => {
-      alive = false;
-    };
-  }, [gamePk]);
+  const gameKey = `game:${gamePk}`;
+  /**
+   * **`staleMs: 0` — every mount still issues its read**, which is what the
+   * paragraph above the old module caches promised and what a page about a game
+   * being played has to do. What the store changes is only what is on screen
+   * while that read is in flight: the answer it already has, drawn at full
+   * height in the first commit, rather than an empty box. That is rule 1 and it
+   * is also what `initialScroll` needs to land where the reader left.
+   *
+   * **`keepPrevious: false`**, because the key changes only when the *game*
+   * does, and one game's line score under another's heading is not a stale
+   * answer to the question on screen — it is an answer to a different one.
+   */
+  const gameRes = useResource(gameKey, () => api.game(gamePk), {
+    keepPrevious: false,
+    staleMs: 0,
+  });
+  const game = gameRes.value ?? null;
+  /* **This page 502s honestly** and the banner is drawn only where `game` is
+     null, so a failed *poll* costs nothing: the last answer stands, which is the
+     loading rule in its own words. */
+  const error = gameRes.error?.message ?? null;
+  const loading = gameRes.loading;
 
   /* The poll, and only for a game that is actually being played — a final game
      is a fact and a scheduled one changes once, when it starts, which is a page
-     the reader will have left. Keyed on the state rather than on the report, so
+     the reader will have left. Read off the state rather than the report, so
      the twenty seconds are not restarted by the answer that arrives. */
   const live = game?.status.state === 'live';
-  useEffect(() => {
-    if (!live) return;
-    const t = setInterval(() => {
-      const req = (reqRef.current += 1);
-      api.game(gamePk).then(
-        (g) => {
-          gameCache.set(gamePk, g);
-          if (reqRef.current === req) setGame(g);
-        },
-        () => {},
-      );
-    }, LIVE_POLL_MS);
-    return () => clearInterval(t);
-  }, [live, gamePk]);
+  useResourcePoll(gameKey, live ? LIVE_POLL_MS : null);
 
   const wait = useDelayedFlag(loading && game === null);
 
@@ -241,57 +232,38 @@ export function GamePage({
    * and **quietly**: the stream that is on screen stands while the next answer
    * is in flight, and a failed re-read leaves it there.
    */
-  const [plays, setPlays] = useState<PlayerReport[] | null>(() => playsCache.get(gamePk) ?? null);
-  const [playsError, setPlaysError] = useState<string | null>(null);
-  const [playsLoading, setPlaysLoading] = useState(false);
-  const playsReq = useRef(0);
-  /** Whether this mount has asked. Marked **before** the read rather than after
-   *  it, which is what makes it a once-per-mount gate rather than a test of
-   *  what has landed — the rule `hooks.ts` states, read the other way round. */
-  const playsAsked = useRef(false);
-  const readPlays = useCallback(
-    (quiet: boolean) => {
-      const req = (playsReq.current += 1);
-      if (!quiet) setPlaysLoading(true);
-      api.gamePlays(gamePk).then(
-        (r) => {
-          if (playsReq.current !== req) return;
-          playsCache.set(gamePk, r);
-          setPlays(r);
-          setPlaysError(null);
-          setPlaysLoading(false);
-        },
-        (e: Error) => {
-          if (playsReq.current !== req) return;
-          if (!quiet) setPlaysError(e.message);
-          setPlaysLoading(false);
-        },
-      );
-    },
-    [gamePk],
-  );
-  useEffect(() => {
-    // Never marked before it is answered, and tested against the state we
-    // already hold rather than against a flag an effect cleanup could unset:
-    // StrictMode mounts, tears down and re-runs, and a mark set on the way out
-    // leaves the second pass returning early and the wait up for ever.
-    // **Two triggers, one read.** The Plays tab wants it, and so does a
-    // half-inning opened off the line score — which can happen on the Overview,
-    // before that tab has ever been touched. Whichever comes first pays for it
-    // and the other finds it done.
-    if (tab !== 'plays' && halfOpen === null) return;
-    // **Once per mount**, and quietly where the cache already has an answer:
-    // the read is what keeps a live game moving, and `plays` being seeded from
-    // the layout cache must not be mistaken for it having been made.
-    if (playsAsked.current) return;
-    playsAsked.current = true;
-    readPlays(plays !== null);
-  }, [tab, halfOpen, plays, readPlays]);
-  useEffect(() => {
-    if (!live || (tab !== 'plays' && halfOpen === null) || plays === null) return;
-    const t = setInterval(() => readPlays(true), LIVE_POLL_MS);
-    return () => clearInterval(t);
-  }, [live, tab, halfOpen, plays, readPlays]);
+  /**
+   * **Two triggers, one key.** The Plays tab wants the stream, and so does a
+   * half-inning opened off the line score — which can happen on the Overview,
+   * before that tab has ever been touched. Whichever comes first opens the key
+   * and the other finds the answer already there.
+   *
+   * `playsAsked` stood here — a ref marking *this mount has asked*, set before
+   * the read rather than after it, and carrying a comment about being a
+   * once-per-mount gate rather than a test of what has landed. A key needs
+   * neither reading: the store's dedupe is what stops two triggers making two
+   * requests, and `staleMs` is what decides whether a re-entry re-asks.
+   *
+   * **`SEASON_STALE_MS` rather than the store's default**, and the reason is
+   * this read's size: ~150KB (21.5KB gzipped) against the report's 11.5, and it
+   * costs a `getDay`. Crossing to the Box Score and back must not re-buy it —
+   * which the old per-mount ref gave for free and a twenty-second staleness
+   * would have taken away. A game being played re-reads on the poll below,
+   * which is the case that actually moves.
+   */
+  const playsKey = tab === 'plays' || halfOpen !== null ? `gamePlays:${gamePk}` : null;
+  const playsRes = useResource(playsKey, () => api.gamePlays(gamePk), {
+    keepPrevious: false,
+    staleMs: SEASON_STALE_MS,
+  });
+  const plays = playsRes.value ?? null;
+  const playsError = playsRes.error?.message ?? null;
+  const playsLoading = playsRes.loading;
+  /* It re-reads on the same twenty-second clock while the game is being played,
+     and **quietly**: the stream on screen stands while the next answer is in
+     flight, and a failed re-read leaves it there. The store counts a poll apart
+     from a read somebody started, so neither the wait nor the banner moves. */
+  useResourcePoll(playsKey, live ? LIVE_POLL_MS : null);
 
   /**
    * The keys this page may open, as a set.
