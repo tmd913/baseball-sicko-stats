@@ -22395,7 +22395,17 @@ html[data-theme='light'] .league-table thead th {
 .ov-heat {
   display: flex;
   gap: 6px;
-  margin: 0;
+  /* **It sits at the foot and takes the push the foot used to.** `.ov-day-foot`
+     carries `margin-top: auto` so a short card puts its door at the bottom
+     rather than leaving it floating in the middle; with this row between the
+     list and that door, the `auto` has to move up here or the two would be
+     pushed apart by whatever slack the card has. The foot's own is zeroed
+     below, so the pair travels together. */
+  margin: auto 0 0;
+  /* The only row on the card that belongs to the whole of it rather than to a
+     column of it — flush left under three right-aligned figures it read as a
+     fourth row of the list. */
+  justify-content: center;
   /* 13 against the glyph's 16 and the `VALUE` label's 11. The count is a figure
      *attached to* the mark beside it rather than a reading in its own right —
      at 14 the two carried equal weight and the badge read as a pair, where what
@@ -22422,6 +22432,12 @@ html[data-theme='light'] .league-table thead th {
    emoji carries hot and cold, and painting the box behind it would be the same
    statement made twice — the rule that keeps the day cards' value column
    monochrome, applied to a row where the *glyph* is doing what a hue would. */
+/* **And each badge is a door**, opening the same ranked list cut to the men it
+   counts. The app's own bare-button reset — `font-family: inherit` rather than
+   `font: inherit`, the shorthand having reset `font-size` on this stylesheet's
+   buttons once already. Hover is **not** scoped to `(hover: hover)`: the rule
+   that scopes it is for full-width rows and cards in a scrolling list, and a
+   small aimed target keeps its hover. */
 .ov-heat-cell {
   display: inline-flex;
   align-items: center;
@@ -22430,6 +22446,12 @@ html[data-theme='light'] .league-table thead th {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel-2);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease;
   /* An emoji has its own metrics and sits a shade high against tabular digits;
      the line box is declared so the row's height cannot change with the font
      the platform hands it. */
@@ -22459,6 +22481,52 @@ html[data-theme='light'] .league-table thead th {
 }
 .ov-heat-cell.is-none > span {
   opacity: 0.45;
+}
+/* **A count of nought does not press**, there being nothing behind it — a
+   control that opens an empty list is worse than a figure that is plainly a
+   nought. */
+.ov-heat-cell:disabled {
+  cursor: default;
+}
+.ov-heat-cell:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ov-heat-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* **The crest beside the manager's name**, the same pairing the ranked dialog's
+   own head and the scoreboard card both make. `.lg-logo`'s default box is 34×26
+   for a table row; here it sits against an 11px small-caps line, so the two
+   variables that size it come down with the type — the split that shape was
+   built with, and the same one the League table's category rows use one size
+   further down. */
+.ov-leader-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-bottom: 6px;
+  --lg-logo-w: 22px;
+  --lg-logo-h: 17px;
+  --lg-logo-glyph: 11px;
+}
+.ov-leader-head .ov-leader-name {
+  margin-bottom: 0;
+  /* The one elastic thing on the line, so a long name ellipsizes into the slack
+     rather than pushing the crest out of the card. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The foot gives up its push to `.ov-heat` above it — see there. Two `auto`
+   margins in one column would split the slack between them and put a gap
+   between a row and the door it belongs to. */
+.ov-leader-side .ov-day-foot {
+  margin-top: 0;
 }
 
 /* **Each side is a card of its own, and there is no card around them.**

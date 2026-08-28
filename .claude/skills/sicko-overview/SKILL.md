@@ -1,6 +1,6 @@
 ---
 name: sicko-overview
-description: The Overview — the app's front page, its first tab and a connected reader's default landing page, which answers "how is it going" out of reads other pages already make: this week's matchup card, then yesterday, today and tomorrow as a swipeable carousel of day cards, each printing the day's totals in the league's own scoring categories and naming the three men who did most for them (with today drawn as a projection until its first game starts), then a Matchup leaders card per manager with hot/level/cold counts and a Summary-or-Projected switch. Every one of those lists opens its whole ranked population in a popup. Also `categoryValue.ts`, which is how a day is scored — the rate contributions, the measured per-player-day scales, and why a batter's day and a pitcher's day are comparable at all. Use when editing OverviewView.tsx or categoryValue.ts, when changing what the Overview shows, how a performer is ranked or how the carousel behaves, when touching which view a bare URL lands on, when adding a scoring category the day blocks can compute, or when refreshing the scales for a new season.
+description: The Overview — the app's front page, its first tab and a connected reader's default landing page, which answers "how is it going" out of reads other pages already make: this week's matchup card, then yesterday, today and tomorrow as a swipeable carousel of day cards, each printing the day's totals in the league's own scoring categories and naming the three men who did most for them (with today drawn as a projection until its first game starts), then a Matchup leaders card per manager — crest, top three, and hot/level/cold counts, over a Summary-or-Projected switch. Every one of those lists opens its whole ranked population in a popup, and each count badge opens its own cut of it. Also `categoryValue.ts`, which is how a day is scored — the rate contributions, the measured per-player-day scales, and why a batter's day and a pitcher's day are comparable at all. Use when editing OverviewView.tsx or categoryValue.ts, when changing what the Overview shows, how a performer is ranked or how the carousel behaves, when touching which view a bare URL lands on, when adding a scoring category the day blocks can compute, or when refreshing the scales for a new season.
 ---
 
 # The Overview
@@ -45,8 +45,9 @@ averaged over the categories the player's own side of the ball scores.
   and why scarcity is value; the ten-date sample the scales were measured off
   and when to refresh them; the `Rank all N` dialog, why it is a popup rather than
   a URL param and why its value chips are colored where the cards' are not; the
-  `Matchup leaders` block, its two read shapes, its `Summary`/`Projected` switch
-  and the two **measured** pairs of hot/cold cuts; the period-long carousel that
+  `Matchup leaders` block, its two read shapes, its `Summary`/`Projected` switch,
+  the two **measured** pairs of hot/cold cuts and the badges that open them; the
+  measured budget the Spotlight's notes are written to; the period-long carousel that
   was built and pulled back; the standard 5×5 fallback for a reader with no
   league; the three doors off the page; and the measured layout, breakpoint and
   bundle.

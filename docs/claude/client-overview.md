@@ -1737,20 +1737,45 @@ without making that side's content box narrower than the first's — measured,
 visibly different sizes. Two cards need no divider, so the trough is the grid's
 own `gap` and the tracks are equal by construction.)*
 
-### The head is a name, then a row that is a reading and a label
+### Read downward: whose, the three, the shape of the rest, the door
 
-**The team name has the line to itself.** It shared the `Value` label's row, and
-it is not a column heading: it is what the whole side *is*, and half this league's
-names are long enough (`Brian&Tom's Excellent Adventure`) to crowd anything beside
-them in a 300px column.
+**The crest and the manager's name, on a line of their own.** The name shared the
+`Value` label's row for a build and is not a column heading — it is what the whole
+side *is*, and half this league's names are long enough
+(`Brian&Tom's Excellent Adventure`) to crowd anything beside them in a 300px
+column. The crest is `LeagueView`'s own `TeamLogo`, at 22×17 rather than the
+League table's 34×26 (the two variables that size it come down with the type, the
+split that shape was built with), and it is the same pairing the scoreboard card
+above and the ranked dialog's head both make: a fantasy team name is chosen by its
+manager and half of them are jokes, where the picture is what the reader already
+recognises.
 
-**The row under it holds the heat counts on the left and `VALUE` on the right** —
-which is what the row already was, *the line that says what the rows under it
-are*, now holding both halves of that. It costs the card a line rather than adding
-one. The counts are **14px against the label's 11**, deliberately unequal: `VALUE`
-names a column and is read once, and the counts *are* a reading.
+**Then `TOP PERFORMERS` and `VALUE`, which is exactly what a day card draws.** The
+heat counts held this row for a build, and what belongs on it is what belongs on
+it everywhere else in this app: the name of the list and the name of the column
+its numbers are in. A block that draws the identical three rows under a
+*different* caption is a block a reader has to check is the same thing.
+`Top Performers` is a **span** rather than the day cards' `h4` — a fact about this
+card, not about the label: the heading of a side here is the manager's name one
+line up, and a second `h4` under it would have a screen reader announce two
+headings for one list.
 
-### Hot, level and cold — two measured pairs of cuts
+**Then the three rows, then the heat counts, then the door.** The counts moved to
+the foot because the head of a list is where you say what the list *is*, and they
+are not about the list — they are about the population it was cut from, which is
+what the control immediately under them opens. **Centered**, being the only row on
+the card that belongs to the whole of it rather than to a column of it: flush left
+under three right-aligned figures it read as a fourth row of the list. It carries
+the `margin-top: auto` the foot used to, so a short side still puts its last two
+rows at the bottom — two `auto` margins in one column would split the slack and
+put a gap between a row and the door it belongs to.
+
+Measured after the move, at 320 / 390 / 720 / 1200: the badge row centered to the
+pixel, the door **0px** under it (the foot's own 10px of padding is the gap), the
+two sides one height at every width the two-up layout draws, and page-body
+overflow 0.
+
+### Hot, neutral and cold — two measured pairs of cuts
 
 **The reading is value *per appearance*, not the total.** A total says who has
 given the most, which is what the three rows already say; *hot* is a question
@@ -1766,7 +1791,7 @@ about the arithmetic rather than about the week, every counting category
 contributing zero or more, so the only way down is a rate below the league's and
 the only way up has no ceiling.
 
-| cuts | hot / level / cold |
+| cuts | hot / neutral / cold |
 | --- | --- |
 | ±0.50 (symmetric) | 14 / 28 / **1** |
 | **+0.50 / 0** | **14 / 17 / 12** |
@@ -1795,7 +1820,7 @@ figures. **A count of nought is drawn and dimmed rather than dropped**, for the
 same reason: a row that lost a cell would be read as a different set of counts.
 
 **The glyphs are emoji, and this is the only place in the app they appear.** A hot
-face (🥵), a level one (😐) and a cold one (🥶) say it in a way three words at 11px
+face (🥵), a neutral one (😐) and a cold one (🥶) say it in a way three words at 11px
 in a 300px column do not, and this row has to survive being glanced at rather than
 read. Each cell carries its own `title` and the row an `aria-label`, so nothing is
 said by the picture alone.
@@ -1814,6 +1839,36 @@ and painting the box behind it would be the same statement made twice.
 **The count is 13px against the glyph's 16 and the `VALUE` label's 11.** It was
 14, where the number and the mark carried equal weight and the badge read as a
 *pair* — what it is is a mark with a number on it.
+
+### And each badge is a door onto its own three
+
+The foot under them opens the whole list, and the counts were the one thing on the
+card that named a group the reader could not then look at — *nine of them are hot*
+with no way to ask *which nine*. So a badge is a button, and it opens the same
+`RankedDialog` with the same rows in the same order, cut to the men it counts.
+
+**It is free.** `heatOf` is already computing the answer to draw the number, so
+the cut and the count cannot come to disagree — the same guarantee `rankDay` gives
+the card's three rows and the whole list.
+
+**The label over the rows says which cut is open, in the badge's own words**:
+`🥵 5 hot` where a whole list says `22 ranked`. The glyph is what the reader
+pressed, so it is what says where they are.
+
+**The chips do not change with the cut.** The scale is the whole matchup's — every
+value on both rosters — so a hot man's chip is the same red among the five as
+among the forty-five, which is what makes this a *filter* rather than a second
+ranking.
+
+**The two sentences under the list do not draw on a cut**, being about the whole
+population: `14 more in the lineup had no game` under a list of five hot men is a
+sentence about a list nobody is looking at.
+
+**A count of nought does not press.** There is nothing behind it, and a control
+that opens an empty list is worse than a figure that is plainly a nought — the
+same rule as a switch with one live option. Driven: the hot badge on the reader's
+own side opens `🥵 5 hot` with five chipped rows and no tail, and the cold badge on
+the opponent's opens `🥶 5 cold` under his name.
 
 **And a man with nothing projected is not on the projected list.** `rankDay`
 deliberately skips the played-men filter for a projected block — a projected *day*
@@ -1934,6 +1989,63 @@ experiment left behind are the ones worth keeping: the `Rank all N` door on ever
 card, and a block that answers *what has this week come to* without a carousel at
 all.
 
+---
+
+## The Spotlight's note fits on the heading's line
+
+**`Player Spotlight` and a note, and the note was dropping to a second line.**
+`.ov-heading` is a wrapping flex row, so a note too long for what is left of the
+line takes one of its own and the switches below it move down. Reported off the
+shipped page on the value rail's **per-game** reading, which was the longest of
+the five.
+
+Measured in the heading's own type (11px/700): the words `PLAYER SPOTLIGHT` are
+**126px** and the gap is 8, so a note's budget is the line less 134 —
+
+| window | line | budget |
+| --- | --- | --- |
+| 320 | 276 | **142** |
+| 350 | 306 | 172 |
+| 375 | 331 | **197** |
+| 390 | 346 | 212 |
+
+— against notes of 153, 170, 169, **207** and **264**. So both value notes wrapped
+at 375 and the per-game one still wrapped at 390; at 320 all five did.
+
+The five, before → after, measured on the live league (period ending `Sep 6`; a
+two-digit day is about 7px more):
+
+| note | was | is |
+| --- | --- | --- |
+| trending, 1 day | `added most in the last day` 153 | `added most, last day` **121** |
+| trending, 3 days | 170 | `added most, last 3 days` **138** |
+| trending, 7 days | 169 | **137** |
+| value, total | `most projected value through Sep 6` 207 | `projected value to Sep 6` **141** |
+| value, per game | `most projected value per game through Sep 6` 264 | `projected value/game to Sep 6` **176** |
+
+Driven at 320 / 350 / 375 / 390 / 430 / 1200 after: **nothing wraps from 375 up**,
+and the three trending notes fit at 320.
+
+Each cut is a word doing a job something else already does:
+
+- **`most` goes** — the rail is *ordered* by the figure, and a list whose first
+  row is the largest does not need to say so.
+- **`through` → `to`** loses a shade of inclusivity and keeps the fact the note is
+  for, which is how far ahead the figure looks. The tab's `title` still spells the
+  whole sentence out.
+- **`per game` → `/game`** is the card's own box label (`Val/G`) read out loud.
+
+**What was not done is shortening it further.** Below 375 the per-game note is
+still over budget, and there is no wording for it that is not a telegram: at 320
+the budget is 142px, about **23 characters** of this type. That is the width at
+which every one of these notes wrapped before, and the width at which this page's
+own tab strip already drops a point of type to fit five words.
+
+**And the reading is still named**, which is the constraint the wording had to
+keep: `Total` and `Per G` are different lists of men, so a note that read the same
+on both would be claiming they are one reading. It is said three times over — on
+the switch, on every card's own box label, and here.
+
 **The bundle**, against the commit this replaced (which carried the period-long
-row): JS **778,270 → 782,310** raw and **229,050 → 229,980** gzipped; CSS
-**204,640 → 205,750** and **36,180 → 36,360**.
+row): JS **778,270 → 782,830** raw and **229,050 → 230,100** gzipped; CSS
+**204,640 → 206,420** and **36,180 → 36,460**.

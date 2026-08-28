@@ -741,6 +741,7 @@ function RankedDialog({
   who,
   whoTeam,
   pool,
+  heat,
   categories,
   categoriesTitle,
   onOpenPlayer,
@@ -784,12 +785,30 @@ function RankedDialog({
    * than his third.
    */
   pool: number[];
+  /**
+   * **One of the three counts, opened.** Undefined is the whole list, which is
+   * what a `Rank all N` press passes; a `Heat` narrows it to the men that badge
+   * counts and says so in the label over the rows.
+   *
+   * **The chips do not change with it.** The scale is `pool`'s — every value in
+   * the matchup on both rosters — so a hot man's chip is the same red whether
+   * he is read among the nine or among the forty-five, which is what makes the
+   * cut a *filter* rather than a second ranking.
+   */
+  heat?: Heat;
   categories: EspnCategory[];
   categoriesTitle: string;
   onOpenPlayer: (id: number) => void;
   onClose: () => void;
 }) {
-  const all = useMemo(() => rankDay(performers, projected), [performers, projected]);
+  /** Everybody the list ranks, and — where a badge was pressed — the men that
+   *  badge counts. `heatOf` is the same function the badge's own number is made
+   *  of, so the cut and the count cannot come to disagree. */
+  const ranked = useMemo(() => rankDay(performers, projected), [performers, projected]);
+  const all = useMemo(
+    () => (heat ? ranked.filter((p) => heatOf(p, projected) === heat) : ranked),
+    [ranked, heat, projected],
+  );
   /** Descending, so a rank is a count of what is strictly above plus one — the
    *  **competition** convention `columnRanks.tsx::rankOf` and `espn.ts::rankAll`
    *  already use, where two men level for 4th are both 4th. */
@@ -813,7 +832,7 @@ function RankedDialog({
    */
   const scorable = (performers ?? []).filter((p) => projected || anyPlay(p.line));
   const idle = (performers?.length ?? 0) - scorable.length;
-  const unscored = scorable.length - all.length;
+  const unscored = scorable.length - ranked.length;
 
   return (
     <Modal
@@ -881,8 +900,17 @@ function RankedDialog({
           So the list starts at the top, and the head above it names the day —
           the only thing about *this* day the rows do not say for themselves. */}
       <div className="ov-perfs-head-row">
+        {/* **The label says which cut is open**, and it says it in the badge's
+            own words: `🥵 5 hot` where a whole list says `22 ranked`. The glyph
+            is what the reader pressed, so it is what says where they are. */}
         <h4 className="ov-perfs-head" title={categoriesTitle}>
-          {all.length} ranked
+          {heat ? (
+            <>
+              <span aria-hidden="true">{HEAT_MARK[heat]}</span> {all.length} {HEAT_WORD[heat]}
+            </>
+          ) : (
+            `${all.length} ranked`
+          )}
         </h4>
         <span className="ov-perfs-val-head" title={categoriesTitle}>
           Value
@@ -902,13 +930,16 @@ function RankedDialog({
           </li>
         ))}
       </ol>
-      {idle > 0 && (
+      {/* **The two sentences are about the whole population**, so a cut does not
+          draw them: `14 more in the lineup had no game` under a list of the five
+          hot men is a sentence about a list nobody is looking at. */}
+      {!heat && idle > 0 && (
         <p className="ov-day-empty">
           {idle} more in the lineup{' '}
           {span ? 'did not play.' : projected ? 'have no game to play.' : 'had no game.'}
         </p>
       )}
-      {unscored > 0 && (
+      {!heat && unscored > 0 && (
         <p className="ov-day-empty">
           {unscored} more {unscored === 1 ? 'is' : 'are'} unranked — your league scores nothing this
           table can compute on {unscored === 1 ? 'his' : 'their'} side of the ball.
@@ -1090,7 +1121,7 @@ function heatTally(performers: Performer[], projected: boolean): Record<Heat, nu
  *  rather than three faces: a flame, a bar and a block of ice read as a scale
  *  at 12px where three round faces read as one smudge. */
 const HEAT_MARK: Record<Heat, string> = { hot: '🥵', neutral: '😐', cold: '🥶' };
-const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'level', cold: 'cold' };
+const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'neutral', cold: 'cold' };
 
 /**
  * **One side of the matchup block**: whose men they are, the three who have
@@ -1103,6 +1134,7 @@ const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'level', cold: 'c
  */
 function LeaderSide({
   name,
+  team,
   performers,
   loading,
   projected,
@@ -1112,6 +1144,10 @@ function LeaderSide({
   onRankAll,
 }: {
   name: string;
+  /** His row off the board, for the crest beside the name — `TeamLogo` draws the
+   *  app's own baseball where there is no logo or the URL is dead, which on a
+   *  real league is the ordinary case rather than the exception. */
+  team: EspnStandingsTeam | undefined;
   /** Null is *not answered yet*; an empty array is *answered, and nobody* — the
    *  two are drawn differently, which is the whole of why this is nullable. */
   performers: Performer[] | null;
@@ -1120,7 +1156,10 @@ function LeaderSide({
   categoriesTitle: string;
   categories: EspnCategory[];
   onOpenPlayer: (id: number) => void;
-  onRankAll: () => void;
+  /** **The door onto the rest**, with an optional cut. `undefined` is the foot's
+   *  own `Rank all N` — everybody; a `Heat` is one of the three badges, which
+   *  open the same list narrowed to the men that badge counts. */
+  onRankAll: (heat?: Heat) => void;
 }) {
   const top = (performers ?? []).slice(0, TOP_N);
   const heat = heatTally(performers ?? [], projected);
@@ -1137,9 +1176,18 @@ function LeaderSide({
           reads as the head of the block it heads and the row under it is free
           for the two things that really are headings — what the roster is doing
           and what the numbers down the right are. */}
-      <h4 className="ov-perfs-head ov-leader-name" title={categoriesTitle}>
-        {name}
-      </h4>
+      {/* **The crest beside the name**, the same pairing the dialog's own head
+          makes and the same one the scoreboard card at the top of the page
+          makes: a fantasy team name is chosen by its manager and half of them
+          are jokes, where the picture is what the reader already recognises. It
+          is `TeamLogo` outright — one component, three surfaces, one answer for
+          a dead URL. */}
+      <div className="ov-leader-head">
+        <TeamLogo team={team} />
+        <h4 className="ov-perfs-head ov-leader-name" title={categoriesTitle}>
+          {name}
+        </h4>
+      </div>
       {performers === null ? (
         loading ? (
           <LoadingBlock>Reading {projected ? 'the days ahead' : 'the matchup'}</LoadingBlock>
@@ -1148,49 +1196,26 @@ function LeaderSide({
         )
       ) : (
         <>
-          {/* **How the roster is running, on the line the `Value` label was
-              already on.**
+          {/* **The same two labels the day cards carry, in the same row.**
 
-              It is the one thing on this card that is about *all* of them: the
-              rows name three men and the door counts the rest, and neither says
-              whether the twenty behind them are going well. Three counts that
-              add up to the door's own number is a shape a reader can take in
-              without reading a figure.
+              This row held the heat counts on the left and `VALUE` on the right,
+              and the counts have gone to the foot (below). What belongs here is
+              what belongs here on every other list of performers in this app:
+              the name of the list and the name of the column its numbers are in.
+              A block that draws the identical three rows under a *different*
+              caption is a block a reader has to check is the same thing.
 
-              **And it shares the label's row rather than taking one of its
-              own**, which is the whole reason the name moved up: that row is
-              already *the line that says what the rows under it are*, and the
-              two things it now holds are the two halves of that — the shape of
-              the roster on the left, the name of the column on the right. It
-              costs the card a line rather than adding one.
-
-              **Bigger than the label beside it, deliberately.** They are on one
-              line and they are not the same kind of thing: `VALUE` names a
-              column and is read once, the counts *are* a reading and are what
-              the eye should land on. 14px against 11 is the same step the card
-              already makes between a performer's line and his name. */}
+              `Top Performers` is a **span** rather than the day cards' `h4`,
+              which is the one difference and is a fact about this card rather
+              than about the label: the heading of a side here is the *manager's
+              name*, one line up, and a second `h4` under it would have a screen
+              reader announce two headings for one list. Same class, same type,
+              no `h4`. */}
           {performers.length > 0 ? (
             <div className="ov-perfs-head-row">
-              <p
-                className="ov-heat"
-                aria-label={`${heat.hot} hot, ${heat.neutral} level, ${heat.cold} cold`}
-              >
-                {(['hot', 'neutral', 'cold'] as const).map((k) => (
-                  <span
-                    key={k}
-                    className={heat[k] === 0 ? 'ov-heat-cell is-none' : 'ov-heat-cell'}
-                    title={`${heat[k]} ${HEAT_WORD[k]} — ${
-                      k === 'hot'
-                        ? `worth ${cuts.hot.toFixed(2)} standard deviations of a player-day or more per appearance`
-                        : k === 'cold'
-                          ? `worth under ${cuts.cold.toFixed(2)} per appearance`
-                          : 'between the two'
-                    }`}
-                  >
-                    <span aria-hidden="true">{HEAT_MARK[k]}</span> {heat[k]}
-                  </span>
-                ))}
-              </p>
+              <span className="ov-perfs-head" title={categoriesTitle}>
+                Top Performers
+              </span>
               <span className="ov-perfs-val-head" title={categoriesTitle}>
                 Value
               </span>
@@ -1217,12 +1242,77 @@ function LeaderSide({
               ))}
             </ol>
           )}
+          {/* **How the roster is running, at the foot and centered.**
+
+              It is the one thing on this card that is about *all* of them: the
+              rows name three men and the door under it counts the rest, and
+              neither says whether the twenty behind them are going well. Three
+              counts that add up to the door's own number is a shape a reader can
+              take in without reading a figure.
+
+              **At the foot rather than at the head**, which is where it was.
+              The head of a list is where you say what the list *is*, and these
+              are not about the list — they are about the population it was cut
+              from, which is what the control immediately under them opens. Read
+              downward the card now goes: whose it is, the three who did most,
+              the shape of the rest, the door onto the rest. Centered for the
+              same reason: it is the only row here that belongs to the whole
+              card rather than to a column of it, and a badge row flush left
+              under three right-aligned figures reads as a fourth row of the
+              list.
+
+              It carries the `margin-top: auto` the foot used to, so a short side
+              still puts its last two rows at the bottom — see `.ov-heat`. */}
+          {performers.length > 0 && (
+            <p
+              className="ov-heat"
+              /* Off `HEAT_WORD` rather than spelled again, so the three words
+                 a screen reader hears and the three the dialog's own label
+                 prints cannot come to disagree. */
+              aria-label={(['hot', 'neutral', 'cold'] as const)
+                .map((k) => `${heat[k]} ${HEAT_WORD[k]}`)
+                .join(', ')}
+            >
+              {/* **Each badge is a door onto its own three.**
+
+                  The foot under them opens the whole list, and the counts were
+                  the one thing on the card that named a group the reader could
+                  not then look at — *nine of them are hot* with no way to ask
+                  *which nine*. It is the same dialog with the same rows in the
+                  same order, cut to the men the badge counts, which is what
+                  makes it free: `heatOf` is already computing the answer to draw
+                  the number.
+
+                  **A count of nought is a badge that does not press.** There is
+                  nothing behind it, and a control that opens an empty list is
+                  worse than a figure that is plainly a nought — the same rule as
+                  a switch with one live option. */}
+              {(['hot', 'neutral', 'cold'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={heat[k] === 0 ? 'ov-heat-cell is-none' : 'ov-heat-cell'}
+                  disabled={heat[k] === 0}
+                  onClick={() => onRankAll(k)}
+                  title={`${heat[k]} ${HEAT_WORD[k]} — ${
+                    k === 'hot'
+                      ? `worth ${cuts.hot.toFixed(2)} standard deviations of a player-day or more per appearance`
+                      : k === 'cold'
+                        ? `worth under ${cuts.cold.toFixed(2)} per appearance`
+                        : 'between the two'
+                  }${heat[k] === 0 ? '' : ' — open the list'}`}
+                >
+                  <span aria-hidden="true">{HEAT_MARK[k]}</span> {heat[k]}
+                </button>
+              ))}
+            </p>
+          )}
           {performers.length > 0 && (
             <footer className="ov-day-foot">
               <button
                 type="button"
                 className="ov-day-more"
-                onClick={onRankAll}
+                onClick={() => onRankAll()}
                 title={`All ${performers.length}, ${categoriesTitle[0].toLowerCase()}${categoriesTitle.slice(1)}`}
               >
                 Rank all {performers.length}
@@ -1459,6 +1549,49 @@ function RailCard({
 /** `day` / `3 days` — one span written one way, since four strings on this block
  *  name it and a rail whose heading and whose tooltip disagree about what `3D`
  *  means is worse than either. */
+/**
+ * **How long the spotlight's notes may be, and why they are what they are.**
+ *
+ * The heading is `PLAYER SPOTLIGHT` and a note on one line — `.ov-heading` is a
+ * wrapping flex row, so a note too long for what is left drops to a second line
+ * and the block below it moves down. Reported off the shipped page on the value
+ * rail's per-game reading, which was the longest of the five.
+ *
+ * Measured in the heading's own type (11px/700), the words are **126px** and the
+ * gap is 8, so the note's budget is the line less 134:
+ *
+ * | window | line | budget |
+ * | --- | --- | --- |
+ * | 320 | 276 | **142** |
+ * | 350 | 306 | 172 |
+ * | 375 | 331 | **197** |
+ * | 390 | 346 | 212 |
+ *
+ * And the five notes, before → after, measured on the live league (whose period
+ * ends `Sep 6`; a two-digit day is about 7px more):
+ *
+ * | note | was | is |
+ * | --- | --- | --- |
+ * | trending, 1 day | `added most in the last day` 153 | `added most, last day` **121** |
+ * | trending, 3 days | 170 | `added most, last 3 days` **138** |
+ * | trending, 7 days | 169 | **137** |
+ * | value, total | `most projected value through Sep 6` 207 | `projected value to Sep 6` **141** |
+ * | value, per game | `most projected value per game through Sep 6` 264 | `projected value/game to Sep 6` **176** |
+ *
+ * Driven at 320 / 350 / 375 / 390 / 430 / 1200 after: **nothing wraps from 375
+ * up**, where before both value notes wrapped at 375 and the per-game one still
+ * wrapped at 390. Below 375 the per-game note is still over budget and there is
+ * no wording for it that is not a telegram: at 320 the budget is 142px, about
+ * **23 characters** of this type. That is the width at which every one of these
+ * notes wrapped before, and the width at which this page's own tab strip already
+ * drops a point of type to fit five words.
+ *
+ * **`through` → `to`** loses a shade of inclusivity and keeps the fact the note
+ * is for — how far ahead the figure looks — and the tab's `title` still spells
+ * the whole sentence out. **`per game` → `/game`** is the card's own `Val/G`
+ * label read out loud. **`most` goes** because the rail is ordered by the
+ * figure: a list whose first row is the largest does not need to say so.
+ */
 const spanWords = (w: TrendWindow): string => (w === 1 ? 'day' : `${w} days`);
 
 const windowTitle = (w: TrendWindow): string =>
@@ -1780,7 +1913,7 @@ function SpotlightSection({
     tabs.push({
       key: 'trending',
       label: 'Trending',
-      note: `added most in the last ${spanWords(trending.window)}`,
+      note: `added most, last ${spanWords(trending.window)}`,
       title: `Who the league has been picking up over the last ${spanWords(trending.window)} — free agents only`,
       sortedBy: `the move over the last ${spanWords(trending.window)}`,
     });
@@ -1794,9 +1927,15 @@ function SpotlightSection({
       // not comparable to each other any more than either is to a day card's
       // `+1.4`, so the sentence under the heading has to say which one the rail
       // in front of the reader is ordered by.
+      //
+      // **And it is as short as it can be while still saying both**, which is a
+      // measurement rather than a preference — see the note on `spanWords`,
+      // where the widths and the budgets are written down. `most` goes (the
+      // rail's order says it), `through` becomes `to`, and `per game` becomes
+      // `/game`, which is what the card's own box label already says (`Val/G`).
       note: per
-        ? `most projected value per game through ${prettyDate(highValue.through)}`
-        : `most projected value through ${prettyDate(highValue.through)}`,
+        ? `projected value/game to ${prettyDate(highValue.through)}`
+        : `projected value to ${prettyDate(highValue.through)}`,
       title: per
         ? 'Who is worth the most per appearance over the days this matchup has left, in the categories your league scores — free agents only'
         : 'Who is worth the most over the days this matchup has left, in the categories your league scores — free agents only',
@@ -2535,7 +2674,11 @@ export default function OverviewView({
    * than two that would have to agree.
    */
   const [ranked, setRanked] = useState<
-    { kind: 'day'; day: DayKey; opp: boolean } | { kind: 'span'; opp: boolean } | null
+    | { kind: 'day'; day: DayKey; opp: boolean }
+    /** `heat` is which of the three badges was pressed, absent for the foot's
+     *  own `Rank all N`. */
+    | { kind: 'span'; opp: boolean; heat?: Heat }
+    | null
   >(null);
 
   /** Every scored value on **both** rosters for whichever list is open — the
@@ -2867,23 +3010,25 @@ export default function OverviewView({
           <section className={showProjected ? 'ov-leaders is-proj' : 'ov-leaders'}>
             <LeaderSide
               name={myName}
+              team={myTeamId != null ? teams.get(myTeamId) : undefined}
               performers={myLeaders}
               loading={leadersLoading}
               projected={showProjected}
               categories={categories}
               categoriesTitle={categoriesTitle}
               onOpenPlayer={onOpenPlayer}
-              onRankAll={() => setRanked({ kind: 'span', opp: false })}
+              onRankAll={(heat) => setRanked({ kind: 'span', opp: false, heat })}
             />
             <LeaderSide
               name={opponentName}
+              team={oppTeamId != null ? teams.get(oppTeamId) : undefined}
               performers={oppLeaders}
               loading={leadersLoading}
               projected={showProjected}
               categories={categories}
               categoriesTitle={categoriesTitle}
               onOpenPlayer={onOpenPlayer}
-              onRankAll={() => setRanked({ kind: 'span', opp: true })}
+              onRankAll={(heat) => setRanked({ kind: 'span', opp: true, heat })}
             />
           </section>
         </>
@@ -2949,6 +3094,7 @@ export default function OverviewView({
                   : 'This matchup'
             }
             span
+            heat={ranked.heat}
             projected={showProjected}
             performers={ranked.opp ? oppLeaders : myLeaders}
             who={ranked.opp ? opponentName : myName}
