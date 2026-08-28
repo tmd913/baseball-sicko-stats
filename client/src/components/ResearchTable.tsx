@@ -783,6 +783,12 @@ export interface SavedControls {
   onRenameList: (id: string, name: string) => void;
   onDeleteList: (id: string) => void;
   onApplySearch: (search: SavedSearch) => void;
+  /** The name of the saved search that replaced the reader's own board, or null
+   *  where nothing has. Applying is the one press on this board that throws a
+   *  reading away in one gesture, so it is the one that owes a way back — see
+   *  `searchUndo` in `App.tsx`, and `undoLine` below for where it is said. */
+  undoSearchName: string | null;
+  onUndoSearch: () => void;
   onSaveSearch: (name: string) => void;
   onReplaceSearch: (id: string) => void;
   onRenameSearch: (id: string, name: string) => void;
@@ -2206,6 +2212,15 @@ export function ResearchTable({
   /** Whether the board is narrowed to a named set. Never on the team reading —
    *  a comparison is of players, and this board's rows are clubs. */
   const comparing = !teams && compareKeys.length > 0;
+  /**
+   * **Whether the table draws its checkbox column** — compare mode, and not the
+   * team reading, where the control that turns it on is not drawn either. It is
+   * one const rather than the same test written three times (the `th`, the
+   * `td`, and the pin measurement below), because a header cell and a body cell
+   * that can disagree about whether they exist is a table with a column of
+   * nothing in it.
+   */
+  const compareCol = compareOn && !teams;
   const boardRows = useMemo(() => {
     // **Nothing partitions thirty clubs.** The three include buttons are a
     // partition of *ownership* and the watchlist is a list of players; neither
@@ -2627,6 +2642,14 @@ export function ResearchTable({
       if (!head) return;
       const img = head.querySelector<HTMLElement>('.sum-img-col');
       const name = head.querySelector<HTMLElement>('.sum-name-col');
+      /* **The compare column, when there is one** — see `.research-cmp-col`.
+         It is drawn only in compare mode, so this is `null` and its width `0`
+         the rest of the time, which is what makes the two offsets below read as
+         the numbers they were before the column existed. Measured for the same
+         reason the name is: the cell is a 28px button between two
+         `--research-gutter`s and that gutter is a `clamp` on `vw`, so there is
+         no *one* number to declare. */
+      const cmp = head.querySelector<HTMLElement>('.research-cmp-col');
       if (!img) return;
       // The **sum of the pinned widths**, not a position. A width is unaffected
       // both by how far the table is scrolled and by where the page happens to
@@ -2640,8 +2663,13 @@ export function ResearchTable({
       // then held the sorted column 240px in on a 346px-wide table, out in the
       // middle of the screen past a column that had scrolled away.
       const pinnedAcross = (el: HTMLElement) => getComputedStyle(el).left !== 'auto';
+      const cmpW = cmp ? cmp.offsetWidth : 0;
       const pin =
-        img.offsetWidth + (name && pinnedAcross(name) ? name.offsetWidth : 0);
+        cmpW + img.offsetWidth + (name && pinnedAcross(name) ? name.offsetWidth : 0);
+      // Published before the pin that reads it, though both are one style
+      // recalculation either way: `offsetWidth` is a width, and a width does not
+      // move when the `left` beside it does.
+      box.style.setProperty('--research-cmp-w', `${cmpW}px`);
       box.style.setProperty('--research-pin-left', `${pin}px`);
     };
     measure();
@@ -3390,13 +3418,30 @@ export function ResearchTable({
           ) : (
             <div className="rl-split">
               {watchlistToggle}
-              {/* **A caret, not a second word.** It read `Watchlist · Lists ▾`,
-                  which is two nouns for one thing: the half beside this one
-                  already names the list, so all this half has to say is *there
-                  are others*. Its accessible name comes from the `title`
-                  through `aria-label`, which is what `label` being absent
-                  arranges. */}
+              {/* **The word is back, and the paragraph that took it away is
+                  kept rather than deleted.** It read: *a caret, not a second
+                  word — `Watchlist · Lists ▾` is two nouns for one thing, the half
+                  beside this one already names the list, so all this half has to
+                  say is* there are others. That argument was made about a bar
+                  where the toggle always said `Watchlist`, and it is the half
+                  that was right: two nouns for one thing is what it read as.
+
+                  What it missed is that the toggle stopped saying `Watchlist`
+                  the same day — it names the **active list**, so the pair reads
+                  `Closers │ Lists ⌄`, which is a list and the button that
+                  changes it rather than one noun twice. And the caret alone was
+                  a 29×36 target with no name on it in a run where every other
+                  button carries its word: nothing on screen said what pressing
+                  it would do, and the only thing that did was a `title` a touch
+                  device never sees. Measured at 1400, the half went **29 → 70px** and the
+                  pair 136 → 177, with the third run and the head unmoved.
+
+                  It is still one shape and still two targets — see `.rl-split`,
+                  which is unchanged. The condensed run hides the word with every
+                  other label and the half goes back to being a caret in a 36px
+                  square, which is that run's whole grammar. */}
               <SavedButton
+                label="Lists"
                 title="Choose a watchlist, or rename, share and add one"
                 open={listsOpen}
                 onToggle={() => setPanel('lists', !listsOpen)}
@@ -3981,7 +4026,7 @@ export function ResearchTable({
              * calendar, where nothing is lit to press.
              */}
             {!teams && (
-              <span className="projected-group">
+              <>
                 <ProjectedToggle
                   on={projected}
                   active={projectedOpen}
@@ -3994,31 +4039,44 @@ export function ResearchTable({
                   }
                 />
                 {/**
-                 * **The key, beside the control it explains and drawn only
-                 * while that control is doing something** — `ProjectionKey`, the
-                 * same popover the Roster row and the League page open, from the
-                 * same `.proj-key` anchor. One engine explained by one component
-                 * on all three surfaces.
+                 * **The key is not here any more — it is on the line the lens
+                 * writes** (`projSpanLine`, `.research-proj-key`). The paragraph
+                 * that put it here is kept, this file's rule for superseded
+                 * reasoning, because most of it is still the record of what a
+                 * key on this board has to survive:
                  *
-                 * It was an accordion in the head for one round, because
-                 * `.research-scroll > .view-tools` was `overflow: hidden` and a
-                 * panel opened from a button inside it painted as a 46px sliver.
-                 * That row clips on the **inline axis only** now
+                 * *"The key, beside the control it explains and drawn only while
+                 * that control is doing something — `ProjectionKey`, the same
+                 * popover the Roster row and the League page open, from the same
+                 * `.proj-key` anchor. One engine explained by one component on
+                 * all three surfaces. It was an accordion in the head for one
+                 * round, because `.research-scroll > .view-tools` was `overflow:
+                 * hidden` and a panel opened from a button inside it painted as a
+                 * 46px sliver. That row clips on the inline axis only now
                  * (`overflow-x: clip`, which is the one value that does not drag
                  * `visible` on the other axis to `auto`), so the popover hangs
-                 * below the row exactly as it does everywhere else and the
-                 * board needs no shape of its own.
+                 * below the row exactly as it does everywhere else. Drawn on the
+                 * press rather than on the answer, the rule the Roster's copy
+                 * states: a key that arrived a quarter of a second later would
+                 * move the run under the finger that had gone on to the next
+                 * control."*
                  *
-                 * Drawn on the **press** rather than on the answer, the rule the
-                 * Roster's copy states: a key that arrived a quarter of a second
-                 * later would move the run under the finger that had gone on to
-                 * the next control. `days` is 0 until the read lands and the
-                 * panel words that as *over the days left*.
+                 * **What that got wrong is which thing the key explains.** Beside
+                 * the toggle it was the fourth item in a run of eight buttons, a
+                 * 30px bordered box that read as a ninth control — and the
+                 * sentence it opens is not about the button, it is about the
+                 * numbers: *these figures are estimates over days still to be
+                 * played*. That sentence belongs against the line that makes the
+                 * claim, which is `PROJECTED · Aug 27 – Sep 5` in the head.
+                 *
+                 * **And the press-not-the-answer rule comes for free there.** It
+                 * existed because the key appearing late would move the seven
+                 * buttons beside it; on the head's own line there is nothing to
+                 * move — the line and the key arrive in the same commit, the
+                 * line being drawn only once `projection` has landed, and the
+                 * head publishes its measured height either way.
                  */}
-                {projected && (
-                  <ProjectionKey board days={projection?.daysLeft ?? 0} className="proj-key" />
-                )}
-              </span>
+              </>
             )}
             {/**
              * **Columns is drawn under the lens and Ranks is not**, which is
@@ -4574,6 +4632,21 @@ export function ResearchTable({
           </>
         )}
       </span>
+      {/* **The key sits against the claim it explains**, which is this line and
+          not the button three runs above it — see the paragraph at the toggle
+          for the reasoning it replaces. It is the same `ProjectionKey` the
+          Roster row and the League page open; what is this caller's is where it
+          hangs from, which is `.research-proj-key`.
+
+          **A glyph rather than a box.** Every other `InfoKey` in the app is
+          `.app-dialog-close`'s 30px bordered square, which is right beside a
+          heading and wrong on a 12px caption: at 30px it was taller than the
+          line it belongs to and drew a second control between the sentence and
+          `Clear`. Here it is the 16px mark alone, with the press area kept at
+          the app's own size by padding the button out and pulling it back in —
+          measured, the box paints 16×16 and hit-tests 28×28, so nothing is lost
+          to a finger. */}
+      <ProjectionKey board days={projection.daysLeft} className="research-proj-key" />
       <button
         type="button"
         className="research-clear"
@@ -4584,6 +4657,47 @@ export function ResearchTable({
         title="Back to what has actually happened"
       >
         Clear
+      </button>
+    </div>
+  ) : null;
+
+  /**
+   * **The way back out of an applied saved search**, and it takes the projected
+   * line's shape because it is the same object: a line in the head saying what
+   * the board is in, with the way out of it beside the words rather than under
+   * them. Folded onto that selector rather than given rules that agree today —
+   * the stylesheet's standing rule.
+   *
+   * **The tense is the shared notice's, and for its reason.** A search is a
+   * reading that was *applied*; the board is the reader's own to change from
+   * here, and a line reading `Showing Closers` would go on claiming so after
+   * they had re-sorted and re-filtered it into something else. `Opened from`
+   * stays true however far they take it — which is exactly what makes the
+   * button beside it worth pressing, since the further they have taken it the
+   * less they can reconstruct what was there before.
+   *
+   * **`Undo` rather than `Clear`**, one word off its neighbour, because they do
+   * different things: `Clear` takes a lens off and leaves the board, and this
+   * puts a whole board back. The two lines are never drawn together by
+   * accident, either — a search remembers `projected`, so applying one that was
+   * saved unprojected takes the lens off with it.
+   *
+   * It is not drawn on the team reading, where a search cannot be applied.
+   */
+  const undoSearchName = saved.undoSearchName;
+  const undoLine = undoSearchName && !teams ? (
+    <div className="research-proj-line research-undo-line">
+      <span>
+        <span className="research-proj-lead">Opened from</span> ·{' '}
+        <strong className="research-undo-name">{undoSearchName}</strong>
+      </span>
+      <button
+        type="button"
+        className="research-clear"
+        onClick={saved.onUndoSearch}
+        title="Back to the board you had before this search was applied"
+      >
+        Undo
       </button>
     </div>
   ) : null;
@@ -4832,6 +4946,11 @@ export function ResearchTable({
               now.** Both printed the same sentence off the same `filters`
               array; only one of them could be pressed. See `panels` above. */}
           {panels}
+          {/* **The provenance line before the reading line**, which is the
+              order the two are read in: *where this board came from*, then
+              *what the figures in it are*. A search remembers the lens, so
+              where both are drawn the second is a consequence of the first. */}
+          {undoLine}
           {projSpanLine}
           {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
@@ -4896,6 +5015,36 @@ export function ResearchTable({
           <table className={`summary-table research-table${teams ? ' is-teams' : ''}`}>
             <thead>
               <tr>
+                {/* **The comparison's own column, ahead of everything**, drawn
+                    only while compare mode is on.
+
+                    *(The ticks were in the name cell, after the star, and the
+                    paragraph there argued it: "this is the sticky name column,
+                    so a control ahead of the name pushes every name along by
+                    its own width, and a control drawn all the time pays that on
+                    every row for a comparison nobody is making." Both halves of
+                    that are still true — this column is drawn **only** in
+                    compare mode, so the second half costs nothing, and the
+                    first is now the price rather than the objection.)*
+
+                    What the name cell got wrong is that a tick is not a mark on
+                    a name. Trailing the star, the newspaper, the padlock and
+                    the baseball, it was the fifth glyph on a line of four
+                    labels and one control — a checkbox in a row of facts, at
+                    the far end of a name that truncates, in a different place
+                    on every row because the marks ahead of it come and go. A
+                    checkbox column is what a table of things you are choosing
+                    between looks like: one edge, one axis, every box on it.
+
+                    It is a `th` with a `sr-only` name rather than an empty cell,
+                    so the column the ticks are in is announced as what it is,
+                    and it takes no sort — there is nothing to order rows by
+                    here that ticking them does not already say. */}
+                {compareCol && (
+                  <th className="research-cmp-col" scope="col">
+                    <span className="sr-only">Compare</span>
+                  </th>
+                )}
                 <th className="sum-img-col" scope="col">
                   <span className="sr-only">{teams ? 'Cap logo' : 'Headshot'}</span>
                   <ExpandButton isFull={isFull} onToggle={toggle} what="board" />
@@ -5009,6 +5158,22 @@ export function ResearchTable({
                   : posCellText(r, posCodes);
                 return (
                   <tr key={key}>
+                    {compareCol && (
+                      <td className="research-cmp-col">
+                        <CompareTick
+                          on={compareSelected.includes(key)}
+                          /* Full and not ticked: the row declines rather than
+                             dropping somebody to make room, and says why. */
+                          full={
+                            compareSelected.length >= maxCompare &&
+                            !compareSelected.includes(key)
+                          }
+                          max={maxCompare}
+                          name={r.name}
+                          onToggle={() => onToggleCompare(key)}
+                        />
+                      </td>
+                    )}
                     <td className="sum-img-col">
                       {/* **The cap logo where the headshot is** — a club has no
                           face, and the mark MLB serves by team id is the one
@@ -5133,26 +5298,10 @@ export function ResearchTable({
                         name={r.name}
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
-                      {/* **After the star, and only in compare mode.** Both
-                          halves follow the same rule: this is the sticky name
-                          column, so a control ahead of the name pushes every
-                          name along by its own width, and a control drawn all
-                          the time pays that on every row for a comparison
-                          nobody is making. */}
-                      {compareOn && (
-                        <CompareTick
-                          on={compareSelected.includes(key)}
-                          /* Full and not ticked: the row declines rather than
-                             dropping somebody to make room, and says why. */
-                          full={
-                            compareSelected.length >= maxCompare &&
-                            !compareSelected.includes(key)
-                          }
-                          max={maxCompare}
-                          name={r.name}
-                          onToggle={() => onToggleCompare(key)}
-                        />
-                      )}
+                      {/* *(The compare tick was the fifth mark on this line,
+                          after the star. It is a column of its own at the head
+                          of the row now — see the `th` in `thead`, which keeps
+                          the paragraph that put it here.)* */}
                       </PlayerIdentity>
                       )}
                     </td>

@@ -533,6 +533,27 @@ exactly the button they always did, and a rename moves the label with it. A
 shared list showing over the top takes the label too, because that is the list
 on the board.
 
+**The chooser half got its word back, and the paragraph above is the record of
+why it lost it.** That paragraph argued the caret alone: *`Watchlist · Lists ▾`
+is two nouns for one thing, the half beside it already names the list, so all
+this half has to say is* there are others. It was right about the bar it was
+written for — and it was written in the same breath as the change that stopped
+the toggle saying `Watchlist` at all. The toggle names the **active list** now,
+so the pair reads `Closers │ Lists ⌄`, which is a list and the button that
+changes it rather than one noun twice.
+
+What settled it is aiming rather than wording. Measured, the caret was a
+**29×36** target carrying no text at all, in a run where every other button in
+the bar carries its word — nothing on screen said what pressing it would do, and
+the only thing that did was a `title`, which half this app's traffic has no
+pointer to summon. The word takes the half to **70px** and the pair from 136 to
+**177** at 1400, with the third run and the head unmoved.
+
+It is still one shape and still two targets: `.rl-split` is untouched, the seam
+is still the caret's own left border, and the condensed run still hides the word
+with every other label and squares the half to 36px — that run's whole grammar
+being marks.
+
 **The panels are rows of `.research-head`, and the first attempt was a popover
 hanging off each button.** That does not work here and the failure is worth
 recording, because it looks like nothing: `.tool-scroll-box` scrolls
@@ -581,6 +602,55 @@ name search. What it deliberately does **not** remember is anything that is not
 a reading — the paging, which panels were open, the half-typed condition in the
 filter builder. Those are where the reader had got to, not what they were
 looking at.
+
+### An applied search has a way back to the board it replaced
+
+**Applying replaces the reader's work in one press, and that is right** — see
+the paragraph above, which says why a saved search cannot compose with the
+filters already set. What it left out is the other half: a reader who has spent
+a minute on a position, a span, two ownership sets and three filters, and then
+presses a search to see what it was, has **no way at all** to reconstruct what
+they had. The board does not remember it, the URL has been overwritten, and
+nothing on screen says a press did it.
+
+So the apply **snapshots first**. `snapshotBoard` is the same function `Save`
+reads, so what comes back is exactly the eleven fields a search remembers and
+nothing else claims to be restored; it goes back out through `applySearchBoard`,
+the one place that knows how to spread one of these across nine pieces of state,
+so restoring cannot come to disagree with applying.
+
+**One step, not a stack.** A second search applied over the first replaces the
+offer rather than stacking under it, and `Undo` from there goes back to the same
+original board — which is the question actually being asked, *what was I looking
+at before I went looking*. A history would be a second model of the board's past
+for a gesture nobody makes twice.
+
+**Put away when the board leaves the screen**, the rule the shared link beside it
+already follows and for a plainer reason than the lenses have: an `Undo` for a
+press three views ago is a button that does something surprising. It costs
+nothing to get back to — the search is still in the panel — and it lives in App
+state, in no URL and on no record, which is the same property the shared items
+have.
+
+**The line is the projected line's own**, folded onto its selector because it is
+the same object: a caption in the sticky head naming the state the table is in,
+with the way out beside the words rather than under them. Two things about the
+words:
+
+- **`Opened from`, not `Showing`** — the shared notice's tense and for its
+  reason. The board is the reader's to change from here, and a line claiming the
+  search is in force would go on claiming it after they had re-sorted and
+  re-filtered it into something else. And the further they have taken it, the
+  more the button beside it is worth.
+- **`Undo`, one word off its neighbour's `Clear`**, because they do different
+  things: `Clear` takes a lens off and leaves the board, and this puts a whole
+  board back.
+
+**Driven at 1400**, the round trip: a board at `SP / 30d / Free Agents +
+watchlist`, **195 of 406 pitchers** → apply `High val fri starters` → `Pitchers /
+60d / projected`, **628 of 628**, with `Opened from · High val fri starters
+Undo` in the head → press it, and the URL comes back **byte-identical**
+(`cols=` included), the count back to 195 of 406, and the line gone.
 
 ### A shared list or search says so, and touches nothing of yours
 
@@ -755,6 +825,56 @@ reachable there (every row on screen is in the set by construction), and
 dropping below two clears the narrowing rather than leaving a board of one man,
 which is not a comparison and is a state a reader cannot untick their way out
 of.
+
+#### The ticks are a column, and were a fifth mark on the name
+
+They were drawn in the sticky name cell, after the star, and the paragraph that
+put them there argued it on width: *this is the sticky name column, so a control
+ahead of the name pushes every name along by its own width, and a control drawn
+all the time pays that on every row for a comparison nobody is making.* Both
+halves are still true. The column is drawn **only in compare mode**, so the
+second half costs nothing, and the first is now the price rather than the
+objection.
+
+What that missed is that **a tick is not a mark on a name**. Trailing the star,
+the newspaper, the padlock and the baseball, it was the fifth glyph on a line of
+four labels and one control — a checkbox in a row of *facts*, at the far end of a
+name that truncates, and in a **different place on every row**, the marks ahead
+of it coming and going with the ownership and the news. What a table of things
+you are choosing between looks like is one edge, one axis, every box on it.
+
+**It joins the pinned block rather than scrolling away**, for the reason the name
+is pinned here at all: by the time you have scrolled out to Chase% there is no
+way to tell whose row you are reading, and a tick you cannot reach from there is
+a comparison you have to scroll back to build. So it takes `left: 0` and the two
+cells pinned there before it move over by its width.
+
+**Its width is measured, not declared.** The cell is a 28px button between two
+`--research-gutter`s and that gutter is `clamp(5px, 1.6vw, 13px)`, so there is no
+*one* number: `--research-cmp-w` is published by the same `useLayoutEffect` that
+already publishes `--research-pin-left`, off the header cell it is about, so the
+two offsets cannot come to disagree. It is **`0px` whenever the column is not
+drawn**, which is what keeps every calc that reads it the plain offset it was
+before the column existed.
+
+**`.research-tick` comes out of its fold with `.research-watch`.** That fold was
+correct while both were marks on a name line — same square, same gutter, same
+baseline nudge — and it is the second half of the same rule that separates them:
+*two things that merely resemble each other are two things that will one day
+differ.* In a cell of its own the tick wants no `margin-left` holding it off a
+name, no `top: -0.09em` sitting it on one, and a press area rather than a glyph's
+worth of width. It is a 28px target, against this app's own 30.
+
+**Measured, at 1400 and 390.** Compare off: `--research-cmp-w` **0px**,
+`--research-pin-left` **237px**, the headshot at x=0 and the name at 68 — the
+board exactly as it was. On at 1400: the column **41px at x=0**, the headshot 41,
+the name 109, the pin **278**, and the row **58px tall in both states**. Scrolled
+900px right, the three pinned cells hold at 0 / 41 / 109 and `elementFromPoint`
+on a tick returns the tick. At 390 the column is **34.2**, the headshot 34.2, the
+name unpinned and scrolling away as it should below 820, and
+`document.body.scrollWidth` **390**. The zebra matches its row across all four
+columns on four consecutive rows — the compare cell is in the stripe's own
+selector list by `td`, and its `--cell-bg` declaration is a class short of it.
 
 ### The color is how much better, by the league's own standards
 
@@ -2191,6 +2311,46 @@ board: pressing `K` under the lens sorts it, and the first page is nothing but
 men with two turns in the span.
 
 #### `How the projection works` is the same popover as everywhere else
+
+**And it is on the line, not on the toggle.** Everything below this paragraph is
+the record of the key while it sat in the tools run beside `Projected`, and all
+of it still holds except where it sits. What was wrong with the run is **which
+thing the key explains**: it was the fourth item among eight buttons, a 30px
+bordered box reading as a ninth control, and the sentence it opens is not about
+the button at all — it is about the numbers, *these figures are estimates over
+days still to be played*. That claim is made by the head's own
+`PROJECTED · Aug 27 – Sep 5` line, so the footnote goes against the line.
+
+Two things follow.
+
+**It is the mark alone.** `.info-key-btn` is `.app-dialog-close`, the app's 30px
+bordered icon button, which is right beside a heading and wrong on a 12px
+caption: at 30px it was taller than the line it belongs to and put a second
+bordered control between the sentence and `Clear`. So the ground and the border
+come off and the box is the glyph — with the **press area kept** by padding the
+button out and pulling the padding back off in margin. Measured, it paints
+**16×16** and hit-tests **28×28** against the app's own 30, and the line is
+**27px tall with the key and 27 without it**.
+
+**And the head clips, which is the same fault the run below it already records,
+met from the other side.** `.research-scroll > .research-head` is `overflow:
+hidden` and has to be — a sticky box in a pane that scrolls sideways must not
+slide with it, and `hidden` is what makes the box a scroller for
+`overscroll-behavior-x` to hold. So the panel computed a perfectly ordinary
+**320×689 rect at `x: 22, y: 299`** and `elementFromPoint` at its centre returned
+`sum-name-col`, the table behind it — a rect is computed whether or not an
+ancestor clips it, which is the third time this file has recorded that reading
+(the Lists popover, the tools row, and now this). The head goes to `overflow-x:
+clip` **only while it `:has()` a key open**: that is a state the reader entered
+by pressing ⓘ and leaves on the next press outside the panel, and while it lasts
+the panel covers the rows a finger would otherwise land on. Measured after, the
+panel paints and hit-tests at **1400** (22 → 342, bottom 988 of a 1000px window)
+and at **390** (22 → 342 of 390, `document.body.scrollWidth` 390).
+
+The `:has(.info-key-panel)` layer bump on `.view-tools` went with the key; its
+paragraph is kept in the stylesheet as prose, the reasoning — a sticky box makes
+its own stacking context, and two of them at one z-index resolve by tree order —
+being what the next key in that row will need.
 
 **`ProjectionKey` beside the toggle, from the same `.proj-key` anchor the Roster
 row and the League page use** — one engine explained by one component on three

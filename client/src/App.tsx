@@ -5501,10 +5501,57 @@ export default function App() {
     [],
   );
 
+  /**
+   * **The board as it stood before a saved search was applied**, and the name
+   * of the search that replaced it — or null, there being nothing to go back
+   * to.
+   *
+   * Applying a search is the one gesture on this board that **replaces the
+   * reader's own work in one press**, and deliberately so: a saved search *is*
+   * somebody's reading, named, and applying it while keeping yesterday's four
+   * filters would produce a board that is neither (see `applySearchBoard`).
+   * That is right, and it is exactly why the press needs a way back — a reader
+   * who has spent a minute setting a position, a span, two ownership sets and
+   * three filters, and then presses a search to see what it was, has no way to
+   * reconstruct what they had.
+   *
+   * **A snapshot rather than a history.** One step back, not a stack: the thing
+   * a reader wants is the board they were on before they went looking, and a
+   * second search applied over the first replaces the offer rather than
+   * stacking under it — `Undo` from there goes back to the same original board,
+   * which is the answer to the question actually being asked. `snapshotBoard`
+   * is the same function `Save` reads, so what comes back is exactly what a
+   * search remembers and nothing else claims to be restored.
+   */
+  const [searchUndo, setSearchUndo] = useState<{
+    name: string;
+    board: ResearchSearchBoard;
+  } | null>(null);
+
   const applySearch = useCallback(
-    (sv: SavedSearch) => applySearchBoard(sv.board),
-    [applySearchBoard],
+    (sv: SavedSearch) => {
+      // Snapshot **before** the apply, and hold the name of what replaced it so
+      // the line above the table can say which press this is undoing.
+      setSearchUndo({ name: sv.name, board: snapshotBoard() });
+      applySearchBoard(sv.board);
+    },
+    [applySearchBoard, snapshotBoard],
   );
+
+  /**
+   * **Back to the board the reader had.** The same apply in the other
+   * direction: a `ResearchSearchBoard` goes through `applySearchBoard`, which
+   * is the one place that knows how to spread one of these across nine pieces
+   * of state, so restoring cannot come to disagree with applying.
+   *
+   * The offer goes with the press. It is one step, and an `Undo` that stayed
+   * would be claiming there is a second one.
+   */
+  const undoSearch = useCallback(() => {
+    if (!searchUndo) return;
+    applySearchBoard(searchUndo.board);
+    setSearchUndo(null);
+  }, [searchUndo, applySearchBoard]);
 
   const saveSearch = useCallback(
     (name: string) => {
@@ -5665,6 +5712,11 @@ export default function App() {
       onRenameList: renameList,
       onDeleteList: deleteList,
       onApplySearch: applySearch,
+      /* The name of the search that replaced the reader's board, and the way
+         back — see `searchUndo`. Null is "there is nothing to go back to", and
+         it is what draws the line above the table or leaves it undrawn. */
+      undoSearchName: searchUndo?.name ?? null,
+      onUndoSearch: undoSearch,
       onSaveSearch: saveSearch,
       onReplaceSearch: replaceSearch,
       onRenameSearch: renameSearch,
@@ -5684,6 +5736,8 @@ export default function App() {
       renameList,
       deleteList,
       applySearch,
+      searchUndo,
+      undoSearch,
       saveSearch,
       replaceSearch,
       renameSearch,
@@ -6622,6 +6676,15 @@ export default function App() {
       setSharedLink(null);
       setShared(null);
       sharedReq.current = null;
+      /* **And the way back out of an applied search goes with them**, on the
+         same rule and for a plainer reason than the lenses have: the offer says
+         *back to the board you had*, and once the reader has crossed to the
+         Roster and come back, the board they had is no longer a thing they can
+         see themselves having left. An `Undo` for a press three views ago is a
+         button that does something surprising. `searchUndo` is App state and in
+         no URL and on no record, so putting it away costs nothing to get back
+         to — the search is still in the panel. */
+      setSearchUndo(null);
     }
   }, [view]);
 
