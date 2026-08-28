@@ -395,6 +395,22 @@ const POSITIONS: PositionOption[] = [
 const POSITION_BY_KEY = new Map(POSITIONS.map((p) => [p.key, p]));
 
 /**
+ * **The same eleven, in the two groups a reader actually thinks in.**
+ *
+ * Derived from `POSITIONS` rather than written out beside it, which is this
+ * file's own rule about one vocabulary: a pill added to that array is on the
+ * picker without anything here being told, and a group is `kind` — the field
+ * every entry already carries and which `researchKindFor` already reads.
+ *
+ * The order inside each group is `POSITIONS`' own, which puts the whole-board
+ * pill first: it is what the group *is* before anything under it narrows it.
+ */
+const POSITION_GROUPS: { label: string; items: PositionOption[] }[] = [
+  { label: 'Batters', items: POSITIONS.filter((p) => p.kind === 'batter') },
+  { label: 'Pitchers', items: POSITIONS.filter((p) => p.kind === 'pitcher') },
+];
+
+/**
  * **The two the team reading keeps**, relabeled for a club.
  *
  * Nine of the eleven pills select a *position* and a club plays them all, so
@@ -1255,6 +1271,19 @@ export interface ResearchUi {
      *  the same surprise as coming back to find it empty. */
     lists: boolean;
     searches: boolean;
+    /**
+     * **The position picker and the span picker** — the two runs of pills the
+     * bar used to draw flat, now behind the buttons that state what they are
+     * set to.
+     *
+     * They are panels rather than dialogs because they are *one strip of pills
+     * each*, which is the test `ColumnPicker` states from the other side: a
+     * panel several hundred pixels tall wedged into the chrome pushes the table
+     * down the page, and eleven pills in a row is not that. `settings` is the
+     * one that is, and it is a dialog and so is not here — see `settingsOpen`.
+     */
+    pos: boolean;
+    window: boolean;
     /** The projected lens's span picker — the days it is drawn over. Open is a
      *  fact about where you were, like the other three. */
     projected: boolean;
@@ -1306,6 +1335,8 @@ export const freshResearchUi = (): ResearchUi => ({
     projCustom: false,
     lists: false,
     searches: false,
+    pos: false,
+    window: false,
   },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
@@ -2005,7 +2036,20 @@ export function ResearchTable({
     projected: projectedOpen,
     lists: listsOpen,
     searches: searchesOpen,
+    pos: posOpen,
+    window: windowOpen,
   } = ui.panels;
+  /**
+   * **The settings dialog, and it is local state where the panels beside it are
+   * not.**
+   *
+   * `ColumnPicker`'s own rule, restated one control along: a dialog is not a
+   * panel — it never survives leaving the board, and there is nothing about it
+   * worth carrying to the other kind's board. The flags above are places the
+   * reader *is*; this is a box that is open, and a reader who comes back to the
+   * board wants the board rather than the box they left over it.
+   */
+  const [settingsOpen, setSettingsOpen] = useState(false);
   /**
    * **The span in force came through the calendar** — it is not one of the
    * named periods, so `Custom` is the door it came through.
@@ -2137,6 +2181,27 @@ export function ResearchTable({
    * all would have `Custom` closing `Projected`, which is the panel it lives
    * inside.
    */
+  /**
+   * **Opening a panel from inside the settings dialog shuts the dialog.**
+   *
+   * The dialog holds every control the bar no longer does, and seven of them
+   * answer with a panel of their own — Filters, Starting, the two saved-thing
+   * boxes, the lens's span picker, Columns. Those panels open into
+   * `.research-head`, which is *behind* this dialog: left up, the box would be
+   * covering the answer to the press the reader has just made. So a press that
+   * opens something closes the box it was made in, which is the same thing the
+   * exclusivity one level down already does between panels — the first question
+   * is abandoned, not stacked.
+   *
+   * **Only where it is opening.** A press that turns a panel *off* is a reader
+   * changing their mind inside the box, and shutting it under them would spend
+   * a gesture they did not make.
+   */
+  const openPanel = (which: keyof ResearchUi['panels'], on: boolean) => {
+    setPanel(which, on);
+    if (on) setSettingsOpen(false);
+  };
+
   const setPanel = (which: keyof ResearchUi['panels'], on: boolean) =>
     onUiChange((u) => {
       if (which === 'projCustom') return { ...u, panels: { ...u.panels, projCustom: on } };
@@ -2148,6 +2213,8 @@ export function ResearchTable({
         projected: false,
         lists: false,
         searches: false,
+        pos: false,
+        window: false,
       };
       const panels = { ...u.panels, ...(on ? shut : {}), [which]: on };
       // **The span picker's own door goes wherever its panel goes**, and that
@@ -2751,20 +2818,12 @@ export function ResearchTable({
     return () => ro.disconnect();
   });
 
-  const posRowRef = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const row = posRowRef.current;
-    const tab = row?.querySelector<HTMLElement>('.research-pos-tab.active');
-    if (!row || !tab) return;
-    const left = tab.offsetLeft - row.offsetLeft;
-    const overLeft = left - row.scrollLeft;
-    const overRight = left + tab.offsetWidth - (row.scrollLeft + row.clientWidth);
-    // A pill flush with either edge reads as cut off, so land it a pill's worth
-    // inside — which also hints there is more row to swipe to.
-    const PEEK = 44;
-    if (overLeft < 0) row.scrollLeft += overLeft - PEEK;
-    else if (overRight > 0) row.scrollLeft += overRight + PEEK;
-  }, [pos]);
+  /* **The effect that scrolled the active position pill into view is gone**, and
+     with it the ref it read. It existed because eleven pills were one
+     horizontally-scrolling run in the bar, so `SS` could be off the end of it at
+     rest; the run is two wrapping groups in a panel now (`posStrip`), where
+     every pill is on screen the moment the panel opens and there is nothing to
+     scroll into view. */
 
   /**
    * Changing **which players are in the table, or what order they are in**
@@ -3509,7 +3568,18 @@ export function ResearchTable({
    * safe because every one of these is controlled from above.
    */
 
-  const rowWho = (
+  /**
+   * What the turn filter's mark says, or null where there is nothing to say —
+   * the filter off, the window not yet read, or a board a turn is not a fact
+   * about. One test, read by the mark, by `Clear all` and by the empty state,
+   * so the three cannot come to disagree about whether the days are in force.
+   *
+   * **Declared up here rather than beside the panels**, where it was: `marks`
+   * reads it, and `marks` has to be built before the bar that carries its count.
+   */
+  const turnChip = activeTurn ? turnDaysLabel(activeTurn.days, activeTurn.index.today) : null;
+
+  const groupWho = (
     <>
           {/* Ahead of the position pills, and a separate control from them:
               which rosters and which position both apply, so folding them into
@@ -3573,7 +3643,7 @@ export function ResearchTable({
                 label="Lists"
                 title="Choose a watchlist, or rename, share and add one"
                 open={listsOpen}
-                onToggle={() => setPanel('lists', !listsOpen)}
+                onToggle={() => openPanel('lists', !listsOpen)}
                 className="rl-split-caret"
               />
             </div>
@@ -3632,122 +3702,128 @@ export function ResearchTable({
     </>
   );
 
-  const rowSlice = (
-    <>
-          {/* Out in the bar rather than inside the Filters panel: it decides which
-              games every number on the board is drawn from, which is too large a
-              thing to keep behind a disclosure — and being always visible, it needs
-              no chip to say what it is set to.
-
-              **Not drawn at all under the projected lens**, which is the rule
-              that takes Columns and Ranks off the bar in schedule mode and the
-              include buttons off the team reading: a control whose whole
-              subject has been swapped out is a setting lying about its own
-              reach. A projection is not drawn from a window — it is his season
-              blended with his last thirty days, always, whichever pill is lit —
-              so under the lens these five decide **nothing**, and a reader who
-              pressed `7d` and watched the table not move would be owed an
-              explanation this bar has no room for. The setting survives the
-              lens and the board comes back to it, exactly as the turn filter's
-              days survive a crossing to the batters.
-
-              It is the tabs *and* the dropdown beside them, or a phone would
-              keep the control the desktop has taken away. */}
-          {!projectedOn && (
-          <div className="research-window-row" role="tablist" aria-label="Time span">
-            {RESEARCH_WINDOWS.map((w) => (
-              <button
-                key={String(w)}
-                type="button"
-                role="tab"
-                aria-selected={statWindow === w}
-                className={`research-window-tab${statWindow === w ? ' active' : ''}`}
-                onClick={() => onWindowChange(w)}
-                title={
-                  w === 'season'
-                    ? 'The whole season to date'
-                    : `The last ${w} days of games, ending yesterday`
-                }
-              >
-                {windowLabel(w)}
-              </button>
-            ))}
-          </div>
-          )}
-          {/* **Eleven pills on the player reading, two on the team one**, and
-              the run is the same run: a club has no position to be eligible at,
-              so what is left of the row is the half of it that was never about
-              a position at all — the two whole-board pills, which already say
-              which side of the ball the board is. They keep their own `pos=`
-              values (`batters` / `pitchers`), so the reading writes nothing new
-              into the URL and a reader who was on `SS` and crosses to the clubs
-              and back is still on `SS`: `TEAM_SIDES` presses a pill only where
-              it would genuinely change the board. */}
-          <div className="research-positions" role="tablist" aria-label={teams ? 'Side' : 'Position'} ref={posRowRef}>
-            {(teams ? TEAM_SIDES : POSITIONS).map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                role="tab"
-                aria-selected={teams ? researchKindFor(pos) === p.kind : pos === p.key}
-                className={`research-pos-tab${
-                  (teams ? researchKindFor(pos) === p.kind : pos === p.key) ? ' active' : ''
-                }`}
-                title={(hasEligibility && p.espnTitle) || p.title}
-                /* On the team reading the press is a no-op where the kind is
-                   already right — pressing `Hitting` on a board reached from
-                   the `SS` pill must not spend that pill. */
-                onClick={() => {
-                  if (teams && researchKindFor(pos) === p.kind) return;
-                  onPosChange(p.key);
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {/* **And the same two as dropdowns on a phone**, which is the one width
-              swap on this bar that survived the move to scrolling rows. The
-              other four went — a button's label is its name and a row that
-              scrolls has no line to buy back — but these two are not buttons:
-              they are a four-pill run and an eleven-pill run, and eleven pills
-              behind a horizontal scroll is a control you have to drag through
-              to find `SS`. A closed select shows the one that is set and opens
-              the rest in a list the platform draws. Both rendered, one media
-              query, neither chosen in JS. */}
-{!projectedOn && (
-          <select
-            className="research-window-select"
-            value={String(statWindow)}
-            onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
-            aria-label="Time span"
+  /**
+   * **The span, as a strip in the head rather than a run in the bar.**
+   *
+   * It was five pills flat on the bar's second row, plus a `<select>` beside
+   * them for a phone. It is now behind a button that states what it is set to,
+   * and that button is one of the four the bar has left — which is the whole
+   * point of the change: five pills were five pills' worth of bar spent saying
+   * `Season` four fifths of the time.
+   *
+   * **A panel and not a dialog**, which is the test `ColumnPicker` states from
+   * the other side: a box several hundred pixels tall wedged into the chrome
+   * pushes the table down the page, and a strip of five is not that. The
+   * `<select>` went with the change — a strip in the head is full-width at
+   * every width, so there is no narrow case left for a dropdown to answer, and
+   * the media query that swapped them is gone.
+   *
+   * **Picking closes it**, which is the day strip's own asymmetry read the easy
+   * way: a press here *is* the answer, so there is nothing left to keep open.
+   *
+   * **Not reachable at all under the projected lens**, which is the old rule
+   * moved with the control rather than dropped: a projection is his season
+   * blended with his last thirty days, always, so under the lens these five
+   * decide nothing — and a reader who pressed `7d` and watched the table not
+   * move would be owed an explanation this chrome has no room for. The setting
+   * survives the lens and the board comes back to it, exactly as the turn
+   * filter's days survive a crossing to the batters. The *button* is not drawn
+   * either, so there is no lit control pointing at a panel nothing can open.
+   */
+  const windowStrip = (
+    <div className="research-panel research-pick-panel">
+      <div className="research-pick-row" role="tablist" aria-label="Time span">
+        {RESEARCH_WINDOWS.map((w) => (
+          <button
+            key={String(w)}
+            type="button"
+            role="tab"
+            aria-selected={statWindow === w}
+            className={`research-window-tab${statWindow === w ? ' active' : ''}`}
+            onClick={() => {
+              onWindowChange(w);
+              openPanel('window', false);
+            }}
+            title={
+              w === 'season'
+                ? 'The whole season to date'
+                : `The last ${w} days of games, ending yesterday`
+            }
           >
-            {RESEARCH_WINDOWS.map((w) => (
-              <option key={String(w)} value={String(w)}>
-                {windowLabel(w)}
-              </option>
-            ))}
-          </select>
-          )}
-<select
-            className="research-pos-select"
-            value={teams ? (researchKindFor(pos) === 'pitcher' ? 'pitchers' : 'batters') : pos}
-            onChange={(e) => onPosChange(e.target.value as ResearchPos)}
-            aria-label={teams ? 'Side' : 'Position'}
-          >
-            {/* Two options and no headings on the team reading — an optgroup
-                over a run of one reads as a heading with nothing under it. */}
-            {(teams ? TEAM_SIDES : POSITIONS).map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          {teamsToggle}
-    </>
+            {windowLabel(w)}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 
-  const rowTools = (
+  /**
+   * **The positions, grouped by the side of the ball they belong to.**
+   *
+   * Eleven pills in one run is a control you have to read along to find `SS`,
+   * which is what the `<select>` beside them existed to answer on a phone. In
+   * two named groups it is two short runs — `Batters · C · 1B · 2B · 3B · SS ·
+   * IF · OF` and `Pitchers · SP · RP` — and the heading over each is the thing
+   * a flat run could never say: that the eight and the two are not one list.
+   * The whole-board pill leads its own group, being what that group is when
+   * nothing under it is narrowed.
+   *
+   * **The group headings are `<div role="presentation">` rather than headings**,
+   * for the reason `Top Performers` is a `span` on the Overview: this panel is
+   * inside a `tablist` whose tabs are the pills, and a heading between them
+   * would be announced as structure in a list that has none. The tablist's own
+   * `aria-label` names what is being picked; each group carries `aria-label` on
+   * its own row.
+   *
+   * **On the team reading it is the two sides and no groups** — a club plays
+   * every position, so nine of the eleven have nothing to select, and an
+   * `optgroup` over a run of one reads as a heading with nothing under it. That
+   * is the rule `TEAM_SIDES` already carried down from the `<select>` it
+   * replaces.
+   */
+  const posStrip = (
+    <div className="research-panel research-pick-panel">
+      {(teams ? [{ label: null, items: TEAM_SIDES }] : POSITION_GROUPS).map((g) => (
+        <div className="research-pick-group" key={g.label ?? 'sides'}>
+          {g.label && (
+            <div className="research-pick-head" role="presentation">
+              {g.label}
+            </div>
+          )}
+          <div
+            className="research-pick-row"
+            role="tablist"
+            aria-label={g.label ?? (teams ? 'Side' : 'Position')}
+          >
+            {g.items.map((p) => {
+              const on = teams ? researchKindFor(pos) === p.kind : pos === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  className={`research-pos-tab${on ? ' active' : ''}`}
+                  title={(hasEligibility && p.espnTitle) || p.title}
+                  /* On the team reading the press is a no-op where the kind is
+                     already right — pressing `Hitting` on a board reached from
+                     the `SS` pill must not spend that pill. */
+                  onClick={() => {
+                    if (!(teams && researchKindFor(pos) === p.kind)) onPosChange(p.key);
+                    openPanel('pos', false);
+                  }}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const groupTools = (
     <>
 
             {/* One group, so the four buttons never split across two lines of the
@@ -3790,26 +3866,25 @@ export function ResearchTable({
              * in the app is about players — and Teams is the lens. It is the
              * run's third panel-less toggle, so it takes `.on` and never
              * `.active`, exactly as Watchlist and Ranks do.
+             *
+             * **And the element is back beside the paragraph that describes
+             * it.** It had drifted onto the row above — the bar's second run,
+             * with the span and the position — while this comment stayed here,
+             * so the file said "Teams leads the run" about a control that was
+             * not in it. With the bar down to four buttons the run is the
+             * settings dialog's, and Teams is a setting: it changes what the
+             * table *is*, which is exactly the kind of thing that box holds.
              */}
-            {/* Search and Filters lead the run — the two disclosures you come to
-                the board with a question in. Each carries an `on` state whenever
-                its panel holds something, open or shut: a collapsed control must
-                never be the only place a filter lives. */}
-            <button
-              type="button"
-              className={`research-toggle${searchOpen ? ' active' : ''}${
-                search.trim() ? ' on' : ''
-              }`}
-              aria-expanded={searchOpen}
-              onClick={() => setPanel('search', !searchOpen)}
-              title="Search the league by name"
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <span className="research-toggle-label">Search</span>
-            </button>
+            {teamsToggle}
+            {/* **Search is not in this box, and it is the only control that
+                isn't.** It is one of the four the bar keeps, so a copy here
+                would be the same disclosure drawn twice — and the two would sit
+                a press apart, one of them behind a box the other's panel would
+                have to close. Filters leads the run instead. Each of these
+                carries an `on` state whenever its panel holds something, open
+                or shut: a collapsed control must never be the only place a
+                filter lives, which is what the badge strip under the count now
+                answers for the whole of this box. */}
             <button
               type="button"
               /* `.on` means the panel *holds* something, whether it is open or
@@ -3819,7 +3894,7 @@ export function ResearchTable({
                 filters.length ? ' on' : ''
               }`}
               aria-expanded={filtersOpen}
-              onClick={() => setPanel('filters', !filtersOpen)}
+              onClick={() => openPanel('filters', !filtersOpen)}
               title="Filter the board by a stat threshold"
             >
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
@@ -3861,7 +3936,7 @@ export function ResearchTable({
                    it and hands it down only once it has landed, exactly as the
                    Schedule toggle knows its own wait. */
                 loading={turnDays !== null && !turnIndex}
-                onToggle={() => setPanel('turns', !turnsOpen)}
+                onToggle={() => openPanel('turns', !turnsOpen)}
               />
             )}
             {/**
@@ -4045,7 +4120,7 @@ export function ResearchTable({
                 // a span picker left open over a mode that is no longer on is
                 // the same fault the run's own exclusivity fixes, arriving from
                 // a control that is not a disclosure.
-                if (scheduleSpan === null) setPanel('projected', false);
+                if (scheduleSpan === null) openPanel('projected', false);
                 onScheduleSpanChange(
                   scheduleSpan === null ? defaultScheduleSpan(matchupWindow) : null,
                 );
@@ -4130,7 +4205,7 @@ export function ResearchTable({
                   on={projected}
                   active={projectedOpen}
                   loading={projected && !projection}
-                  onToggle={() => setPanel('projected', !projectedOpen)}
+                  onToggle={() => openPanel('projected', !projectedOpen)}
                   title={
                     projected
                       ? `Projected over ${wideRange(projSpan.start, projSpan.end)} — pick other days, or clear it`
@@ -4216,7 +4291,7 @@ export function ResearchTable({
                 open={columnsOpen}
                 count={columns.length - (activeTurn ? 1 : 0)}
                 customised={projectedOn ? !!projColumnKeys : !!columnKeys}
-                onToggle={() => setPanel('columns', !columnsOpen)}
+                onToggle={() => openPanel('columns', !columnsOpen)}
               />
             )}
             {/**
@@ -4268,6 +4343,312 @@ export function ResearchTable({
     </>
   );
 
+  /**
+   * **What the position button says**, which is the whole reason a button
+   * replaces the run: the run said eleven things and the reader only ever needs
+   * the one that is set. `Batters` is the default and reads as one, so nothing
+   * on the bar has to say *default*.
+   */
+  const posLabel =
+    (teams ? TEAM_SIDES : POSITIONS).find((p) =>
+      teams ? researchKindFor(pos) === p.kind : p.key === pos,
+    )?.label ?? 'Batters';
+
+  /**
+   * ---------------------------------------------------------------------------
+   * The bar: four controls, and everything else behind one of them
+   * ---------------------------------------------------------------------------
+   *
+   * **It was three wrapping runs of up to seventeen controls** — the ownership
+   * sets and the two saved-thing boxes, then the span and the position as two
+   * pill rows with a `<select>` each, then eight to ten tools — and on a phone
+   * that is three or four rows of chrome over a table where every pixel of
+   * height is a row of the board. Reported as the top of this page being hard
+   * to manage, and worst on a phone, which is exactly where it cost most.
+   *
+   * **Four, and each one answers a different question.** *Which name am I
+   * looking for* (Search), *which slice of the league* (Position), *over what*
+   * (Season), and *everything else about the board* (the gear). The first three
+   * are the questions a reader arrives with; the fourth is the box they open
+   * when they have one of the others.
+   *
+   * **Two of them are icons and two are words, and that is not inconsistency.**
+   * Search and the gear are *actions with no state to report* — a magnifier
+   * means search wherever you meet one, and this app already spends a gear on
+   * settings in its own header. Position and Season are the opposite: their
+   * whole job is to say what they are set to, and a glyph cannot say `SS`. So
+   * each control is drawn as the thing it is, which is the same rule that gives
+   * the include buttons a code, an abbreviation and a full word at three widths.
+   *
+   * **The two icon buttons keep a `sr-only` word**, a wordless control owing a
+   * label to everything that is not a pointer — the rule the saved-things row's
+   * four icon buttons already state.
+   */
+  /**
+   * ---------------------------------------------------------------------------
+   * The marks: every setting in force, beside the count
+   * ---------------------------------------------------------------------------
+   *
+   * **The bar hides most of the board's settings now, so something has to say
+   * what they are.** That is this file's own standing rule — *a collapsed
+   * control must never be the only place a filter lives* — and it used to be
+   * answered by the controls themselves: they were all on the bar, lit, and the
+   * condensed run kept them lit once it had scrolled away. Four buttons cannot
+   * do that, so the answer moves to the one line that was already saying what
+   * the board is: the count.
+   *
+   * **They are the chips, widened.** `.research-chips` already drew the stat
+   * thresholds and the turn filter's days as pressable labels with an `×`, one
+   * row above the count, and those are two of the settings a reader can no
+   * longer see the control for — so a second row of *badges* beside them would
+   * be the same sentence twice, 33px apart, which is the exact fault the old
+   * `.research-badge` row was removed for. One strip, holding all of it, and
+   * the chips' own behavior generalized: **a mark is what the setting is, and
+   * pressing it undoes it.**
+   *
+   * **Where a setting has no single undo, the press opens the box that sets
+   * it.** The include set is the case — `Nobody included` is a state three
+   * buttons make together and there is no one press that resolves it — so that
+   * mark carries no `×` and raises the settings dialog instead. A mark that
+   * looks clearable and is not would be worse than either.
+   *
+   * **Order is coarsest first**, which is what the chips already did between
+   * the days and the thresholds: what the board *is* (the lens, the clubs, the
+   * sets), then what has been taken out of it (the days, the name, the
+   * thresholds). A reader scanning the strip meets the big claims first, and
+   * the strip scrolls, so the ones most worth seeing are the ones that stay.
+   *
+   * `hidden` is whether the setting lives behind the gear, which is what that
+   * button's own count is of — the name search is on the strip and is *not*
+   * behind it, having a button of its own in the bar.
+   */
+  const marks = useMemo(() => {
+    const out: {
+      key: string;
+      label: string;
+      title: string;
+      hidden: boolean;
+      onClear?: () => void;
+    }[] = [];
+    const push = (m: (typeof out)[number]) => out.push(m);
+    if (teams) {
+      push({
+        key: 'teams',
+        label: 'Clubs',
+        title: 'The board is thirty clubs rather than six hundred players — press to go back to the players',
+        hidden: true,
+        onClear: () => onTeamsChange(false),
+      });
+    }
+    if (projected) {
+      push({
+        key: 'projected',
+        label: `Projected · ${wideRange(projSpan.start, projSpan.end)}`,
+        title: 'Every figure is what the player is expected to do over these days — press to go back to what he has done',
+        hidden: true,
+        onClear: () => onProjSpanChange(null),
+      });
+    }
+    if (scheduleSpan !== null) {
+      push({
+        key: 'sched',
+        label: `Schedule · ${scheduleSpan === 'matchup' ? 'This matchup' : scheduleSpan === 'next' ? 'Next matchup' : `Next ${scheduleSpan}`}`,
+        title: 'The columns are the days ahead rather than the stats — press to go back to the stats',
+        hidden: true,
+        onClear: () => onScheduleSpanChange(null),
+      });
+    }
+    if (!teams) {
+      /* **One mark for the ownership sets, not one per button**, because what
+         is worth saying is the *set* — `Mine + FA` is a sentence and three
+         separate marks reading `Mine`, `FA` are a row the reader has to add up.
+         Drawn only where it is not the default, which is the rule every mark
+         here follows: a mark that would be on every board marks nothing. */
+      if (!isDefaultInclude(include)) {
+        const on = includeKeys(include).map((k) => includeMeta(k, espnConnected).abbr);
+        push({
+          key: 'include',
+          label: on.length ? on.join(' + ') : 'No rosters',
+          title: on.length
+            ? `Only these rosters are on the board — ${on.join(', ')}`
+            : 'None of the three ownership sets is on, so the board is whatever the watchlist adds to it',
+          hidden: true,
+        });
+      }
+      if (includeWatchlist) {
+        push({
+          key: 'watch',
+          /* The `+` says which direction this one goes: every other mark here
+             takes rows out and this one puts them in, which is the distinction
+             the chips row was careful to keep the watchlist *out* of when
+             `Clear all` was the only thing beside it. It is safe on a strip
+             whose presses are per-mark. */
+          label: `+ ${watchlistName || 'Watchlist'}`,
+          title: `The players on “${watchlistName || 'your watchlist'}” are on the board whoever owns them — press to take them off again`,
+          hidden: true,
+          onClear: () => onIncludeWatchlistChange(false),
+        });
+      }
+      if (compareOn) {
+        push({
+          key: 'compare',
+          label: comparing
+            ? `Comparing ${compareKeys.length}`
+            : `Comparing ${compareSelected.length ? `${compareSelected.length} picked` : '— pick some'}`,
+          title: comparing
+            ? 'The board is narrowed to the players you ticked — press to bring the whole board back'
+            : 'The tick column is on — press to put it away',
+          hidden: true,
+          onClear: () => {
+            if (comparing) onClearCompare();
+            onCompareModeChange(false);
+          },
+        });
+      }
+    }
+    if (turnChip) {
+      push({
+        key: 'turn',
+        label: `Starting ${turnChip}`,
+        title: activeTurn
+          ? `Starting ${turnDaysTitle(activeTurn.days, activeTurn.index.today)} — press to show every pitcher again, whatever day he starts`
+          : '',
+        hidden: true,
+        onClear: () => onTurnDaysChange(null),
+      });
+    }
+    if (search.trim()) {
+      push({
+        key: 'search',
+        label: `“${search.trim()}”`,
+        title: 'The board is narrowed to names matching this — press to clear it',
+        // The one mark whose control is still on the bar, so it is not one of
+        // the things the gear is hiding and is not in its count.
+        hidden: false,
+        onClear: () => setSearch(''),
+      });
+    }
+    for (const f of filters) {
+      push({
+        key: `f-${f.id}`,
+        label: `${columnsByKey.get(f.column)?.label ?? f.column} ${OP_LABEL[f.op]} ${f.label}`,
+        title: 'Remove this filter',
+        hidden: true,
+        onClear: () => setFilters((fs) => fs.filter((x) => x.id !== f.id)),
+      });
+    }
+    return out;
+  }, [
+    teams,
+    projected,
+    projSpan,
+    scheduleSpan,
+    include,
+    espnConnected,
+    includeWatchlist,
+    watchlistName,
+    compareOn,
+    comparing,
+    compareKeys,
+    compareSelected,
+    turnChip,
+    activeTurn,
+    search,
+    filters,
+    columnsByKey,
+    onTeamsChange,
+    onProjSpanChange,
+    onScheduleSpanChange,
+    onIncludeWatchlistChange,
+    onClearCompare,
+    onCompareModeChange,
+    onTurnDaysChange,
+    setSearch,
+    setFilters,
+  ]);
+
+  const rowMain = (
+    <>
+      {/* Search leads, being the one question you can ask this board without
+          knowing anything about it. `.on` while the field holds something, so a
+          board narrowed by a name says so with the panel shut — and the badge
+          strip under the count says *what* the name is. */}
+      <button
+        type="button"
+        className={`research-toggle research-icon${searchOpen ? ' active' : ''}${
+          search.trim() ? ' on' : ''
+        }`}
+        aria-expanded={searchOpen}
+        onClick={() => setPanel('search', !searchOpen)}
+        title="Search the league by name"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <span className="sr-only">Search the league by name</span>
+      </button>
+      {/**
+       * **The gear, and it carries a count.**
+       *
+       * The count is how many settings inside are doing something — the same
+       * figure the badge strip under the count spells out. Both, deliberately,
+       * and it is not the restatement it looks like: the strip **scrolls**, so
+       * on a phone with four things in force the fourth is off the end of it,
+       * and a control that hides settings owes an always-visible answer to *is
+       * anything in here on*. The strip says which; this says how many. It is
+       * the shape `Filters` already wore for the same reason one row down.
+       *
+       * `.active` for open and `.on` for holding something, which is the class
+       * pair every disclosure on this board takes.
+       */}
+      <button
+        type="button"
+        className={`research-toggle research-icon${settingsOpen ? ' active' : ''}${
+          marks.length ? ' on' : ''
+        }`}
+        aria-expanded={settingsOpen}
+        aria-haspopup="dialog"
+        onClick={() => setSettingsOpen((v) => !v)}
+        title={
+          marks.length
+            ? `Everything else this board is set to — ${marks.length} in force`
+            : 'Everything else this board is set to'
+        }
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.47V21a2 2 0 1 1-4 0v-.09a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.77.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.47-.97H3a2 2 0 1 1 0-4h.09A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.32-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.6 1.6 0 0 0 9 4.6a1.6 1.6 0 0 0 .97-1.47V3a2 2 0 1 1 4 0v.09A1.6 1.6 0 0 0 15 4.6a1.6 1.6 0 0 0 1.77-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.6 1.6 0 0 0 19.4 9v0a1.6 1.6 0 0 0 1.47.97H21a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.47.97Z" />
+        </svg>
+        <span className="sr-only">Board settings</span>
+        {marks.length > 0 && <span className="research-toggle-count">{marks.length}</span>}
+      </button>
+      {/* The position, stating what it is set to. `.active` alone and never
+          `.on`: every board is on *some* position, so a lit button here would
+          be a mark on every board, which marks nothing. */}
+      <SavedButton
+        label={posLabel}
+        title={teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'}
+        open={posOpen}
+        onToggle={() => setPanel('pos', !posOpen)}
+        className="research-pick-btn"
+      />
+      {/* …and the span, on the same terms, and **not drawn under the projected
+          lens** — the rule that took the pill row off the bar there, arriving on
+          the button that replaced it. See `windowStrip`. */}
+      {!projectedOn && (
+        <SavedButton
+          label={windowLabel(statWindow)}
+          title="How much of the season every number on the board is drawn from"
+          open={windowOpen}
+          onToggle={() => setPanel('window', !windowOpen)}
+          className="research-pick-btn"
+        />
+      )}
+    </>
+  );
+
+
   /* **The two panels and the chips travel with the head, not with the bar.**
 
       Search and Filters open inline rows rather than dialogs — see the Columns
@@ -4297,13 +4678,6 @@ export function ResearchTable({
       "control that changes size under the finger that pressed it" — the finger
       is on the condensed run, which rides a zero-height rail and does not
       move. */
-  /**
-   * What the turn filter's chip says, or null where there is nothing to say —
-   * the filter off, the window not yet read, or a board a turn is not a fact
-   * about. One test, read by the chip, by `Clear all` and by the empty state,
-   * so the three cannot come to disagree about whether the days are in force.
-   */
-  const turnChip = activeTurn ? turnDaysLabel(activeTurn.days, activeTurn.index.today) : null;
 
   /**
    * Whether the surface that raised the open preview is **still on screen** —
@@ -4319,6 +4693,19 @@ export function ResearchTable({
 
   const panels = (
     <>
+      {/* **The position and the span, behind the two buttons that state them.**
+
+          They are the newest members of this run and they arrive by the same
+          argument every other one is here on: a panel opens into the head,
+          which is the one box on this board drawn at every offset — so a
+          control pressed in the condensed run has its answer under the finger
+          rather than hundreds of pixels above the top of the pane.
+
+          They lead the run because they are what the two buttons beside Search
+          open, and because they are the smallest: one strip and two, where
+          Filters is a builder and the day strip is a fortnight. */}
+      {posOpen && posStrip}
+      {windowOpen && !projectedOn && windowStrip}
       {/* **The two saved-thing panels are dialogs now, and are drawn beside the
           Columns picker rather than here.** Two paragraphs of this file's
           history sit under that one sentence and both are worth keeping:
@@ -4597,88 +4984,32 @@ export function ResearchTable({
         </div>
       )}
 
-      {/* Outside the panel on purpose: the chips are the record of what the
-          table is currently showing, so they stay whether the Filters panel is
-          open or shut. The stat thresholds are now the whole of it — Qualified
-          carried a chip here too until it was cut (see below).
+      {/* **The chips are the mark strip now, and it lives beside the count.**
 
-          **The watchlist had a chip here and has lost it**, which is the one
-          piece of the old design the union genuinely retires. Every member
-          of this row *takes rows out* of the table, and `Clear all` is the
-          button that puts them back; a control that puts rows in has no
-          business in a row whose one action would then shrink the board —
-          and with the three ownership buttons off, `Clear all` would have
-          emptied it outright. Nothing is hidden by the loss: the three
-          include buttons keep no chips either, for the same reason this one
-          no longer needs one — it is always on screen in the bar above,
-          lit, with its count beside it. */}
-      {(filters.length > 0 || turnChip) && (
-        <div className="research-chips">
-          {/* **The turn filter's chip leads the row**, and it is the one thing
-              on this board that says which days are in force once the strip
-              has scrolled away — `Starting` on the button says *that* the board
-              is narrowed, and `Fri 8/28 – Sun 8/30` is what it is narrowed to.
-              It is a chip rather than a count beside the button for the reason
-              the stat thresholds are: a sentence a number cannot say.
+          What stood here was the stat thresholds and the turn filter's days, as
+          pressable labels with an `×`, on their own row of the head above the
+          count. Both are still exactly that — the same array, the same press,
+          the same `×` — and what has changed is that they are no longer the only
+          two settings a reader cannot see the control for. The bar is four
+          buttons; the ownership sets, the watchlist, the clubs lens, the
+          schedule lens, the projected lens and the comparison are all behind the
+          gear, and every one of them owes the same sentence.
 
-              It reads before the thresholds because it is the coarser cut —
-              forty pitchers out of six hundred, where `K/9 ≥ 9` then works on
-              those forty. */}
-          {turnChip && (
-            <button
-              type="button"
-              className="research-chip"
-              onClick={() => onTurnDaysChange(null)}
-              title={
-                activeTurn
-                  ? `Starting ${turnDaysTitle(activeTurn.days, activeTurn.index.today)} — press to show every pitcher again, whatever day he starts`
-                  : undefined
-              }
-            >
-              Starting {turnChip}
-              <span className="research-chip-x" aria-hidden="true">
-                ×
-              </span>
-            </button>
-          )}
-          {filters.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className="research-chip"
-              onClick={() => setFilters((fs) => fs.filter((x) => x.id !== f.id))}
-              title="Remove this filter"
-            >
-              {columnsByKey.get(f.column)?.label ?? f.column} {OP_LABEL[f.op]} {f.label}
-              <span className="research-chip-x" aria-hidden="true">
-                ×
-              </span>
-            </button>
-          ))}
-          {/* Clears exactly what the row shows — the stat thresholds, and the
-              days if they are among them — and nothing else. It used to clear
-              the watchlist too, which was right while that narrowed the table
-              and is wrong now that it widens it: a button for undoing filters
-              must not be able to take players *off* the board, still less empty
-              it outright with the three ownership buttons off. It also cleared
-              the Qualified toggle, which no longer exists.
+          So one strip holds all of it and it moves down beside the count — see
+          `marks` for what is in it and in what order, and `.research-marks` for
+          why it scrolls rather than wraps. A second row of badges beside these
+          chips was the alternative and it is the fault the old `.research-badge`
+          row was removed for: the same filter printed twice, 33px apart, with
+          the head paying for both.
 
-              The turn filter is in it because it is *in the row*: this button's
-              rule is that it undoes what the chips beside it say, and a chip
-              this button left standing would be a row that says two things and
-              clears one. It takes rows away like every other member. */}
-          <button
-            type="button"
-            className="research-clear"
-            onClick={() => {
-              setFilters([]);
-              if (turnChip) onTurnDaysChange(null);
-            }}
-          >
-            Clear all
-          </button>
-        </div>
-      )}
+          **`Clear all` goes with them**, and its rule is unchanged in words and
+          wider in reach: it undoes what the strip beside it says. That used to
+          be the thresholds and the days; it is now every mark that has an undo,
+          which is all of them but the ownership set — the one whose press opens
+          the box instead, there being no single gesture that resolves *nobody
+          included*. It still cannot take a player off the board by accident:
+          the watchlist mark's own undo does that and is a press of its own,
+          where this button's job is to put the board back to what it was. */}
     </>
   );
 
@@ -4808,22 +5139,17 @@ export function ResearchTable({
     <div className="view-tools">
       <div className="research-chrome">
           <div className="research-bar">
-          <ScrollRow label="which players" className="research-row">
-            {rowWho}
-          </ScrollRow>
-          <ScrollRow label="the span and position" className="research-row">
-            {rowSlice}
-          </ScrollRow>
-          {/* **The third run carries the mark the stick is read off** — see
-              `stuck`, and `.research-stick-line` for why the mark needs a box
-              of its own rather than a place in this wrapping row. The bar stops
-              here: the two runs above scroll away behind the condensed copy of
-              themselves, and this one is replaced in place by a run that
-              already holds its buttons. */}
+          {/* **One run, where there were three**, and it carries the mark the
+              stick is read off — see `stuck`, and `.research-stick-line` for why
+              the mark needs a box of its own rather than a place in this row.
+              The run scrolls away and is replaced in place by a condensed copy
+              of itself; with four buttons the copy is very nearly the run, which
+              is the point — a bar you can hold in one line is a bar that does
+              not need a second shape at every offset. */}
           <div className="research-stick-line">
             <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
-            <ScrollRow label="the board's tools" className="research-row">
-              {rowTools}
+            <ScrollRow label="the board's controls" className="research-row">
+              {rowMain}
             </ScrollRow>
           </div>
           </div>
@@ -4844,6 +5170,60 @@ export function ResearchTable({
               onSaveAsMine={saved.onSaveSharedAsMine}
               onDismiss={saved.onDismissShared}
             />
+          )}
+
+          {/**
+           * **Everything the bar no longer carries, in one box.**
+           *
+           * Thirteen controls, which is the *volume* argument `ColumnPicker`
+           * already settled for this board: a panel several hundred pixels tall
+           * wedged into the chrome pushes the table it describes down the page,
+           * and on a phone takes the screen outright while pretending to be a
+           * strip of controls. A dialog is the shape for that, and it is the
+           * shape the two saved-thing boxes and the column picker beside it
+           * already take — so opening the settings and opening Columns from
+           * inside it are the same kind of gesture rather than two.
+           *
+           * **The two groups are the questions the bar's runs used to be**:
+           * *which players* (the ownership sets, the watchlist and its chooser,
+           * the saved searches) and *what to do with the board* (the clubs
+           * lens, Filters, Starting, Schedule, the comparison, Projected,
+           * Columns, Ranks). They are unchanged inside — the same components
+           * from the same props calling the same callbacks — because the
+           * change here is one of **place**, which is the same thing the
+           * saved-thing panels' own move records.
+           *
+           * **A press that opens a panel closes this box** — `openPanel`, which
+           * is where that is argued.
+           *
+           * **Drawn on the team reading too**, unlike the two below it, and the
+           * box is simply shorter there: the controls that have no subject on a
+           * board of clubs already take themselves off (`!teams`), which is a
+           * rule they carried in from the bar and which reads the same inside a
+           * dialog. What is left is Teams itself, Filters, Columns and Ranks —
+           * and a gear that opened nothing would be the one control on this
+           * board that lies about having anything behind it.
+           */}
+          {settingsOpen && (
+            <Modal
+              title="Board settings"
+              titleId="research-settings-title"
+              className="rl-dialog-box"
+              onClose={() => setSettingsOpen(false)}
+            >
+              <div className="research-settings">
+                {!teams && (
+                  <div className="research-settings-group">
+                    <h3 className="research-settings-head">Which players</h3>
+                    {groupWho}
+                  </div>
+                )}
+                <div className="research-settings-group">
+                  <h3 className="research-settings-head">The board</h3>
+                  {groupTools}
+                </div>
+              </div>
+            </Modal>
           )}
 
           {/* **The watchlist chooser and the saved searches, as dialogs.**
@@ -5069,9 +5449,7 @@ export function ResearchTable({
                 live on stopped moving. Reading order belongs to a bar you read
                 top to bottom; this is one line replacing one row. */}
             <ScrollRow label="the board's controls" className="research-row research-condensed">
-              {rowTools}
-              {rowWho}
-              {rowSlice}
+              {rowMain}
             </ScrollRow>
             </div>
           </div>
@@ -5125,7 +5503,19 @@ export function ResearchTable({
               where both are drawn the second is a consequence of the first. */}
           {undoLine}
           {projSpanLine}
-          {(loading || boardRows.length > 0) && (
+          {/* **The count and the marks are one line**, which is what the strip
+              being *beside* the count rather than above it buys: the count is
+              `418 of 640 pitchers` and the marks are why it is not 640, so the
+              two are one sentence and reading them as one is the whole point.
+              The count is pinned and the marks scroll past it — see
+              `.research-count-row`.
+
+              `role="status"` stays on the count alone. The marks are controls,
+              and a live region that announced a row of buttons every time one of
+              them changed would read the whole strip out on every press. */}
+          {(loading || boardRows.length > 0 || marks.length > 0) && (
+            <div className="research-count-row">
+            {(loading || boardRows.length > 0) && (
             <div className="research-count" role="status">
               {loading ? (
                 <LoadingLine>
@@ -5151,6 +5541,49 @@ export function ResearchTable({
                   teams ? 'clubs' : kind === 'pitcher' ? 'pitchers' : 'batters'
                 }`
               )}
+            </div>
+            )}
+            {marks.length > 0 && (
+              <div className="research-marks">
+                {marks.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    className={`research-chip${m.onClear ? '' : ' is-flat'}`}
+                    title={
+                      m.title ||
+                      (m.onClear ? undefined : 'Open the board settings to change this')
+                    }
+                    onClick={m.onClear ?? (() => setSettingsOpen(true))}
+                  >
+                    {m.label}
+                    {m.onClear && (
+                      <span className="research-chip-x" aria-hidden="true">
+                        ×
+                      </span>
+                    )}
+                  </button>
+                ))}
+                {/* Two or more, because `Clear all` beside a single mark is a
+                    second button for what that mark's own `×` already does —
+                    the same rule that keeps a kind tab off a board with one
+                    kind on it. It clears every mark that has an undo; the
+                    ownership set has none, and is deliberately not swept up by
+                    a button whose word is *clear* into a state that shows
+                    fewer rows rather than more. */}
+                {marks.filter((m) => m.onClear).length > 1 && (
+                  <button
+                    type="button"
+                    className="research-clear"
+                    onClick={() => {
+                      for (const m of marks) m.onClear?.();
+                    }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+            )}
             </div>
           )}
         </div>
