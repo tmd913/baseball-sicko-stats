@@ -59,7 +59,8 @@ import { TURN_KEY } from './schedule';
  *   the client has no way to know how many games a club has played.
  *
  * **An unqualified player is not dropped and not blanked — he is placed on the
- * qualified players' scale**, and the badge says so with a dashed ring. Only
+ * qualified players' scale**, and the badge says so with a dashed underline.
+ * Only
  * the population that *defines* the scale changes; every row on the board still
  * carries a reading, which is the whole reason this board exists. That answers
  * the objection that retired the old `Qualified` toggle — reviving a subset
@@ -67,18 +68,28 @@ import { TURN_KEY } from './schedule';
  * on both halves: nobody is hidden, and the rule is stated in the badge's own
  * tooltip, in the toggle's, and in the expanded table's chrome.
  *
- * **The dashed ring is not a second meaning for a broken border; it is the same
- * one arriving on a second surface.** This app's standing rule is that solid
- * means measured and broken means ours, and the percentile card one tab over
- * already draws a **dashed ring on exactly these men** (`.pct-bubble--est`):
- * Savant publishes no `percent_rank_` for a player under its bar, so the card
- * ranks him itself and marks the bar as ours. That is the same set of players
- * and the same sentence — *the league publishes no standing for this man, so
- * this placement is ours* — so it wears the same clothes. The two screens now
- * agree mark for mark about the same player.
+ * **The broken line is not a second meaning for a broken border; it is the
+ * same one arriving on a second surface.** This app's standing rule is that
+ * solid means measured and broken means ours, and the percentile card one tab
+ * over already breaks its outline on **exactly these men**
+ * (`.pct-bubble--est`): Savant publishes no `percent_rank_` for a player under
+ * its bar, so the card ranks him itself and marks the bar as ours. That is the
+ * same set of players and the same sentence — *the league publishes no standing
+ * for this man, so this placement is ours* — so it speaks in the same
+ * vocabulary: the same `dashed`, the same `--faint`.
+ *
+ * **The shape differs, and only the shape.** *(This paragraph claimed the
+ * stronger thing for a while — that the two wear the same clothes and "agree
+ * mark for mark" — and the badge was a dashed ring for exactly that reason. It
+ * is an underline now.)* A ring round a colored bubble is a mark on a bubble;
+ * there is no bubble in a table cell, and a closed ring there is a second
+ * *box* under a full-size value, on the app's widest table, in a column where
+ * qualification alternates row to row. An underline is the least that can carry
+ * the same claim, in the one place the reader is already looking. See
+ * `.col-rank--outside` in the stylesheet, which holds the measurement.
  *
  * **What a badge that was both projected and unqualified would draw** was asked
- * before the ring went on, and the answer is: one ring. Neither surface that
+ * before the mark went on, and the answer is: one mark. Neither surface that
  * draws a `.col-rank` percentile has a projected reading today — the board and
  * the Stats tab hold measured stats only, and the League Rankings table's
  * `.col-rank` is a rank of *teams*, which this modifier is scoped away from.
@@ -86,7 +97,7 @@ import { TURN_KEY } from './schedule';
  * ("this figure is ours rather than the league's"), and a second broken outline
  * over the first would be two ways of saying one thing — the argument that took
  * the third mark off a projected start row. The chrome says `Projected` once
- * for the whole table, as the matchup card does, and the ring keeps its single
+ * for the whole table, as the matchup card does, and the mark keeps its single
  * meaning.
  *
  * **Nulls are out of the denominator, not at the bottom of it.** A player
@@ -380,7 +391,7 @@ export function rankFill(rank: number | undefined, n: number): CSSProperties | u
  * players. Everything else falls out of the population it is handed: `qualified`
  * is false on every club row — there is no bar to clear when all thirty have
  * played the span — so `rankScales` takes its already-written nobody-qualifies
- * path, the scale is built over all thirty, no row wears the dashed ring (a
+ * path, the scale is built over all thirty, no row wears the broken line (a
  * mark every row would carry marks nothing), and the tooltip says the plain
  * noun. What must never happen is a percentile against six hundred *players*
  * rendering under a club's aggregate; a separate population is what prevents
@@ -418,12 +429,13 @@ const populationNoun = (kind: PlayerKind) => (kind === 'pitcher' ? 'pitchers' : 
  * a second color system on the one table whose color vocabulary is already
  * spoken for by the live inning, the postponement and the trend.
  *
- * **The one mark it does carry is the dashed ring on a player outside the
- * population** — argued at the head of this file, and drawn as an `outline` for
- * the same reason `.pct-bubble--est` is one: an outline is painted rather than
- * laid out, so a ring that comes and goes down a column cannot change a row's
- * height or a table's width, which is the `.sched-vs-estimated` argument about
- * the same choice. Measured: neither moves by a pixel.
+ * **The one mark it does carry is the dashed underline on a player outside the
+ * population** — argued at the head of this file, and drawn as a
+ * `text-decoration` for the reason `.pct-bubble--est` gives for its `outline`:
+ * both are *painted* rather than laid out, so a mark that comes and goes down a
+ * column cannot change a row's height or a table's width, which is the
+ * `.sched-vs-estimated` argument about the same choice. Measured: neither moves
+ * by a pixel.
  *
  * ---
  *
@@ -466,9 +478,9 @@ const populationNoun = (kind: PlayerKind) => (kind === 'pitcher' ? 'pitchers' : 
  * league's lowest, and a column with no good end (`NO_GOOD_END`) draws no badge
  * at all on either reading.
  *
- * **No dashed ring, ever, on this reading.** There is no bar for a club to be
+ * **No broken line, ever, on this reading.** There is no bar for a club to be
  * short of; `qualified` is false on all thirty, which is what makes
- * `qualifiedScale` false and the ring unreachable — the ring marks a row
+ * `qualifiedScale` false and the underline unreachable — it marks a row
  * *outside* a population, and a mark every row or no row would carry marks
  * nothing.
  */
@@ -492,7 +504,8 @@ export function RankBadge({
    *  what they are being ranked against. */
   population: string;
   /** Whether this row is *in* that population — `ResearchRow.qualified`, which
-   *  is Savant's bar measured over this span. False draws the dashed ring and
+   *  is Savant's bar measured over this span. False draws the dashed underline
+   *  and
    *  adds the sentence explaining it; the number itself is the same either way,
    *  because he is placed on the same scale. */
   qualified: boolean;
@@ -535,7 +548,7 @@ export function RankBadge({
   const who = scale.qualifiedScale ? `qualified ${plain}` : plain;
   const short = outside
     ? ` He is short of that bar himself (${QUALIFIER_WORDS[kind]}), so this is his place on` +
-      ' their scale rather than a standing among them — which is what the dashed ring says.'
+      ' their scale rather than a standing among them — which is what the dashed underline says.'
     : '';
   return (
     <span
@@ -606,7 +619,7 @@ export function RanksButton({
       title={
         asRank
           ? `Show each club's rank under every value — 1st to 30th, with 1st always the good end, among ${population}.`
-          : `Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed ring on the badge.`
+          : `Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed underline under the badge.`
       }
     >
       {/* Three bars rising to the right: a rank, drawn as one. */}

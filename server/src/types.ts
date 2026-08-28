@@ -1622,7 +1622,7 @@ export interface ResearchRow {
    *  **This is what the percentile scale is built from** — the rows where it is
    *  true are the population `rankScales` ranks within, on the board and on the
    *  player page's Stats tab alike. A row where it is false is still drawn and
-   *  still badged, placed on that scale with a dashed ring saying he is not one
+   *  still badged, placed on that scale with a dashed underline saying he is not one
    *  of them (`columnRanks.tsx`). */
   qualified: boolean;
   /**

@@ -495,13 +495,17 @@ a value, an opponent cell's second line, the handedness token on a name — whic
 is the tone this app spends deliberately and which is 3.18 in Midnight, 3.35 in
 Lavender and 3.90 in Maroon.
 
-**The dashed ring on an unranked-population badge (`.col-rank--outside`) takes
-that same token and adds no color to the palette**, which is deliberate on both
-counts. It is part of the badge rather than a mark laid over it, so a louder ink
-would invert the cell's one hierarchy — a full-size value over a quiet second
+**The dashed underline on an unranked-population badge (`.col-rank--outside`)
+takes that same token and adds no color to the palette**, which is deliberate on
+both counts. It is part of the badge rather than a mark laid over it, so a louder
+ink would invert the cell's one hierarchy — a full-size value over a quiet second
 line — and the percentile card's own ring is `--text` only because it sits on a
-colored bubble and has to clear it. Nothing in the audit moves: the ring is not a
-text node, and the digits inside it read exactly what an unringed badge's do. **Light has none at all**: its only entries are
+colored bubble and has to clear it. Nothing in the audit moves: *(this said "the
+ring is not a text node" while the mark was an `outline`; it is a
+`text-decoration` now, which is not a text node either — a decoration has no
+color of its own in the audit's sense, it is drawn in
+`text-decoration-color`, and the digits under it read exactly what an unmarked
+badge's do.)* **Light has none at all**: its only entries are
 `.brand-sicko`, which is `color: transparent` with a gradient clipped to the
 text, so the audit reads 1.00 for it in every theme including the three shipped
 ones. It is the cleanest of the six by that measure.
