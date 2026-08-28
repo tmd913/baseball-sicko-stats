@@ -8870,6 +8870,34 @@ button.start-line:focus-visible {
   overflow: hidden;
   overscroll-behavior-x: none;
 }
+/* **Except while the head is holding an open key**, which is the one thing that
+   has to hang *out* of it.
+
+   The projection key moved onto the head's `PROJECTED` line
+   (`.research-proj-key`), and it met the fault the paragraph above describes
+   from the other side: measured at 1400, the panel's rect computed a perfectly
+   ordinary 320×689 at `x: 22, y: 299` and `elementFromPoint` at its centre
+   returned `sum-name-col` — the table behind it. A rect is computed whether or
+   not an ancestor clips it, which is the same reading `.tool-scroll-box` gave
+   when the Lists panel was first tried as a popover, and the same one the tools
+   row gave before it went to `clip`.
+
+   `clip` is the value that lets the other axis stay `visible`, and it costs
+   what the paragraph above buys: a box that is not a scroll container has
+   nothing for `overscroll-behavior` to hold, so a sideways drag landing on the
+   head chains to the pane. Scoped to `:has()` — the condition **is** "the head
+   has a key open in it" — that is a state the reader entered by pressing ⓘ and
+   leaves on the next press outside the panel (`useDismissable` dismisses on an
+   outside pointer press), and while it lasts the panel covers the rows a finger
+   would otherwise land on. The rest of the time the head clips both axes
+   exactly as before.
+
+   `hidden` on one axis computes `visible` on the other to `auto`, so both are
+   restated here rather than only the one that changes. */
+.research-scroll > .research-head:has(.info-key-panel) {
+  overflow-x: clip;
+  overflow-y: visible;
+}
 /* **The control set clips on one axis and not the other**, where the four
    above it clip on both — and the difference is that this row is the only one
    of them that **opens a popover**.
@@ -8892,17 +8920,19 @@ button.start-line:focus-visible {
   overflow-y: visible;
   overscroll-behavior-x: none;
 }
-/* **And a layer above the head while that panel is open.** `position: sticky`
-   opens a stacking context whatever the `z-index`, so the key's own 40 resolves
-   against its siblings inside the row and against nothing outside it; the head
-   is a sticky sibling at the same 5 and **later** in the tree, so at 5 it
-   painted over a panel hanging down into it. Scoped to `:has()` — the condition
-   *is* "this row has a key panel in it" — so the row's place in the pinned
-   ladder is unchanged the rest of the time. The board's own date bar took the
-   identical rule while it had one. */
-.research-scroll > .view-tools:has(.info-key-panel) {
-  z-index: 6;
-}
+/* *(A `:has()` rule stood here and is gone with the only key that was ever in
+   this row. It read: "**and a layer above the head while that panel is open** —
+   `position: sticky` opens a stacking context whatever the `z-index`, so the
+   key's own 40 resolves against its siblings inside the row and against nothing
+   outside it; the head is a sticky sibling at the same 5 and **later** in the
+   tree, so at 5 it painted over a panel hanging down into it." That was the
+   projection key, and it is on the head's own `PROJECTED` line now
+   (`.research-proj-key`), where the fault it answered cannot arise: the panel
+   hangs out of the head rather than into it, and the head is already above the
+   header row and the pinned columns it opens over.
+   Kept as prose rather than as a rule because the *reasoning* is what the next
+   key in this row will need — a sticky box makes its own stacking context, and
+   two of them at one z-index resolve by tree order.)* */
 /* **The Rankings pane's second row of chrome is a date bar**, where it was a
    caption (`.lg-span-detail`, gone with it). It sticks against the same
    scrollport the tools row above it and the header row below it do — the rule
@@ -13056,6 +13086,66 @@ button.start-line:focus-visible {
   font-weight: 800;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+/* **The projection key, moved off the toggle and onto the line that makes the
+   claim** — see `ResearchTable.tsx` at the toggle for why, and the block
+   further up (`.proj-key`) for the arrangement it used to take.
+
+   Two things are this caller's. The first is the **anchor**: the panel has to
+   resolve against the line rather than against a 16px glyph part-way along it,
+   so the line is the containing block and the key is `position: static` inside
+   it — the same trade `.spl-card-head .spl-key` records, written the same way
+   and for the same reason. Opening from `left: 0` rather than the splits card's
+   `right: 0` because this line *starts* at the pane's gutter and the head is
+   the full content width: measured at 1400 the panel runs 22 → 342, and at 390
+   it is capped by its own `min(320px, 100vw - 40px)` and runs 16 → 336 inside
+   the screen.
+
+   The second is the **size**. `.info-key-btn` is `.app-dialog-close`, the app's
+   30px bordered icon button, which is right beside a heading and wrong on a
+   12px caption: it made the line 30px tall where the words are 16, and a
+   bordered box between the sentence and `Clear` read as a second control rather
+   than as a mark on the sentence. So the border and the ground come off and the
+   box is the glyph — and the **press area is kept** by padding the button out
+   and pulling the padding back off in margin, which costs the line nothing:
+   measured, the button paints 16×16 at the cap height of the text and hit-tests
+   28×28, against this app's own 30. That is the rule this file already applies
+   to small aimed targets, spelled as geometry rather than as a smaller target.
+
+   Lit when open the way every other key is — `.info-key-btn.active` fills with
+   the accent, and with no border or ground of its own to fill, the accent goes
+   on the mark. */
+.research-proj-line {
+  position: relative;
+}
+.research-proj-key {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+}
+.research-proj-key .info-key-btn {
+  width: auto;
+  height: auto;
+  padding: 6px;
+  margin: -6px;
+  background: none;
+  border: 0;
+  border-radius: var(--control-radius-inner);
+}
+.research-proj-key .info-key-btn svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+/* The open state cannot fill a box that isn't drawn, so it colors the mark. */
+.research-proj-key .info-key-btn.active {
+  color: var(--accent);
+  background: none;
+  border-color: transparent;
+}
+.research-proj-key .info-key-panel {
+  left: 0;
+  right: auto;
 }
 
 /* The foot of a paged table while there are rows still to come — the strip that
@@ -22949,10 +23039,20 @@ html[data-theme='light'] .league-table thead th {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }
-/* The caret-only half. Square-ish rather than pill-shaped padding, so it reads
-   as a handle on the button beside it rather than as a second button. */
+/* The chooser half. *(This block read: "the caret-only half — square-ish rather
+   than pill-shaped padding, so it reads as a handle on the button beside it
+   rather than as a second button." It is kept, this file's rule for superseded
+   reasoning, because the shape argument still holds: the two halves share one
+   outline and are meant to read as one control. What changed is that the half
+   carries its word now — see the component — and a 9px squeeze around a label
+   is not a handle, it is a cramped button.)*
+
+   So the padding is the run's own `0 12px`, less two pixels on the left where
+   the seam is: the border between the halves already draws the boundary that a
+   full gutter would draw a second time. Measured at 1400, the half 29 → 70px
+   and the pair 136 → 177, with the third run unmoved. */
 .rl-split-caret {
-  padding-inline: 9px;
+  padding-inline: 10px 12px;
 }
 .rl-caret {
   flex: none;

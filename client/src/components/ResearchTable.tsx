@@ -3390,13 +3390,30 @@ export function ResearchTable({
           ) : (
             <div className="rl-split">
               {watchlistToggle}
-              {/* **A caret, not a second word.** It read `Watchlist · Lists ▾`,
-                  which is two nouns for one thing: the half beside this one
-                  already names the list, so all this half has to say is *there
-                  are others*. Its accessible name comes from the `title`
-                  through `aria-label`, which is what `label` being absent
-                  arranges. */}
+              {/* **The word is back, and the paragraph that took it away is
+                  kept rather than deleted.** It read: *a caret, not a second
+                  word — `Watchlist · Lists ▾` is two nouns for one thing, the half
+                  beside this one already names the list, so all this half has to
+                  say is* there are others. That argument was made about a bar
+                  where the toggle always said `Watchlist`, and it is the half
+                  that was right: two nouns for one thing is what it read as.
+
+                  What it missed is that the toggle stopped saying `Watchlist`
+                  the same day — it names the **active list**, so the pair reads
+                  `Closers │ Lists ⌄`, which is a list and the button that
+                  changes it rather than one noun twice. And the caret alone was
+                  a 29×36 target with no name on it in a run where every other
+                  button carries its word: nothing on screen said what pressing
+                  it would do, and the only thing that did was a `title` a touch
+                  device never sees. Measured at 1400, the half went **29 → 70px** and the
+                  pair 136 → 177, with the third run and the head unmoved.
+
+                  It is still one shape and still two targets — see `.rl-split`,
+                  which is unchanged. The condensed run hides the word with every
+                  other label and the half goes back to being a caret in a 36px
+                  square, which is that run's whole grammar. */}
               <SavedButton
+                label="Lists"
                 title="Choose a watchlist, or rename, share and add one"
                 open={listsOpen}
                 onToggle={() => setPanel('lists', !listsOpen)}
@@ -3981,7 +3998,7 @@ export function ResearchTable({
              * calendar, where nothing is lit to press.
              */}
             {!teams && (
-              <span className="projected-group">
+              <>
                 <ProjectedToggle
                   on={projected}
                   active={projectedOpen}
@@ -3994,31 +4011,44 @@ export function ResearchTable({
                   }
                 />
                 {/**
-                 * **The key, beside the control it explains and drawn only
-                 * while that control is doing something** — `ProjectionKey`, the
-                 * same popover the Roster row and the League page open, from the
-                 * same `.proj-key` anchor. One engine explained by one component
-                 * on all three surfaces.
+                 * **The key is not here any more — it is on the line the lens
+                 * writes** (`projSpanLine`, `.research-proj-key`). The paragraph
+                 * that put it here is kept, this file's rule for superseded
+                 * reasoning, because most of it is still the record of what a
+                 * key on this board has to survive:
                  *
-                 * It was an accordion in the head for one round, because
-                 * `.research-scroll > .view-tools` was `overflow: hidden` and a
-                 * panel opened from a button inside it painted as a 46px sliver.
-                 * That row clips on the **inline axis only** now
+                 * *"The key, beside the control it explains and drawn only while
+                 * that control is doing something — `ProjectionKey`, the same
+                 * popover the Roster row and the League page open, from the same
+                 * `.proj-key` anchor. One engine explained by one component on
+                 * all three surfaces. It was an accordion in the head for one
+                 * round, because `.research-scroll > .view-tools` was `overflow:
+                 * hidden` and a panel opened from a button inside it painted as a
+                 * 46px sliver. That row clips on the inline axis only now
                  * (`overflow-x: clip`, which is the one value that does not drag
                  * `visible` on the other axis to `auto`), so the popover hangs
-                 * below the row exactly as it does everywhere else and the
-                 * board needs no shape of its own.
+                 * below the row exactly as it does everywhere else. Drawn on the
+                 * press rather than on the answer, the rule the Roster's copy
+                 * states: a key that arrived a quarter of a second later would
+                 * move the run under the finger that had gone on to the next
+                 * control."*
                  *
-                 * Drawn on the **press** rather than on the answer, the rule the
-                 * Roster's copy states: a key that arrived a quarter of a second
-                 * later would move the run under the finger that had gone on to
-                 * the next control. `days` is 0 until the read lands and the
-                 * panel words that as *over the days left*.
+                 * **What that got wrong is which thing the key explains.** Beside
+                 * the toggle it was the fourth item in a run of eight buttons, a
+                 * 30px bordered box that read as a ninth control — and the
+                 * sentence it opens is not about the button, it is about the
+                 * numbers: *these figures are estimates over days still to be
+                 * played*. That sentence belongs against the line that makes the
+                 * claim, which is `PROJECTED · Aug 27 – Sep 5` in the head.
+                 *
+                 * **And the press-not-the-answer rule comes for free there.** It
+                 * existed because the key appearing late would move the seven
+                 * buttons beside it; on the head's own line there is nothing to
+                 * move — the line and the key arrive in the same commit, the
+                 * line being drawn only once `projection` has landed, and the
+                 * head publishes its measured height either way.
                  */}
-                {projected && (
-                  <ProjectionKey board days={projection?.daysLeft ?? 0} className="proj-key" />
-                )}
-              </span>
+              </>
             )}
             {/**
              * **Columns is drawn under the lens and Ranks is not**, which is
@@ -4574,6 +4604,21 @@ export function ResearchTable({
           </>
         )}
       </span>
+      {/* **The key sits against the claim it explains**, which is this line and
+          not the button three runs above it — see the paragraph at the toggle
+          for the reasoning it replaces. It is the same `ProjectionKey` the
+          Roster row and the League page open; what is this caller's is where it
+          hangs from, which is `.research-proj-key`.
+
+          **A glyph rather than a box.** Every other `InfoKey` in the app is
+          `.app-dialog-close`'s 30px bordered square, which is right beside a
+          heading and wrong on a 12px caption: at 30px it was taller than the
+          line it belongs to and drew a second control between the sentence and
+          `Clear`. Here it is the 16px mark alone, with the press area kept at
+          the app's own size by padding the button out and pulling it back in —
+          measured, the box paints 16×16 and hit-tests 28×28, so nothing is lost
+          to a finger. */}
+      <ProjectionKey board days={projection.daysLeft} className="research-proj-key" />
       <button
         type="button"
         className="research-clear"
