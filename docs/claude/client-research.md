@@ -549,10 +549,47 @@ the only thing that did was a `title`, which half this app's traffic has no
 pointer to summon. The word takes the half to **70px** and the pair from 136 to
 **177** at 1400, with the third run and the head unmoved.
 
-It is still one shape and still two targets: `.rl-split` is untouched, the seam
-is still the caret's own left border, and the condensed run still hides the word
-with every other label and squares the half to 36px — that run's whole grammar
-being marks.
+It is still one shape and still two targets, and the condensed run still hides
+the word with every other label and squares the half to 36px — that run's whole
+grammar being marks.
+
+**But the shape had to be rebuilt to stay one shape**, and this was reported
+before it was noticed: *the style looks a little off*. Each half had carried its
+own border and ground, the toggle giving up its right border and the caret's
+left border serving as the seam. That held while the second half was a 29px
+caret — two thirds of the capsule was one button and the join barely registered.
+With the word in it the halves are **107 and 70**, and three things then said
+*these are two objects* at once: the outer ring **changed color half way along**
+(`--accent` at 50% on the lit half, `--border` on the other), the two grounds
+were different shades meeting at a hard step, and the seam was doing double duty
+as an edge.
+
+So **the shell is the outlined object and the halves are segments inside it**.
+`.rl-split` takes the border, the ground and the run's height; the halves drop
+all three and fill it through `align-items: stretch`; what is left between them
+is one hairline. The outer ring is a single color by construction rather than by
+two rules agreeing, and lighting the set now lights the **whole capsule**, which
+is what "the watchlist is on the board" should look like on a control that *is*
+the watchlist. The lit half keeps the accent fill, because which half the state
+belongs to is the thing a fill can say and a ring cannot.
+
+Three states, and they are three distinct readings: **on** — accent ring, left
+half filled with the accent at 12%; **off** — one flat `--border` capsule;
+**panel open** — the full accent ring with the chooser half filled in `--text`
+at 8%, deliberately *not* the accent, which is `.rl-row`'s own answer to the
+same question one box over (*open is a disclosure, active is a fact about the
+board*). Both at once reads as both.
+
+Two measurements. The halves' outer corners are `calc(--control-radius - 1px)`,
+because a child rounded to its parent's own radius leaves a hair of the parent's
+ground in the corner — a notch of untinted `--panel` inside a lit half. And the
+**height belongs to whichever box carries the border**: `box-sizing` is
+`border-box` app-wide, so a 36px half inside a 1px-bordered shell is a **38px**
+capsule, measured, 2px taller than every other control on the row. With the
+height moved out: capsule **36.00**, halves **34.00**, the neighbouring include
+button 36.00 and on the same top to the hundredth, at 1400 and at 390. Condensed,
+the pair is **74px** of two 36px squares under one ring, beside the 36px squares
+it belongs with.
 
 **The panels are rows of `.research-head`, and the first attempt was a popover
 hanging off each button.** That does not work here and the failure is worth

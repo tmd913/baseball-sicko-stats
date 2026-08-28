@@ -23167,23 +23167,89 @@ html[data-theme='light'] .league-table thead th {
    the accent at 12% behind a 45% border, which is what "this control is doing
    something" already looks like in this bar. Nothing below invents a scale. */
 
-/* **A split control**: the Watchlist toggle that was always there, and a caret
-   that says *there are others*. Two targets sharing an outline so they read as
-   one thing — see the component for why they are not one button. The seam is
-   the caret's own left border; the toggle gives up its right one so the pair is
-   not divided by a doubled 2px line. */
+/* **A split control**: the Watchlist toggle that was always there, and the half
+   beside it that chooses which list. Two targets that have to read as one
+   thing — see the component for why they are not one button.
+
+   **The shell is the outlined object, and the halves are segments inside it.**
+   *(It was the other way round: each half kept its own border and ground, the
+   toggle gave up its right border and the caret's left border was the seam.
+   That worked while the second half was a 29px caret — two thirds of the
+   capsule was one button and the join barely registered. With the word in it
+   the halves are 107 and 70, and the fault was reported as the control looking
+   off: the outer ring **changed color half way along** — `--accent` at 50% on
+   the lit half, `--border` on the other — the two grounds were different shades
+   meeting at a hard step, and the seam was doing double duty as an edge. Three
+   ways of saying "these are two objects", on a control whose whole job is to
+   read as one.)*
+
+   So the border and the ground move to `.rl-split`, the halves drop both, and
+   what is left inside is **one hairline seam**. The outer ring is then a single
+   color by construction rather than by two rules agreeing, and lighting the set
+   lights the whole capsule — which is what "the watchlist is on the board"
+   should look like on a control that *is* the watchlist.
+
+   The halves' outer corners are `calc(--control-radius - 1px)`: a child rounded
+   to its parent's own radius leaves a hair of the parent's ground showing
+   through the corner, which on a lit half is a notch of untinted `--panel`
+   where the fill should be. One pixel in, and the fill meets the border. */
 .rl-split {
   display: inline-flex;
   align-items: stretch;
+  /* **The shell owns the run's height, and the halves fill it.** The border
+     moved out here, and a 36px child inside a 1px-bordered box is a **38px**
+     capsule — measured, and 2px taller than every other control on the row.
+     `box-sizing` is `border-box` app-wide, so the height belongs on whichever
+     box carries the border; the halves give theirs up along with it and take
+     the shell's content box through `align-items: stretch`. Measured after:
+     the capsule 36.00px, the halves 34.00, and the run's other buttons
+     unmoved. */
+  height: var(--control-h);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
 }
-.rl-split .research-toggle:first-child {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right-width: 0;
+.rl-split > .research-toggle {
+  height: auto;
+  border: 0;
+  background: none;
+  border-radius: 0;
 }
-.rl-split .rl-btn-open {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+.rl-split > .research-toggle:first-child {
+  border-start-start-radius: calc(var(--control-radius) - 1px);
+  border-end-start-radius: calc(var(--control-radius) - 1px);
+}
+.rl-split > .research-toggle:last-child {
+  border-start-end-radius: calc(var(--control-radius) - 1px);
+  border-end-end-radius: calc(var(--control-radius) - 1px);
+}
+/* The seam, drawn once by the half on its right. It is a **division, not an
+   edge**, so it stays `--border` while the capsule's own ring goes accent — a
+   seam as loud as the outline would read as two capsules again. */
+.rl-split > .research-toggle + .research-toggle {
+  border-left: 1px solid var(--border);
+}
+/* **The set is on, so the capsule is lit** — the ring the halves used to carry
+   one each, on the object they are halves of. The lit *half* keeps the fill,
+   because which half the state belongs to is the thing the fill says. */
+.rl-split:has(> .research-toggle.on) {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.rl-split > .research-toggle.on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* **The chooser's panel is open**, which is a different claim from the set
+   being on and must not be said in the same ink: a neutral fill rather than the
+   accent, which is `.rl-row`'s own answer to the same question one box over
+   ("it is `--text` at 5% rather than the accent … *open* is a disclosure;
+   *active* is a fact about the board"). The capsule's ring takes the full
+   accent, as `.research-toggle.active` does everywhere else in this bar. */
+.rl-split:has(> .rl-btn-open.active) {
+  border-color: var(--accent);
+}
+.rl-split > .rl-btn-open.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 /* The chooser half. *(This block read: "the caret-only half — square-ish rather
    than pill-shaped padding, so it reads as a handle on the button beside it
@@ -23194,8 +23260,8 @@ html[data-theme='light'] .league-table thead th {
    is not a handle, it is a cramped button.)*
 
    So the padding is the run's own `0 12px`, less two pixels on the left where
-   the seam is: the border between the halves already draws the boundary that a
-   full gutter would draw a second time. Measured at 1400, the half 29 → 70px
+   the seam is: the hairline between the halves already draws the boundary that
+   a full gutter would draw a second time. Measured at 1400, the half 29 → 70px
    and the pair 136 → 177, with the third run unmoved. */
 .rl-split-caret {
   padding-inline: 10px 12px;
