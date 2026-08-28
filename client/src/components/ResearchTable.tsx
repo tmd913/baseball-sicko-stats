@@ -2212,6 +2212,15 @@ export function ResearchTable({
   /** Whether the board is narrowed to a named set. Never on the team reading —
    *  a comparison is of players, and this board's rows are clubs. */
   const comparing = !teams && compareKeys.length > 0;
+  /**
+   * **Whether the table draws its checkbox column** — compare mode, and not the
+   * team reading, where the control that turns it on is not drawn either. It is
+   * one const rather than the same test written three times (the `th`, the
+   * `td`, and the pin measurement below), because a header cell and a body cell
+   * that can disagree about whether they exist is a table with a column of
+   * nothing in it.
+   */
+  const compareCol = compareOn && !teams;
   const boardRows = useMemo(() => {
     // **Nothing partitions thirty clubs.** The three include buttons are a
     // partition of *ownership* and the watchlist is a list of players; neither
@@ -2633,6 +2642,14 @@ export function ResearchTable({
       if (!head) return;
       const img = head.querySelector<HTMLElement>('.sum-img-col');
       const name = head.querySelector<HTMLElement>('.sum-name-col');
+      /* **The compare column, when there is one** — see `.research-cmp-col`.
+         It is drawn only in compare mode, so this is `null` and its width `0`
+         the rest of the time, which is what makes the two offsets below read as
+         the numbers they were before the column existed. Measured for the same
+         reason the name is: the cell is a 28px button between two
+         `--research-gutter`s and that gutter is a `clamp` on `vw`, so there is
+         no *one* number to declare. */
+      const cmp = head.querySelector<HTMLElement>('.research-cmp-col');
       if (!img) return;
       // The **sum of the pinned widths**, not a position. A width is unaffected
       // both by how far the table is scrolled and by where the page happens to
@@ -2646,8 +2663,13 @@ export function ResearchTable({
       // then held the sorted column 240px in on a 346px-wide table, out in the
       // middle of the screen past a column that had scrolled away.
       const pinnedAcross = (el: HTMLElement) => getComputedStyle(el).left !== 'auto';
+      const cmpW = cmp ? cmp.offsetWidth : 0;
       const pin =
-        img.offsetWidth + (name && pinnedAcross(name) ? name.offsetWidth : 0);
+        cmpW + img.offsetWidth + (name && pinnedAcross(name) ? name.offsetWidth : 0);
+      // Published before the pin that reads it, though both are one style
+      // recalculation either way: `offsetWidth` is a width, and a width does not
+      // move when the `left` beside it does.
+      box.style.setProperty('--research-cmp-w', `${cmpW}px`);
       box.style.setProperty('--research-pin-left', `${pin}px`);
     };
     measure();
@@ -4993,6 +5015,36 @@ export function ResearchTable({
           <table className={`summary-table research-table${teams ? ' is-teams' : ''}`}>
             <thead>
               <tr>
+                {/* **The comparison's own column, ahead of everything**, drawn
+                    only while compare mode is on.
+
+                    *(The ticks were in the name cell, after the star, and the
+                    paragraph there argued it: "this is the sticky name column,
+                    so a control ahead of the name pushes every name along by
+                    its own width, and a control drawn all the time pays that on
+                    every row for a comparison nobody is making." Both halves of
+                    that are still true — this column is drawn **only** in
+                    compare mode, so the second half costs nothing, and the
+                    first is now the price rather than the objection.)*
+
+                    What the name cell got wrong is that a tick is not a mark on
+                    a name. Trailing the star, the newspaper, the padlock and
+                    the baseball, it was the fifth glyph on a line of four
+                    labels and one control — a checkbox in a row of facts, at
+                    the far end of a name that truncates, in a different place
+                    on every row because the marks ahead of it come and go. A
+                    checkbox column is what a table of things you are choosing
+                    between looks like: one edge, one axis, every box on it.
+
+                    It is a `th` with a `sr-only` name rather than an empty cell,
+                    so the column the ticks are in is announced as what it is,
+                    and it takes no sort — there is nothing to order rows by
+                    here that ticking them does not already say. */}
+                {compareCol && (
+                  <th className="research-cmp-col" scope="col">
+                    <span className="sr-only">Compare</span>
+                  </th>
+                )}
                 <th className="sum-img-col" scope="col">
                   <span className="sr-only">{teams ? 'Cap logo' : 'Headshot'}</span>
                   <ExpandButton isFull={isFull} onToggle={toggle} what="board" />
@@ -5106,6 +5158,22 @@ export function ResearchTable({
                   : posCellText(r, posCodes);
                 return (
                   <tr key={key}>
+                    {compareCol && (
+                      <td className="research-cmp-col">
+                        <CompareTick
+                          on={compareSelected.includes(key)}
+                          /* Full and not ticked: the row declines rather than
+                             dropping somebody to make room, and says why. */
+                          full={
+                            compareSelected.length >= maxCompare &&
+                            !compareSelected.includes(key)
+                          }
+                          max={maxCompare}
+                          name={r.name}
+                          onToggle={() => onToggleCompare(key)}
+                        />
+                      </td>
+                    )}
                     <td className="sum-img-col">
                       {/* **The cap logo where the headshot is** — a club has no
                           face, and the mark MLB serves by team id is the one
@@ -5230,26 +5298,10 @@ export function ResearchTable({
                         name={r.name}
                         onToggle={(on) => onWatchlistToggle(key, on)}
                       />
-                      {/* **After the star, and only in compare mode.** Both
-                          halves follow the same rule: this is the sticky name
-                          column, so a control ahead of the name pushes every
-                          name along by its own width, and a control drawn all
-                          the time pays that on every row for a comparison
-                          nobody is making. */}
-                      {compareOn && (
-                        <CompareTick
-                          on={compareSelected.includes(key)}
-                          /* Full and not ticked: the row declines rather than
-                             dropping somebody to make room, and says why. */
-                          full={
-                            compareSelected.length >= maxCompare &&
-                            !compareSelected.includes(key)
-                          }
-                          max={maxCompare}
-                          name={r.name}
-                          onToggle={() => onToggleCompare(key)}
-                        />
-                      )}
+                      {/* *(The compare tick was the fifth mark on this line,
+                          after the star. It is a column of its own at the head
+                          of the row now — see the `th` in `thead`, which keeps
+                          the paragraph that put it here.)* */}
                       </PlayerIdentity>
                       )}
                     </td>

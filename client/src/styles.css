@@ -12129,13 +12129,19 @@ button.start-line:focus-visible {
    table's slack, so on a desktop this costs the stats nothing, and ahead of the
    name it would have pushed every name in the column along by its own width.
    Muted when off, accent when on, filled when on — see `WatchStar`. */
-/* The compare tick is folded onto the star rather than styled to resemble it:
+/* *(The compare tick used to be folded onto this selector. The paragraph read:
+   "the compare tick is folded onto the star rather than styled to resemble it:
    the same 19px square in the same gutter at the end of the same sticky name
    column, with the same baseline nudge. Two controls that are the same object
-   share a selector; what differs is the lit color and the refusal state, both
-   below. */
-.research-watch,
-.research-tick {
+   share a selector." That was true while both were marks on a name line, and it
+   is the second half of the same rule that separates them now — **two things
+   that merely resemble each other are two things that will one day differ**,
+   and this is the day. The tick is a **column** (`.research-cmp-col`): it has
+   its own cell, so it wants no `margin-left` to hold it off a name, no baseline
+   nudge to sit it on one, and a press area rather than a glyph's worth of
+   width. Every one of the four rules below was inherited by it and every one
+   was wrong in a cell.)* */
+.research-watch {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
@@ -12151,19 +12157,46 @@ button.start-line:focus-visible {
   position: relative;
   top: -0.09em;
 }
-.research-watch:hover,
-.research-tick:hover {
+.research-watch:hover {
   color: var(--text);
 }
-.research-watch.on,
-.research-tick.on {
+.research-watch.on {
   color: var(--accent);
 }
-.research-watch:focus-visible,
-.research-tick:focus-visible {
+.research-watch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+/* **The tick, centred in a cell of its own.** What it keeps from the star is
+   the ink — muted off, accent on, `--text` on hover — because that is this
+   board's vocabulary for a control and not a fact about where either one sits.
+   What it gains is a target: 28px square against the app's own 30, which is the
+   size the `⋯` in the lists panel was rewritten to and the size the projection
+   key is padded out to one file over. It costs the row nothing, the row's
+   height being the headshot's. */
+.research-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.research-tick:hover {
+  color: var(--text);
+}
+.research-tick.on {
+  color: var(--accent);
+}
+.research-tick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 /* **Full, and it says so rather than going inert.** `aria-disabled` and not
    `disabled`, because a disabled button shows no `title` and the title is the
@@ -13549,7 +13582,10 @@ button.start-line:focus-visible {
 @media (min-width: 820px) {
   .research-table .sum-name-col {
     position: sticky;
-    left: calc(var(--row-photo) + 2 * var(--research-gutter));
+    /* `--research-cmp-w` is the compare column's measured width and **0px
+       whenever that column is not drawn**, so this is the calc it always was
+       at rest. See `.research-cmp-col` below for why it is measured. */
+    left: calc(var(--research-cmp-w, 0px) + var(--row-photo) + 2 * var(--research-gutter));
     z-index: 1;
   }
   /* Above both the sticky header and the sticky column, as the corner cell. */
@@ -13565,6 +13601,56 @@ button.start-line:focus-visible {
   .research-table .sum-name-col {
     box-shadow: var(--pin-edge);
   }
+}
+
+/* ---- The compare column: the ticks, at the head of the row ----------------
+   **Drawn only in compare mode**, which is what lets it be a column at all: a
+   checkbox column standing empty on a board nobody is comparing on would be the
+   width of a control that does nothing, on every row, on the app's widest
+   table. The `th` and the `td` are rendered off one const (`compareCol`) so
+   they cannot disagree about whether the column exists.
+
+   **It joins the pinned block rather than scrolling away**, and it has to: the
+   whole reason the name is pinned here is that by the time you have scrolled
+   out to Chase% there is no way to tell whose row you are reading, and a tick
+   you cannot reach from the far columns is a comparison you have to scroll back
+   to build. So it takes `left: 0` and the two cells that were pinned there
+   before it move over by its width.
+
+   **Its width is measured, not declared**, which is this file's rule for a
+   number that is a function of something we do not choose: the cell is a 28px
+   button between two `--research-gutter`s, and that gutter is
+   `clamp(5px, 1.6vw, 13px)` — one number at 390 and another at 1400. The
+   measurement is the same `useLayoutEffect` that already publishes
+   `--research-pin-left`, reading the header cell it is about, so the two
+   offsets cannot come to disagree. `0px` is the fallback and the value at rest,
+   which is what makes every calc above read as the plain offset it always was.
+
+   No `box-shadow`: the soft edge marks where the pinned *block* ends, and that
+   is still the name column above 820px and the headshot below it. A seam here
+   would draw a line through the middle of three cells that scroll as one. */
+.research-table .research-cmp-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 1%;
+  padding-right: 0;
+  --cell-bg: var(--bg);
+  text-align: center;
+  white-space: nowrap;
+}
+/* The top-left corner cell now, above both the sticky header row and the sticky
+   column — the job `.sum-img-col` held before this column arrived ahead of it. */
+.research-table thead .research-cmp-col {
+  z-index: 3;
+  --cell-bg: var(--panel-2);
+}
+/* The headshot is no longer the leftmost thing pinned, so it starts where the
+   compare column ends. Two classes deep, which is what `.summary-table
+   .sum-img-col`'s own `left: 0` is, and **later in the file** — a media query
+   adds no specificity and neither does a longer selector that ties. */
+.research-table .sum-img-col {
+  left: var(--research-cmp-w, 0px);
 }
 
 /* The column being sorted on is tinted down its whole length — on a table this
