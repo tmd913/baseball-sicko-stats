@@ -1796,6 +1796,26 @@ pixel, the door **0px** under it (the foot's own 10px of padding is the gap), th
 two sides one height at every width the two-up layout draws, and page-body
 overflow 0.
 
+**A badge's own padding was too tight on the thing inside it**, and reported as
+such. `1px 9px 1px 7px` round a 20px glyph on a 20px line box is a **24px** pill
+with the emoji's ink all but touching the border top and bottom, and 5px between
+it and the count it labels. An emoji is not a letterform — it fills its em box
+where a digit sits well inside one — so the padding that reads as comfortable
+round `5` reads as cramped round `🥵`. It is `4px 12px 4px 10px` with an 8px gap:
+measured at 1400, the badge goes **24 → 30px tall and 51.8 → 60.8 wide** and the
+leaders card **270 → 276**, six pixels on a card whose height is not a row of
+anything. The horizontal asymmetry moves with the rest (10 left, 12 right), the
+glyph carrying its own side bearing where the count has none.
+
+**30px is the app's own control height**, which is what decides between 28 and
+30: these are *doors*, each opening its own cut of the ranked list, and the
+header's gear, a dialog's ✕ and the saved-things row's four icon buttons are all
+30. And it costs no width where width is scarce — at 390 the three badges and
+their two 6px gaps are **194.4px in a 320px row**, `scrollWidth` equal to
+`clientWidth` and document overflow 0, so the phone has 125px spare. The row gap
+stays at 6: the complaint was about the space *inside* a badge, and three boxes
+6px apart already read as three.
+
 ### Hot, neutral and cold — two measured pairs of cuts
 
 **The reading is value *per appearance*, not the total.** A total says who has
