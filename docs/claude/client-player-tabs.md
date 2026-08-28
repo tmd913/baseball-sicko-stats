@@ -720,7 +720,7 @@ The whole of the rule — 0–100 with 100 always the good end, `ascFirst` read 
 for orientation, nulls out of the denominator and unbadged, the four profile
 columns and the Fantasy group left out for having no good end, the dashed credit
 cells left out for having no value on screen, **the scale built from the
-qualified players and a dashed ring on anyone outside them** — is
+qualified players and a dashed underline on anyone outside them** — is
 `components/columnRanks.tsx` and is argued under **the research board**. What is this tab's own is where the
 population comes from.
 
@@ -769,9 +769,11 @@ inherits a change rather than making one: `rankScales` is the board's own
 function and it now builds each scale from the rows where `ResearchRow.qualified`
 is true — Savant's bar for the span, 2.1 plate appearances per team game or 1.25
 batters faced. A row short of it is still drawn, still badged and marked with a
-dashed ring; see **the research board** for the whole argument, including why
-that ring is the percentile card's mark arriving on a second surface rather than
-a second meaning for a broken border.
+dashed underline; see **the research board** for the whole argument, including
+why that mark is the percentile card's own arriving on a second surface rather
+than a second meaning for a broken border — and why it arrives in the card's
+vocabulary rather than in its shape, a ring being a mark on a bubble and there
+being no bubble in a table cell.
 
 **That makes this tab the one place the per-span qualifier is visible as such**,
 because it draws five spans of one man at once and he can be on either side of
