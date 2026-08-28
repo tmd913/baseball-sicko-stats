@@ -462,6 +462,40 @@ file argues at length — the key's panel gets this box as its containing block
 make a **stacking context**, which would paint the panel underneath the very
 bars it explains.
 
+### The three reads are three keys, and the Results tab stopped re-buying a season
+
+`windows`, `splits` and `games` are keys on the resource store now — see *One
+entry per server resource* in the client shell. Each carried a `*Req` ref and a
+paragraph about **never being marked before the answer lands**, the StrictMode
+hang this app has met four times; a key cannot be marked at all, so all three
+paragraphs are one rule in one file.
+
+**The one behavior that changes is the Results tab.** `TeamResults` is a
+component of its own, so leaving the tab unmounts it and its `req` ref goes with
+it — and a season of a club's results was read again on every re-entry.
+Measured, a second sweep of the tabs after a first:
+
+| tab | before | after |
+| --- | --- | --- |
+| Splits | 0 | 0 |
+| **Results** | **1** | **0** |
+| Stats | 0 | 0 |
+| Overview | 0 | 0 |
+
+The other two were already free within a mount, and stay free across one.
+
+**`SEASON_STALE_MS`** on all three, for the reason `lib.ts` gives: these are
+season-shaped, re-entering a tab must be free, and five minutes is longer than a
+reading of a club and shorter than a game — so today's result still arrives on
+a page reopened after it.
+
+**Keyed exactly as the refs were**: `windows` and `splits` by club **and side**,
+so a switch between the two is a read of its own and never one side's numbers
+under the other's heading; `games` by club **alone**, which is a fact about
+games rather than an omission — a club's result is its result, and there is no
+batting reading of a 5–3 win. Verified: crossing the side switch re-reads
+`/api/teams/147/windows` and nothing else.
+
 ### Stats
 
 `PlayerWindowTable` over the board's **team** reading — the same table, the same

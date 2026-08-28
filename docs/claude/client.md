@@ -2035,8 +2035,27 @@ of zero would put them on the store and change nothing about them.
 objects for the statuses entry, against 2.2MB less over the wire on the browse
 above, and the idle-entry cap bounds it.
 
-**Still on their own fetches**: `GamePage`'s two module-level caches, and
-`TeamDetails`.
+**`GamePage` and `TeamDetails` finished it**, and each turned up one thing the
+move was not looking for: `gameCache.set` sat inside its read's own `alive`
+guard, so the module cache was **never written when the reader left before the
+answer landed** — which is the case a cache like that exists for; and
+`TeamResults`, being a component of its own, re-read a whole season of a club's
+results on every re-entry to the tab. See *The two module caches are two keys*
+in **`client-game-page.md`** and *The three reads are three keys* in
+**`client-team-page.md`**.
+
+**Every server read in the client is on the store now** except the two left
+deliberately (`ownership` and `fantasyRoster`, whose read-on-every-entry is the
+point) and the ESPN league reads behind the League view's own minute poll.
+
+**What the four steps came to**, against `main`: **785.11 → 783.48 kB** of JS
+raw, 230.85 → 230.97 gzipped. Counted across the five files that moved
+(`App.tsx`, `PlayerDetails`, `LeagueTeam`, `GamePage`, `TeamDetails`), the
+request-guard refs — `*Req`, `*Seq`, `*Read`, `*InFlight`, `*Asked` — went
+**30 → 10**, and the ten left are the ones that are not request guards at all.
+With them went 2 module-level `Map`s, four `alive`/`canceled` cleanup flags and
+an eleven-line per-player reset effect, against one file that every one of them
+was a hand-rolled copy of a part of.
 
 ### Where the rest of the client's documentation lives
 

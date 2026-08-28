@@ -29,6 +29,7 @@ import {
   isRotationStarter,
   LIVE_POLL_MS,
   savantPlayerUrl,
+  SEASON_STALE_MS,
   statusCorner,
 } from '../lib';
 import {
@@ -487,28 +488,6 @@ function DetailsPhoto({
   );
 }
 
-/**
- * **How long a season-shaped answer on this page is treated as current.**
- *
- * The store's default is `LIVE_POLL_MS` — the app's own definition of "this
- * page is current" — and it is the right number for the day beside it and the
- * wrong one for everything else here. Measured with it: crossing all eight
- * tabs once and then crossing them again cost **3 requests on the second
- * sweep** where the page had always cost **0**, the first sweep having taken
- * longer than twenty seconds to walk. Re-entering a tab must be free — that
- * is this page's own rule, and the percentile card is a 1–2s Savant scrape.
- *
- * Five minutes rather than for ever, which is the other thing it could be.
- * For ever matches what the old `*Req` marks did *within one page*, but the
- * answers now outlive the page, so it would also mean a game log that never
- * gained today's last row for as long as the tab stayed open — where closing
- * the page and opening it again used to re-read. Five minutes is longer than
- * a reading of a player and shorter than a game.
- *
- * The **day** is deliberately not on it: it keeps the store's default and
- * polls on the roster's twenty seconds while he is batting.
- */
-const SEASON_MS = 5 * 60_000;
 
 /**
  * **Who he plays for, and the door to them** — under the portrait, in the
@@ -906,7 +885,7 @@ export function PlayerDetails({
   const pctRes = useResource(
     tab === 'percentiles' ? `percentiles:${who}:${pctCut ?? 'all'}` : null,
     () => api.percentiles(playerId, kind, pctCut),
-    { family: who, staleMs: SEASON_MS },
+    { family: who, staleMs: SEASON_STALE_MS },
   );
   const data = pctRes.value ?? null;
   const error = pctRes.error?.message ?? null;
@@ -920,12 +899,12 @@ export function PlayerDetails({
   const batSplitsRes = useResource(
     isPitcher ? null : `splits:batter:${playerId}`,
     () => api.splits(playerId),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const pitSplitsRes = useResource(
     isPitcher ? `splits:pitcher:${playerId}` : null,
     () => api.pitcherSplits(playerId),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const splits = batSplitsRes.value ?? null;
   const pitcherSplits = pitSplitsRes.value ?? null;
@@ -940,7 +919,7 @@ export function PlayerDetails({
   const windowsRes = useResource(
     tab === 'stats' ? `playerWindows:${who}:${statsCut ?? 'all'}` : null,
     () => api.playerWindows(playerId, kind, statsCut),
-    { family: who, staleMs: SEASON_MS },
+    { family: who, staleMs: SEASON_STALE_MS },
   );
   const windows = windowsRes.value ?? null;
   const windowsError = windowsRes.error?.message ?? null;
@@ -954,7 +933,7 @@ export function PlayerDetails({
   const newsRes = useResource(
     tab === 'news' || tab === 'overview' ? `playerNews:${playerId}` : null,
     () => api.playerNews(playerId),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const news = newsRes.value ?? null;
   const newsError = newsRes.error?.message ?? null;
@@ -971,7 +950,7 @@ export function PlayerDetails({
   const startsRes = useResource(
     wantStarts && tab === 'overview' ? `projectedStarts:${playerId}` : null,
     () => api.projectedStarts(playerId),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const starts = startsRes.value ?? null;
   const startsLoading = startsRes.loading;
@@ -995,7 +974,7 @@ export function PlayerDetails({
   const xwobaRes = useResource(
     tab === 'charts' ? `xwoba:${who}` : null,
     () => api.xwoba(playerId, kind),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const xwoba = xwobaRes.value ?? null;
   const xwobaError = xwobaRes.error?.message ?? null;
@@ -1011,7 +990,7 @@ export function PlayerDetails({
   >(
     tab === 'gamelog' || tab === 'overview' ? `gameLog:${who}` : null,
     () => (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId)),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const gameLog = gameLogRes.value ?? null;
   const gameLogError = gameLogRes.error?.message ?? null;
@@ -1022,7 +1001,7 @@ export function PlayerDetails({
   const arsenalRes = useResource(
     tab === 'arsenal' ? `arsenal:${playerId}` : null,
     () => api.arsenal(playerId),
-    { keepPrevious: false, staleMs: SEASON_MS },
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
   const arsenal = arsenalRes.value ?? null;
   const arsenalError = arsenalRes.error?.message ?? null;

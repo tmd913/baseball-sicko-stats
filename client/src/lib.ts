@@ -1974,3 +1974,30 @@ export const LEAGUE_POLL_MS = 30_000;
  * *the app considers itself current for this long* cannot be two numbers.
  */
 export const LIVE_POLL_MS = 20_000;
+
+/**
+ * **How long a season-shaped answer is treated as current** — the `staleMs` the
+ * detail pages hand the resource store for everything that is not today.
+ *
+ * The store's default is `LIVE_POLL_MS` above, which is the app's own answer to
+ * *how stale a page is this app willing to consider current* and is the right
+ * number for exactly one read on those pages: the day. It is the wrong one for
+ * the other eight on the player page and the three on the team page, and the
+ * measurement is the argument: crossing all eight of the player page's tabs and
+ * then crossing them again cost **3 requests on the second sweep** where the
+ * page had always cost **0**, the first sweep having taken longer than twenty
+ * seconds to walk. Re-entering a tab must be free — that is those pages' own
+ * rule, and the percentile card behind one of them is a 1–2s Savant scrape.
+ *
+ * **Five minutes rather than for ever**, which is the other thing it could be.
+ * For ever matches what the old per-mount `*Req` marks did *within one page*,
+ * but an answer on the store outlives the page that asked for it, so for ever
+ * would mean a game log that never gained today's last row and a Results tab
+ * that never gained today's game. Five minutes is longer than a reading of a
+ * player and shorter than a game.
+ *
+ * One number in one place, for the reason the repo states generally: two files
+ * declaring five minutes are two files that will one day declare different
+ * ones. `PlayerDetails`, `TeamDetails` and `GamePage`'s Plays tab read it.
+ */
+export const SEASON_STALE_MS = 5 * 60_000;
