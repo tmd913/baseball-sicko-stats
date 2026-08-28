@@ -443,6 +443,12 @@ export function SavedButton({
       type="button"
       className={`research-toggle rl-btn-open${open ? ' active' : ''}${className ? ` ${className}` : ''}`}
       aria-expanded={open}
+      /* **It raises a dialog now, not a row of the head.** `aria-expanded`
+         alone says "there is more of this"; a reader on a screen reader who is
+         about to have the page put behind a modal is owed the other half. It is
+         the pair the accordion-to-popup sweep put on every control it moved —
+         see `client-dialogs.md`. */
+      aria-haspopup="dialog"
       aria-label={label ? undefined : title}
       title={title}
       onClick={onToggle}
@@ -548,7 +554,14 @@ export function ListsPanel({
   const [armed, setArmed] = useState<Armed>(null);
   return (
     <div className="research-panel rl-panel">
-      <p className="rl-head">Watchlists</p>
+      {/* **No heading of its own.** It carried `<p class="rl-head">Watchlists`
+          while this was a row of the board's head, where nothing else said what
+          the rows under it were. It is a dialog now and the dialog's title bar
+          says exactly that word, so a heading here is the word twice — the same
+          reading that turned `CardSection`'s bar into a plain label inside a box
+          opened *for* it, and then into nothing at all under a tab strip that
+          had just said it. `.rl-head` is kept for the empty-searches note's
+          scale, which is the only thing still using it. */}
       <ul className="rl-rows">
         {lists.map((l) => (
           <Row
@@ -632,7 +645,8 @@ export function SearchesPanel({
   const [armed, setArmed] = useState<Armed>(null);
   return (
     <div className="research-panel rl-panel">
-      <p className="rl-head">Saved searches</p>
+      {/* The dialog's title says `Saved searches` — see the note in
+          `ListsPanel` for why this box no longer says it a second time. */}
       {searches.length === 0 ? (
         <p className="rl-note">
           Nothing saved yet. A saved search remembers the position, the span, which players are

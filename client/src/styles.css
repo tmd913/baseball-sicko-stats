@@ -23306,10 +23306,34 @@ html[data-theme='light'] .league-table thead th {
   align-items: stretch;
   gap: 10px;
   width: 100%;
-  max-width: min(420px, calc(100vw - 2 * var(--table-bleed, 22px)));
+  /* *(The cap that stood here was `min(420px, calc(100vw - 2 *
+     --table-bleed))`, and the paragraph above it explained why a saved-thing
+     panel is a stack where the others are a line: "capped in width because the
+     rows are names and a name is not a table — at 1920 an uncapped panel would
+     run the width of the window with 300px of content in it. Capped against the
+     viewport too, so it cannot decide the width of a phone." Both halves are
+     still the argument; what changed is **who answers them**. This is a dialog's
+     body now, and `.app-dialog-box` is already `width: min(…, 100%)` inside a
+     backdrop with its own gutter — a second cap in here would be the same
+     sentence said twice, and the two would be free to disagree. The width the
+     rows get is `.rl-dialog-box`'s.)* */
 }
+/* The empty-searches note's heading scale, and the only thing still drawing this
+   class: both panels dropped their own headings when they became dialogs, the
+   title bar above them saying the word already. */
 .rl-head {
   margin: 0;
+}
+/* **The box the two saved-thing dialogs take**, narrower than `.app-dialog-box`'s
+   own 720: these hold a column of *names*, and the paragraph that used to cap
+   the panel at 420 is the reason — a name is not a table, and 720px of dialog
+   with 300px of content in it reads as a box that has lost its contents. 440
+   because the row is a name, a dot and a `⋯` at this app's own control sizes,
+   and it is `min()`ed against the backdrop's own width the way every dialog is,
+   so a phone still decides its own. Measured at 390: the box 358 wide at x=16, the rows
+   inside it 332, and no page overflow. */
+.rl-dialog-box {
+  width: min(440px, 100%);
 }
 /* `min-width: 0` at every flex level between the panel and the name, or the
    name's own cannot help: an item that is itself a flex container passes its

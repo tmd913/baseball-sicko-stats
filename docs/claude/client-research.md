@@ -591,6 +591,13 @@ button 36.00 and on the same top to the hundredth, at 1400 and at 390. Condensed
 the pair is **74px** of two 36px squares under one ring, beside the 36px squares
 it belongs with.
 
+**These two are dialogs now, and everything below is the record of how they got
+there.** They were popovers, then rows of the head, and they are modals — the
+two paragraphs under this one carry the measurements that killed the popover and
+they still hold, a popover being no more possible on this bar today than it was
+then. What the *head* row missed is set out in **The two that are lists, not
+lines** further down.
+
 **The panels are rows of `.research-head`, and the first attempt was a popover
 hanging off each button.** That does not work here and the failure is worth
 recording, because it looks like nothing: `.tool-scroll-box` scrolls
@@ -639,6 +646,58 @@ name search. What it deliberately does **not** remember is anything that is not
 a reading — the paging, which panels were open, the half-typed condition in the
 filter builder. Those are where the reader had got to, not what they were
 looking at.
+
+### The two that are lists, not lines
+
+`client-dialogs.md` named **the research board's panels** among the two things
+that deliberately stayed accordions when every *detail* in the app became a
+dialog, on the test of **grouping against detail**: these are navigation and
+controls, not a detail about one thing. That test is right and these two still
+pass it. What it missed is the test `ColumnPicker` left the row on, which is
+**volume**: Search, Filters and the day strip are a line of controls each, and a
+list of saved things with a rename, a share, an armed delete and a `Save this
+board` field is not.
+
+**Driven against the old build at 1400.** Opening Lists put a 420×237 panel in
+the head, took the head **31 → 273.9px** and pushed the first row of the board
+**340 → 582.9** — four rows gone under a box you open to choose which list is
+active. And it went on moving: the `⋯` drawer inside a row took the head to
+**317.9** and the first row to **626.9**, and opening `Rename` over it took them
+to **325.9 / 634.9**. The table shifted three times, twice of them under a reader
+whose finger was on a control three rows above it. Measured after the move, with
+either dialog open: the head **31px** and the first row at **340**, at 1400 and
+at 390.
+
+**It is a change of place and nothing else.** The two components are unchanged
+but for the heading each dropped — the dialog's title bar says `Watchlists` and
+`Saved searches`, so a heading inside would be the word twice, which is the
+reading that turned `CardSection`'s bar into a plain label and then into nothing.
+The buttons keep `ui.panels` and their `.active` fill, and pressing a lit one
+still shuts the box exactly as it shut the panel; they gain
+`aria-haspopup="dialog"` beside the `aria-expanded` they had, the pair the
+accordion-to-popup sweep put on every control it moved.
+
+**Four ways out**, which is what a modal owes and three more than a panel had:
+the ✕, Escape, a press on the backdrop, and the button. Driven, each of the four
+closes it and leaves the board where it was. The layer is `Modal`'s own — the
+page's **46**, over the pinned chrome that opened them and over the full-page
+table box at 45, which is `ColumnPicker`'s rung beside them and for the same
+reason.
+
+**`setPanel`'s exclusivity matters more now, not less.** Opening Lists still
+closes Filters — driven, opening Filters over the Searches dialog shut the dialog
+and took the head 31 → 73 — and two of these being fixed boxes is exactly why: a
+panel left open *under* a modal is a row of head the reader cannot see being
+changed.
+
+**The width is the dialog's, not the panel's.** `.rl-panel` gave up the
+`min(420px, 100vw - 2 × --table-bleed)` cap it carried, and the argument behind
+that cap — *the rows are names and a name is not a table; at 1920 an uncapped
+panel would run the width of the window with 300px of content in it* — moved
+into `.rl-dialog-box` at **440px**, `min()`ed against the backdrop like every
+dialog so a phone still decides its own. Two caps would be one sentence said
+twice and free to disagree. Measured at 390: the box **358 wide at x=16**, the
+rows inside it **332**, `document.body.scrollWidth` 390.
 
 ### An applied search has a way back to the board it replaced
 
