@@ -8973,6 +8973,22 @@ button.start-line:focus-visible {
 .research-scroll > .empty-state {
   margin-inline: var(--table-bleed, 0px);
 }
+/* **And the banner needs air over it here, where the app-wide rule gives it
+   none.** `.error-banner` carries a `margin-bottom` and no top, which is right
+   on every other surface it appears on: `App` draws it **above** the tools row,
+   against the pinned chrome, so its one margin is the gap to the controls under
+   it. This pane is the one place it lands the other way up — after the band,
+   before the table — and there the same rule reads as lopsided: measured with a
+   forced 503, **14px above and 18 below**, the 14 being the band's own closing
+   air and the 18 the banner's.
+
+   So the top makes up the difference rather than restating the number: the band
+   has already spent `--tools-band-gap` of the 18, and this is the rest of it.
+   `max()` because a band gap raised past 18 would otherwise pull the banner up
+   into the row it is news about. Measured after: 18 above and 18 below. */
+.research-scroll > .error-banner {
+  margin-top: max(0px, calc(18px - var(--tools-band-gap)));
+}
 /* In the page it has to bleed for itself, which the pane did on its behalf. One
    pair of declarations, the same token: the band runs to the edges of the box
    it is in on every surface, and its content lines up with the gutter the rest
@@ -23251,6 +23267,30 @@ html[data-theme='light'] .league-table thead th {
   color: var(--text);
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
+/* **The lit half names the active list, and a name is the reader's own text.**
+   A watchlist may be called anything up to `MAX_NAME_LEN`, and 60 characters is
+   a legal name that wrecks the run it sits in: measured at 1400 with a
+   58-character list on the button, the label went **60.8 → 356.9px** and the
+   capsule **176.8 → 473** — a third of the window for one control, and on a
+   phone the whole of the first run. The row scrolls, so nothing breaks; it is
+   simply absurd.
+
+   So the *display* is capped where the name is not. This is the same answer
+   `.rl-shared-name` and `.research-undo-name` already give for the same string
+   in two other places, and the reason it is a display cap rather than a shorter
+   `maxLength`: a list is allowed to be called something descriptive, and it is
+   the **button** that must not grow to fit it. The full name stays reachable —
+   the toggle's `title` carries it, and the chooser beside it lists them all.
+
+   `min()` against the viewport so a phone decides its own: 160px at 1400 and
+   132.6 at 390, against the 60.8 the default `Watchlist` measures, so nothing
+   that fits today is touched. */
+.rl-split .research-toggle-label {
+  max-width: min(160px, 34vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* The chooser half. *(This block read: "the caret-only half — square-ish rather
    than pill-shaped padding, so it reads as a handle on the button beside it
    rather than as a second button." It is kept, this file's rule for superseded
@@ -23290,10 +23330,34 @@ html[data-theme='light'] .league-table thead th {
   align-items: stretch;
   gap: 10px;
   width: 100%;
-  max-width: min(420px, calc(100vw - 2 * var(--table-bleed, 22px)));
+  /* *(The cap that stood here was `min(420px, calc(100vw - 2 *
+     --table-bleed))`, and the paragraph above it explained why a saved-thing
+     panel is a stack where the others are a line: "capped in width because the
+     rows are names and a name is not a table — at 1920 an uncapped panel would
+     run the width of the window with 300px of content in it. Capped against the
+     viewport too, so it cannot decide the width of a phone." Both halves are
+     still the argument; what changed is **who answers them**. This is a dialog's
+     body now, and `.app-dialog-box` is already `width: min(…, 100%)` inside a
+     backdrop with its own gutter — a second cap in here would be the same
+     sentence said twice, and the two would be free to disagree. The width the
+     rows get is `.rl-dialog-box`'s.)* */
 }
+/* The empty-searches note's heading scale, and the only thing still drawing this
+   class: both panels dropped their own headings when they became dialogs, the
+   title bar above them saying the word already. */
 .rl-head {
   margin: 0;
+}
+/* **The box the two saved-thing dialogs take**, narrower than `.app-dialog-box`'s
+   own 720: these hold a column of *names*, and the paragraph that used to cap
+   the panel at 420 is the reason — a name is not a table, and 720px of dialog
+   with 300px of content in it reads as a box that has lost its contents. 440
+   because the row is a name, a dot and a `⋯` at this app's own control sizes,
+   and it is `min()`ed against the backdrop's own width the way every dialog is,
+   so a phone still decides its own. Measured at 390: the box 358 wide at x=16, the rows
+   inside it 332, and no page overflow. */
+.rl-dialog-box {
+  width: min(440px, 100%);
 }
 /* `min-width: 0` at every flex level between the panel and the name, or the
    name's own cannot help: an item that is itself a flex container passes its
@@ -23337,8 +23401,8 @@ html[data-theme='light'] .league-table thead th {
   min-width: 0;
   gap: 2px;
 }
-/* The name is the press, and it is the whole row less the `⋯`. Flexible so the
-   trailing marks keep their width and the name ellipsizes instead — a list
+/* The name is the press, and it is the whole row less its actions. Flexible so
+   the trailing marks keep their width and the name ellipsizes instead — a list
    called something long must not push its own count off the panel. */
 .rl-pick {
   flex: 1 1 auto;
@@ -23463,31 +23527,91 @@ html[data-theme='light'] .league-table thead th {
 .rl-row.is-active .rl-count {
   color: color-mix(in srgb, var(--accent) 70%, var(--faint));
 }
-/* The one trailing control. A 30px square, which is what every icon button in
-   this app is, against the 22×24 the three glyphs it replaces shared between
-   them. */
-.rl-more {
+/* **The row's actions, back on the row as icon buttons.** *(A single `.rl-more`
+   stood here — "the one trailing control, a 30px square, which is what every
+   icon button in this app is, against the 22×24 the three glyphs it replaces
+   shared between them". The 30px is the half that survives, and it is the half
+   that matters: the three glyphs were thrown out for being **small**, not for
+   being glyphs, and at the app's own size in the app's own box they are the
+   same shape as the header's gear and the dialog's ✕.)*
+
+   `flex: none` on the group so the names ellipsize and the buttons never do;
+   `gap: 2px`, the row's own, so four of them read as one run rather than four
+   controls. */
+.rl-icons {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+}
+/* **The button, and it widens for a word.** `min-width` rather than `width`,
+   because two of these grow into `Update?` and `Delete?` once armed — the shape
+   `.remove-btn` already has for the same reason and on the same gesture. `14px`
+   of side padding is what holds those words off the edge; at rest the glyph is
+   centred in the 30px the padding and the min-width agree on. */
+.rl-icon {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  min-width: 30px;
   height: 30px;
-  padding: 0;
+  padding: 0 7px;
   border: none;
+  border-radius: var(--control-radius-inner);
   background: none;
   color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 @media (hover: hover) {
-  .rl-more:hover {
+  .rl-icon:hover {
     color: var(--text);
     background: color-mix(in srgb, var(--text) 8%, transparent);
   }
 }
-.rl-more.is-open {
+.rl-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Its drawer is open — the same lit ground `.rl-more` used to take, on whichever
+   of the two icons opened it. */
+.rl-icon.is-open {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* **The share icon says the state as well as the action**, which is what the
+   chip did in words (`Sharing` rather than `Share`). A wordless control cannot
+   say it in words, so it says it in the ink — beside the `⤴` the row already
+   wears while a link is out, which is the second copy that keeps this off hue
+   alone. */
+.rl-icon.is-on {
+  color: var(--accent);
+}
+/* **Armed.** Both of these carry a word at this point, so the color is the
+   second thing they say rather than the only one — the rule that made
+   `RemoveButton` grow `Remove?` instead of just turning red. The red is
+   `--strikeout`, the app's own for a destructive control; the update's is the
+   accent, it replacing a reading rather than destroying a thing. */
+@media (hover: hover) {
+  .rl-icon-del:hover {
+    color: var(--strikeout);
+    background: color-mix(in srgb, var(--strikeout) 12%, transparent);
+  }
+}
+.rl-icon-del.is-armed,
+.rl-icon-del.is-armed:hover {
+  color: var(--strikeout);
+  background: color-mix(in srgb, var(--strikeout) 16%, transparent);
+}
+.rl-icon-update.is-armed,
+.rl-icon-update.is-armed:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 /* The drawer under an opened row: the action strip, or whichever action has
@@ -23630,10 +23754,67 @@ html[data-theme='light'] .league-table thead th {
   padding-top: 9px;
   border-top: 1px solid var(--border);
 }
+/* **A field and the press that commits it, as one control.** It was an input
+   and a button side by side with 6px between them, each with its own outline
+   and its own radius, and the two were reported as not reading as one thing —
+   which they were not: a bordered box, a gap, then a second bordered box that
+   only ever acts on the first.
+
+   So it takes the shape `.rl-split` took for the same complaint one bar over:
+   **the shell is the outlined object and the two are segments inside it**, with
+   one hairline seam between them. The input gives up its border, its ground and
+   its radius; the button gives up its border; and the shell lights on
+   `:focus-within`, so the ring the input used to draw *inside itself* is now
+   drawn round the whole control — which is what "the caret is in this field"
+   should look like when the field and its button are one box.
+
+   The commit button keeps its accent tint, because inside a shared outline a
+   fill is the only thing left that can say which segment is the action — the
+   same division of labor the split capsule's lit half has.
+
+   The segments' outer corners are `calc(--control-radius-inner - 1px)`, the
+   nesting `.rl-split` records: a child rounded to its parent's own radius
+   leaves a hair of the parent's ground in the corner, which on a tinted segment
+   is a notch of untinted `--bg`.
+
+   **Two callers, folded rather than repeated**: the footer's `New watchlist` /
+   `Name this board`, and the rename drawer's field and `Save`. They are the same
+   object — a name being typed and the press that takes it — and were two
+   arrangements agreeing today. */
 .rl-new {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  /* **The shell owns the height**, the trap `.rl-split` records one control
+     over: `box-sizing` is `border-box` app-wide, so a 36px child inside a
+     1px-bordered box is a 38px control — measured, 2px over the app's own
+     `--control-h` and over every icon button in the same dialog. The children
+     take the content box through `align-items: stretch`. */
+  height: var(--control-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+}
+.rl-new:focus-within {
+  border-color: var(--accent);
+}
+.rl-new > .rl-input {
+  border: 0;
+  border-radius: calc(var(--control-radius-inner) - 1px) 0 0
+    calc(var(--control-radius-inner) - 1px);
+  background: none;
+}
+/* The shell draws the focus now — see `:focus-within` above. A ring inside a
+   ring is the fault this weld exists to remove. */
+.rl-new > .rl-input:focus-visible {
+  outline: none;
+}
+.rl-new > .rl-act {
+  border: 0;
+  /* The seam, and it is a division rather than an edge — `--border` while the
+     shell's own ring goes accent, exactly as `.rl-split`'s does. */
+  border-left: 1px solid var(--border);
+  border-radius: 0 calc(var(--control-radius-inner) - 1px)
+    calc(var(--control-radius-inner) - 1px) 0;
 }
 .rl-note {
   margin: 0;

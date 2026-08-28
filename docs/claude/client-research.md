@@ -591,6 +591,13 @@ button 36.00 and on the same top to the hundredth, at 1400 and at 390. Condensed
 the pair is **74px** of two 36px squares under one ring, beside the 36px squares
 it belongs with.
 
+**These two are dialogs now, and everything below is the record of how they got
+there.** They were popovers, then rows of the head, and they are modals — the
+two paragraphs under this one carry the measurements that killed the popover and
+they still hold, a popover being no more possible on this bar today than it was
+then. What the *head* row missed is set out in **The two that are lists, not
+lines** further down.
+
 **The panels are rows of `.research-head`, and the first attempt was a popover
 hanging off each button.** That does not work here and the failure is worth
 recording, because it looks like nothing: `.tool-scroll-box` scrolls
@@ -639,6 +646,151 @@ name search. What it deliberately does **not** remember is anything that is not
 a reading — the paging, which panels were open, the half-typed condition in the
 filter builder. Those are where the reader had got to, not what they were
 looking at.
+
+### A row's actions are icon buttons, which is the third answer
+
+They were **three 12px glyphs** (`✎ ⤴ ✕`) against the row's right edge, then
+**one press and a `⋯`** opening a drawer of labeled chips. They are icon buttons
+on the row again, and the paragraph that threw the glyphs out is what this
+drawing had to avoid repeating: *"a pencil at that size against `--faint` is a
+smudge, and nothing said what any of them did until you hovered, which a touch
+device never does… a 22×24px target, where this app's own icon buttons are 30px
+and its chips 28."*
+
+**Both faults were size, and neither was iconography.** At the app's own **30px**
+— the header's gear, the dialog's ✕, the roster's remove button — with a 15px
+glyph inside, they are aimable and they are the shape this app already uses for a
+wordless control. Each carries a `title` *and* an `aria-label`, which is the whole
+of what a wordless control owes: a tooltip for a pointer, a label for everything
+else, and neither of them the only copy. Measured: four buttons at **30×30** on a
+search's row, three on a list's, the row **36px** tall either way inside a 414px
+dialog, and the `⋯` and its menu drawer gone (`.rl-more` count **0**).
+
+**The `⋯` went with them**, and so did the menu it opened: a drawer whose whole
+content was four labels is a press spent on reaching the press. Rename and Share
+still open a drawer, each being a *field* rather than a press — opened by its own
+icon now, which is one gesture shorter to the same box, and `Back` closes it
+where it used to return to a menu that is no longer there.
+
+**`Update to this board` is an icon rather than a chip, and both destructive
+controls keep their word.** This app's rule is that identity never rests on hue,
+so a red ✕ cannot be the whole of *armed* — and `RemoveButton` had already
+answered that, being a ✕ at rest and the **word** `Remove?` once armed, the
+button widening to hold it. Both of these follow it exactly: measured, the delete
+goes 30 → **59.8px** at `Delete?` and the update 30 → **64.6** at `Update?`, and
+arming either disarms the other, opening a drawer disarms both.
+
+The update arms at all because the move made it cheaper: it was a labeled chip
+two presses deep and it is now one press on a 30px target beside three that do
+not overwrite anything, and it is still *the one gesture here that destroys
+something*. It takes the accent rather than `--strikeout`, replacing a reading
+being a different act from destroying a thing.
+
+### A field and its commit press are one control
+
+The footer's `New watchlist` / `Name this board` was an input and an `Add`
+button side by side with 6px between them, each with its own outline and its own
+radius, and it was reported as not reading as one thing — which it was not: a
+bordered box, a gap, then a second bordered box that only ever acts on the first.
+
+It takes the shape `.rl-split` took for the same complaint one bar over. **The
+shell is the outlined object and the two are segments inside it**, one hairline
+between them: the input gives up its border, its ground and its radius, the
+button gives up its border, and the shell lights on `:focus-within` — so the ring
+the input used to draw *inside itself* is drawn round the whole control, which is
+what "the caret is in this field" should look like when the field and its button
+are one box. The commit segment keeps its accent tint, a fill being the only
+thing left inside a shared outline that can say which half is the action.
+
+**Two callers, folded rather than repeated**: the footer's field, and the rename
+drawer's field and `Save`. Those are the same object — a name being typed and the
+press that takes it — and were two arrangements agreeing today, which is the
+condition this stylesheet's fold rule exists for.
+
+Two numbers came off `.rl-split`'s own record. The segments' outer corners are
+`calc(--control-radius-inner - 1px)`, a child rounded to its parent's radius
+leaving a hair of the parent's ground in the corner. And **the shell owns the
+height**: `box-sizing` is `border-box` app-wide, so a 36px child inside a
+1px-bordered box measured a **38px** control, 2px over `--control-h` and over
+every icon button in the same dialog. Measured after: shell **36px**, the gap
+between input and button **0**, and the shell's border going `--border` →
+`--accent` on focus.
+
+### A name is capped at 60, and the button that shows it is capped at 160px
+
+`MAX_NAME_LEN` is **60** and always was — the server enforces it on all four
+routes with `400 name must be 1-60 characters`, and both name fields carried
+`maxLength={60}` as a literal, agreeing with it by coincidence. It is the
+mirrored constant in `client/src/types.ts` now, beside `MAX_LISTS` and
+`MAX_SEARCHES`, and this is the one of the three the client genuinely *enforces*
+rather than labels: a name too long to store cannot be typed, where without it
+the request goes, comes back 400 and is swallowed into a `console.error`.
+
+**What was missing is the other end.** A 60-character name is legal, and the
+Watchlist toggle names the active list: measured at 1400 with a 58-character list
+on it, the label went **60.8 → 356.9px** and the capsule **176.8 → 473** — a third
+of the window for one control, and on a phone the whole of the first run. Nothing
+breaks, the run scrolling; it is simply absurd.
+
+So the **display** is capped where the name is not — `min(160px, 34vw)` with an
+ellipsis, which is the answer `.rl-shared-name` and `.research-undo-name` already
+give for the same string in two other places. A list is allowed to be called
+something descriptive; it is the button that must not grow to fit it, and the
+full name stays in the toggle's `title` and in the chooser beside it. Measured
+after: the label **160 at 1400 and 132.6 at 390**, the capsule **276.1 / 248.7**,
+the text ellipsised, and the default `Watchlist` untouched at **60.8**.
+
+### The two that are lists, not lines
+
+`client-dialogs.md` named **the research board's panels** among the two things
+that deliberately stayed accordions when every *detail* in the app became a
+dialog, on the test of **grouping against detail**: these are navigation and
+controls, not a detail about one thing. That test is right and these two still
+pass it. What it missed is the test `ColumnPicker` left the row on, which is
+**volume**: Search, Filters and the day strip are a line of controls each, and a
+list of saved things with a rename, a share, an armed delete and a `Save this
+board` field is not.
+
+**Driven against the old build at 1400.** Opening Lists put a 420×237 panel in
+the head, took the head **31 → 273.9px** and pushed the first row of the board
+**340 → 582.9** — four rows gone under a box you open to choose which list is
+active. And it went on moving: the `⋯` drawer inside a row took the head to
+**317.9** and the first row to **626.9**, and opening `Rename` over it took them
+to **325.9 / 634.9**. The table shifted three times, twice of them under a reader
+whose finger was on a control three rows above it. Measured after the move, with
+either dialog open: the head **31px** and the first row at **340**, at 1400 and
+at 390.
+
+**It is a change of place and nothing else.** The two components are unchanged
+but for the heading each dropped — the dialog's title bar says `Watchlists` and
+`Saved searches`, so a heading inside would be the word twice, which is the
+reading that turned `CardSection`'s bar into a plain label and then into nothing.
+The buttons keep `ui.panels` and their `.active` fill, and pressing a lit one
+still shuts the box exactly as it shut the panel; they gain
+`aria-haspopup="dialog"` beside the `aria-expanded` they had, the pair the
+accordion-to-popup sweep put on every control it moved.
+
+**Four ways out**, which is what a modal owes and three more than a panel had:
+the ✕, Escape, a press on the backdrop, and the button. Driven, each of the four
+closes it and leaves the board where it was. The layer is `Modal`'s own — the
+page's **46**, over the pinned chrome that opened them and over the full-page
+table box at 45, which is `ColumnPicker`'s rung beside them and for the same
+reason.
+
+**`setPanel`'s exclusivity matters more now, not less.** Opening Lists still
+closes Filters — driven, opening Filters over the Searches dialog shut the dialog
+and took the head 31 → 73 — and two of these being fixed boxes is exactly why: a
+panel left open *under* a modal is a row of head the reader cannot see being
+changed.
+
+**The width is the dialog's, not the panel's.** `.rl-panel` gave up the
+`min(420px, 100vw - 2 × --table-bleed)` cap it carried, and the argument behind
+that cap — *the rows are names and a name is not a table; at 1920 an uncapped
+panel would run the width of the window with 300px of content in it* — moved
+into `.rl-dialog-box` at **440px**, `min()`ed against the backdrop like every
+dialog so a phone still decides its own. Two caps would be one sentence said
+twice and free to disagree. Measured at 390: the box **358 wide at x=16**, the
+rows inside it **332**, `document.body.scrollWidth` 390.
 
 ### An applied search has a way back to the board it replaced
 

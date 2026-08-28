@@ -4220,38 +4220,40 @@ export function ResearchTable({
 
   const panels = (
     <>
-      {/* **The two saved-thing panels, in the head with the rest.** They were
-          written as popovers hanging off their buttons and that does not work
-          here: the control set is `.tool-scroll-box`, which scrolls
-          horizontally and therefore clips on **both** axes, so the panel
-          measured a perfectly ordinary 268×322 box and painted nothing at all.
-          The head is where a panel on this board goes; see the note above. */}
-      {listsOpen && !teams && (
-        <ListsPanel
-          lists={saved.lists}
-          activeId={saved.activeListId}
-          max={saved.maxLists}
-          onPick={saved.onPickList}
-          onCreate={saved.onCreateList}
-          onRename={saved.onRenameList}
-          onDelete={saved.onDeleteList}
-          onShare={(id: string, on: boolean) => saved.onShare('list', id, on)}
-        />
-      )}
-      {searchesOpen && !teams && (
-        <SearchesPanel
-          searches={saved.searches}
-          max={saved.maxSearches}
-          onApply={saved.onApplySearch}
-          onSave={saved.onSaveSearch}
-          onReplace={saved.onReplaceSearch}
-          onRename={saved.onRenameSearch}
-          onDelete={saved.onDeleteSearch}
-          onShare={(id: string, on: boolean) => saved.onShare('search', id, on)}
-          onClose={() => setPanel('searches', false)}
-        />
-      )}
+      {/* **The two saved-thing panels are dialogs now, and are drawn beside the
+          Columns picker rather than here.** Two paragraphs of this file's
+          history sit under that one sentence and both are worth keeping:
 
+          *"They were written as popovers hanging off their buttons and that does
+          not work here: the control set is `.tool-scroll-box`, which scrolls
+          horizontally and therefore clips on both axes, so the panel measured a
+          perfectly ordinary 268×322 box and painted nothing at all. The head is
+          where a panel on this board goes."* True, and still the reason a
+          **popover** is not an option here.
+
+          And `client-dialogs.md` listed *the research board's panels* among the
+          two things that deliberately stayed accordions when every detail in the
+          app became a dialog, on the test of **grouping against detail**: these
+          are navigation and controls, not a detail about one thing.
+
+          What both missed is that Search, Filters and the day strip are *one
+          line of controls each*, and these two are not. A list of saved things
+          with a rename, a share, an armed delete and a `Save this board` field
+          is the shape `ColumnPicker` already left the row for — see the
+          paragraph there, which turns on **volume**: a panel several hundred
+          pixels tall wedged into the chrome pushes the table it describes down
+          the page, and on a phone takes the screen outright while pretending to
+          be a strip of controls. Driven against the old build at 1400: opening
+          Lists put a 420×237 panel in the head, took the head **31 → 273.9px**
+          and pushed the first row of the board **340 → 582.9** — four rows gone
+          under a box you open to choose which list is active.
+
+          And it went on moving. The `⋯` drawer inside a row took the head to
+          **317.9** and the first row to **626.9**, and opening `Rename` over it
+          took them to **325.9 / 634.9** — the table shifting twice more under a
+          reader who is looking at a control three rows above it. Nothing behind
+          a modal moves: measured after, the head is **31px and the first row at
+          340 with either dialog open**, at 1400 and at 390. */}
       {searchOpen && (
         <div className="research-panel">
           <input
@@ -4743,6 +4745,78 @@ export function ResearchTable({
               onSaveAsMine={saved.onSaveSharedAsMine}
               onDismiss={saved.onDismissShared}
             />
+          )}
+
+          {/* **The watchlist chooser and the saved searches, as dialogs.**
+
+              They were rows of the head with Search, Filters and the day strip,
+              and they are the two of the five that are *lists of saved things*
+              rather than a line of controls — see the note above `panels`, which
+              keeps the reasoning that put them in the head and says what it
+              missed. The move is a change of **place** and nothing else: the two
+              components are unchanged but for the heading each dropped, the
+              buttons keep `ui.panels` and their `.active` fill, and pressing a
+              lit button still shuts the box exactly as it shut the panel.
+
+              **Four ways out, which is what a modal owes** and three more than a
+              panel had: the ✕, Escape, a press on the backdrop, and the button.
+              The layer is `Modal`'s own — portalled to the body at the page's
+              46, over the pinned chrome that opened them and over the full-page
+              table box at 45, which is the rung `ColumnPicker` beside them
+              already takes and for the same reason.
+
+              **Exclusive, still.** `setPanel` shuts the others when one opens,
+              so opening Lists closes Filters exactly as it did — which matters
+              more now, not less: two of these are fixed boxes and a panel left
+              open under one is a row of head the reader cannot see being
+              changed. And each dialog's own state (a rename in progress, a
+              half-pressed delete) needs no reset, being unmounted with the box.
+
+              Drawn on `!teams` for the reason the buttons are: a watchlist is a
+              list of players and a saved search remembers a position and an
+              ownership set, neither of which is an operation on thirty clubs. */}
+          {listsOpen && !teams && (
+            <Modal
+              title="Watchlists"
+              titleId="research-lists-title"
+              className="rl-dialog-box"
+              onClose={() => setPanel('lists', false)}
+            >
+              <ListsPanel
+                lists={saved.lists}
+                activeId={saved.activeListId}
+                max={saved.maxLists}
+                onPick={saved.onPickList}
+                onCreate={saved.onCreateList}
+                onRename={saved.onRenameList}
+                onDelete={saved.onDeleteList}
+                onShare={(id: string, on: boolean) => saved.onShare('list', id, on)}
+              />
+            </Modal>
+          )}
+          {searchesOpen && !teams && (
+            <Modal
+              title="Saved searches"
+              titleId="research-searches-title"
+              className="rl-dialog-box"
+              onClose={() => setPanel('searches', false)}
+            >
+              <SearchesPanel
+                searches={saved.searches}
+                max={saved.maxSearches}
+                onApply={saved.onApplySearch}
+                onSave={saved.onSaveSearch}
+                onReplace={saved.onReplaceSearch}
+                onRename={saved.onRenameSearch}
+                onDelete={saved.onDeleteSearch}
+                onShare={(id: string, on: boolean) => saved.onShare('search', id, on)}
+                /* Applying a search closes the box, where picking a list leaves
+                   it open — the asymmetry `ResearchLists.tsx` argues, and one
+                   the dialog makes sharper rather than softer: a search's result
+                   *is* the board underneath, which a modal is covering. */
+                onClose={() => setPanel('searches', false)}
+              />
+            </Modal>
           )}
 
           {/* **A modal, where Search and Filters beside it are inline panels**

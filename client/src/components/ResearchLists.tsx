@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { MAX_NAME_LEN } from '../types';
 import type { SavedList, SavedSearch, SharedItem } from '../types';
 
 /**
@@ -26,37 +27,63 @@ import type { SavedList, SavedSearch, SharedItem } from '../types';
  *   columns, sort and filters in one go, so the panel closes and the reader is
  *   looking at the result.
  *
- * ### One trailing control per row, not three glyphs
+ * ### The actions are icon buttons on the row, and that is the third answer
  *
- * A row's actions were three 12px glyphs (`✎ ⤴ ✕`) jammed against its right
- * edge, and they were wrong twice over. **They were unreadable** — a pencil at
- * that size against `--faint` is a smudge, and nothing said what any of them
- * did until you hovered, which a touch device never does. And **they were
- * un-pressable**: a 22×24px target, where this app's own icon buttons are 30px
- * and its chips 28. A fourth action (a search can be *updated* to the board it
- * is looking at) had nowhere to go at all, which is why that one had ended up
- * as a duplicated run of pills at the foot of the panel, restating the same two
- * names the list above it already carried.
+ * They were **three 12px glyphs** (`✎ ⤴ ✕`) jammed against the row's right
+ * edge, and the paragraph that replaced them is worth keeping whole, because it
+ * is what this drawing had to avoid repeating:
  *
- * So a row is **one press and one `⋯`**. The press does the row's own thing;
- * the `⋯` opens a drawer under it — **labeled chips**, at the size the column
- * picker's own chips are, so nothing is guessed at and everything is aimable.
- * Rename and Share take that drawer *over* rather than stacking on it: three
- * states of one box, not a pile of panels.
+ * *"They were wrong twice over. **They were unreadable** — a pencil at that size
+ * against `--faint` is a smudge, and nothing said what any of them did until you
+ * hovered, which a touch device never does. And **they were un-pressable**: a
+ * 22×24px target, where this app's own icon buttons are 30px and its chips 28. A
+ * fourth action (a search can be updated to the board it is looking at) had
+ * nowhere to go at all… So a row is one press and one `⋯`. The press does the
+ * row's own thing; the `⋯` opens a drawer under it — labeled chips, at the size
+ * the column picker's own chips are, so nothing is guessed at and everything is
+ * aimable."*
  *
- * The delete arms rather than asks, the same gesture and the same red
- * (`--strikeout`) the roster's ✕ already uses — a confirm dialog for a thing
- * that takes two seconds to rebuild is a dialog nobody reads.
+ * **Both faults were size, and neither was iconography.** A glyph at 12px in a
+ * 22×24 box is a smudge nobody can hit; the same glyph at 15px in this app's own
+ * **30px** icon button is the shape the header's gear, the dialog's ✕ and the
+ * roster's own remove button already are. So the actions come back onto the row
+ * as icon buttons at that size, and the `⋯` and its menu drawer go: a drawer
+ * whose whole content was four labels is a press spent on reaching the press.
+ *
+ * Rename and Share still open a drawer, because each is a *field* rather than a
+ * press — the drawer is opened by its own icon now instead of by a chip inside
+ * a menu, which is one gesture shorter to the same box.
+ *
+ * ### The two that destroy something keep their word
+ *
+ * **Delete arms rather than asks**, unchanged — the same gesture and the same
+ * red (`--strikeout`) the roster's ✕ already uses, a confirm dialog for a thing
+ * that takes two seconds to rebuild being a dialog nobody reads. What an icon
+ * changes is how *armed* is said: this app's rule is that identity never rests
+ * on hue, so a red ✕ cannot be the whole of it. `RemoveButton` answered this
+ * already — it is a ✕ at rest and the **word** `Remove?` once armed, the button
+ * widening to hold it — and this follows it exactly, at `Delete?`.
+ *
+ * **Updating a search arms too, and that is new.** It was a labeled chip in the
+ * menu (`Update to this board`) and is an icon on the row, which makes the one
+ * gesture here that *overwrites something* a single press on a 30px target
+ * beside three that do not. So it takes the same two-press shape and the same
+ * widening word, `Update?` — in the accent rather than the red, because it
+ * replaces a reading rather than destroying a thing.
  */
 
-/** Which row's drawer is open, and what it is showing. `menu` is the strip of
- *  actions; the other two are one action having taken the drawer over. */
-type Drawer = { id: string; mode: 'menu' | 'rename' | 'share' } | null;
+/** Which row's drawer is open, and what it is showing. There is no `menu` any
+ *  more — the two modes are the two actions that need a field, each opened by
+ *  its own icon on the row. */
+type Drawer = { id: string; mode: 'rename' | 'share' } | null;
 
-/** A delete that has been armed, by row id. State of the **panel**, which is
- *  unmounted when the panel shuts — so a panel re-opened never comes back with
- *  a delete half-pressed, and no effect is needed to say so. */
-type Armed = string | null;
+/** The one half-pressed destructive control, by row id **and by which action** —
+ *  a row has two of them now (a delete, and for a search an update that
+ *  overwrites). One at a time across the whole panel, so arming anything
+ *  disarms the last. State of the **panel**, which is unmounted when the panel
+ *  shuts, so a panel re-opened never comes back with either half-pressed and no
+ *  effect is needed to say so. */
+type Armed = { id: string; act: 'delete' | 'update' } | null;
 
 export interface SavedThing {
   id: string;
@@ -208,12 +235,16 @@ function RenameDrawer({
   };
   return (
     <div className="rl-drawer">
-      <div className="rl-acts">
+      {/* **`.rl-new`, not `.rl-acts`** — folded onto the footer's own field
+          rather than given rules that agree today, this being the same object:
+          a name being typed and the press that takes it. See the stylesheet for
+          the weld. */}
+      <div className="rl-new">
         <input
           ref={ref}
           className="rl-input"
           value={draft}
-          maxLength={60}
+          maxLength={MAX_NAME_LEN}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             // Enter commits, Escape abandons — and Escape is stopped here so it
@@ -244,7 +275,8 @@ function RenameDrawer({
   );
 }
 
-/** One row of either panel: a press, its marks, and the drawer behind `⋯`. */
+/** One row of either panel: a press, its icon buttons, and the drawer two of
+ *  them open. */
 function Row({
   thing,
   active,
@@ -271,7 +303,7 @@ function Row({
   armed: Armed;
   onPick: (id: string) => void;
   onDrawer: (d: Drawer) => void;
-  onArm: (id: string | null) => void;
+  onArm: (a: Armed) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   onShare: (id: string, enabled: boolean) => void;
@@ -281,6 +313,10 @@ function Row({
   const open = drawer?.id === thing.id;
   const mode = open ? drawer.mode : null;
   const isList = kind === 'list';
+  /* One armed control across the whole panel, so these are a test on the id
+     *and* the action — a row can have two of them. */
+  const deleteArmed = armed?.id === thing.id && armed.act === 'delete';
+  const updateArmed = armed?.id === thing.id && armed.act === 'update';
   return (
     <li className={`rl-row${active ? ' is-active' : ''}${open ? ' is-open' : ''}`}>
       <div className="rl-row-main">
@@ -310,76 +346,178 @@ function Row({
           )}
           {count !== undefined && <span className="rl-count">{count}</span>}
         </button>
-        <button
-          type="button"
-          className={`rl-more${open ? ' is-open' : ''}`}
-          aria-expanded={open}
-          aria-label={`Actions for ${thing.name}`}
-          title={`Rename, share or delete “${thing.name}”`}
-          onClick={() => {
-            onArm(null);
-            onDrawer(open ? null : { id: thing.id, mode: 'menu' });
-          }}
-        >
-          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-            <circle cx="3" cy="8" r="1.4" fill="currentColor" />
-            <circle cx="8" cy="8" r="1.4" fill="currentColor" />
-            <circle cx="13" cy="8" r="1.4" fill="currentColor" />
-          </svg>
-        </button>
-      </div>
-
-      {mode === 'menu' && (
-        <div className="rl-drawer">
-          <div className="rl-acts">
+        {/* **The row's actions, as icon buttons at the app's own 30px.** See the
+            head of this file for why they are glyphs again and why that is not
+            the 12px smudge this panel already threw out once. Each carries a
+            `title` *and* an `aria-label`, which is the whole of what a wordless
+            control owes: the tooltip for a pointer, the label for everything
+            else, and neither of them the only copy. */}
+        <div className="rl-icons">
+          {/* **Update, and it arms** — the one press in this panel that
+              overwrites a saved reading with the board underneath. It was a
+              labeled chip two presses deep; on the row it is one press from a
+              destroyed reading, so it takes the roster ✕'s two-press shape and
+              widens to the word. The accent rather than the red: it replaces a
+              reading, it does not destroy a thing. */}
+          {onReplace && (
             <button
               type="button"
-              className="rl-act"
-              onClick={() => onDrawer({ id: thing.id, mode: 'rename' })}
-            >
-              Rename
-            </button>
-            {onReplace && (
-              <button
-                type="button"
-                className="rl-act"
-                title={`Replace “${thing.name}” with the board as it stands`}
-                onClick={() => onReplace(thing.id)}
-              >
-                Update to this board
-              </button>
-            )}
-            <button
-              type="button"
-              className={`rl-act${thing.shareCode ? ' is-on' : ''}`}
-              onClick={() => onDrawer({ id: thing.id, mode: 'share' })}
-            >
-              {thing.shareCode ? 'Sharing' : 'Share'}
-            </button>
-            {/* **Arms rather than asks** — see the note at the head of this
-                file. */}
-            <button
-              type="button"
-              className={`rl-act rl-act-del${armed === thing.id ? ' is-armed' : ''}`}
+              className={`rl-icon rl-icon-update${updateArmed ? ' is-armed' : ''}`}
+              title={
+                updateArmed
+                  ? `Press again to save this board over “${thing.name}”`
+                  : `Save the board as it stands over “${thing.name}”`
+              }
+              aria-label={
+                updateArmed
+                  ? `Confirm saving this board over ${thing.name}`
+                  : `Save this board over ${thing.name}`
+              }
               onClick={() => {
-                if (armed === thing.id) {
+                if (updateArmed) {
                   onArm(null);
-                  onDelete(thing.id);
+                  onReplace(thing.id);
                 } else {
-                  onArm(thing.id);
+                  onDrawer(null);
+                  onArm({ id: thing.id, act: 'update' });
                 }
               }}
             >
-              {armed === thing.id ? 'Really delete?' : 'Delete'}
+              {updateArmed ? (
+                'Update?'
+              ) : (
+                /* A circular arrow closing onto its own head: *this one, again,
+                   off what is on screen now*. Distinct at 15px from the pencil,
+                   the share arrow and the ✕ beside it. */
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 11.5a8 8 0 1 0-2.3 5.4" />
+                  <path d="M20 5.5v6h-6" />
+                </svg>
+              )}
             </button>
-          </div>
+          )}
+          <button
+            type="button"
+            className={`rl-icon${mode === 'rename' ? ' is-open' : ''}`}
+            aria-expanded={mode === 'rename'}
+            title={`Rename “${thing.name}”`}
+            aria-label={`Rename ${thing.name}`}
+            onClick={() => {
+              onArm(null);
+              onDrawer(mode === 'rename' ? null : { id: thing.id, mode: 'rename' });
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+              <path d="M14.5 6.5l3 3" />
+            </svg>
+          </button>
+          {/* Lit while the link is live, the way the chip that replaced it said
+              `Sharing` rather than `Share`: a wordless control still has to say
+              the *state*, and here the ink is what says it — beside the `⤴` the
+              row already wears when a share is out. */}
+          <button
+            type="button"
+            className={`rl-icon${thing.shareCode ? ' is-on' : ''}${
+              mode === 'share' ? ' is-open' : ''
+            }`}
+            aria-expanded={mode === 'share'}
+            title={thing.shareCode ? `Sharing “${thing.name}”` : `Share “${thing.name}”`}
+            aria-label={thing.shareCode ? `Sharing ${thing.name}` : `Share ${thing.name}`}
+            onClick={() => {
+              onArm(null);
+              onDrawer(mode === 'share' ? null : { id: thing.id, mode: 'share' });
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 15V4" />
+              <path d="m8 7.5 4-3.5 4 3.5" />
+              <path d="M5 13v6h14v-6" />
+            </svg>
+          </button>
+          {/* **Arms rather than asks**, and says so in a word — see the head of
+              this file, and `RemoveButton`, which is the same two presses and
+              the same red on the app's other destructive control. */}
+          <button
+            type="button"
+            className={`rl-icon rl-icon-del${deleteArmed ? ' is-armed' : ''}`}
+            title={
+              deleteArmed
+                ? `Press again to delete “${thing.name}”`
+                : `Delete “${thing.name}”`
+            }
+            aria-label={
+              deleteArmed ? `Confirm deleting ${thing.name}` : `Delete ${thing.name}`
+            }
+            onClick={() => {
+              if (deleteArmed) {
+                onArm(null);
+                onDelete(thing.id);
+              } else {
+                onDrawer(null);
+                onArm({ id: thing.id, act: 'delete' });
+              }
+            }}
+          >
+            {deleteArmed ? (
+              'Delete?'
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            )}
+          </button>
         </div>
-      )}
+      </div>
+
+      {/* **`Back` closes the drawer where it used to return to the menu**, there
+          being no menu behind it any more. One box, opened and shut by the icon
+          that opens it — which is also what the icon's own second press does, so
+          the two ways out agree. */}
       {mode === 'rename' && (
         <RenameDrawer
           thing={thing}
           onRename={onRename}
-          onBack={() => onDrawer({ id: thing.id, mode: 'menu' })}
+          onBack={() => onDrawer(null)}
         />
       )}
       {mode === 'share' && (
@@ -387,7 +525,7 @@ function Row({
           kind={kind}
           thing={thing}
           onShare={onShare}
-          onBack={() => onDrawer({ id: thing.id, mode: 'menu' })}
+          onBack={() => onDrawer(null)}
         />
       )}
     </li>
@@ -443,6 +581,12 @@ export function SavedButton({
       type="button"
       className={`research-toggle rl-btn-open${open ? ' active' : ''}${className ? ` ${className}` : ''}`}
       aria-expanded={open}
+      /* **It raises a dialog now, not a row of the head.** `aria-expanded`
+         alone says "there is more of this"; a reader on a screen reader who is
+         about to have the page put behind a modal is owed the other half. It is
+         the pair the accordion-to-popup sweep put on every control it moved —
+         see `client-dialogs.md`. */
+      aria-haspopup="dialog"
       aria-label={label ? undefined : title}
       title={title}
       onClick={onToggle}
@@ -492,7 +636,7 @@ function NewRow({
         className="rl-input"
         placeholder={placeholder}
         value={draft}
-        maxLength={60}
+        maxLength={MAX_NAME_LEN}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -548,7 +692,14 @@ export function ListsPanel({
   const [armed, setArmed] = useState<Armed>(null);
   return (
     <div className="research-panel rl-panel">
-      <p className="rl-head">Watchlists</p>
+      {/* **No heading of its own.** It carried `<p class="rl-head">Watchlists`
+          while this was a row of the board's head, where nothing else said what
+          the rows under it were. It is a dialog now and the dialog's title bar
+          says exactly that word, so a heading here is the word twice — the same
+          reading that turned `CardSection`'s bar into a plain label inside a box
+          opened *for* it, and then into nothing at all under a tab strip that
+          had just said it. `.rl-head` is kept for the empty-searches note's
+          scale, which is the only thing still using it. */}
       <ul className="rl-rows">
         {lists.map((l) => (
           <Row
@@ -632,7 +783,8 @@ export function SearchesPanel({
   const [armed, setArmed] = useState<Armed>(null);
   return (
     <div className="research-panel rl-panel">
-      <p className="rl-head">Saved searches</p>
+      {/* The dialog's title says `Saved searches` — see the note in
+          `ListsPanel` for why this box no longer says it a second time. */}
       {searches.length === 0 ? (
         <p className="rl-note">
           Nothing saved yet. A saved search remembers the position, the span, which players are
