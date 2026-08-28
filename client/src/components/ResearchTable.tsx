@@ -642,13 +642,22 @@ export const MAX_COMPARE = 6;
 /**
  * **A saved search's payload: the whole of what decides what is on this board.**
  *
- * Eleven fields, and the test each one had to pass is *would a reader who saved
- * this and came back tomorrow be surprised to find it different*. Which
+ * **Fourteen fields**, and the test each one had to pass is *would a reader who
+ * saved this and came back tomorrow be surprised to find it different*. Which
  * position, over which span, which ownership sets, with the watchlist on or
  * off, the clubs board or the players one, measured or projected, which
- * columns, sorted how, filtered how, searched for what — every one of those is
- * something somebody deliberately set, and a "saved search" that dropped any of
- * them would come back as a different board wearing the right name.
+ * columns, sorted how, filtered how, searched for what, **which days a starter
+ * has to be starting on, the schedule reading or the stats, and whether the
+ * percentile badges are drawn** — every one of those is something somebody
+ * deliberately set, and a "saved search" that dropped any of them would come
+ * back as a different board wearing the right name.
+ *
+ * *(It was **eleven**, and the last three are the report that it "doesn't seem
+ * to be saving all the settings" run to ground. Driven, all three failed and one
+ * of them failed in the direction that matters most — see `turn`, `sched` and
+ * `ranks` below, which carry the measurements. The test above never changed;
+ * what was wrong is that it had been applied to the controls somebody thought of
+ * rather than to the board.)*
  *
  * **What is deliberately not here** is anything that is not a *reading*: the
  * paging (`shown`), which panels were open, the half-typed condition in the
@@ -683,9 +692,60 @@ export interface ResearchSearchBoard {
   /** The name search, which is `search` on `BoardState` and `text` here because
    *  `search` on a thing called a *search* reads as the whole object. */
   text: string;
+  /**
+   * **The `Starting` filter's days**, as the URL spells them (`turnDaysParam`),
+   * or null for the filter off.
+   *
+   * It was missing, and it is the one of the three that changed the *rows*:
+   * driven, a board at `SP / 30d / Starting Fri 8/28 · Sun 8/30` read **32 of
+   * 418 pitchers**, and the same search applied came back with no days and
+   * **203 of 418**. A saved search that does not remember the narrowest filter
+   * on the board is not a saved search.
+   *
+   * **Absolute dates, and they may go stale** — which is exactly what `turn=`
+   * in a link already does and for the reason set out at `turnDays` in
+   * `App.tsx`: `Starting Fri 8/28` is a fact about the schedule, not a rule
+   * about the reader's today, and `clampTurnDays` cuts a stored day the window
+   * no longer holds. A search kept past its fortnight therefore opens with the
+   * filter off rather than with days nobody can start on.
+   */
+  turn: string | null;
+  /**
+   * **The Schedule reading**, or null for the stats. Missing too, and worse than
+   * missing: `applySearchBoard` actively cleared it, so a search saved off a
+   * schedule board came back as a stat board — measured, 80 schedule cells → 0.
+   */
+  sched: ScheduleSpan | null;
+  /**
+   * **Whether the percentile badges are drawn.**
+   *
+   * Not saved, and it did not merely fail to restore — it **leaked**. `showRanks`
+   * is neither in the URL nor in the search, so it simply survived whatever board
+   * the search was applied over: driven, a search saved with the badges *off*
+   * came back with 1,426 of them, because the board it was applied from had them
+   * on. The same search from two boards gave two different tables, which is the
+   * one thing an apply is supposed to make impossible.
+   *
+   * **Optional, and absent means "no opinion".** A search saved before this
+   * field existed has none, and the app's own rule is that an unrecognized value
+   * falls back rather than emptying the view — so an old search leaves the
+   * reader's badges as it finds them rather than turning them off. Every new
+   * save writes a definite `true` or `false`.
+   *
+   * **And applying it never writes the record.** `showRanks` is a saved
+   * *preference* (see it in `App.tsx`, where the comment draws the line between
+   * a fact about the reader and a fact about the board), so the apply sets it
+   * locally with its touched ref raised — exactly what the include set and the
+   * watchlist already do, and what keeps opening somebody's link from quietly
+   * becoming your saved default.
+   */
+  ranks?: boolean;
 }
 
 const ALL_POSITIONS = new Set<string>(POSITIONS.map((p) => p.key));
+/** Every span the Schedule control can be in, including the two a league
+ *  supplies — narrowed against on the way back out of a stored search. */
+const SCHEDULE_SPANS_ALL = new Set<ScheduleSpan>([7, 14, 'matchup', 'next']);
 
 /**
  * Narrow a stored board into one this build can actually apply.
@@ -752,6 +812,14 @@ export function readSearchBoard(raw: unknown): ResearchSearchBoard | null {
     sortAsc: r.sortAsc === true,
     filters,
     text: typeof r.text === 'string' ? r.text : '',
+    // The days are re-parsed by the caller (`toTurnDays`) and cut to the window
+    // by the clamp that already guards an inbound `turn=`, so all this has to
+    // decide is whether a string was stored at all.
+    turn: typeof r.turn === 'string' && r.turn ? r.turn : null,
+    sched: SCHEDULE_SPANS_ALL.has(r.sched as ScheduleSpan) ? (r.sched as ScheduleSpan) : null,
+    // Three states, not two: `true`, `false`, and **absent** — a search saved
+    // before the field existed, which leaves the reader's own setting alone.
+    ranks: typeof r.ranks === 'boolean' ? r.ranks : undefined,
   };
 }
 
