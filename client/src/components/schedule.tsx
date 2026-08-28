@@ -913,9 +913,27 @@ export function ScheduleCell({
         const press =
           onPreview && g.state === 'scheduled' ? () => void onPreview(g) : null;
         const vs = opposingStarter(index, g, teamId);
+        /* **Which half of the pair**, on the title alone and never in the cell.
+           The stacked lines already say the club plays twice, and they are now
+           stacked in the order the games are played — `schedule.ts::dedupe`
+           orders a day by `gameNumber`, where it used to order by `gamePk` and
+           put the nightcap on top for 30 of the 2026 season's 44 doubleheader
+           club-days. What the stack cannot say is *which line is which*, and
+           that is exactly what a start mark on one of them needs; a `Gm 2` drawn
+           in the cell would be a third line of text in a grid whose whole point
+           is being scannable at 600 rows, so it goes on the title the cell
+           already carries. The two list surfaces that draw a fixture a row at a
+           time — the Schedule tab and the Projected Starts block — draw it
+           visibly, having the room and no stack to imply it. */
+        const half = games.length > 1 ? `game ${g.gameNumber} of a doubleheader` : null;
         const title = ppd
           ? `${opp} — postponed`
-          : [opp, tier ? TIER_TITLE[tier] : null, vs ? `${vs.full} — ${VS_TITLE[vs.tier]}` : null]
+          : [
+              opp,
+              half,
+              tier ? TIER_TITLE[tier] : null,
+              vs ? `${vs.full} — ${VS_TITLE[vs.tier]}` : null,
+            ]
               .filter(Boolean)
               .join(' — ');
         return (

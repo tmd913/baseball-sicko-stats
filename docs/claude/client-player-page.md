@@ -1226,6 +1226,29 @@ answer was `Not yet scheduled.`: true, useless, and a thing anybody with the
 fixture list could have worked out. `ProjectedStartsBlock` works it out, three
 turns ahead.
 
+**A row says which half of a doubleheader it is, and only where there is one.**
+`ProjectedStart.gameNumber` is `1` or `2` where his club plays twice that day
+and **null on every other row**, which is *a mark that would be on every row
+marks nothing* decided on the wire rather than in the component: the server
+counts the club's own run, which the block cannot — its list holds at most one
+half of any pair. Without it the two rows of a pair are the same line twice —
+same date, same opponent, same side — and one of them may be his start while the
+other is not. Measured on the live window, **11 projected turns land on a
+doubleheader** across the 4 pairs it holds. The Schedule tab's fixture list and
+the schedule grid's stacked cell ask the same question of the index instead
+(`gamesOn(...).length > 1`), the index already holding the club's whole day; the
+grid says it on the **title alone**, a third line of text in a cell drawn 600
+rows at a time being worth more than it buys, where the two list surfaces draw
+`Gm 1` / `Gm 2` in `.start-gm`. That mark takes **no color** — the scale this app
+spends color on is *state*, and which of a pair this is is a fact that tells two
+identical lines apart — so it is `--faint` at the opposing starter's own weight
+beside it, and deliberately not a second pill next to `.start-tag`, which is the
+row's *tier* and would read as a second claim about how firm the start is.
+
+The ordering behind it is the server's: a doubleheader is sorted by
+`gameNumber`, not `gamePk`, and the two disagree on **30 of the 2026 season's 44
+doubleheader club-days** — see **The server**, `/api/schedule`.
+
 **It is second in the tab, directly under the day**, which is that tab's own
 ordering argument rather than an exception to it: "when does he pitch next" is
 the forward half of *what is he doing*, and the day block's own note says the
