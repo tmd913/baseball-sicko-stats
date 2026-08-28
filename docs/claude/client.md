@@ -1988,10 +1988,55 @@ row behind it moved. See *The page's nine reads are nine keys* and *The player
 page had no clock* in **`client-player-page.md`**, which also carry `family` and
 `staleMs`, the two options that page needed and the report did not.
 
-**Still on their own fetches**, in the order they are worth moving: the ten
-`hooks.ts` contexts (already fetched once in App and broadcast, which is the
-right semantics and the wrong plumbing), `GamePage`'s two module-level caches,
-and `TeamDetails`.
+**Three of the `hooks.ts` contexts followed**, and one of them was the largest
+single waste in the app.
+
+**`/api/statuses` is 453,622 bytes** — what is true of every player today, his
+roster status and where his club's game has him — and it was re-read on **every
+entry**, the effect listing `[view, detailsKey]` with nothing between one
+navigation and the next request. Measured on an ordinary browse (open four men,
+closing each, then two entries to the research board):
+
+| | reads | over the wire |
+| --- | --- | --- |
+| before | 6 | **2.60 MB** |
+| after | **1** | **0.43 MB** |
+
+Of a map that had not changed between the first read and the sixth. The
+freshness it wants is real — a lineup posts in the afternoon — and it is
+**`LIVE_POLL_MS`**, the app's own answer to *how stale a page is this app
+willing to consider current*, so no new number was needed. Checked both ways:
+re-entering the board **inside** twenty seconds costs **0** reads, re-entering
+**after** costs **1**. The two `Map`s are now built once per answer rather than
+once per entry, which is the other half of what six reads cost — ~1,300 entries
+and thirty, rebuilt each time.
+
+**`recentNews`** went 2 boot reads to 1 (dev's StrictMode double-mount,
+deduped), and keeps its resume re-read: its upstreams date to a *day*, so the
+one thing that can change the answer is the app being reopened across one.
+
+**`parkFactors` is the same number of requests and a smaller amount of code** —
+1 read for open-Park, leave, re-open, before and after. What went is a
+`canceled` cleanup flag and a hand-rolled loading/error pair. **Its `wanted`
+flag stayed**, and that is the finding worth keeping: a key alone cannot express
+*"ask again when somebody next wants this"*, which is exactly what the failed
+park read does — nothing retries on its own, because this is a garnish rather
+than the page, so the flag is cleared on the error and the next surface that
+wants a park sets it again.
+
+**`ownership` and `fantasyRoster` were left alone deliberately.** Both fire on
+every entry *on purpose* — "a roster changes whenever anyone in the league makes
+a move, so a set read at breakfast is the wrong answer by lunchtime" — and the
+server's own ten-minute cache is where their freshness is decided. A `staleMs`
+of zero would put them on the store and change nothing about them.
+
+**One thing the store costs here**: the raw answer is held as well as the two
+`Map`s derived from it, where App held only the `Map`s. That is ~450KB of JS
+objects for the statuses entry, against 2.2MB less over the wire on the browse
+above, and the idle-entry cap bounds it.
+
+**Still on their own fetches**: `GamePage`'s two module-level caches, and
+`TeamDetails`.
 
 ### Where the rest of the client's documentation lives
 
