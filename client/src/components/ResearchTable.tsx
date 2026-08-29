@@ -18,7 +18,12 @@ import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { ProjectedToggle, ProjectionKey } from './Projection';
 import { CalendarGlyph, DateCalendar } from './DateRangePicker';
 import { Modal } from './Modal';
-import { RESEARCH_CONTROLS, ResearchLayoutEditor } from './ResearchLayout';
+import {
+  condensedOrder,
+  displayOf,
+  RESEARCH_CONTROLS,
+  ResearchLayoutEditor,
+} from './ResearchLayout';
 import type { ResearchControlKey, ResearchLayout } from './ResearchLayout';
 import { TurnButton, TurnDayStrip } from './TurnPicker';
 import {
@@ -4847,6 +4852,13 @@ export function ResearchTable({
    * crossing to the clubs and back finds every control where it was left.
    */
   const slots: Partial<Record<ResearchControlKey, ReactNode>> = {
+    /* **The gear is placed like everything else**, and the only thing special
+       about it is that it cannot be taken off the bar or off the sticky line —
+       `REQUIRED_CONTROL`, enforced in `readResearchLayout` so a stored
+       arrangement that has lost it gets it back rather than being refused. It
+       used to be drawn outside the arrangement, first on the first row, which
+       was the same guarantee with the reader's choice of place taken away. */
+    settings: gearButton,
     search: slotSearch,
     pos: slotPos,
     window: projectedOn ? null : slotWindow,
@@ -4873,18 +4885,27 @@ export function ResearchTable({
    * direct flex item of the row it is on and nothing about the layout changes
    * by being wrapped — the trick `.research-chrome` and `.research-bar` already
    * use one box up. What the wrapper buys is a class the stylesheet can hang
-   * *this reader's* choice on: `.is-icon` is folded onto the condensed run's own
-   * selector list, so "drawn as its glyph alone" is one set of rules with two
-   * ways of being asked for rather than two sets that agree today.
+   * *this reader's* choice on — `.is-icon` for the glyph alone and `.is-text`
+   * for the word alone, with neither meaning both, which is the default and so
+   * needs no class at all.
+   *
+   * `.is-icon` is **folded onto the condensed run's own selector list**, since
+   * a control drawn as its glyph is the same object however it came to be one.
+   * `.is-text` is its mirror and has no such twin: nothing else in this app
+   * takes a glyph off a button, so it is one rule of its own rather than a
+   * fold onto something that merely resembles it.
    */
-  const slotOf = (k: ResearchControlKey) => (
-    <div
-      key={k}
-      className={`research-slot${layout.iconOnly.includes(k) ? ' is-icon' : ''}`}
-    >
-      {slots[k]}
-    </div>
-  );
+  const slotOf = (k: ResearchControlKey) => {
+    const mode = displayOf(layout, k);
+    return (
+      <div
+        key={k}
+        className={`research-slot${mode === 'both' ? '' : ` is-${mode}`}`}
+      >
+        {slots[k]}
+      </div>
+    );
+  };
 
   /**
    * **A row with nothing on it is not drawn**, and that is not only about a
@@ -4893,12 +4914,24 @@ export function ResearchTable({
    * an arrangement whose second row is the ownership sets, the watchlist and
    * the saved searches has an empty second row there. Drawn, it was a line of
    * chrome over the table with nothing in it — the one thing this whole file is
-   * measured against. Only the **first** row is kept whatever is on it, being
-   * where the gear is.
+   * measured against.
+   *
+   * **Every empty row goes, the first included**, and that is only safe because
+   * the gear is placed like everything else and is required to be *somewhere*
+   * (`REQUIRED_CONTROL`) — so at least one row always has something on it and
+   * the bar can never come out with no rows at all. While the gear was drawn
+   * outside the arrangement this rule had to spare the first row to have
+   * somewhere to put it, which meant a reader who emptied that row got a line
+   * of chrome holding one button.
    */
   const barRows = layout.rows.map((row) => row.filter(liveSlot));
+  /** Which row the stick is read off — the last one that is drawn. */
   const lastRow = barRows.reduce((last, row, i) => (row.length ? i : last), 0);
-  const condensedRun = layout.condensed.filter(liveSlot);
+  /* The sticky line as the reader has it: their order, less what they have
+     turned off there — `condensedOrder`, so this and the arrangement screen's
+     own preview cannot come to disagree about which controls are on that line.
+     Then less whatever has no subject on this reading, like every row above. */
+  const condensedRun = condensedOrder(layout).filter(liveSlot);
 
   /** Everything the bar is not carrying, which is what the settings dialog
    *  holds. In the editor's own order rather than the arrangement's: this box is
@@ -5418,20 +5451,19 @@ export function ResearchTable({
               drawn at all — a line of chrome over the table spent on nothing —
               except the first, which is where the gear is. */}
           {barRows.map((row, i) =>
-            !row.length && i !== 0 ? null : (
+            !row.length ? null : (
               <div className="research-stick-line" key={i}>
                 {i === lastRow && (
                   <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
                 )}
                 <ScrollRow
                   label={
-                    barRows.filter((r, n) => r.length || n === 0).length > 1
+                    barRows.filter((r) => r.length).length > 1
                       ? `row ${i + 1} of the board's controls`
                       : "the board's controls"
                   }
                   className="research-row"
                 >
-                  {i === 0 && gearButton}
                   {row.map(slotOf)}
                 </ScrollRow>
               </div>
@@ -5808,10 +5840,14 @@ export function ResearchTable({
                 set, and defaulted to the bar read top to bottom, which is the
                 arrangement-independent version of the same reading.
 
-                The gear leads it whatever they say, being where the bar is
-                arranged and the one control this run cannot be without. */}
+                **And which controls are on it is theirs too.** A reader who
+                has scrolled into the table wants the table, so the line can be
+                cut down to the three or four things they actually reach for
+                while reading it — `condensedOff`, kept apart from the order so
+                a control turned off keeps its place for when it comes back. The
+                gear is the one that cannot be turned off, being the only way
+                back to the controls from a scrolled board. */}
             <ScrollRow label="the board's controls" className="research-row research-condensed">
-              {gearButton}
               {condensedRun.map(slotOf)}
             </ScrollRow>
             </div>

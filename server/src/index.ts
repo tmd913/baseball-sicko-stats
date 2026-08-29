@@ -986,8 +986,8 @@ app.put(
 
 /**
  * **How the research board's controls are arranged on its bar** — up to four
- * rows of keys, the condensed run's order, and which controls are drawn as
- * their glyph alone. A route of its own for the reason each of the ones around
+ * rows of keys, the condensed run's order, which of them it leaves out, and how
+ * each control is drawn. A route of its own for the reason each of the ones around
  * it is, and its update semantics are `theme`'s: an object that a `null` clears
  * back to the default arrangement.
  *
@@ -1009,23 +1009,35 @@ app.put(
   requireUser,
   asyncRoute(async (req, res) => {
     const { controls } = (req.body ?? {}) as { controls?: unknown };
+    const KEY = /^[a-z][a-z0-9-]{0,31}$/;
     const keys = (v: unknown, max: number) =>
-      Array.isArray(v) &&
-      v.length <= max &&
-      v.every((k) => typeof k === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(k));
+      Array.isArray(v) && v.length <= max && v.every((k) => typeof k === 'string' && KEY.test(k));
+    // A map of key → word, and the words are not checked here either: which
+    // readings exist is the client's, exactly as the keys are.
+    const wordMap = (v: unknown) =>
+      !!v &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      Object.keys(v).length <= 64 &&
+      Object.entries(v as Record<string, unknown>).every(
+        ([k, w]) => KEY.test(k) && typeof w === 'string' && KEY.test(w),
+      );
+    const c = controls as ResearchControlsPref;
     const valid =
       controls === null ||
       (!!controls &&
         typeof controls === 'object' &&
         !Array.isArray(controls) &&
-        Array.isArray((controls as ResearchControlsPref).rows) &&
-        (controls as ResearchControlsPref).rows.length <= 4 &&
-        (controls as ResearchControlsPref).rows.every((r) => keys(r, 64)) &&
-        keys((controls as ResearchControlsPref).condensed, 64) &&
-        keys((controls as ResearchControlsPref).iconOnly, 64));
+        Array.isArray(c.rows) &&
+        c.rows.length <= 4 &&
+        c.rows.every((r) => keys(r, 64)) &&
+        keys(c.condensed, 64) &&
+        keys(c.condensedOff, 64) &&
+        wordMap(c.display));
     if (!valid) {
       res.status(400).json({
-        error: 'controls must be null, or { rows: string[][] (max 4), condensed: string[], iconOnly: string[] }',
+        error:
+          'controls must be null, or { rows: string[][] (max 4), condensed: string[], condensedOff: string[], display: Record<string, string> }',
       });
       return;
     }
@@ -1035,9 +1047,13 @@ app.put(
         controls === null
           ? null
           : {
-              rows: (controls as ResearchControlsPref).rows,
-              condensed: (controls as ResearchControlsPref).condensed,
-              iconOnly: (controls as ResearchControlsPref).iconOnly,
+              rows: c.rows,
+              condensed: c.condensed,
+              condensedOff: c.condensedOff,
+              display: c.display,
+              /* `iconOnly` is deliberately not carried through: it is read on
+                 the client and never written, so a PUT that omits it is what
+                 migrates the record. See `ResearchControlsPref`. */
             },
       ),
     );

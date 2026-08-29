@@ -184,6 +184,24 @@ box to take it off the bar. Escape cancels the pick-up rather than closing the
 dialog — the app's rule that one press undoes one thing — listening in
 **capture** so it beats `Modal`'s own bubble-phase listener on the same object.
 
+The one move it refuses is the gear over the `Behind the gear` box: those chips
+go `frozen` (dim, `disabled`, saying why in their `title`), the box's drop tail
+is not drawn, and the box itself says `Board settings has to stay on the bar.`
+A control that went quiet under a press would be worse than one that declines it
+out loud. Driven: with the gear in hand all four off-bar chips are frozen, the
+tail is gone, pressing one leaves the gear still in hand, and dropping it in
+front of `Filters` moves it to row 3.
+
+**The switch is under the chip's label rather than beside it**, and that is
+measured: three segments and a two-line label came to **320px** against the
+**338** a 390px phone leaves inside this dialog, so a row layout wrapped
+unpredictably — the switch beside the label on one chip and under it on the
+next, down the same box. A column is the same shape at every width, which is
+what a screen holding fifteen of them needs. Never two switches on one chip: the
+display question is asked in the row boxes and the sticky-line question in the
+sticky box, and a chip carrying both would be a control the reader has to read
+before they can aim it.
+
 **Not a drag**, and that is the picker's measurement rather than a preference:
 a drag inside a scroller fights the scroll, `touch-action` cannot arbitrate two
 gestures that differ in neither place nor axis, and press-and-press measured 30
@@ -235,8 +253,17 @@ being *rejected* by an older server rather than ignored by an older tab — and
 this is the one preference a reader would have to rebuild by hand.
 `readResearchLayout` is the whole of the reconciliation on the way in: unknown
 keys dropped, a key on two rows keeping its first place, the rows padded to
-four, `condensed` completed from the bar, and `iconOnly` narrowed to controls
-that have a glyph to fall back to.
+four, the gear put back if it is missing, `condensed` completed from the bar,
+`condensedOff` narrowed to on-bar keys and never the gear, and `display`
+narrowed to controls that have both a word and a glyph.
+
+**`iconOnly` is read there and never written**, which is `researchWatchlistOnly`'s
+own treatment. It was the list of glyph-alone keys under the two-state shape;
+taken as `display: 'icon'` entries, an arrangement saved before the third
+reading existed keeps the readings its owner set by hand instead of silently
+coming back with every word restored. `display` is read after it, so a record
+carrying both is the newer field's, and a record migrates the first time its
+owner touches the screen.
 
 #### The settings dialog is what is left over
 

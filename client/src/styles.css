@@ -13059,12 +13059,20 @@ button.start-line:focus-visible {
   align-items: stretch;
   gap: 6px;
 }
-/* **The chip is two targets in one shape**, which is `.rl-split`'s arrangement
-   and is here for the same reason: a single button that both picks a control up
-   and toggles its label is a control the reader cannot aim. The border is on the
-   wrapper so the two halves read as one object. */
+/* **The chip is a column: the press target, then whichever switch this box
+   asks for.** Two targets in one shape is `.rl-split`'s arrangement and is here
+   for its reason — a single button that both picks a control up and changes how
+   it is drawn is a control the reader cannot aim — but stacked rather than side
+   by side, which is measured. Three segments beside a two-line label came to
+   **320px** against the **338** a 390px phone leaves inside this dialog, so a
+   row wrapped unpredictably: the switch beside the label on one chip and under
+   it on the next, down the same box. A column is the same shape at every width,
+   which is what a screen holding fifteen of them needs.
+
+   The border is on the wrapper so the halves read as one object. */
 .rlay-chip {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
   min-height: 34px;
   background: var(--bg-2);
@@ -13072,7 +13080,23 @@ button.start-line:focus-visible {
   border-radius: var(--control-radius-inner);
   overflow: hidden;
 }
+/* On the sticky line's list but not on the line — dim, which is this app's own
+   way of saying a thing is present and not in force. It keeps its place in the
+   order, which is the whole reason it is still drawn. */
+.rlay-chip.off {
+  opacity: 0.55;
+}
+/* Not a destination for what is in hand — the gear over the off-bar box. It
+   declines the press and says why in its `title`; a control that went quiet
+   under a press would be worse than one that refuses it out loud. */
+.rlay-chip.frozen {
+  opacity: 0.4;
+}
+.rlay-chip.frozen .rlay-chip-main {
+  cursor: not-allowed;
+}
 .rlay-chip-main {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -13116,13 +13140,38 @@ button.start-line:focus-visible {
 .rlay-chip.picked .rlay-chip-hint {
   color: var(--on-accent);
 }
-/* The Word/Icon switch, on the chip's own trailing edge. `.on` is the icon
-   reading, which is the state worth marking: a control drawn with its word is
-   the default and a mark on every chip would mark nothing. */
-.rlay-chip-icon {
-  flex: none;
-  align-self: stretch;
-  padding: 0 8px;
+/* The switch keeps its own ground under a lifted chip: the fill above is what
+   says *this one is in hand*, and letting it run under the segments would take
+   the lit one's own fill with it — the reader would lose which reading is set
+   on the very chip they are moving. */
+.rlay-chip.picked .rlay-modes {
+  background: var(--panel);
+}
+/* **The chip's own switch, under its label** — three segments on the bar (how
+   the control is drawn) and two on the sticky line (whether it is on it).
+
+   **All the answers are drawn and the one in force is lit**, which is the
+   change the two-state version was reported for. `Word` / `Icon` named two of
+   the three states a control can be in and made the third — the one every
+   button on this bar is in unless told otherwise — the *absence* of a setting;
+   a reader looking for "both" found a switch that was in neither position. The
+   segments are the app's own segmented shape, the one `.research-window-tab`
+   and the position pills already take, at caption size.
+
+   `--bg` rather than the chip's `--bg-2` so the run reads as a control sitting
+   *on* the chip rather than as more of it. */
+.rlay-modes {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px 6px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.rlay-mode {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 6px;
+  /* `font-family`, not `font` — the shorthand resets `font-size`. */
   font-family: inherit;
   font-size: 10px;
   font-weight: 800;
@@ -13130,17 +13179,18 @@ button.start-line:focus-visible {
   text-transform: uppercase;
   color: var(--muted);
   background: none;
-  border: 0;
-  border-left: 1px solid var(--border);
+  border: 1px solid transparent;
+  border-radius: var(--control-radius-inner);
   cursor: pointer;
 }
-.rlay-chip-icon.on {
+.rlay-mode.on {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.rlay-chip-icon:focus-visible {
+.rlay-mode:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: -1px;
 }
 /* Where a picked-up control lands when there is no chip to put it in front of —
    the end of a row, and the whole of an empty one. Drawn **only while something
@@ -13537,6 +13587,36 @@ button.start-line:focus-visible {
    declines to offer it: their label **is** their state, and squared they are
    two identical carets), so an override for them here would be a rule for a
    state that cannot be reached. */
+/* **And its mirror: the word alone.**
+ *
+ * This one has no twin to fold onto — nothing else in this app takes the glyph
+ * *off* a button, where `.research-condensed` has been taking the word off one
+ * since the bar first condensed. So it is a rule of its own rather than a fold
+ * onto something that merely resembles it.
+ *
+ * **`svg`, less two exceptions, and both of them are load-bearing.** Every
+ * leading mark on this bar is a bare `<svg>` — a magnifier, a funnel, a star, a
+ * crest, two bars, a calendar — so one selector reaches all of them without a
+ * class being added to eight components. The two that must survive:
+ *
+ * - **`.ball-spin`**, the wait mark. `ScheduleToggle` and `ProjectedToggle`
+ *   draw the spinning baseball *in place of* their glyph while the read is out,
+ *   and that is the only mark those presses leave — rule 1 of the app's loading
+ *   system, stated inside the control. Hidden with the glyph, a press on a
+ *   text-only Schedule would do nothing visible for as long as the window takes.
+ * - **`.rl-caret`**, which is not a glyph but a *disclosure* — it says there is
+ *   more of this control, which is as true of a word as of an icon. The
+ *   condensed run hides it for the opposite reason (a 36px square is room for
+ *   one mark and the chevron is not the one worth keeping), and that is why
+ *   these two rules are not one.
+ *
+ * `.research-inc-code` goes by name: the ownership buttons' mark is a `<span>`
+ * carrying a letterform, not an `<svg>`, so the same instruction has to be
+ * given twice for one control. */
+.research-slot.is-text svg:not(.ball-spin):not(.rl-caret),
+.research-slot.is-text .research-inc-code {
+  display: none;
+}
 .research-slot {
   display: contents;
 }

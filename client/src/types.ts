@@ -1940,7 +1940,8 @@ export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
  * is off the bar and lives behind the gear. `condensed` is the order the sticky
  * run reads in, which is a different question from the bar's own — the bar is
  * read top to bottom and the condensed run is one line replacing the last of
- * them. `iconOnly` is which controls give up their word.
+ * them. `condensedOff` is which of them that line leaves out, and `display` is
+ * how each control is drawn where that is not the default.
  *
  * Every list is **keys**, and the meaning of a key lives where the bar is drawn
  * (`client/src/components/ResearchLayout.tsx`) — the same split `researchColumns`
@@ -1954,9 +1955,25 @@ export interface ResearchControlsPref {
    *  appended in the bar's own order, so a control added to a row is in the
    *  condensed run without the reader being asked twice. */
   condensed: string[];
-  /** Which controls are drawn as their glyph alone. Absent from this list means
-   *  the control's own default, which for every one of them is its word. */
-  iconOnly: string[];
+  /** Which controls are on the bar but **not drawn** on the sticky line. An
+   *  order and a membership kept apart on purpose: a control turned off here
+   *  keeps its place in `condensed`, so turning it back on puts it back where it
+   *  was rather than at the end. */
+  condensedOff: string[];
+  /** How each control is drawn, by key — `'icon'` for its glyph alone,
+   *  `'text'` for its word alone. **Absent means both**, which is what every
+   *  control on this bar has always been and is the same
+   *  absence-is-the-default convention as every other entry here; a value this
+   *  build does not recognize is read as both rather than rejected. */
+  display: Record<string, string>;
+  /** @deprecated **The glyph-alone controls, under the shape that predates the
+   *  third reading.** It was a list of keys drawn as their icon, from when the
+   *  choice was a two-state switch; it is a `display` entry of `'icon'` now.
+   *  Read on the way in so an arrangement saved before the change keeps the
+   *  readings its owner set by hand, and **never written** — a record migrates
+   *  the first time its owner touches the screen. The same treatment
+   *  `researchWatchlistOnly` gets, and for the same reason. */
+  iconOnly?: string[];
 }
 
 
