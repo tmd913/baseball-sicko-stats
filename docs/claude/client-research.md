@@ -413,6 +413,52 @@ word back in flow a pixel wide and the two buttons measured **22px**, their
 padding and nothing else. A `<select>` needs none of it: the run's squaring never
 reaches it, and its closed state has always been the word.
 
+#### The projected line is gone; the mark says it
+
+It read `PROJECTED · Aug 29 – Aug 31  ⓘ  Clear`, one line above a count row
+carrying `Projected · Aug 29 – Aug 31 ×` — **the same claim, in the same accent,
+with the same way out, 33px apart**. That is exactly the fault the old
+`.research-badge` row was deleted for, arriving from the other direction: the
+badge row went *because* the mark strip could hold every setting, and this line
+stayed behind saying one of them a second time. Reported, and removing it gives
+the head a line back on the one page where a line of head is a row of the table.
+
+Measured at 1000, same width and same count row: the head is **79px** on the
+branch that still draws a line and **43** on the branch that no longer does — a
+**36px** line, and the first table row 388 → 352.
+
+**Two things it was carrying do not go with it.**
+
+**The empty state stays.** `daysLeft === 0` is not a span, it is *nothing to
+project — every game in these days has been played*, and no mark says that. An
+empty state names its own cause and keeps the control that caused it reachable,
+so that branch keeps the line and keeps `Clear` with it. The two are never the
+same sentence: where the line is drawn, the mark beside the count is the only
+other thing saying which days, and the line is saying they are all behind us.
+
+**The key moves to the count row.** The paragraph that put it on the line is
+kept, being right about the question rather than the answer — *the key sits
+against the claim it explains, which is the line and not the button three runs
+above it*. The claim moved, so the key follows it.
+
+**Between the count and the strip, and that is forced rather than chosen.** The
+claim is now the `Projected · …` mark, so the key belongs beside it — but
+`.research-marks` is `overflow-x: auto`, and a popover opened inside a scroller
+paints nothing. This board has answered that twice already (`.tool-scroll-box`
+and `.research-head`, both clipping). The count is `flex: none` and never
+scrolls, so a key pinned after it is one gap from the mark it explains and
+always on screen, which the far side of a scrolling strip would not be.
+`.research-count-row` takes the `position: relative` the line used to carry,
+folded onto that rule — the two are one job, being the box a `position: static`
+key resolves its panel against.
+
+Driven at 390 and 1000, with the lens on a real span: no `.research-proj-line`
+at all, the mark reading `Projected · Aug 28 – Sep 6 ×`, the key a 28×28 target
+in `.research-count-row`, and its panel opening at the head's own left gutter
+(x=22) starting at y=299 against a head ending at 301 — below the box and
+clipped by nothing. On the `daysLeft === 0` branch the line is back, the key is
+still on the count row, and the panel still paints.
+
 #### The comparison line is a sentence, so it takes the line
 
 Reported as cut off. `.research-count-row > .research-count` is `flex: none`,

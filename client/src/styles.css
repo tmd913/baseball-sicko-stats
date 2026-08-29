@@ -13743,6 +13743,12 @@ button.start-line:focus-visible {
 .research-count-row {
   flex-wrap: wrap;
 }
+/* The key is `flex: none` beside the count for the reason the count is: this
+   row's other child scrolls, and a key that scrolled away is a key the reader
+   cannot reach from the state it explains. */
+.research-count-row > .research-proj-key {
+  flex: none;
+}
 .research-count-row > .research-count-wide {
   flex: 1 1 100%;
   min-width: 0;
@@ -13824,7 +13830,14 @@ button.start-line:focus-visible {
    Lit when open the way every other key is — `.info-key-btn.active` fills with
    the accent, and with no border or ground of its own to fill, the accent goes
    on the mark. */
-.research-proj-line {
+/* **The box the key hangs its panel from**, and it is two boxes now: the
+   projected line still carries the key in its empty state, and the count row
+   carries it everywhere else — the line that said `PROJECTED · <span>` is gone,
+   the mark strip beside the count having said the same thing 33px below it.
+   Folded rather than given two rules that agree today: this is one job, which
+   is being the containing block a `position: static` key resolves against. */
+.research-proj-line,
+.research-count-row {
   position: relative;
 }
 .research-proj-key {

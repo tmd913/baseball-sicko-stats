@@ -5372,45 +5372,74 @@ export function ResearchTable({
    * server had clamped it (`start` is clamped forward to today) would be
    * describing days the table is not about.
    */
-  const projSpanLine = projectedOn ? (
-    <div className="research-proj-line">
-      <span>
-        {projection.daysLeft === 0 ? (
-          'Nothing to project — every game in these days has been played'
-        ) : (
-          <>
-            <span className="research-proj-lead">Projected</span> ·{' '}
-            {wideRange(projection.start, projection.end)}
-          </>
-        )}
-      </span>
-      {/* **The key sits against the claim it explains**, which is this line and
-          not the button three runs above it — see the paragraph at the toggle
-          for the reasoning it replaces. It is the same `ProjectionKey` the
-          Roster row and the League page open; what is this caller's is where it
-          hangs from, which is `.research-proj-key`.
+  /**
+   * **The line is gone and the mark says it instead**, which is what the mark
+   * strip was built to do.
+   *
+   * It read `PROJECTED · Aug 29 – Aug 31  ⓘ  Clear`, one line above a count row
+   * carrying `Projected · Aug 29 – Aug 31 ×` — the **same claim, the same
+   * accent and the same way out, 33px apart**. That is precisely the fault the
+   * old `.research-badge` row was deleted for, arriving from the other
+   * direction: the badge row was removed *because* the strip could hold every
+   * setting, and this line stayed behind saying one of them a second time.
+   * Reported as exactly that, and removing it gives the head a line back on the
+   * one page where a line of head is a row of the table.
+   *
+   * **Two things it was carrying do not go with it.**
+   *
+   * The **empty state** is one: `daysLeft === 0` is not a span, it is *nothing
+   * to project — every game in these days has been played*, and no mark says
+   * that. An empty state names its own cause and keeps the control that caused
+   * it reachable, so that branch keeps the line and keeps `Clear` with it. The
+   * two are never the same sentence: where the line is drawn now, the mark
+   * beside the count is the only other thing on screen saying which days, and
+   * the line is saying they are all behind us.
+   *
+   * The **key** is the other, and it moves to the count row — see `projKey`.
+   */
+  const projSpanLine =
+    projectedOn && projection.daysLeft === 0 ? (
+      <div className="research-proj-line">
+        <span>Nothing to project — every game in these days has been played</span>
+        <button
+          type="button"
+          className="research-clear"
+          onClick={() => {
+            setPanel('projected', false);
+            onProjSpanChange(null);
+          }}
+          title="Back to what has actually happened"
+        >
+          Clear
+        </button>
+      </div>
+    ) : null;
 
-          **A glyph rather than a box.** Every other `InfoKey` in the app is
-          `.app-dialog-close`'s 30px bordered square, which is right beside a
-          heading and wrong on a 12px caption: at 30px it was taller than the
-          line it belongs to and drew a second control between the sentence and
-          `Clear`. Here it is the 16px mark alone, with the press area kept at
-          the app's own size by padding the button out and pulling it back in —
-          measured, the box paints 16×16 and hit-tests 28×28, so nothing is lost
-          to a finger. */}
-      <ProjectionKey board days={projection.daysLeft} className="research-proj-key" />
-      <button
-        type="button"
-        className="research-clear"
-        onClick={() => {
-          setPanel('projected', false);
-          onProjSpanChange(null);
-        }}
-        title="Back to what has actually happened"
-      >
-        Clear
-      </button>
-    </div>
+  /**
+   * **The key, on the count row now that the line it hung from is gone.**
+   *
+   * *(The paragraph that put it on that line is kept, being right about the
+   * question rather than about the answer: "the key sits against the claim it
+   * explains, which is the line and not the button three runs above it." The
+   * claim moved; the key follows it. It is the same `ProjectionKey` the Roster
+   * row and the League page open, and the same 16px-glyph-with-a-28px-target
+   * treatment — see `.research-proj-key`, where that geometry is measured.)*
+   *
+   * **Between the count and the strip, and that is forced rather than chosen.**
+   * The claim is the `Projected · …` mark, so the key belongs beside it — but
+   * `.research-marks` is `overflow-x: auto`, and a popover opened inside a
+   * scroller is a popover that paints nothing. This board has answered that
+   * twice already (`.tool-scroll-box` and `.research-head` both clipping). The
+   * count is `flex: none` and never scrolls, so a key pinned after it is one
+   * gap from the mark it explains and always on screen, which the far side of a
+   * scrolling strip would not be.
+   *
+   * `.research-count-row` takes the `position: relative` the line used to
+   * carry — folded onto that rule, the two being the same job: the box a
+   * `position: static` key hangs its panel from.
+   */
+  const projKey = projectedOn ? (
+    <ProjectionKey board days={projection.daysLeft} className="research-proj-key" />
   ) : null;
 
   /**
@@ -5943,6 +5972,7 @@ export function ResearchTable({
               them changed would read the whole strip out on every press. */}
           {(loading || boardRows.length > 0 || marks.length > 0) && (
             <div className="research-count-row">
+            {/* Drawn before the strip and after the count — see `projKey`. */}
             {(loading || boardRows.length > 0) && (
             /* **A sentence takes the line; a caption shares it.** `418 of 640
                pitchers` is a caption and is `flex: none` beside the marks, which
@@ -5982,6 +6012,7 @@ export function ResearchTable({
               )}
             </div>
             )}
+            {projKey}
             {marks.length > 0 && (
               <div className="research-marks">
                 {marks.map((m) => (
