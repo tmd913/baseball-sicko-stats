@@ -12,14 +12,159 @@ scrolls away with the board — and on this view it has since moved once more,
 into the board's own scroller, which is what makes "scrolls away" true rather
 than merely intended. See **The page scrolls, and the head stays**, below.)*
 
-### The bar is three rows that scroll, and it condenses when the head sticks
+### The bar is four buttons, and everything else is behind one of them
 
-*(This supersedes the shape both sections below describe: one wrapping row of
-five groups. What they say about where the band is drawn and what sticks is
-unchanged. **And the line it sticks at has since moved up to the third row** —
-everything below about the rail, the sentinel and the measured `--research-cond-h`
-holds, but the offsets it quotes are the old ones. See* **The bar stops at its
-third row**, *directly after this section.)*
+**Reported: the filters and tools at the top of this page are getting hard to
+manage, and worst on a phone.** They were, and the measurement says how much —
+three wrapping runs of up to seventeen controls came to **156px of chrome at
+every width**, over a table where every pixel of height is a row of the board.
+
+The bar is now **four controls**, and each answers a different question:
+
+| | | opens |
+| --- | --- | --- |
+| 🔍 | *which name am I looking for* | the search panel, in the head |
+| ⚙ | *everything else about the board* | the settings dialog |
+| `Batters ⌄` | *which slice of the league* | the position panel, in the head |
+| `Season ⌄` | *over what* | the span panel, in the head |
+
+**Two are icons and two are words, and that is not inconsistency.** Search and
+the gear are actions with no state to report — a magnifier means search wherever
+you meet one, and this app already spends a gear on settings in its own header.
+Position and Season are the opposite: their whole job is to say what they are
+set to, and a glyph cannot say `SS`. Each control is drawn as the thing it is,
+which is the same rule that gives the include buttons a code, an abbreviation
+and a full word at three widths. The two icon buttons keep an `sr-only` word,
+a wordless control owing a label to everything that is not a pointer.
+
+**Measured, before → after, at 390 / 640 / 900 / 1200 / 1920:**
+
+| | 390 | 640 | 900 | 1200 | 1920 |
+| --- | --- | --- | --- | --- | --- |
+| `.view-tools` before | 156 | 156 | 156 | 156 | 156 |
+| `.view-tools` after | **60** | **60** | **64** | **64** | **64** |
+| first row before | 337 | 338 | 340 | 340 | 340 |
+| first row after | **253** | **254** | **260** | **260** | **260** |
+
+So **−92 to −96px of chrome** and **−80 to −84px before the first row**, which
+at this board's row height is more than a whole row of the table given back at
+every width. The head grows 31 → 43 for the mark strip and that growth is inside
+those figures. `document.scrollWidth − clientWidth` is **0** at every width,
+before and after.
+
+**Three things go behind the gear and one does not.** Filters, Starting, the
+watchlist and its chooser, the saved searches, the three ownership sets, Teams,
+Schedule, Compare, Projected, Columns and Ranks are all in the settings dialog.
+Search is not: it is one of the four, so a copy inside would be the same
+disclosure drawn twice, a press apart, one of them behind a box the other's
+panel would have to close.
+
+**The settings box is a dialog and the two pickers are panels**, which is the
+*volume* test `ColumnPicker` already settled for this board: a panel several
+hundred pixels tall wedged into the chrome pushes the table down the page and on
+a phone takes the screen outright while pretending to be a strip of controls.
+Thirteen controls is that; a strip of five spans is not, and neither is eleven
+positions in two groups. Measured: the settings dialog is **438 × 198** at 1400
+and the position panel **100px** of head.
+
+*(A true popover hanging off each button was the third option and this board has
+already answered it twice — see* A panel opens where its button is: `.tool-scroll-box`
+*and* `.research-head` *both clip, and a popover in either paints nothing. The
+panels open into the head, which is the one box on this board drawn at every
+offset.)*
+
+**The positions are grouped, which a flat run of eleven never could be.**
+`POSITION_GROUPS` derives them from `POSITIONS` by the `kind` every entry already
+carries, so a pill added to that array is in the picker without anything being
+told: `BATTERS · Batters C 1B 2B 3B SS IF OF` over `PITCHERS · Pitchers SP RP`.
+The whole-board pill leads its own group, being what that group is before
+anything under it narrows it. On the team reading it is the two sides and no
+groups, an `optgroup` over a run of one reading as a heading with nothing under
+it.
+
+**And the two `<select>`s are gone with the media query that swapped them in.**
+The paragraph that argued them is kept in the stylesheet and it was right about
+the problem — *eleven pills behind a horizontal scroll is a control you have to
+drag through to find `SS`* — and the panel is a better answer than a dropdown to
+the same thing: it states what is set on the *button* (which is the half a
+closed select was doing) and opens as a full-width grouped strip (which is the
+half a platform list does badly, being unable to group or to carry
+`Eligible at shortstop in ESPN`). One shape at every width, one media query
+fewer, one dead class and two dead elements gone, and the effect that scrolled
+the active pill into view gone with them.
+
+**The condensed run is the same four**, and the two word buttons keep their
+words there — the one exception to that run's *marks, not words* rule, because
+for these two the label **is** the state and two squared carets would be two
+identical unlabeled controls. Getting that override wrong is written down in the
+stylesheet: those labels are the app's *visually-hidden* block rather than
+`display: none`, so `display: inline` put the word back in flow a pixel wide and
+the buttons measured **22px**. Driven after: 36 / 57 / **84.6** / **84.4**
+against the bar's own 36 / 56 / 88.6 / 88.4.
+
+### The mark strip: every setting in force, beside the count
+
+**A collapsed control must never be the only place a filter lives** — this
+board's own standing rule, and it used to be answered by the controls
+themselves, all of them on the bar and lit, with the condensed run keeping them
+lit once the bar had scrolled away. Four buttons cannot do that, so the answer
+moves to the one line that was already saying what the board is: the count.
+
+**It is the chips row, widened and moved.** `.research-chips` already drew the
+stat thresholds and the turn filter's days as pressable labels with an `×`, one
+row above the count, and those are two of the settings whose control is now
+hidden. A second row of badges beside them was the alternative and it is exactly
+the fault the old `.research-badge` row was deleted for — the same filter printed
+twice, 33px apart, with the head paying for both. So there is one strip, holding
+all of it, and the chips' own behavior generalized: **a mark is what the setting
+is, and pressing it undoes it.** The two classes are folded onto one selector
+list.
+
+**Order is coarsest first**, which is what the chips already did between the days
+and the thresholds: what the board *is* (the clubs lens, the projected lens, the
+schedule lens, the ownership set, the watchlist, the comparison), then what has
+been taken out of it (the days, the name, the thresholds). The strip scrolls, so
+the marks most worth seeing are the ones that stay.
+
+**Where a setting has no single undo, the press opens the box that sets it.** The
+ownership set is the only one — `Nobody included` is a state three buttons make
+together — so that mark carries no `×`, gives up the accent for `--muted` on the
+panel's ground, and raises the settings dialog. A mark that looked clearable and
+was not would be worse than either.
+
+**The gear carries a count and the strip spells it out**, deliberately both. The
+strip *scrolls*, so on a phone with four things in force the fourth is off the
+end of it, and a control that hides settings owes an always-visible answer to *is
+anything in here on*. The strip says which; the count says how many. The name
+search is on the strip and **not** in that count, having a button of its own in
+the bar.
+
+**`Clear all` keeps its rule and widens its reach**: it undoes what the strip
+beside it says, which used to be the thresholds and the days and is now every
+mark that has an undo. It is drawn only at two or more, a `Clear all` beside a
+single mark being a second button for what that mark's own `×` already does. And
+it still cannot take a player off the board by accident — the ownership set has
+no undo and is not swept into a state that shows *fewer* rows.
+
+Driven at 390 with the watchlist, the schedule lens and a non-default ownership
+set on: `295 of 642 pitchers` then `Schedule · Next 7 ×`, `+ Watchlist ×`,
+`Clear all` — strip 218.9px wide against a 325px scroll width, document overflow
+**0**, head **43px**. Pressing `Clear all` left `Others` standing and dropped
+`sched=` and `watch=` from the URL.
+
+### The bar was three rows that scroll, and it condensed when the head stuck
+
+*(Superseded by the section above — the bar is one row now. Everything here about
+the rail, the sentinel, the measured `--research-cond-h` and what sticks is
+unchanged and still describes the machinery; what has changed is how much is in
+the run it condenses.)*
+
+*(And this in turn supersedes the shape both sections below it describe: one
+wrapping row of five groups. What they say about where the band is drawn and what
+sticks is unchanged. **And the line it sticks at has since moved up to the third
+row** — everything below about the rail, the sentinel and the measured
+`--research-cond-h` holds, but the offsets it quotes are the old ones. See* **The
+bar stops at its third row**, *below.)*
 
 **Three runs, in the order the questions come in** — *which players* (Watchlist,
 Free Agents, My Roster, Other Rosters), *which slice* (span, position, Teams),

@@ -864,7 +864,6 @@ body {
    list is now headed by `.research-window-select`, the first surviving member.
    The rules are unchanged; only the name at the top of the list moved. */
 .research-window-select,
-.research-pos-select,
 .schedule-span-select,
 .mup-select {
   display: none;
@@ -890,7 +889,6 @@ body {
   cursor: pointer;
 }
 .research-window-select:hover,
-.research-pos-select:hover,
 .schedule-span-select:hover,
 .mup-select:hover {
   border-color: var(--accent);
@@ -911,7 +909,6 @@ body {
     display: none;
   }
   .research-window-select,
-  .research-pos-select,
   .schedule-span-select {
     display: block;
     /* In a wrapping flex bar rather than the header's grid — each must be only
@@ -12322,28 +12319,24 @@ button.start-line:focus-visible {
   color: var(--text);
 }
 
-/* The time-span tabs. In the control bar rather than inside the Filters panel:
-   they decide which games every number on the board is drawn from, which is too
-   large a thing to keep behind a disclosure. The control itself is the app's
-   segmented switch — folded into `.view-switch`/`.view-tab`'s selector lists
-   above rather than restyled to match, so it highlights identically by
-   construction. `flex: none` so it travels intact when the bar wraps, as the
-   scope switch does. */
-.research-window-row {
-  display: flex;
-  flex: none;
-  max-width: max-content;
-  overflow-x: auto;
-  /* The inline axis alone, as on every strip that scrolls sideways: a vertical
-     swipe landing on it has to reach the page, and naming an axis with nothing
-     to scroll blocks the chain rather than passing it on. `none` on the inline
-     axis, the app's one answer everywhere it scrolls. */
-  overscroll-behavior-x: none;
-  scrollbar-width: none;
-}
-.research-window-row::-webkit-scrollbar {
-  display: none;
-}
+/* **The time-span tabs' own scrolling box is gone**, and the paragraph that
+   argued it is kept because half of it still holds:
+
+   *"In the control bar rather than inside the Filters panel: they decide which
+   games every number on the board is drawn from, which is too large a thing to
+   keep behind a disclosure."*
+
+   That was true of a bar with room for them and is not true of a bar with four
+   buttons on it. What replaces the argument rather than abandoning it is the
+   **button**: `Season` states what the span is set to without being pressed, so
+   the setting is as visible as it ever was and the five pills it opens are the
+   disclosure. The tabs themselves are unchanged — they were always styled off
+   `.view-switch`/`.view-tab` — and they live in `.research-pick-row` now, which
+   wraps rather than scrolls, a panel opened and closed in one gesture having no
+   standing height to defend. `flex: none` goes with the box it was for.
+
+   `.research-window-tab` keeps its own rule below for the same reason it always
+   had one: it is the tab inside whichever container is holding it. */
 .research-window-tab {
   flex: none;
 }
@@ -12372,7 +12365,15 @@ button.start-line:focus-visible {
    without it the row grows to the widest chip run and the head goes past the
    pane's edge instead of scrolling inside it — the same line the badge row
    needed for the same reason. */
-.research-chips {
+/* **The mark strip, which is the chips row widened and moved.** It was
+   `.research-chips` alone — the stat thresholds and the turn filter's days,
+   above the count — and it now holds every setting the board is on, beside the
+   count, because the bar is four buttons and the rest are behind one of them.
+   Same object, so one selector list rather than a second rule that agrees today
+   (`.research-chips` is kept in it: the class is gone from the markup and the
+   name is the one the whole of this block's reasoning is written under). */
+.research-chips,
+.research-marks {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -12384,7 +12385,8 @@ button.start-line:focus-visible {
   scrollbar-width: none;
   min-width: 0;
 }
-.research-chips::-webkit-scrollbar {
+.research-chips::-webkit-scrollbar,
+.research-marks::-webkit-scrollbar {
   display: none;
 }
 /* **And every chip in it holds its own width**, which is the whole of what
@@ -12398,7 +12400,8 @@ button.start-line:focus-visible {
    the answer is the same one. Written on the children rather than on each
    class: `Clear all` is the last item in this row and is exactly as
    unsqueezable as the chips beside it. */
-.research-chips > * {
+.research-chips > *,
+.research-marks > * {
   flex: none;
 }
 /* A chip is a label you can dismiss rather than a control you operate, but it
@@ -12421,6 +12424,24 @@ button.start-line:focus-visible {
 }
 .research-chip:hover {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+/* **A mark with no undo does not wear the dismissible chip's clothes.** The
+   ownership set is the one — `Nobody included` is a state three buttons make
+   together, so its press opens the box that sets them rather than resolving
+   anything — and a chip that looks like every `×`-bearing one beside it while
+   doing something else is the fault this app spends its whole mark vocabulary
+   avoiding. It keeps the shape and gives up the accent: `--muted` on the
+   panel's own ground, which is what the app already draws a thing you read in.
+   Still a button, so it still lights on hover. */
+.research-chip.is-flat {
+  color: var(--muted);
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+.research-chip.is-flat:hover {
+  background: var(--panel-2);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .research-chip-x {
   font-size: 14px;
@@ -12828,24 +12849,141 @@ button.start-line:focus-visible {
   margin-inline: 0;
 }
 
-/* **The span and the position give way to their dropdowns on a phone.** The
-   one width swap on this bar that survived the move to scrolling rows: the
-   other four were *buttons*, whose label is their name, and a run that scrolls
-   has no line to buy back — but these two are a four-pill run and an
+/* **The span and the position gave way to `<select>`s on a phone, and both are
+   gone.** The paragraph is kept, this file's rule for superseded reasoning,
+   because the fault it names is the one the new shape answers:
+
+   *"The one width swap on this bar that survived the move to scrolling rows:
+   the other four were buttons, whose label is their name, and a run that
+   scrolls has no line to buy back — but these two are a four-pill run and an
    eleven-pill run, and eleven pills behind a horizontal scroll is a control you
    have to drag through to find `SS`. A closed select states the one that is set
-   and opens the rest in a list the platform draws.
+   and opens the rest in a list the platform draws."*
 
-   Two classes deep because the shared `.view-switch` rule sets
-   `display: inline-flex` and comes later in the file — without the extra
-   specificity a row and its dropdown would both be on screen. And after every
-   rule it overrides, a media query adding no specificity, which is the trap
-   this file records five times. */
-@media (max-width: 640px) {
-  .research-row .research-window-row,
-  .research-row .research-positions {
-    display: none;
-  }
+   That is exactly right about the problem and it now has a better answer than a
+   `<select>`: the pill runs are **not on the bar at all**. Each is behind a
+   button that states what it is set to — which is the half of a closed select
+   that was doing the work — and opens as a full-width strip in the head, which
+   is the half a select did badly (a platform list cannot group eleven positions
+   into batters and pitchers, and cannot say `Eligible at shortstop in ESPN`).
+   One shape at every width, one media query fewer, and two `<select>` rules and
+   their two elements gone with it.
+
+   **The pick buttons are `SavedButton`s**, which is the shape this bar already
+   uses for *a word and a caret that opens something* — the watchlist chooser
+   and the saved searches. A third button of the same kind reads as one of them
+   rather than as a fourth thing to learn. */
+
+/* **The two icon buttons in the bar.** Square, because there is no word in them
+   to set the width — the app's own 30px, which is what the header's gear, a
+   dialog's ✕ and the saved-things row's four icon buttons all measure. The
+   glyph is 16 rather than the labeled buttons' 15: it is carrying the whole
+   meaning here rather than sitting beside a word that already carries it. */
+.research-icon {
+  /* **36 and not the app's 30**, which is the one number here that is the bar's
+     rather than the app's: every button in this run is 36 tall, and a 30px box
+     among them is a square that is not square. The app's 30 is the size of an
+     icon button *on its own*; inside a run the run's own height wins, which is
+     the same reading that gives the condensed run its 36px squares. */
+  width: 36px;
+  padding-inline: 0;
+  justify-content: center;
+}
+/* …unless it is wearing a count, which needs the room a word would have taken.
+   `width: auto` rather than a second number, so the box is exactly the glyph,
+   the gap and the figure. */
+.research-icon:has(.research-toggle-count) {
+  width: auto;
+  padding-inline: 7px 8px;
+}
+
+/* **A pick panel: one strip of pills, or two under their group names.**
+
+   It is `.research-panel`'s box — the same row of the head Search and the
+   filter builder open into — with the pills laid out in it. The groups are a
+   column and each group is a wrapping row: eleven pills is two lines on a
+   phone and one on anything wider, and a *wrapping* run rather than a scrolling
+   one is right here for the reason the mark strip is the other way round. A
+   panel is opened, read and closed in one gesture, so its height is not a
+   standing cost; a strip that lives under the count is. */
+.research-pick-panel {
+  display: flex;
+  flex-direction: column;
+  /* **`align-items` is reset, and it has to be.** `.research-panel` above sets
+     `center`, which is right for the row it is — a field and its Clear button —
+     and in a column it centers every group on the head's own axis: driven, the
+     eleven pills opened as a centered block running from x=500 to the right
+     edge of a 1400 viewport, with the group's own name centered over it. The
+     board's gutter is the line everything else in this head starts on. */
+  align-items: stretch;
+  gap: 8px;
+}
+.research-pick-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* The group's name, in the app's own small-caps caption — the type
+   `.ov-perfs-head` and every other "what this run is" label in the app takes.
+   It names the side of the ball, which is the one thing a flat run of eleven
+   could not say. */
+.research-pick-head {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.research-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* **The settings dialog's two groups.** A column of the same runs the bar used
+   to hold, each under the question it answers. The groups' own heads take the
+   caption type above rather than a heading size: this box is a dialog with a
+   title of its own, and two `h3`s at heading weight under it would read as
+   three titles. */
+.research-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.research-settings-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.research-settings-head {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+/* **The runs inside it wrap rather than scroll**, which is the one thing that
+   changes about them here. On the bar they were `flex: none` groups that moved
+   down together, because a bar is a line; a dialog is a column with room, so a
+   group that ran off the edge would be a horizontal scroll inside a modal — the
+   gesture that box is least able to disambiguate from a dismissal.
+
+   **`flex-wrap` alone was not enough, and the reason is one box up.** Both runs
+   carry `flex: none` for the bar's sake, so inside the dialog's own wrapping row
+   they were sized to their content and simply overhung it: driven at 390,
+   `Other Rosters` and `Compare` were both cut off by the dialog's edge. So each
+   run takes the line outright and is allowed to shrink onto it — `flex: 1 1
+   100%` with the `min-width: 0` that makes a flex item narrower than its
+   content, which is the pair `.research-stick-line` already spells out for the
+   same reason. */
+.research-settings .research-tools,
+.research-settings .research-include {
+  flex: 1 1 100%;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 /* **The third run and the mark the stick is read off, as one box.**
@@ -13094,6 +13232,52 @@ button.start-line:focus-visible {
 .research-condensed .rl-btn-open:not(.rl-split-caret) .rl-caret {
   display: none;
 }
+/* **And the position and the span, which keep their words.**
+
+   The run hides every label and squares what is left, and it is right about
+   every other button on this board: a label there is a word repeating a glyph.
+   These two are the opposite case — the label **is** the state. Squared, they
+   were two identical 36px boxes carrying a caret each, which is the exact fault
+   the bare caret beside the watchlist toggle was reported for, twice over.
+   Driven at 390 before this rule: `Batters` and `Season` both `w: 36`.
+
+   Three declarations because the run takes three away: the label back, the box
+   back off the square, and the caret back — that last one being hidden for
+   every `.rl-btn-open` that has a mark of its own, and these have no mark, only
+   the word. After every rule each overrides, and at one class more specificity
+   than any of them. */
+.research-condensed .research-toggle.research-pick-btn {
+  width: auto;
+  padding: 0 10px;
+  /* The trap this file records on `.research-toggle svg` and again on
+     `.research-chips > *`: an item in a flex row shrinks below its own content
+     the moment the line is tight, and this run's line is as tight as the phone
+     it is on. */
+  flex: none;
+}
+/* **`display` was the wrong property**, and it is worth writing down because
+   the run's own rule does not read like it: those labels are not `display:
+   none`, they are the app's **visually-hidden** block — absolutely positioned,
+   clipped to a pixel and left in the accessibility tree, because a button whose
+   only content is an `aria-hidden` glyph has no name at all. So `display:
+   inline` put the word back in flow and left it a pixel wide: driven, the two
+   buttons went 36 → **22px**, which is their padding and nothing else. Every
+   declaration of that block has to be undone, not the one that looks like the
+   switch. */
+.research-condensed .research-pick-btn .research-toggle-label {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  border: 0;
+}
+.research-condensed .rl-btn-open.research-pick-btn .rl-caret {
+  display: inline;
+}
+
 .research-condensed .research-include {
   gap: 4px;
 }
@@ -13123,6 +13307,34 @@ button.start-line:focus-visible {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+}
+/* **The count and the marks on one line, the count pinned and the marks
+   scrolling past it.**
+
+   The count says `418 of 640 pitchers` and the marks say *why it is not 640*,
+   so the two are one sentence and reading them as one is the whole reason the
+   strip is beside the count rather than above it. The count is what must never
+   scroll away — it is the caption of the table directly under it — so it is
+   `flex: none` and the strip takes the rest of the line and scrolls inside it.
+
+   `align-items: center` and not `baseline`: the marks are 26px boxes and the
+   count is a 12px line, and a baseline would hang the count off the marks'
+   text rather than centering it against the row they make.
+
+   **No wrap, deliberately.** A wrapping strip is a head that changes height
+   every time a filter is added — which is a row of the table paid for by a
+   control the reader is not looking at — and this box is measured
+   (`--research-head-h`) so every one of those changes moves the column
+   headings. Scrolling is what a run in this head does; `.research-chips`
+   carries the measurement that established it. */
+.research-count-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.research-count-row > .research-count {
+  flex: none;
 }
 /* **The line that says an applied search replaced this board**, and it is the
    same object as the projected line one selector up: a caption in the head
@@ -13820,7 +14032,6 @@ button.start-line:focus-visible {
    always styled off `.view-switch`/`.view-tab`, which is the point of folding
    rather than restyling. */
 .view-switch,
-.research-window-row,
 /* The League page's three tabs. Folded here rather than restyled to resemble
    the row above them: it is the view switch one tier down — see
    `docs/claude/client-league.md`. (`.lg-span-row`, the Rankings tab's five
@@ -16637,9 +16848,10 @@ button.start-line:focus-visible {
    construction rather than by resemblance. */
 
 /* `Next 7` / `Next 14`, the app's segmented switch (it carries `.view-switch`
-   and its tabs `.view-tab`, so it inherits outright). `flex: none` for the
-   reason `.research-window-row` carries it: it travels whole when the bar
-   wraps rather than folding in half. */
+   and its tabs `.view-tab`, so it inherits outright). `flex: none` so it
+   travels whole when the run wraps rather than folding in half — the reason
+   `.research-window-row` carried it, before that box went with the bar's second
+   row (see `.research-window-tab`). */
 .schedule-span {
   flex: none;
   white-space: nowrap;
