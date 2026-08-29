@@ -2820,7 +2820,7 @@ export function ResearchTable({
   const headRef = useRef<HTMLDivElement | null>(null);
   usePublishedHeight(headRef, '--research-head-h');
   /**
-   * **Whether the bar has reached its third row**, which is what swaps the
+   * **Whether the bar has scrolled past its last row**, which is what swaps the
    * control set for the condensed run.
    *
    * A sentinel rather than a scroll listener on the pane: the question is "has
@@ -2842,8 +2842,29 @@ export function ResearchTable({
    * of `.view-tools` — hides it too and this reads `true` there. That costs
    * nothing: the run is drawn on `stuck || isFull` either way, and it is the
    * only thing the flag decides.
+   *
+   * **The mark is held in state rather than in a ref, and that is the whole of
+   * a bug this shipped with.** The sentinel is drawn inside whichever row is
+   * the last one, so it is a *different DOM node* every time that changes —
+   * the reader moves a control between rows, empties a row, or crosses to the
+   * clubs board where a row's controls all take themselves off. A `useRef` with
+   * an `useEffect(…, [])` observing it once bound the observer to the node the
+   * bar had **at mount**; the moment the last row moved, React unmounted that
+   * node and the observer went on watching a **removed element**, which reports
+   * `isIntersecting: false` forever. So the condensed run appeared over an
+   * unscrolled board and stayed there until the page was reloaded.
+   *
+   * Reported exactly so, and driven: with the bar at `scrollTop` 0, moving one
+   * control out of the fourth row took the rail from **not drawn to drawn**,
+   * with the sentinel now in row 3 and the observer still on row 4's. A
+   * callback ref into state re-runs the effect on the node itself, so it
+   * follows the mark wherever the arrangement puts it — and that is right for
+   * *any* reason the node changes rather than for the one that was noticed.
+   *
+   * It could not happen while the bar was one row, which is why `[]` was safe
+   * when it was written: there was only ever one place for the mark to be.
    */
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
   const [stuck, setStuck] = useState(false);
   /** **How tall the condensed run is**, published because two sticky boxes are
    *  held under it — the head, and through `--pane-bar-h` the table's own
@@ -2852,16 +2873,23 @@ export function ResearchTable({
    *  whenever the rail is not drawn. */
   const condRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const mark = sentinelRef.current;
     const box = scrollRef.current;
-    if (!mark || !box) return;
+    /* **No mark means nothing to read the stick off**, which is a real state
+       for one frame while React swaps the sentinel from one row to another —
+       and `false` is the right answer for it: the run belongs on screen only
+       once something has said the bar has gone, and a stale `true` held across
+       that frame is the fault this whole block records. */
+    if (!sentinel || !box) {
+      setStuck(false);
+      return;
+    }
     const io = new IntersectionObserver(
       ([e]) => setStuck(!e.isIntersecting),
       { root: box, threshold: 0 },
     );
-    io.observe(mark);
+    io.observe(sentinel);
     return () => io.disconnect();
-  }, []);
+  }, [sentinel]);
   /**
    * **Nothing here compensates the scroll any more, because nothing moves.**
    *
@@ -5454,7 +5482,7 @@ export function ResearchTable({
             !row.length ? null : (
               <div className="research-stick-line" key={i}>
                 {i === lastRow && (
-                  <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
+                  <div className="research-sentinel" ref={setSentinel} aria-hidden="true" />
                 )}
                 <ScrollRow
                   label={

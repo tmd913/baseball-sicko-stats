@@ -127,6 +127,26 @@ at every step, exactly. The condensed rail is `height: 0` and its inner box
 **60px**, which is the band `--tools-row-gap` + a control + `--tools-band-gap`
 comes to — the arithmetic `.research-condensed-inner` states in full, unchanged.
 
+**And the mark has to be *followed*, which is a bug this shipped with.** The
+sentinel is drawn inside whichever row is the last one, so it is a **different
+DOM node** every time that changes: the reader moves a control between rows,
+empties a row, or crosses to the clubs board where a whole row's controls take
+themselves off. The `IntersectionObserver` was created once on mount against a
+`useRef` — right while the bar was one row, since there was only ever one place
+for the mark to be — and the moment the last row moved it went on watching a
+**removed element**, which reports `isIntersecting: false` forever. The
+condensed run appeared over an unscrolled board and stayed there until reload.
+
+Reported exactly so, and driven at `scrollTop` 0: moving one control out of the
+fourth row took the rail from **not drawn to drawn**, sentinel now in row 3 and
+the observer still on row 4's. The mark is a **callback ref into state** now, so
+the effect re-runs on the node — which is right for any reason the node changes
+rather than for the one that was noticed — and a frame with no mark reads
+`false`, a stale `true` held across the swap being the fault itself. Driven
+after: 4 rows → 3 at `scrollTop` 0 leaves the rail undrawn, a scroll to 400
+draws it with the first table row at **340 − 400 = −60** exactly, coming back to
+0 undraws it, and crossing to the clubs board draws nothing.
+
 #### The condensed run has an order of its own
 
 *(The paragraph that decided this run's order is kept and its finding is what
