@@ -854,17 +854,47 @@ the record**: the include set and the Watchlist button are set locally with
 their touched refs raised, exactly as that door sets the include set, so opening
 somebody's link cannot quietly become your saved default.
 
-**What a saved search remembers** is **fourteen** fields
+**What a saved search remembers** is **fifteen** fields
 (`ResearchSearchBoard`), and the test each had to pass is *would a reader who
 saved this be surprised to find it different*: position, span, ownership sets,
 watchlist on or off, clubs or players, measured or projected, columns, sort key,
 sort direction, filters, name search, **the `Starting` filter's days, the
-Schedule reading, and whether the percentile badges are drawn**.
+Schedule reading, whether the percentile badges are drawn, and which watchlist
+was the active one**.
 
-*(It was **eleven**, and the last three are* "the saved searches feature doesn't
-seem to be saving all the settings" *run to ground — see* Three settings a search
-did not remember *below. The test never changed; what was wrong is that it had
-been applied to the controls somebody thought of rather than to the board.)* What it deliberately does **not** remember is anything that is not
+*(It was **eleven**, then fourteen —* "the saved searches feature doesn't seem to
+be saving all the settings" *run to ground, see* Three settings a search did not
+remember *below. The test never changed; what was wrong is that it had been
+applied to the controls somebody thought of rather than to the board.)*
+
+**The fifteenth is `list`, and it is the same fault one level down.** `watchlist`
+is whether the *button* is on; `list` is **which list it is on**, and a reader
+with `Closers`, `Streamers` and `Deep SP` has three boards behind one lit button.
+A search that remembered the button and not the list re-opened on whichever list
+happened to be selected — the same "the same search from two boards gives two
+different tables" that `ranks` records, on a control that changes the *rows*
+rather than the badges. It matters with the button **off** too: the active list
+is what fills the star on every row and what the next press of one writes to.
+
+**It is the one field an apply writes to the record**, which is not a relaxation
+of the rule above but a consequence of where the fact lives. The include set, the
+Watchlist button and the badges are client state the server merely remembers, so
+they are set locally with their touched refs raised; the **active list is the
+server's own** — `store.ts::setWatchlisted` resolves it there, a press on a row
+having no room to name a list — so setting it locally would leave the star drawn
+from one list and writing to another. There is no local-only version of it to
+set.
+
+**And it is narrowed to a list this reader owns**, which is what keeps a shared
+search from touching anything: a list id belongs to one person, so somebody
+else's search names nothing here and the reader's own list stands — *a join fails
+to null, never to a guess*. Absent is a search saved before the field existed and
+has no opinion either, the app's rule that an unrecognized value falls back
+rather than emptying the view. Driven, all three: a search saved with `Pitchers`
+active and applied from `Watchlist` put the button back to **`Pitchers`** and the
+server's `activeId` to that list; an older search with no `list` left both at
+**`Watchlist`**; and a search naming `NOTMINE1` left both at **`Watchlist`**
+with no write at all. What it deliberately does **not** remember is anything that is not
 a reading — the paging, which panels were open, the half-typed condition in the
 filter builder. Those are where the reader had got to, not what they were
 looking at.
