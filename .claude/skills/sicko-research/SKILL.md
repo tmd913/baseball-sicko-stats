@@ -1,6 +1,6 @@
 ---
 name: sicko-research
-description: The research board — the whole league over a season or a window, its 39-44 columns and their picker, the sort, the include buttons and the watchlist star, the padlock and news marks, the position row and what a fantasy position means, the window tabs, the stat filter builder, the turn filter that narrows the pitching board to the men starting on chosen days, percentile rank badges, paging, and the board's own Schedule view. Use when editing ResearchTable.tsx, researchColumns.tsx, ColumnPicker.tsx, columnRanks.tsx, TurnPicker.tsx, LockMark.tsx or NewsMark.tsx; when adding a stat column; or when the board's sort, filters, pinned columns or scroll reset behave wrongly.
+description: The research board — the whole league over a season or a window, its 39-44 columns and their picker, the sort, the include buttons and the watchlist star, the padlock and news marks, the position row and what a fantasy position means, the window tabs, the stat filter builder, the turn filter that narrows the pitching board to the men starting on chosen days, percentile rank badges, paging, the board's own Schedule view, and the bar itself — up to four rows the reader arranges, with the rest behind the gear. Use when editing ResearchTable.tsx, ResearchLayout.tsx, researchColumns.tsx, ColumnPicker.tsx, columnRanks.tsx, TurnPicker.tsx, LockMark.tsx or NewsMark.tsx; when adding a stat column; or when the board's sort, filters, pinned columns or scroll reset behave wrongly; or when changing what is on its bar.
 ---
 
 # The research board
@@ -18,9 +18,14 @@ touching the board; several of its rules are the record of a reversal.
 ## What to read
 
 - **Read `docs/claude/client-research.md`** before editing `ResearchTable.tsx`,
-  `researchColumns.tsx`, `ColumnPicker.tsx`, `columnRanks.tsx` or `TurnPicker.tsx`, before adding
+  `ResearchLayout.tsx`, `researchColumns.tsx`, `ColumnPicker.tsx`, `columnRanks.tsx` or
+  `TurnPicker.tsx`, before adding
   or reordering a column, and before changing anything about the board's
-  controls. It covers: the sticky name and sorted columns and the derived
+  controls. It covers: **the bar as an arrangement the reader
+  owns** — up to four rows, which control is on which and in what order, the
+  condensed run's own order, the per-control icon-or-word switch, and what is
+  left behind the gear (`ResearchLayout.tsx`, `UserPrefs.researchControls`);
+  the sticky name and sorted columns and the derived
   `--research-pin-left`; the sort, its reserved arrow box and its reset rule;
   paging at 50 rows; the three include buttons as a partition of ownership and
   the watchlist unioned on top; the roster baseball, the padlock and the news

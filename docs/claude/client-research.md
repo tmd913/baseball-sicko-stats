@@ -12,7 +12,254 @@ scrolls away with the board — and on this view it has since moved once more,
 into the board's own scroller, which is what makes "scrolls away" true rather
 than merely intended. See **The page scrolls, and the head stays**, below.)*
 
-### The bar is four buttons, and everything else is behind one of them
+### The bar is the reader's, and up to four rows of it
+
+**Reported, against the four-button bar the section below describes: not all of
+these controls were meant to be in a popup — some of them need the board
+visible.** That is a real fault and it is worth naming precisely, because the
+measurement that produced the four-button bar was also real and is not
+withdrawn.
+
+**Half of what went behind the gear is a *lens*.** Compare ticks players on the
+rows underneath it; Projected and Schedule swap what the cells say; Ranks puts a
+second reading under every number; the three ownership buttons change how many
+rows there are; Filters and Starting take rows out. A reader presses one of
+those **to watch the table move** — and a dialog over the table is the one
+shape that makes the result unobservable. The four-button bar was right about
+the *saved things* (a watchlist chooser, the saved searches: lists of saved
+things, which is a dialog's shape by the volume test `ColumnPicker` settled
+here) and wrong about the lenses, and it applied one answer to both.
+
+**So the shape stops being a decision this file makes.** The bar is **up to four
+rows**; the reader says which control is on which row and in what order, which
+give up their word for their glyph, and what order the condensed run reads in.
+Anything on no row is behind the gear — which is exactly where the four-button
+bar put all thirteen — so **the shape below is one of the arrangements this can
+be set to**, and so is the three-run bar before it. `ResearchLayout.tsx` is the
+vocabulary, the default, the normalizer and the screen; `ResearchTable.tsx`
+draws the controls, as it always did.
+
+#### The fourteen, and the one that is not among them
+
+Every control the bar ever held is placeable: `search`, `pos`, `window`,
+`include`, `watchlist`, `searches`, `teams`, `filters`, `turns`, `compare`,
+`schedule`, `projected`, `columns`, `ranks`.
+
+**The gear is not.** It is drawn first on the first row, always, and is in no
+arrangement — a gear moved off the bar would take the screen that moves it back
+with it. That is the only exception and it is the whole of it.
+
+**Two of the fourteen cannot be asked for as an icon**, and it is the four-button
+bar's own sentence: `Position` and `Season / window` exist to say what they are
+set to, *and a glyph cannot say `SS`*. Drawn as glyphs they square to two
+identical carets, which is the exact fault the condensed run carries a
+three-declaration override to prevent (see **the condensed run**, below). The
+editor does not offer the switch on those two rather than offering it and
+declining it.
+
+#### The default is two rows, and the two off it are the two the gear was right about
+
+| | |
+| --- | --- |
+| **Row 1** — what the board *is* of | Search · Position · Season · the ownership sets · Watchlist |
+| **Row 2** — what is *done* to it | Filters · Starting · Compare · Schedule · Projected · Columns · Ranks |
+| **Behind the gear** | Saved searches · Teams |
+
+It sits deliberately between the two shapes it replaces. Every control marked
+`live` in `RESEARCH_CONTROLS` — every one whose point is watching the table
+change — is on the bar. Saved searches is a list of saved things; the clubs lens
+is a reading a reader crosses to and stays on rather than one they toggle
+against the rows. Neither is `live`.
+
+**Measured, at 390 / 640 / 900 / 1200 / 1920**, against the two shapes this
+supersedes:
+
+| | 390 | 640 | 900 | 1200 | 1920 |
+| --- | --- | --- | --- | --- | --- |
+| `.view-tools`, three runs | 156 | 156 | 156 | 156 | 156 |
+| `.view-tools`, four buttons | 60 | 60 | 64 | 64 | 64 |
+| `.view-tools`, **two rows** | **108** | **108** | **110** | **110** | **110** |
+| first row, three runs | 337 | 338 | 340 | 340 | 340 |
+| first row, four buttons | 253 | 254 | 260 | 260 | 260 |
+| first row, **two rows** | **289** | **290** | **294** | **294** | **294** |
+
+So the default gives back **46 to 48px of the 92 to 96** the four-button bar
+took, and keeps the other half. `document.scrollWidth − clientWidth` is **0** at
+every width. A reader who wants the 60px back arranges one row; a reader who
+wants the old bar arranges three.
+
+#### Every row is a `ScrollRow`, and the empty ones are not drawn
+
+A row that has been given nine controls **scrolls**; it does not wrap into a
+shape the reader did not ask for. That is the rule the three-run bar already ran
+on and the reason a button added to a run costs an arrow rather than a line.
+
+**A row with nothing on it is not drawn**, and that is not only about a reader
+who has left one empty. On the **clubs** board every control in a row can take
+itself off — `slots` maps a key with no subject to `null`, which is the
+`!teams`/`!schedule`/`!projectedOn` rule the bar already followed a control at a
+time — so an arrangement whose second row is the ownership sets, the watchlist
+and the saved searches has an *empty second row there*. Drawn, that is a line of
+chrome over the table with nothing in it, which is the one thing this whole
+section is measured against. Driven on the clubs board with the four-row
+arrangement: 4 rows → **3**, the empty one gone, the other three unmoved.
+
+Only the **first** row is kept whatever is on it, being where the gear is.
+
+**The arrangement itself is untouched by any of that.** A control taken off by
+the reading is drawn nowhere — not on the bar, not behind the gear, and not
+disabled — and crossing to the clubs and back finds every control exactly where
+it was left.
+
+#### The stick is read off the *last* row
+
+`.research-stick-line` and the sentinel are unchanged; what moved is which row
+carries them. The bar scrolls away top to bottom and the condensed run lands in
+the place the **last** row was standing in, which is what makes the swap free.
+Read off the first row, a two-row bar would put the run on screen with the
+second row still under it — the 52px of table the whole arrangement exists to
+stop being taken. It is the same reading the three-run bar had, where the mark
+was on its third row.
+
+Driven at 1200 with the default two rows, stepping the pane 0 → 60 → 100 → 140 →
+200: the head pins at **162** and the first table row is at **294 − scrollTop**
+at every step, exactly. The condensed rail is `height: 0` and its inner box
+**60px**, which is the band `--tools-row-gap` + a control + `--tools-band-gap`
+comes to — the arithmetic `.research-condensed-inner` states in full, unchanged.
+
+#### The condensed run has an order of its own
+
+*(The paragraph that decided this run's order is kept and its finding is what
+the setting is built on: the tools lead it where the bar reads who → slice →
+tools, because the run is drawn in the last row's own place and the controls
+that were standing there are the ones that must not move. Measured then: led by
+the include marks instead, the five tools started 741px along a 1,156px line at
+1200 and Filters, Schedule, Columns and Ranks went behind the scroll arrow at
+the exact frame the row they live on stopped moving.)*
+
+That is right, and it is right about **one particular arrangement** — the
+three-run bar it was measured on. With the rows the reader's own, no order
+written in this file can be the answer for all of them. So the run reads in
+`layout.condensed`, which is theirs, and defaults to **the bar read top to
+bottom** — the arrangement-independent version of the same reading. The gear
+leads it whatever they say.
+
+**It is an order and not a membership.** Every control on the bar is on the
+sticky line; `readResearchLayout` filters the stored order to what is on the bar
+and then *completes* it from the bar, so a control promoted onto a row joins the
+line without the reader being asked a second question, and one taken off the bar
+leaves the line with it. Asking twice about one control is how the two come to
+disagree.
+
+#### Icon or word, per control
+
+The switch is on the chip, in the one screen where a reader is looking at all
+fourteen at once. `.research-slot` is a `display: contents` wrapper — the button
+inside stays a direct flex item of its row, with the row's own gap and no box in
+between, the trick `.research-chrome` and `.research-bar` already use one level
+up — and `.is-icon` on it is **folded onto `.research-condensed`'s own selector
+list** rather than written a second time.
+
+That fold is the point. The two are the same object — a control with its word
+taken off and its box squared to the app's 36px — reached by two different
+questions: one a *scroll state* ("the bar has gone, this line stands in for
+it"), the other a *setting* ("I know what the funnel means, give me the pixels
+back"). Two rule sets that agree today are two rule sets that will one day
+differ, and the day one of them gained the `:has(.research-toggle-count)`
+exception and the other did not is the day a filter count got clipped. Driven:
+`Filters` set to icon on a two-row bar measures **36px**, the same square the
+condensed run gives it.
+
+What is deliberately *not* folded is the `.research-pick-btn` block that puts
+the position's and the span's words back inside the condensed run: those two
+cannot be set to icon at all, so an override for them here would be a rule for a
+state nothing can reach.
+
+#### The gesture is a press and a press
+
+`ResearchLayoutEditor` is `ColumnPicker`'s reorder over four lists instead of
+one: press a chip to pick a control up, press another to drop it **in front of**
+that one, press a row's tail to put it at the end, press the `Behind the gear`
+box to take it off the bar. Escape cancels the pick-up rather than closing the
+dialog — the app's rule that one press undoes one thing — listening in
+**capture** so it beats `Modal`'s own bubble-phase listener on the same object.
+
+**Not a drag**, and that is the picker's measurement rather than a preference:
+a drag inside a scroller fights the scroll, `touch-action` cannot arbitrate two
+gestures that differ in neither place nor axis, and press-and-press measured 30
+of 30 where dragging did not. It is more true here — these are four separate
+lists and a drag between them crosses every one of them.
+
+**The hint line is `.research-order-hint` outright**, folded rather than copied:
+it is the same object exactly — the line over a press-and-press reorder saying
+what is in hand, with its height reserved by an invisible copy of the resting
+sentence laid out underneath the live one, so the chips cannot move between the
+press that picks a control up and the press that drops it.
+
+**Every press commits**, and there is no Save: the bar above the dialog is the
+preview. Opening the screen **shuts the settings box** it was opened from, which
+is `openPanel`'s own rule one control along — the arrangement is checked against
+the bar, and on a phone two stacked dialogs put a second full-screen box between
+the reader and it. It also keeps Escape honest: one press from the arrangement
+screen is back to the board.
+
+**The box is `min(640px, 100%)`** where the two saved-thing dialogs are
+`min(440px, 100%)`. Those hold a column of *names*; this holds chips laid out
+the way the bar lays them out, and at 440 they came one to a line — so the
+picture of a row was a vertical stack, which is the one thing this screen has to
+get right. Measured at 1400: 640 wide, row 1's five chips on three lines. At
+390: 358 wide at x=16, one chip to a line (the reading that width actually
+calls for), page overflow **0**.
+
+#### Where it is stored
+
+`UserPrefs.researchControls`, a saved preference and **not** a URL parameter: it
+says nothing about which data is on screen, which is the whole test the params
+are chosen by, so a link describes the same table drawn in whatever arrangement
+the recipient keeps. Absent means the default, the convention every entry there
+follows, and `researchLayoutPref` returns `null` for an arrangement equal to the
+default — so a reset stores *nothing at all* and goes on following the default
+as it moves, which is the policy `ColumnPicker` already applies to a column list
+that has come back to the defaults.
+
+Held in `App` rather than in the board, for the reason `showRanks` and the
+include set are: the board is remounted when the kind changes, and an
+arrangement held down there would be thrown away by that remount and put back
+from the server a moment later — with the bar changing shape in between.
+
+**The route validates the shape and never the words.** `/api/prefs/research-controls`
+checks four rows of key-shaped strings and nothing else; which controls exist is
+the client's business, exactly as `theme`'s and `researchColumns`' vocabularies
+are. Validating the spelling there would mean a newer browser's arrangement
+being *rejected* by an older server rather than ignored by an older tab — and
+this is the one preference a reader would have to rebuild by hand.
+`readResearchLayout` is the whole of the reconciliation on the way in: unknown
+keys dropped, a key on two rows keeping its first place, the rows padded to
+four, `condensed` completed from the bar, and `iconOnly` narrowed to controls
+that have a glyph to fall back to.
+
+#### The settings dialog is what is left over
+
+It keeps its two groups — *which players* and *the board* — and a group with
+nothing left in it is **not drawn**: a heading over an empty box is a setting
+claiming to be somewhere it is not. With every control on the bar the box is one
+group, `The bar`, saying `Every control is on the bar.` over the button that
+opens the arrangement screen. That screen is always there, being the one thing
+behind the gear that cannot be moved out of it.
+
+`search`, `pos` and `window` press through `openPanel` now rather than
+`setPanel`: any of the three can be behind the gear, and a panel opening into
+the head *under* the settings dialog is a press whose whole answer is off
+screen. On the bar the extra half is a no-op, that box being already shut.
+
+---
+
+### The bar was four buttons, and everything else was behind one of them
+
+*(Superseded by the section above — the bar is the reader's now, and this shape
+is its default arranged down to one row. What is unchanged: the four controls'
+own reasoning, the mark strip under the count, and every measurement here, which
+is what the table above compares against.)*
 
 **Reported: the filters and tools at the top of this page are getting hard to
 manage, and worst on a phone.** They were, and the measurement says how much —

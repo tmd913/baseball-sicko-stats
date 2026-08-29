@@ -94,6 +94,12 @@ import type {
   ResearchUi,
 } from './components/ResearchTable';
 import {
+  DEFAULT_RESEARCH_LAYOUT,
+  readResearchLayout,
+  researchLayoutPref,
+} from './components/ResearchLayout';
+import type { ResearchLayout } from './components/ResearchLayout';
+import {
   defaultColumnKeys,
   projectedColumnKeys,
   trendKey,
@@ -1705,6 +1711,39 @@ export default function App() {
   }, [queueUserWrite]);
 
   /**
+   * **How the research board's controls are arranged on its bar** — which row
+   * each is on, in what order, which are drawn as their glyph alone, and the
+   * order the condensed run reads in. `ResearchLayout.tsx` owns the vocabulary
+   * and the default; this owns the copy the board is drawing and the write.
+   *
+   * Held here for the reason `showRanks` and the include set are: the board is
+   * remounted when the kind changes, and an arrangement held down there would
+   * be thrown away by that remount and put back from the server a moment
+   * later, with the bar changing shape in between. And it is a **saved
+   * preference and not a URL parameter** — it says nothing about which data is
+   * on screen, which is the whole test the params are chosen by, so a link
+   * describes the same table drawn in whatever arrangement the reader keeps.
+   *
+   * `null` on the way in is *back to the default*, which stores nothing at all
+   * — the policy the column picker already applies, and what lets the default
+   * move without anyone's record needing revisiting. The `Touched` ref is the
+   * whole of the reconciliation, there being no param for a saved value to have
+   * to defend itself against.
+   */
+  const [researchLayout, setResearchLayoutState] = useState<ResearchLayout>(
+    DEFAULT_RESEARCH_LAYOUT,
+  );
+  const researchLayoutTouched = useRef(false);
+  const setResearchLayout = useCallback((next: ResearchLayout | null) => {
+    researchLayoutTouched.current = true;
+    const layout = next ?? DEFAULT_RESEARCH_LAYOUT;
+    setResearchLayoutState(layout);
+    queueUserWrite(() => api.saveResearchControls(researchLayoutPref(layout))).catch(
+      (e: Error) => console.error('saving research-controls failed:', e.message),
+    );
+  }, [queueUserWrite]);
+
+  /**
    * The players most recently picked out of the header search, newest first —
    * what that field offers before anything is typed. Player keys, so a row is
    * resolved against the season roster the search is already holding rather
@@ -2083,6 +2122,13 @@ export default function App() {
         // source there is, so it applies unless the user has already spoken.
         if (!muteAudioTouched.current && prefs.muteAudio) setMuteAudioState(true);
         if (!showRanksTouched.current && prefs.statRanks) setShowRanksState(true);
+        // Normalized on the way in rather than trusted: a key this build has
+        // never heard of is dropped and the rest of the arrangement stands, and
+        // an entry written before a control existed gets that control appended
+        // to the sticky line rather than losing it. See `readResearchLayout`.
+        if (!researchLayoutTouched.current && prefs.researchControls) {
+          setResearchLayoutState(readResearchLayout(prefs.researchControls));
+        }
         // A density this build does not recognize resolves to the default
         // rather than emptying the tab — the rule the theme two lines below
         // follows, and the reason the server stores the word without checking
@@ -11223,6 +11269,8 @@ export default function App() {
           onIncludeWatchlistChange={setResearchWatchlist}
           showRanks={showRanks}
           onShowRanksChange={setShowRanks}
+          layout={researchLayout}
+          onLayoutChange={setResearchLayout}
           hasRosterPct={rosterPct !== null}
           hasEligibility={eligibility !== null}
           trendWindows={rosterTrend}

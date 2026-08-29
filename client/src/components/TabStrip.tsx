@@ -1,5 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
+
+/** What one `deltaMode: 1` line is worth to a row that scrolls sideways — the
+ *  app's own control height, since a "line" of one of these rows is a button. */
+const WHEEL_LINE = 36;
 
 /**
  * **Whether a scrolling row overflows, and which way there is more of it.**
@@ -73,6 +77,62 @@ export function useOverflowArrows(
     const ro = new ResizeObserver(measure);
     ro.observe(box);
     return () => ro.disconnect();
+  }, [boxRef, measure]);
+
+  /**
+   * **A wheel over a sideways row scrolls it sideways.**
+   *
+   * Reported against the board's control rows: *nothing happens when your
+   * mouse is over them and you scroll*. That is the browser being literal
+   * rather than a bug in the row — a mouse wheel is `deltaY`, this box has no
+   * vertical overflow to spend it on, so the event goes to the nearest
+   * ancestor that does, which on the research board is the pane holding six
+   * hundred rows. The row a reader is pointing at never moves, and the only
+   * ways along it are the arrows and a drag of a scrollbar the app hides
+   * (`scrollbar-width: none`). A trackpad's sideways swipe already arrives as
+   * `deltaX` and works today, which is why this was only ever reported by
+   * somebody on a mouse.
+   *
+   * **`deltaY` only, and only when it is the bigger of the two.** A trackpad
+   * gesture that is genuinely diagonal already has its horizontal half
+   * applied by the browser, and adding the vertical half to it would move
+   * this row at twice the speed of the finger.
+   *
+   * **And the page gets the wheel back at either end.** A row scrolled to its
+   * last control that went on swallowing the wheel would be a 36px band the
+   * page cannot be scrolled over — the `overscroll-behavior` rule stated as a
+   * gesture. So the clamp is computed first and the event is only taken
+   * (`preventDefault`) where this box actually has somewhere to go.
+   *
+   * **A native listener, not React's `onWheel`.** React binds wheel at the
+   * root as **passive**, where `preventDefault` is a no-op and a console
+   * warning — so the page would scroll *as well*, which is the whole of what
+   * this is for.
+   */
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const max = box.scrollWidth - box.clientWidth;
+      if (max <= 1) return;
+      /* `deltaMode` is pixels almost everywhere and lines on Firefox; a line is
+         not a length this row knows, so it is spent as one control's worth of
+         it — `--control-h`, the 36px square every button here is. */
+      const step =
+        e.deltaMode === 1
+          ? e.deltaY * WHEEL_LINE
+          : e.deltaMode === 2
+            ? e.deltaY * box.clientWidth
+            : e.deltaY;
+      const next = Math.min(max, Math.max(0, box.scrollLeft + step));
+      if (next === box.scrollLeft) return;
+      e.preventDefault();
+      box.scrollLeft = next;
+      measure();
+    };
+    box.addEventListener('wheel', onWheel, { passive: false });
+    return () => box.removeEventListener('wheel', onWheel);
   }, [boxRef, measure]);
 
   /** A press moves the row by most of a pane — enough to be a page rather than

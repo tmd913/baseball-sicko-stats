@@ -1049,6 +1049,33 @@ export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
 
 export const RESEARCH_INCLUDE_KEYS: ResearchIncludeKey[] = ['mine', 'others', 'fa'];
 
+/**
+ * **The research board's bar, as an arrangement rather than a fixed shape.**
+ *
+ * Up to four rows, each an ordered list of control keys; a key on none of them
+ * is off the bar and lives behind the gear. `condensed` is the order the sticky
+ * run reads in, which is a different question from the bar's own — the bar is
+ * read top to bottom and the condensed run is one line replacing the last of
+ * them. `iconOnly` is which controls give up their word.
+ *
+ * Every list is **keys**, and the meaning of a key lives where the bar is drawn
+ * (`client/src/components/ResearchLayout.tsx`) — the same split `researchColumns`
+ * makes, where the route validates the shape and the vocabulary lives with the
+ * thing it names. Mirrors `ResearchControlsPref` in `client/src/types.ts`.
+ */
+export interface ResearchControlsPref {
+  /** Up to four rows, top to bottom. */
+  rows: string[][];
+  /** The condensed run's order. Anything on the bar and not named here is
+   *  appended in the bar's own order, so a control added to a row is in the
+   *  condensed run without the reader being asked twice. */
+  condensed: string[];
+  /** Which controls are drawn as their glyph alone. Absent from this list means
+   *  the control's own default, which for every one of them is its word. */
+  iconOnly: string[];
+}
+
+
 /** A player's batting line — full-season, or a platoon split (vs L/R pitching). */
 export interface SeasonStats {
   gamesPlayed: number;

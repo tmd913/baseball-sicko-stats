@@ -45,6 +45,7 @@ import {
 } from './types.js';
 import type {
   PlayerKind,
+  ResearchControlsPref,
   ResearchIncludeKey,
   ResearchWindow,
   SeasonArsenalPitch,
@@ -82,6 +83,7 @@ import {
   setMuteAudio,
   setTheme,
   setPercentileDensity,
+  setResearchControls,
   setStatRanks,
   setRecentPlayer,
   setSeenTransactions,
@@ -979,6 +981,66 @@ app.put(
       return;
     }
     res.json(await setStatRanks(userId(req), on));
+  }),
+);
+
+/**
+ * **How the research board's controls are arranged on its bar** — up to four
+ * rows of keys, the condensed run's order, and which controls are drawn as
+ * their glyph alone. A route of its own for the reason each of the ones around
+ * it is, and its update semantics are `theme`'s: an object that a `null` clears
+ * back to the default arrangement.
+ *
+ * **The shape is validated and the vocabulary is not**, which is the split
+ * `/api/prefs/theme` and `/api/prefs/research-columns` both make: which controls
+ * exist is the client's business (`ResearchLayout.tsx`), and a key it does not
+ * recognize is dropped where the bar is drawn. Validating the words here would
+ * mean a newer browser's arrangement being **rejected** by an older server
+ * instead of ignored by an older tab — and this is the one preference a reader
+ * would have to rebuild by hand.
+ *
+ * The caps are what keeps a preference blob a preference blob: four rows, and a
+ * key no longer than a key. They are deliberately generous against the client's
+ * own count rather than equal to it, for the same reason the vocabulary is not
+ * checked.
+ */
+app.put(
+  '/api/prefs/research-controls',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { controls } = (req.body ?? {}) as { controls?: unknown };
+    const keys = (v: unknown, max: number) =>
+      Array.isArray(v) &&
+      v.length <= max &&
+      v.every((k) => typeof k === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(k));
+    const valid =
+      controls === null ||
+      (!!controls &&
+        typeof controls === 'object' &&
+        !Array.isArray(controls) &&
+        Array.isArray((controls as ResearchControlsPref).rows) &&
+        (controls as ResearchControlsPref).rows.length <= 4 &&
+        (controls as ResearchControlsPref).rows.every((r) => keys(r, 64)) &&
+        keys((controls as ResearchControlsPref).condensed, 64) &&
+        keys((controls as ResearchControlsPref).iconOnly, 64));
+    if (!valid) {
+      res.status(400).json({
+        error: 'controls must be null, or { rows: string[][] (max 4), condensed: string[], iconOnly: string[] }',
+      });
+      return;
+    }
+    res.json(
+      await setResearchControls(
+        userId(req),
+        controls === null
+          ? null
+          : {
+              rows: (controls as ResearchControlsPref).rows,
+              condensed: (controls as ResearchControlsPref).condensed,
+              iconOnly: (controls as ResearchControlsPref).iconOnly,
+            },
+      ),
+    );
   }),
 );
 

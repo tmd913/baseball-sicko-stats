@@ -1824,6 +1824,27 @@ export interface UserPrefs {
    * means that kind's projected defaults, the same convention.
    */
   projectedColumns?: Partial<Record<PlayerKind, string[]>>;
+  /**
+   * **How the research board's controls are arranged on its bar** — which row
+   * each one is on, in what order, which are drawn as their glyph alone, and
+   * the order the condensed run reads in once the bar has scrolled away.
+   *
+   * A fact about the person and so a saved preference rather than a URL
+   * parameter: it says nothing about which data the board is showing, which is
+   * the whole test the URL params are chosen by. A link therefore describes the
+   * same table whoever opens it, drawn in whatever arrangement the reader keeps.
+   *
+   * Absent means the default arrangement, the same absence-is-the-default
+   * convention as everything around it — so that default can move without
+   * anyone's record needing revisiting.
+   *
+   * **The vocabulary is the client's**, exactly as `theme`'s and
+   * `researchColumns`' are: a key this build does not recognize is dropped
+   * where the bar is drawn rather than rejected on the way in, so a record
+   * written by a newer build opens an older tab short one control instead of
+   * on nothing.
+   */
+  researchControls?: ResearchControlsPref;
   /** Absent means off, the default — the server stores off as no entry. */
   hideInjured?: boolean;
   /** Play every video clip with the sound off. Absent means off. */
@@ -1911,6 +1932,33 @@ export interface UserPrefs {
  * rides beside this as its own flag and is unioned on top (`researchWatchlist`).
  */
 export type ResearchIncludeKey = 'mine' | 'others' | 'fa';
+
+/**
+ * **The research board's bar, as an arrangement rather than a fixed shape.**
+ *
+ * Up to four rows, each an ordered list of control keys; a key on none of them
+ * is off the bar and lives behind the gear. `condensed` is the order the sticky
+ * run reads in, which is a different question from the bar's own — the bar is
+ * read top to bottom and the condensed run is one line replacing the last of
+ * them. `iconOnly` is which controls give up their word.
+ *
+ * Every list is **keys**, and the meaning of a key lives where the bar is drawn
+ * (`client/src/components/ResearchLayout.tsx`) — the same split `researchColumns`
+ * makes, where the route validates the shape and the vocabulary lives with the
+ * thing it names.
+ */
+export interface ResearchControlsPref {
+  /** Up to four rows, top to bottom. */
+  rows: string[][];
+  /** The condensed run's order. Anything on the bar and not named here is
+   *  appended in the bar's own order, so a control added to a row is in the
+   *  condensed run without the reader being asked twice. */
+  condensed: string[];
+  /** Which controls are drawn as their glyph alone. Absent from this list means
+   *  the control's own default, which for every one of them is its word. */
+  iconOnly: string[];
+}
+
 
 export const RESEARCH_INCLUDE_KEYS: ResearchIncludeKey[] = ['mine', 'others', 'fa'];
 
