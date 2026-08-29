@@ -413,6 +413,37 @@ word back in flow a pixel wide and the two buttons measured **22px**, their
 padding and nothing else. A `<select>` needs none of it: the run's squaring never
 reaches it, and its closed state has always been the word.
 
+#### The comparison line is a sentence, so it takes the line
+
+Reported as cut off. `.research-count-row > .research-count` is `flex: none`,
+which is exactly right for what that box usually holds — `418 of 640 pitchers`
+is a **caption**, and `flex: none` is what stops it scrolling away past the
+marks beside it, which is the whole reason the two share a line.
+
+The comparison branch is not a caption. It is two clauses saying what the badges
+measure and which way each hue runs, and `flex: none` sizes a flex item to its
+**max-content**: the sentence laid out as one unwrappable line and
+`.research-head` (`overflow-x: hidden`) cut it off. Measured at 680, it ran to
+x=775 against a row ending at 658 — **117px off the end**, and what the reader
+lost was the half that says what the colors mean.
+
+**It takes the line rather than sharing it** — `flex: 1 1 100%`, the same "its
+own line" `.research-stick-line` and the settings dialog's runs take. Sharing
+was the other option and is worse where it matters: at 390 the marks would leave
+the sentence ~230px and it would wrap to four lines *beside* a strip squeezed to
+nothing, where a line of its own wraps to three and leaves the marks whole
+underneath. `flex-wrap` on the row is what lets a 100% basis claim a line, and it
+changes nothing in the ordinary case — the caption is `flex: none` and short and
+the marks are `min-width: 0` and scroll, so neither ever wraps.
+
+Driven at 390 / 680 / 900 / 1400 with four pitchers ticked: nothing overhangs
+the row at any of them, the line wraps to 3 / 2 / 1 / 1, the head measures
+98 / 83 / 68 / 68 and publishes each as `--research-head-h`, the `Comparing 4 ×`
+mark is whole and pressable at every width, and page overflow is 0. The head is
+measured, so the column headings follow it down and back; and this line is drawn
+only while a comparison is on, which is a state the reader entered on purpose
+and leaves with one press.
+
 #### Two things the arrangement changed underneath
 
 **The scroll arrows reach the edge of the band now.** Reported as wasting

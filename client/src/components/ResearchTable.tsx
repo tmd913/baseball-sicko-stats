@@ -5944,7 +5944,18 @@ export function ResearchTable({
           {(loading || boardRows.length > 0 || marks.length > 0) && (
             <div className="research-count-row">
             {(loading || boardRows.length > 0) && (
-            <div className="research-count" role="status">
+            /* **A sentence takes the line; a caption shares it.** `418 of 640
+               pitchers` is a caption and is `flex: none` beside the marks, which
+               is the whole point of putting the two on one line. The comparison
+               branch below is not a caption — it is two clauses explaining what
+               the badges measure — and `flex: none` sizes a flex item to its
+               **max-content**, so that sentence laid out as one unwrappable
+               line and `.research-head` (`overflow-x: hidden`) cut it off.
+               Reported. See `.research-count-wide`. */
+            <div
+              className={`research-count${comparing ? ' research-count-wide' : ''}`}
+              role="status"
+            >
               {loading ? (
                 <LoadingLine>
                   {teams ? 'Reading the team leaderboard' : 'Reading the league leaderboard'}

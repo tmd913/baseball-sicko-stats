@@ -13716,6 +13716,37 @@ button.start-line:focus-visible {
 .research-count-row > .research-count {
   flex: none;
 }
+/* **Except when the count is a sentence rather than a caption.**
+ *
+ * Reported as cut off. `flex: none` sizes a flex item to its **max-content**,
+ * which is exactly right for `418 of 640 pitchers` — a caption that must never
+ * scroll away past the marks beside it — and exactly wrong for the comparison
+ * line, which is two clauses saying what the badges measure and which way each
+ * hue runs. Laid out at max-content it never wrapped: measured at 680, the line
+ * ran to x=775 against a row ending at 658, **117px off the end**, and
+ * `.research-head` is `overflow-x: hidden`, so the reader lost the half of the
+ * sentence that says what the colors mean.
+ *
+ * **It takes the line rather than sharing it**, which is `flex: 1 1 100%` — the
+ * same "its own line" this file gives `.research-stick-line` and the settings
+ * dialog's runs. Sharing was the other option and it is worse where it matters:
+ * at 390 the marks would leave the sentence ~230px and it would wrap to four
+ * lines *beside* a strip squeezed to nothing, where a line of its own wraps to
+ * three and leaves the marks whole underneath.
+ *
+ * The head is **measured** (`--research-head-h`), so the column headings follow
+ * it down and back; and this line is drawn only while a comparison is on, which
+ * is a state the reader entered on purpose and can leave with one press.
+ * `flex-wrap` on the row is what lets a 100% basis claim a line at all, and it
+ * changes nothing in the ordinary case — the caption is `flex: none` and short,
+ * the marks are `min-width: 0` and scroll, so neither ever wraps. */
+.research-count-row {
+  flex-wrap: wrap;
+}
+.research-count-row > .research-count-wide {
+  flex: 1 1 100%;
+  min-width: 0;
+}
 /* **The line that says an applied search replaced this board**, and it is the
    same object as the projected line one selector up: a caption in the head
    naming the state the table is in, with the way out of it beside the words.
