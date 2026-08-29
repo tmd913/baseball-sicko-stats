@@ -27,6 +27,7 @@ import type {
   PlayerStatus,
   RecentNews,
   ClubStatus,
+  ResearchControlsPref,
   ResearchIncludeKey,
   SavedList,
   SavedSearch,
@@ -446,6 +447,19 @@ export const api = {
       method: 'PUT',
       headers: JSON_HEADERS,
       body: JSON.stringify({ on }),
+    });
+  },
+  /**
+   * How the research board's controls are arranged on its bar. An **object**
+   * that a `null` clears back to the default arrangement — `saveTheme`'s update
+   * semantics rather than a boolean's, and for the same reason: the default is
+   * a thing that can move, and an absent entry is what lets it.
+   */
+  async saveResearchControls(controls: ResearchControlsPref | null): Promise<UserPrefs> {
+    return request('/api/prefs/research-controls', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ controls }),
     });
   },
   /** Which density the player page's percentile card opens at. A **string**

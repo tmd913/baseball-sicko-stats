@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { ScrollRow } from './TabStrip';
 import { ListsPanel, SavedButton, SearchesPanel, SharedNotice } from './ResearchLists';
 /* The measured contrast cap the park board's heat is capped at — imported
@@ -18,6 +18,13 @@ import { ScheduleSpanTabs, ScheduleToggle } from './ScheduleControl';
 import { ProjectedToggle, ProjectionKey } from './Projection';
 import { CalendarGlyph, DateCalendar } from './DateRangePicker';
 import { Modal } from './Modal';
+import {
+  condensedOrder,
+  displayOf,
+  RESEARCH_CONTROLS,
+  ResearchLayoutEditor,
+} from './ResearchLayout';
+import type { ResearchControlKey, ResearchLayout } from './ResearchLayout';
 import { TurnButton, TurnDayStrip } from './TurnPicker';
 import {
   defaultScheduleSpan,
@@ -484,6 +491,38 @@ export type ResearchInclude = Record<ResearchIncludeKey, boolean>;
 
 /** The board as it opens. */
 export const DEFAULT_INCLUDE: ResearchInclude = { mine: false, others: false, fa: true };
+
+/**
+ * **How the settings dialog groups whatever the bar is not carrying** — the two
+ * questions the bar's three runs used to be, which are the same two the
+ * arrangement screen's default rows are: *which players* and *what is done to
+ * the board*.
+ *
+ * Keys rather than elements, so a control the reader has moved onto the bar
+ * simply stops appearing in its group and a group emptied that way is not
+ * drawn. The order inside each is this list's, not the bar's: a box of
+ * leftovers has no order of its own, and taking the bar's would mean the two
+ * controls left behind reading in the order of the twelve that are not.
+ */
+const SETTINGS_GROUPS: { head: string; keys: ResearchControlKey[] }[] = [
+  { head: 'Which players', keys: ['watchlist', 'searches', 'include'] },
+  {
+    head: 'The board',
+    keys: [
+      'search',
+      'pos',
+      'window',
+      'teams',
+      'filters',
+      'turns',
+      'compare',
+      'schedule',
+      'projected',
+      'columns',
+      'ranks',
+    ],
+  },
+];
 
 /** The set as a list of keys — exported because a **saved search** stores one
  *  (see `ResearchSearchBoard`), and `fromIncludeKeys` beside it reads one back. */
@@ -1063,6 +1102,24 @@ interface Props {
    *  user, and deliberately not in the URL. */
   showRanks: boolean;
   onShowRanksChange: (on: boolean) => void;
+  /**
+   * **How this reader has arranged the bar** — which control is on which row,
+   * in what order, which are drawn as their glyph alone, and the order the
+   * condensed run reads in. See `ResearchLayout.tsx` for the vocabulary and for
+   * why the shape is the reader's at all.
+   *
+   * Lifted to App for the reason `showRanks` is: it is a saved preference on
+   * the user's own record and the write goes out with the rest of them, and it
+   * has to survive the remount a board switch causes — held here, crossing to
+   * the clubs and back would throw the arrangement away and put it back from
+   * the server a moment later, with the bar changing shape in between.
+   *
+   * `null` on the way out means **back to the default**, which is what stores
+   * nothing at all — the same policy the column picker applies to a list that
+   * has come back to the defaults, and what lets that default move later.
+   */
+  layout: ResearchLayout;
+  onLayoutChange: (next: ResearchLayout | null) => void;
   /** Whether a fantasy league is connected, and so whether the board carries a
    *  roster-% column at all. The figure is ESPN's own and needs no credentials,
    *  so this gate is about relevance rather than access: to someone with no
@@ -1305,19 +1362,11 @@ export interface ResearchUi {
      *  the same surprise as coming back to find it empty. */
     lists: boolean;
     searches: boolean;
-    /**
-     * **The position picker and the span picker** — the two runs of pills the
-     * bar used to draw flat, now behind the buttons that state what they are
-     * set to.
-     *
-     * They are panels rather than dialogs because they are *one strip of pills
-     * each*, which is the test `ColumnPicker` states from the other side: a
-     * panel several hundred pixels tall wedged into the chrome pushes the table
-     * down the page, and eleven pills in a row is not that. `settings` is the
-     * one that is, and it is a dialog and so is not here — see `settingsOpen`.
-     */
-    pos: boolean;
-    window: boolean;
+    /* *(`pos` and `window` stood here — the position picker and the span
+        picker, as panels opening into the head. Both are `<select>`s now and a
+        platform list has no "open" this app can hold, so the two flags went
+        with them. The paragraph that argued them as panels rather than dialogs
+        is kept where the controls are, in `slotPos`.)* */
     /** The projected lens's span picker — the days it is drawn over. Open is a
      *  fact about where you were, like the other three. */
     projected: boolean;
@@ -1369,8 +1418,6 @@ export const freshResearchUi = (): ResearchUi => ({
     projCustom: false,
     lists: false,
     searches: false,
-    pos: false,
-    window: false,
   },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
@@ -1576,6 +1623,8 @@ export function ResearchTable({
   onIncludeWatchlistChange,
   showRanks,
   onShowRanksChange,
+  layout,
+  onLayoutChange,
   hasRosterPct,
   hasEligibility,
   trendWindows,
@@ -2070,8 +2119,6 @@ export function ResearchTable({
     projected: projectedOpen,
     lists: listsOpen,
     searches: searchesOpen,
-    pos: posOpen,
-    window: windowOpen,
   } = ui.panels;
   /**
    * **The settings dialog, and it is local state where the panels beside it are
@@ -2084,6 +2131,18 @@ export function ResearchTable({
    * board wants the board rather than the box they left over it.
    */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * **The arrangement screen, and it is local for the same reason — with one
+   * thing to say for itself.**
+   *
+   * It is *not* closed when the settings box that opened it is. A reader
+   * arranging the bar wants to look at the bar, and the settings box is a
+   * full-screen thing on a phone standing directly over it; shutting that box
+   * without losing this screen is the whole of how the arrangement gets
+   * checked. Two independent flags is what says that, where `setPanel`'s
+   * exclusivity would not.
+   */
+  const [layoutOpen, setLayoutOpen] = useState(false);
   /**
    * **The span in force came through the calendar** — it is not one of the
    * named periods, so `Custom` is the door it came through.
@@ -2247,8 +2306,6 @@ export function ResearchTable({
         projected: false,
         lists: false,
         searches: false,
-        pos: false,
-        window: false,
       };
       const panels = { ...u.panels, ...(on ? shut : {}), [which]: on };
       // **The span picker's own door goes wherever its panel goes**, and that
@@ -2749,7 +2806,7 @@ export function ResearchTable({
   const headRef = useRef<HTMLDivElement | null>(null);
   usePublishedHeight(headRef, '--research-head-h');
   /**
-   * **Whether the bar has reached its third row**, which is what swaps the
+   * **Whether the bar has scrolled past its last row**, which is what swaps the
    * control set for the condensed run.
    *
    * A sentinel rather than a scroll listener on the pane: the question is "has
@@ -2771,8 +2828,29 @@ export function ResearchTable({
    * of `.view-tools` — hides it too and this reads `true` there. That costs
    * nothing: the run is drawn on `stuck || isFull` either way, and it is the
    * only thing the flag decides.
+   *
+   * **The mark is held in state rather than in a ref, and that is the whole of
+   * a bug this shipped with.** The sentinel is drawn inside whichever row is
+   * the last one, so it is a *different DOM node* every time that changes —
+   * the reader moves a control between rows, empties a row, or crosses to the
+   * clubs board where a row's controls all take themselves off. A `useRef` with
+   * an `useEffect(…, [])` observing it once bound the observer to the node the
+   * bar had **at mount**; the moment the last row moved, React unmounted that
+   * node and the observer went on watching a **removed element**, which reports
+   * `isIntersecting: false` forever. So the condensed run appeared over an
+   * unscrolled board and stayed there until the page was reloaded.
+   *
+   * Reported exactly so, and driven: with the bar at `scrollTop` 0, moving one
+   * control out of the fourth row took the rail from **not drawn to drawn**,
+   * with the sentinel now in row 3 and the observer still on row 4's. A
+   * callback ref into state re-runs the effect on the node itself, so it
+   * follows the mark wherever the arrangement puts it — and that is right for
+   * *any* reason the node changes rather than for the one that was noticed.
+   *
+   * It could not happen while the bar was one row, which is why `[]` was safe
+   * when it was written: there was only ever one place for the mark to be.
    */
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
   const [stuck, setStuck] = useState(false);
   /** **How tall the condensed run is**, published because two sticky boxes are
    *  held under it — the head, and through `--pane-bar-h` the table's own
@@ -2781,16 +2859,23 @@ export function ResearchTable({
    *  whenever the rail is not drawn. */
   const condRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const mark = sentinelRef.current;
     const box = scrollRef.current;
-    if (!mark || !box) return;
+    /* **No mark means nothing to read the stick off**, which is a real state
+       for one frame while React swaps the sentinel from one row to another —
+       and `false` is the right answer for it: the run belongs on screen only
+       once something has said the bar has gone, and a stale `true` held across
+       that frame is the fault this whole block records. */
+    if (!sentinel || !box) {
+      setStuck(false);
+      return;
+    }
     const io = new IntersectionObserver(
       ([e]) => setStuck(!e.isIntersecting),
       { root: box, threshold: 0 },
     );
-    io.observe(mark);
+    io.observe(sentinel);
     return () => io.disconnect();
-  }, []);
+  }, [sentinel]);
   /**
    * **Nothing here compensates the scroll any more, because nothing moves.**
    *
@@ -3476,7 +3561,7 @@ export function ResearchTable({
       label="Searches"
       title="Saved readings of this board — apply, save, share"
       open={searchesOpen}
-      onToggle={() => setPanel('searches', !searchesOpen)}
+      onToggle={() => openPanel('searches', !searchesOpen)}
       /* **A mark, because the condensed run is marks.** That run hides every
          label and squares the button; with no glyph this one collapsed to its
          own caret alone — a bare `⌄` in a row where Search is a magnifier and
@@ -3613,7 +3698,7 @@ export function ResearchTable({
    */
   const turnChip = activeTurn ? turnDaysLabel(activeTurn.days, activeTurn.index.today) : null;
 
-  const groupWho = (
+  const slotWatchlist = (
     <>
           {/* Ahead of the position pills, and a separate control from them:
               which rosters and which position both apply, so folding them into
@@ -3651,30 +3736,34 @@ export function ResearchTable({
           ) : (
             <div className="rl-split">
               {watchlistToggle}
-              {/* **The word is back, and the paragraph that took it away is
-                  kept rather than deleted.** It read: *a caret, not a second
-                  word — `Watchlist · Lists ▾` is two nouns for one thing, the half
-                  beside this one already names the list, so all this half has to
-                  say is* there are others. That argument was made about a bar
-                  where the toggle always said `Watchlist`, and it is the half
-                  that was right: two nouns for one thing is what it read as.
+              {/* **The caret alone, and the word is gone again.** Asked for
+                  in as many words, and the paragraph that put the word there is
+                  kept rather than deleted, because half of it is still the
+                  reason this half has a `title` and an `aria-label` at all:
 
-                  What it missed is that the toggle stopped saying `Watchlist`
-                  the same day — it names the **active list**, so the pair reads
-                  `Closers │ Lists ⌄`, which is a list and the button that
-                  changes it rather than one noun twice. And the caret alone was
-                  a 29×36 target with no name on it in a run where every other
-                  button carries its word: nothing on screen said what pressing
-                  it would do, and the only thing that did was a `title` a touch
-                  device never sees. Measured at 1400, the half went **29 → 70px** and the
-                  pair 136 → 177, with the third run and the head unmoved.
+                  *"a caret, not a second word — `Watchlist · Lists ▾` is two
+                  nouns for one thing, the half beside this one already names
+                  the list, so all this half has to say is* there are others.
+                  *…What that missed is that the caret alone was a 29×36 target
+                  with no name on it in a run where every other button carries
+                  its word: nothing on screen said what pressing it would do,
+                  and the only thing that did was a `title` a touch device never
+                  sees."*
+
+                  Both halves of that were right about a bar where **every**
+                  button carried its word. That is no longer the bar: the reader
+                  says how each control is drawn, and on any arrangement with
+                  icons in it a caret beside a star is the run's own grammar
+                  rather than the one wordless thing in it. So the word goes and
+                  what it bought is kept another way — the half is the app's own
+                  36px square rather than the 29px squeeze it was, so it is a
+                  target you can aim at, and `SavedButton` gives a label-less
+                  button its `title` as an `aria-label`, so it still names
+                  itself to everything that is not a pointer.
 
                   It is still one shape and still two targets — see `.rl-split`,
-                  which is unchanged. The condensed run hides the word with every
-                  other label and the half goes back to being a caret in a 36px
-                  square, which is that run's whole grammar. */}
+                  which is unchanged. */}
               <SavedButton
-                label="Lists"
                 title="Choose a watchlist, or rename, share and add one"
                 open={listsOpen}
                 onToggle={() => openPanel('lists', !listsOpen)}
@@ -3682,6 +3771,11 @@ export function ResearchTable({
               />
             </div>
           )}
+    </>
+  );
+
+  const slotSearches = (
+    <>
           {/* **Straight after the split**, and ahead of the ownership sets
               rather than behind them: the two saved-thing controls are a pair,
               and a pair is read together. Off the bar on the team reading for
@@ -3689,6 +3783,11 @@ export function ResearchTable({
               and an ownership set, and a board of thirty clubs has neither, so a
               reading applied there would be a control lying about its reach. */}
           {searchesButton}
+    </>
+  );
+
+  const slotInclude = (
+    <>
           {!teams && (
           <div className="research-include" role="group" aria-label="Which players">
             {INCLUDE_ORDER.filter(
@@ -3736,143 +3835,40 @@ export function ResearchTable({
     </>
   );
 
-  /**
-   * **The span, as a strip in the head rather than a run in the bar.**
-   *
-   * It was five pills flat on the bar's second row, plus a `<select>` beside
-   * them for a phone. It is now behind a button that states what it is set to,
-   * and that button is one of the four the bar has left — which is the whole
-   * point of the change: five pills were five pills' worth of bar spent saying
-   * `Season` four fifths of the time.
-   *
-   * **A panel and not a dialog**, which is the test `ColumnPicker` states from
-   * the other side: a box several hundred pixels tall wedged into the chrome
-   * pushes the table down the page, and a strip of five is not that. The
-   * `<select>` went with the change — a strip in the head is full-width at
-   * every width, so there is no narrow case left for a dropdown to answer, and
-   * the media query that swapped them is gone.
-   *
-   * **Picking closes it**, which is the day strip's own asymmetry read the easy
-   * way: a press here *is* the answer, so there is nothing left to keep open.
-   *
-   * **Not reachable at all under the projected lens**, which is the old rule
-   * moved with the control rather than dropped: a projection is his season
-   * blended with his last thirty days, always, so under the lens these five
-   * decide nothing — and a reader who pressed `7d` and watched the table not
-   * move would be owed an explanation this chrome has no room for. The setting
-   * survives the lens and the board comes back to it, exactly as the turn
-   * filter's days survive a crossing to the batters. The *button* is not drawn
-   * either, so there is no lit control pointing at a panel nothing can open.
-   */
-  const windowStrip = (
-    <div className="research-panel research-pick-panel">
-      <div className="research-pick-row" role="tablist" aria-label="Time span">
-        {RESEARCH_WINDOWS.map((w) => (
-          <button
-            key={String(w)}
-            type="button"
-            role="tab"
-            aria-selected={statWindow === w}
-            className={`research-window-tab${statWindow === w ? ' active' : ''}`}
-            onClick={() => {
-              onWindowChange(w);
-              openPanel('window', false);
-            }}
-            title={
-              w === 'season'
-                ? 'The whole season to date'
-                : `The last ${w} days of games, ending yesterday`
-            }
-          >
-            {windowLabel(w)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  /* *(The two **panels** that stood here are gone, and the paragraphs that
+      argued them are kept in `slotPos` and in the stylesheet's own
+      `.research-pick-select` block, which is this file's rule for superseded
+      reasoning. They were `windowStrip` and `posStrip` — a strip of five spans
+      and eleven positions in two named groups, opened into `.research-head` by
+      a button that stated what it was set to.
 
-  /**
-   * **The positions, grouped by the side of the ball they belong to.**
-   *
-   * Eleven pills in one run is a control you have to read along to find `SS`,
-   * which is what the `<select>` beside them existed to answer on a phone. In
-   * two named groups it is two short runs — `Batters · C · 1B · 2B · 3B · SS ·
-   * IF · OF` and `Pitchers · SP · RP` — and the heading over each is the thing
-   * a flat run could never say: that the eight and the two are not one list.
-   * The whole-board pill leads its own group, being what that group is when
-   * nothing under it is narrowed.
-   *
-   * **The group headings are `<div role="presentation">` rather than headings**,
-   * for the reason `Top Performers` is a `span` on the Overview: this panel is
-   * inside a `tablist` whose tabs are the pills, and a heading between them
-   * would be announced as structure in a list that has none. The tablist's own
-   * `aria-label` names what is being picked; each group carries `aria-label` on
-   * its own row.
-   *
-   * **On the team reading it is the two sides and no groups** — a club plays
-   * every position, so nine of the eleven have nothing to select, and an
-   * `optgroup` over a run of one reads as a heading with nothing under it. That
-   * is the rule `TEAM_SIDES` already carried down from the `<select>` it
-   * replaces.
-   */
-  const posStrip = (
-    <div className="research-panel research-pick-panel">
-      {(teams ? [{ label: null, items: TEAM_SIDES }] : POSITION_GROUPS).map((g) => (
-        <div className="research-pick-group" key={g.label ?? 'sides'}>
-          {g.label && (
-            <div className="research-pick-head" role="presentation">
-              {g.label}
-            </div>
-          )}
-          <div
-            className="research-pick-row"
-            role="tablist"
-            aria-label={g.label ?? (teams ? 'Side' : 'Position')}
-          >
-            {g.items.map((p) => {
-              const on = teams ? researchKindFor(pos) === p.kind : pos === p.key;
-              return (
-                <button
-                  key={p.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  className={`research-pos-tab${on ? ' active' : ''}`}
-                  title={(hasEligibility && p.espnTitle) || p.title}
-                  /* On the team reading the press is a no-op where the kind is
-                     already right — pressing `Hitting` on a board reached from
-                     the `SS` pill must not spend that pill. */
-                  onClick={() => {
-                    if (!(teams && researchKindFor(pos) === p.kind)) onPosChange(p.key);
-                    openPanel('pos', false);
-                  }}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+      What they were right about is the fault the pill runs had: eleven pills
+      behind a horizontal scroll is a control you have to drag through to find
+      `SS`. What they were wrong about is that a platform list cannot group or
+      carry a per-option title — `<optgroup>` and `<option title>` do both —
+      and about the cost: a panel opens into the head, so a press **moved the
+      table down the page** and moved it back, over a board where every pixel
+      of height is a row. Both controls are `<select>`s again, at every width,
+      and the media query that used to swap them in on a phone is not coming
+      back with them.)* */
 
-  const groupTools = (
+
+  /* *(The paragraph that stood here argued `.research-tools` — the four
+      disclosure buttons as **one flex item**, so a wrapping bar moved them
+      down together instead of stranding whichever one still fitted at the end
+      of the row above. It is kept because it is still true of the box it was
+      written for: that class is what the settings dialog groups its off-bar
+      controls with, and the gap between two `.research-toggle`s is declared on
+      it for the whole app.*
+
+      *What it no longer describes is the bar. A row is a `ScrollRow` now and
+      the reader says which controls are on it — see `ResearchLayout.tsx` — so
+      there is no wrapping left for a group to survive, and a run travelling
+      whole would be four controls the reader had asked to place separately
+      arriving together.)* */
+
+  const slotTeams = (
     <>
-
-            {/* One group, so the four buttons never split across two lines of the
-                bar. As individual flex children they wrapped one at a time, and on
-                a wide screen that stranded whichever one happened to fit at the end
-                of the position row — a lone Search up there, its three companions
-                below. `flex: none` on the group is what makes the whole run move
-                down together instead.
-
-                The window dropdown used to sit at the head of it, to share the
-                buttons' line on a phone. It has moved back up beside its own pill
-                row now that the position row has a dropdown of its own: the two
-                belong together — they name which slice of the league the table
-                is, where the buttons open panels. */}
-            <div className="research-tools">
             {/**
              * **Teams leads the run, and it is a toggle rather than a
              * segmented switch.**
@@ -3910,6 +3906,11 @@ export function ResearchTable({
              * table *is*, which is exactly the kind of thing that box holds.
              */}
             {teamsToggle}
+    </>
+  );
+
+  const slotFilters = (
+    <>
             {/* **Search is not in this box, and it is the only control that
                 isn't.** It is one of the four the bar keeps, so a copy here
                 would be the same disclosure drawn twice — and the two would sit
@@ -3937,6 +3938,11 @@ export function ResearchTable({
               <span className="research-toggle-label">Filters</span>
               {filters.length > 0 && <span className="research-toggle-count">{filters.length}</span>}
             </button>
+    </>
+  );
+
+  const slotTurns = (
+    <>
             {/**
              * **Starting — the third disclosure, and the pitching board's
              * own.**
@@ -3973,7 +3979,16 @@ export function ResearchTable({
                 onToggle={() => openPanel('turns', !turnsOpen)}
               />
             )}
-            {/**
+    </>
+  );
+
+  /* *(Three paragraphs stood here and are kept, this file's rule for
+      superseded reasoning. Two of them are about controls that are no longer
+      in this run because there is no run: Watchlist and Schedule are placed
+      by the reader now, and the measurement about `.research-include` and the
+      order the tools read in is the record of a bar that decided both.)* */
+
+            /**
              * **Watchlist sits after Filters, and it is the one control here
              * that adds players rather than taking them away.** It stays in this
              * group rather than joining the three include buttons it now
@@ -4003,12 +4018,12 @@ export function ResearchTable({
              * never `.active`, and it carries the count for the same reason the
              * Filters button does — a control that holds something has to say so
              * with its panel shut, and this one has no panel at all.
-             */}
-            {/* Off the bar on the team reading with the three include buttons
+             */
+            /* Off the bar on the team reading with the three include buttons
                 it composes with, and for the same reason: the watchlist is a
                 list of players, and unioning players onto a board of clubs is
-                not an operation. */}
-            {/**
+                not an operation. */
+            /**
              * **Schedule reads after the four that narrow the board and before
              * the two that dress it**, which is where it belongs in the run's
              * own order: Search, Filters and Watchlist decide *who* is in the
@@ -4024,10 +4039,13 @@ export function ResearchTable({
              * its own reach. Search and Filters stay, because they narrow the
              * *rows* and a schedule of the shortstops with 300+ PA is exactly
              * the question this board is opened with.
-             */}
-            {/* *(Saved searches stood here and are in the first run now, beside
+             */
+            /* *(Saved searches stood here and are in the first run now, beside
                 the watchlist chooser — see `searchesButton`, which keeps the
-                paragraph that put them here.)* */}
+                paragraph that put them here.)* */
+
+  const slotCompare = (
+    <>
             {/**
              * **Compare, and it is two controls in one place rather than two
              * buttons.**
@@ -4142,6 +4160,11 @@ export function ResearchTable({
                 )}
               </div>
             )}
+    </>
+  );
+
+  const slotSchedule = (
+    <>
             <ScheduleToggle
               on={scheduleSpan !== null}
               /* On with no index is the read still out — App holds the window
@@ -4188,6 +4211,11 @@ export function ResearchTable({
                 onChange={onScheduleSpanChange}
               />
             )}
+    </>
+  );
+
+  const slotProjected = (
+    <>
             {/**
              * **Projected reads directly after Schedule**, and the two are the
              * same kind of control read one step apart: that one swaps the stat
@@ -4286,6 +4314,11 @@ export function ResearchTable({
                  */}
               </>
             )}
+    </>
+  );
+
+  const slotColumns = (
+    <>
             {/**
              * **Columns is drawn under the lens and Ranks is not**, which is
              * this pair's own rule read one control at a time rather than as a
@@ -4328,6 +4361,11 @@ export function ResearchTable({
                 onToggle={() => openPanel('columns', !columnsOpen)}
               />
             )}
+    </>
+  );
+
+  const slotRanks = (
+    <>
             {/**
              * **Ranks is the half of the pair that genuinely has no subject
              * under the lens.** A percentile is a standing among the
@@ -4373,20 +4411,9 @@ export function ResearchTable({
                 />
               </>
             )}
-            </div>
     </>
   );
 
-  /**
-   * **What the position button says**, which is the whole reason a button
-   * replaces the run: the run said eleven things and the reader only ever needs
-   * the one that is set. `Batters` is the default and reads as one, so nothing
-   * on the bar has to say *default*.
-   */
-  const posLabel =
-    (teams ? TEAM_SIDES : POSITIONS).find((p) =>
-      teams ? researchKindFor(pos) === p.kind : p.key === pos,
-    )?.label ?? 'Batters';
 
   /**
    * ---------------------------------------------------------------------------
@@ -4601,7 +4628,7 @@ export function ResearchTable({
     setFilters,
   ]);
 
-  const rowMain = (
+  const slotSearch = (
     <>
       {/* Search leads, being the one question you can ask this board without
           knowing anything about it. `.on` while the field holds something, so a
@@ -4613,7 +4640,11 @@ export function ResearchTable({
           search.trim() ? ' on' : ''
         }`}
         aria-expanded={searchOpen}
-        onClick={() => setPanel('search', !searchOpen)}
+        /* `openPanel`, not `setPanel`: this control can be behind the gear
+           now, and a panel opening into the head *under* the settings dialog
+           would be a press whose whole answer is off screen. On the bar the
+           extra half is a no-op — that box is already shut. */
+        onClick={() => openPanel('search', !searchOpen)}
         title="Search the league by name"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
@@ -4622,6 +4653,17 @@ export function ResearchTable({
         </svg>
         <span className="sr-only">Search the league by name</span>
       </button>
+    </>
+  );
+
+  /* **The gear is the one control the reader cannot place**, and that is the
+      whole of the exception: everything else on this bar can be moved off it,
+      and a gear moved off the bar would take the screen that moves it back
+      with it. So it is drawn first on the first row and is in no
+      arrangement — see `ResearchLayout.tsx`, where the fourteen that *are*
+      placeable are listed. */
+  const gearButton = (
+    <>
       {/**
        * **The gear, and it carries a count.**
        *
@@ -4657,29 +4699,275 @@ export function ResearchTable({
         <span className="sr-only">Board settings</span>
         {marks.length > 0 && <span className="research-toggle-count">{marks.length}</span>}
       </button>
-      {/* The position, stating what it is set to. `.active` alone and never
-          `.on`: every board is on *some* position, so a lit button here would
-          be a mark on every board, which marks nothing. */}
-      <SavedButton
-        label={posLabel}
-        title={teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'}
-        open={posOpen}
-        onToggle={() => setPanel('pos', !posOpen)}
-        className="research-pick-btn"
-      />
-      {/* …and the span, on the same terms, and **not drawn under the projected
-          lens** — the rule that took the pill row off the bar there, arriving on
-          the button that replaced it. See `windowStrip`. */}
-      {!projectedOn && (
-        <SavedButton
-          label={windowLabel(statWindow)}
-          title="How much of the season every number on the board is drawn from"
-          open={windowOpen}
-          onToggle={() => setPanel('window', !windowOpen)}
-          className="research-pick-btn"
-        />
-      )}
     </>
+  );
+
+  /**
+   * **The position, as a dropdown.**
+   *
+   * *(It has been three shapes. Eleven pills flat on the bar, with a `<select>`
+   * swapped in under 640 — and the paragraph that argued the swap is kept in
+   * the stylesheet because it was right about the fault: "eleven pills behind a
+   * horizontal scroll is a control you have to drag through to find `SS`". Then
+   * a button stating what it is set to, opening a grouped strip in the head,
+   * which was argued as having both halves of a select — the closed state on
+   * the button and a **groupable** open state the platform list was said not to
+   * do.)*
+   *
+   * **That last claim was the weak one, and it is what this reverts.** A
+   * platform list groups perfectly well — `<optgroup>` is the element the
+   * board's own reading of it already named — and it carries a per-option
+   * `title` too, which was the other thing the panel was said to be needed for.
+   * What the panel could never be is *the shape a reader expects*: asked for
+   * directly, twice.
+   *
+   * **And the swap it makes is a good one on this bar in particular.** A panel
+   * opens into `.research-head`, which means a press here **moves the table
+   * down the page** by the panel's height and moves it back when a pill is
+   * pressed — over a board where every pixel of height is a row. A native list
+   * is drawn by the platform *over* everything and costs the page nothing.
+   *
+   * **One shape at every width**, so the media query that swapped pills for a
+   * select is not coming back with it: this is the select at 390 and at 1920
+   * alike.
+   *
+   * On the team reading it is the two sides and **no groups** — a club plays
+   * every position, so nine of the eleven have nothing to select, and an
+   * `optgroup` over a run of one reads as a heading with nothing under it. That
+   * is the rule `TEAM_SIDES` carried down from the first `<select>`, arriving
+   * back at one. Picking the side already set fires no `change` at all, which
+   * is the "pressing `Hitting` on a board reached from the `SS` pill must not
+   * spend that pill" rule for free.
+   */
+  const slotPos = (
+    <select
+      className="research-pick-select"
+      aria-label={
+        teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'
+      }
+      title={
+        teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'
+      }
+      value={teams ? (researchKindFor(pos) === 'pitcher' ? 'pitchers' : 'batters') : pos}
+      onChange={(e) => onPosChange(e.target.value as ResearchPos)}
+    >
+      {teams
+        ? TEAM_SIDES.map((p) => (
+            <option key={p.key} value={p.key} title={p.title}>
+              {p.label}
+            </option>
+          ))
+        : POSITION_GROUPS.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map((p) => (
+                <option
+                  key={p.key}
+                  value={p.key}
+                  /* The eligibility wording the pills carried — `Eligible at
+                     shortstop in ESPN` — which the panel was said to be the
+                     only shape that could hold. An `<option>` takes a `title`
+                     like anything else. */
+                  title={(hasEligibility && p.espnTitle) || p.title}
+                >
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+    </select>
+  );
+
+  /** …and the span, on the same terms and for the same reasons — a flat list of
+   *  five, which is the one thing a strip of five pills and a dropdown are
+   *  equally good at, so what decides it is that the two controls beside each
+   *  other should be one shape. **Not drawn under the projected lens**, which
+   *  is `noSubject`'s business now rather than a condition written here. */
+  const slotWindow = (
+    <select
+      className="research-pick-select"
+      aria-label="How much of the season every number on the board is drawn from"
+      title="How much of the season every number on the board is drawn from"
+      value={String(statWindow)}
+      onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
+    >
+      {RESEARCH_WINDOWS.map((w) => (
+        <option
+          key={String(w)}
+          value={String(w)}
+          title={
+            w === 'season'
+              ? 'The whole season to date'
+              : `The last ${w} days of games, ending yesterday`
+          }
+        >
+          {windowLabel(w)}
+        </option>
+      ))}
+    </select>
+  );
+
+  /**
+   * ---------------------------------------------------------------------------
+   * The bar, as the reader has arranged it
+   * ---------------------------------------------------------------------------
+   *
+   * **The fourteen controls, by key.** Every one of them is the same JSX it was
+   * when the bar's shape was written here — the change is one of **place**,
+   * which is the same thing the saved-thing panels' own move records. What is
+   * new is that this file no longer decides the place: `layout` does, and the
+   * reader owns `layout`.
+   *
+   * **Which of them have a subject on this reading is `noSubject`'s question**,
+   * not this map's — see it directly below.
+   */
+  const slots: Record<ResearchControlKey, ReactNode> = {
+    /* **The gear is placed like everything else**, and the only thing special
+       about it is that it cannot be taken off the bar or off the sticky line —
+       `REQUIRED_CONTROL`, enforced in `readResearchLayout` so a stored
+       arrangement that has lost it gets it back rather than being refused. It
+       used to be drawn outside the arrangement, first on the first row, which
+       was the same guarantee with the reader's choice of place taken away. */
+    settings: gearButton,
+    search: slotSearch,
+    pos: slotPos,
+    window: slotWindow,
+    include: slotInclude,
+    watchlist: slotWatchlist,
+    searches: slotSearches,
+    teams: slotTeams,
+    filters: slotFilters,
+    turns: slotTurns,
+    compare: slotCompare,
+    schedule: slotSchedule,
+    projected: slotProjected,
+    columns: slotColumns,
+    ranks: slotRanks,
+  };
+
+  /**
+   * **Why a control has nothing to be about on this reading**, in words, or
+   * `undefined` where it does.
+   *
+   * This is the rule the bar already followed a control at a time — *a control
+   * whose whole subject has been swapped out is a setting lying about its own
+   * reach* — collected into one function, and collecting it is the point. It
+   * used to be a condition per entry in the map above and a `null` where it
+   * fired, which drew the bar correctly and left the **arrangement screen**
+   * showing fifteen chips with no hint that four of them were not on the board
+   * behind it. Reported as exactly that: `Starting` sitting in row 2 of the
+   * editor and nowhere on a batters board.
+   *
+   * One function, two readers — the bar tests it to decide whether to draw a
+   * control, and the editor prints it under the chip. *One arithmetic, one
+   * implementation*: a condition written in both places is a condition that
+   * comes to disagree, and the way it would disagree is the editor promising a
+   * control the board will not draw.
+   *
+   * The wording completes *"Not on the bar right now — …"*.
+   */
+  const noSubject = (k: ResearchControlKey): string | undefined => {
+    /* A board of thirty clubs has no owners, no watchlist, no comparison of
+       players, no per-man projection and no rotation turn. */
+    const clubs = 'the board is reading clubs, not players';
+    switch (k) {
+      case 'include':
+      case 'watchlist':
+      case 'searches':
+      case 'compare':
+      case 'projected':
+        return teams ? clubs : undefined;
+      /* A turn is a fact about a pitcher. The range it holds survives the
+         crossing, so coming back to the arms finds the days still picked. */
+      case 'turns':
+        return teams ? clubs : kind !== 'pitcher' ? 'the board is reading batters' : undefined;
+      /* A projection is his season blended with his last thirty days, always,
+         so the five spans decide nothing under the lens. */
+      case 'window':
+        return projectedOn ? 'the projected lens always reads one span' : undefined;
+      /* The day columns are a vocabulary nobody picks. */
+      case 'columns':
+        return schedule ? 'the Schedule view draws days instead of stats' : undefined;
+      /* …and a percentile is a standing among *qualified* players on a measured
+         board, which nobody is for a week nobody has played. */
+      case 'ranks':
+        return schedule
+          ? 'the Schedule view draws days instead of stats'
+          : projectedOn
+            ? 'a projection is never ranked against measured players'
+            : undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  /** What the arrangement screen prints under the chips it cannot promise. */
+  const absentControls = Object.fromEntries(
+    RESEARCH_CONTROLS.map((c) => [c.key, noSubject(c.key)]).filter(([, why]) => !!why),
+  ) as Partial<Record<ResearchControlKey, string>>;
+
+  /** Which of them have something to draw on this reading. */
+  const liveSlot = (k: ResearchControlKey) => !noSubject(k);
+
+  /**
+   * **One control, wrapped only so the arrangement can reach it.**
+   *
+   * `display: contents` (see `.research-slot`), so the button inside is still a
+   * direct flex item of the row it is on and nothing about the layout changes
+   * by being wrapped — the trick `.research-chrome` and `.research-bar` already
+   * use one box up. What the wrapper buys is a class the stylesheet can hang
+   * *this reader's* choice on — `.is-icon` for the glyph alone and `.is-text`
+   * for the word alone, with neither meaning both, which is the default and so
+   * needs no class at all.
+   *
+   * `.is-icon` is **folded onto the condensed run's own selector list**, since
+   * a control drawn as its glyph is the same object however it came to be one.
+   * `.is-text` is its mirror and has no such twin: nothing else in this app
+   * takes a glyph off a button, so it is one rule of its own rather than a
+   * fold onto something that merely resembles it.
+   */
+  const slotOf = (k: ResearchControlKey) => {
+    const mode = displayOf(layout, k);
+    return (
+      <div
+        key={k}
+        className={`research-slot${mode === 'both' ? '' : ` is-${mode}`}`}
+      >
+        {slots[k]}
+      </div>
+    );
+  };
+
+  /**
+   * **A row with nothing on it is not drawn**, and that is not only about a
+   * reader who has left one empty: on the clubs board *every* control in a row
+   * can take itself off (`slots`, where a key with no subject is `null`), and
+   * an arrangement whose second row is the ownership sets, the watchlist and
+   * the saved searches has an empty second row there. Drawn, it was a line of
+   * chrome over the table with nothing in it — the one thing this whole file is
+   * measured against.
+   *
+   * **Every empty row goes, the first included**, and that is only safe because
+   * the gear is placed like everything else and is required to be *somewhere*
+   * (`REQUIRED_CONTROL`) — so at least one row always has something on it and
+   * the bar can never come out with no rows at all. While the gear was drawn
+   * outside the arrangement this rule had to spare the first row to have
+   * somewhere to put it, which meant a reader who emptied that row got a line
+   * of chrome holding one button.
+   */
+  const barRows = layout.rows.map((row) => row.filter(liveSlot));
+  /** Which row the stick is read off — the last one that is drawn. */
+  const lastRow = barRows.reduce((last, row, i) => (row.length ? i : last), 0);
+  /* The sticky line as the reader has it: their order, less what they have
+     turned off there — `condensedOrder`, so this and the arrangement screen's
+     own preview cannot come to disagree about which controls are on that line.
+     Then less whatever has no subject on this reading, like every row above. */
+  const condensedRun = condensedOrder(layout).filter(liveSlot);
+
+  /** Everything the bar is not carrying, which is what the settings dialog
+   *  holds. In the editor's own order rather than the arrangement's: this box is
+   *  a list of what is left, and a list of leftovers has no order of its own. */
+  const offBar = RESEARCH_CONTROLS.map((c) => c.key).filter(
+    (k) => liveSlot(k) && !barRows.some((row) => row.includes(k)),
   );
 
 
@@ -4738,8 +5026,6 @@ export function ResearchTable({
           They lead the run because they are what the two buttons beside Search
           open, and because they are the smallest: one strip and two, where
           Filters is a builder and the day strip is a fortnight. */}
-      {posOpen && posStrip}
-      {windowOpen && !projectedOn && windowStrip}
       {/* **The two saved-thing panels are dialogs now, and are drawn beside the
           Columns picker rather than here.** Two paragraphs of this file's
           history sit under that one sentence and both are worth keeping:
@@ -5086,45 +5372,74 @@ export function ResearchTable({
    * server had clamped it (`start` is clamped forward to today) would be
    * describing days the table is not about.
    */
-  const projSpanLine = projectedOn ? (
-    <div className="research-proj-line">
-      <span>
-        {projection.daysLeft === 0 ? (
-          'Nothing to project — every game in these days has been played'
-        ) : (
-          <>
-            <span className="research-proj-lead">Projected</span> ·{' '}
-            {wideRange(projection.start, projection.end)}
-          </>
-        )}
-      </span>
-      {/* **The key sits against the claim it explains**, which is this line and
-          not the button three runs above it — see the paragraph at the toggle
-          for the reasoning it replaces. It is the same `ProjectionKey` the
-          Roster row and the League page open; what is this caller's is where it
-          hangs from, which is `.research-proj-key`.
+  /**
+   * **The line is gone and the mark says it instead**, which is what the mark
+   * strip was built to do.
+   *
+   * It read `PROJECTED · Aug 29 – Aug 31  ⓘ  Clear`, one line above a count row
+   * carrying `Projected · Aug 29 – Aug 31 ×` — the **same claim, the same
+   * accent and the same way out, 33px apart**. That is precisely the fault the
+   * old `.research-badge` row was deleted for, arriving from the other
+   * direction: the badge row was removed *because* the strip could hold every
+   * setting, and this line stayed behind saying one of them a second time.
+   * Reported as exactly that, and removing it gives the head a line back on the
+   * one page where a line of head is a row of the table.
+   *
+   * **Two things it was carrying do not go with it.**
+   *
+   * The **empty state** is one: `daysLeft === 0` is not a span, it is *nothing
+   * to project — every game in these days has been played*, and no mark says
+   * that. An empty state names its own cause and keeps the control that caused
+   * it reachable, so that branch keeps the line and keeps `Clear` with it. The
+   * two are never the same sentence: where the line is drawn now, the mark
+   * beside the count is the only other thing on screen saying which days, and
+   * the line is saying they are all behind us.
+   *
+   * The **key** is the other, and it moves to the count row — see `projKey`.
+   */
+  const projSpanLine =
+    projectedOn && projection.daysLeft === 0 ? (
+      <div className="research-proj-line">
+        <span>Nothing to project — every game in these days has been played</span>
+        <button
+          type="button"
+          className="research-clear"
+          onClick={() => {
+            setPanel('projected', false);
+            onProjSpanChange(null);
+          }}
+          title="Back to what has actually happened"
+        >
+          Clear
+        </button>
+      </div>
+    ) : null;
 
-          **A glyph rather than a box.** Every other `InfoKey` in the app is
-          `.app-dialog-close`'s 30px bordered square, which is right beside a
-          heading and wrong on a 12px caption: at 30px it was taller than the
-          line it belongs to and drew a second control between the sentence and
-          `Clear`. Here it is the 16px mark alone, with the press area kept at
-          the app's own size by padding the button out and pulling it back in —
-          measured, the box paints 16×16 and hit-tests 28×28, so nothing is lost
-          to a finger. */}
-      <ProjectionKey board days={projection.daysLeft} className="research-proj-key" />
-      <button
-        type="button"
-        className="research-clear"
-        onClick={() => {
-          setPanel('projected', false);
-          onProjSpanChange(null);
-        }}
-        title="Back to what has actually happened"
-      >
-        Clear
-      </button>
-    </div>
+  /**
+   * **The key, on the count row now that the line it hung from is gone.**
+   *
+   * *(The paragraph that put it on that line is kept, being right about the
+   * question rather than about the answer: "the key sits against the claim it
+   * explains, which is the line and not the button three runs above it." The
+   * claim moved; the key follows it. It is the same `ProjectionKey` the Roster
+   * row and the League page open, and the same 16px-glyph-with-a-28px-target
+   * treatment — see `.research-proj-key`, where that geometry is measured.)*
+   *
+   * **Between the count and the strip, and that is forced rather than chosen.**
+   * The claim is the `Projected · …` mark, so the key belongs beside it — but
+   * `.research-marks` is `overflow-x: auto`, and a popover opened inside a
+   * scroller is a popover that paints nothing. This board has answered that
+   * twice already (`.tool-scroll-box` and `.research-head` both clipping). The
+   * count is `flex: none` and never scrolls, so a key pinned after it is one
+   * gap from the mark it explains and always on screen, which the far side of a
+   * scrolling strip would not be.
+   *
+   * `.research-count-row` takes the `position: relative` the line used to
+   * carry — folded onto that rule, the two being the same job: the box a
+   * `position: static` key hangs its panel from.
+   */
+  const projKey = projectedOn ? (
+    <ProjectionKey board days={projection.daysLeft} className="research-proj-key" />
   ) : null;
 
   /**
@@ -5173,19 +5488,44 @@ export function ResearchTable({
     <div className="view-tools">
       <div className="research-chrome">
           <div className="research-bar">
-          {/* **One run, where there were three**, and it carries the mark the
-              stick is read off — see `stuck`, and `.research-stick-line` for why
-              the mark needs a box of its own rather than a place in this row.
-              The run scrolls away and is replaced in place by a condensed copy
-              of itself; with four buttons the copy is very nearly the run, which
-              is the point — a bar you can hold in one line is a bar that does
-              not need a second shape at every offset. */}
-          <div className="research-stick-line">
-            <div className="research-sentinel" ref={sentinelRef} aria-hidden="true" />
-            <ScrollRow label="the board's controls" className="research-row">
-              {rowMain}
-            </ScrollRow>
-          </div>
+          {/* **As many runs as the reader has asked for, up to four**, and the
+              **last** of them carries the mark the stick is read off — see
+              `stuck`, and `.research-stick-line` for why the mark needs a box
+              of its own rather than a place in the row.
+
+              The last row, and not the first: the bar scrolls away top to
+              bottom and the condensed run lands in the place the last row was
+              standing in, which is what makes the swap free. Read off the first
+              row instead, a two-row bar would put the run on screen with the
+              second row still under it — the 52px of table the whole
+              `.research-stick-line` arrangement exists to stop being taken.
+              That is the same reading the three-run bar had, where the mark was
+              on its third row.
+
+              Every row is a `ScrollRow`, so a reader who has piled nine
+              controls onto one line gets a line that scrolls rather than a bar
+              that wraps to a shape they did not ask for. An empty row is not
+              drawn at all — a line of chrome over the table spent on nothing —
+              except the first, which is where the gear is. */}
+          {barRows.map((row, i) =>
+            !row.length ? null : (
+              <div className="research-stick-line" key={i}>
+                {i === lastRow && (
+                  <div className="research-sentinel" ref={setSentinel} aria-hidden="true" />
+                )}
+                <ScrollRow
+                  label={
+                    barRows.filter((r) => r.length).length > 1
+                      ? `row ${i + 1} of the board's controls`
+                      : "the board's controls"
+                  }
+                  className="research-row"
+                >
+                  {row.map(slotOf)}
+                </ScrollRow>
+              </div>
+            ),
+          )}
           </div>
 
           {/* **The bar that says you are reading somebody else's**, and it sits
@@ -5207,36 +5547,41 @@ export function ResearchTable({
           )}
 
           {/**
-           * **Everything the bar no longer carries, in one box.**
+           * **Whatever the bar is not carrying, and the screen that decides
+           * which that is.**
            *
-           * Thirteen controls, which is the *volume* argument `ColumnPicker`
-           * already settled for this board: a panel several hundred pixels tall
-           * wedged into the chrome pushes the table it describes down the page,
-           * and on a phone takes the screen outright while pretending to be a
-           * strip of controls. A dialog is the shape for that, and it is the
-           * shape the two saved-thing boxes and the column picker beside it
-           * already take — so opening the settings and opening Columns from
-           * inside it are the same kind of gesture rather than two.
+           * *(This box held all thirteen once, and the paragraph that argued it
+           * is kept: "the volume argument `ColumnPicker` already settled for
+           * this board — a panel several hundred pixels tall wedged into the
+           * chrome pushes the table it describes down the page, and on a phone
+           * takes the screen outright while pretending to be a strip of
+           * controls." That is still exactly right about **thirteen** controls,
+           * and it is why this is a dialog rather than a panel.)*
            *
-           * **The two groups are the questions the bar's runs used to be**:
-           * *which players* (the ownership sets, the watchlist and its chooser,
-           * the saved searches) and *what to do with the board* (the clubs
-           * lens, Filters, Starting, Schedule, the comparison, Projected,
-           * Columns, Ranks). They are unchanged inside — the same components
-           * from the same props calling the same callbacks — because the
-           * change here is one of **place**, which is the same thing the
-           * saved-thing panels' own move records.
+           * **What it got wrong is that some of these controls are lenses.**
+           * Reported: not all of them were meant to be in a popup, because they
+           * need the board visible. Compare ticks players on the rows under it,
+           * Projected and Schedule swap what the cells say, Ranks puts a second
+           * reading under every number, the ownership buttons change how many
+           * rows there are — and a reader presses those to *watch the table
+           * move*, which a dialog over the table makes impossible. So the box
+           * holds what the reader has left in it, and `ResearchLayout.tsx` is
+           * where they say which that is.
+           *
+           * **The two groups are the questions the bar's runs used to be** —
+           * *which players* and *what to do with the board* — and a group with
+           * nothing left in it is not drawn: a heading over an empty box is a
+           * setting claiming to be somewhere it is not. The controls themselves
+           * are unchanged inside, the same components from the same props
+           * calling the same callbacks, because the change is one of **place**.
            *
            * **A press that opens a panel closes this box** — `openPanel`, which
            * is where that is argued.
            *
-           * **Drawn on the team reading too**, unlike the two below it, and the
-           * box is simply shorter there: the controls that have no subject on a
-           * board of clubs already take themselves off (`!teams`), which is a
-           * rule they carried in from the bar and which reads the same inside a
-           * dialog. What is left is Teams itself, Filters, Columns and Ranks —
-           * and a gear that opened nothing would be the one control on this
-           * board that lies about having anything behind it.
+           * **And the arrangement screen is always here**, whatever is left
+           * over: it is the one thing behind the gear that cannot be moved onto
+           * the bar, and a gear whose box was empty would be the one control on
+           * this board that lies about having anything behind it.
            */}
           {settingsOpen && (
             <Modal
@@ -5246,18 +5591,77 @@ export function ResearchTable({
               onClose={() => setSettingsOpen(false)}
             >
               <div className="research-settings">
-                {!teams && (
-                  <div className="research-settings-group">
-                    <h3 className="research-settings-head">Which players</h3>
-                    {groupWho}
-                  </div>
-                )}
+                {SETTINGS_GROUPS.map((g) => {
+                  const keys = g.keys.filter((k) => offBar.includes(k));
+                  if (!keys.length) return null;
+                  return (
+                    <div className="research-settings-group" key={g.head}>
+                      <h3 className="research-settings-head">{g.head}</h3>
+                      {/* `.research-tools` for the gap between two
+                          `.research-toggle`s, which is declared on that class
+                          for the whole app, and for the `flex: 1 1 100%` this
+                          dialog's own rule gives it — see the stylesheet, where
+                          the measurement that a run sized to its content
+                          overhangs this box at 390 is written down. */}
+                      <div className="research-tools">{keys.map((k) => slots[k])}</div>
+                    </div>
+                  );
+                })}
                 <div className="research-settings-group">
-                  <h3 className="research-settings-head">The board</h3>
-                  {groupTools}
+                  <h3 className="research-settings-head">The bar</h3>
+                  <p className="research-settings-note">
+                    {offBar.length
+                      ? `${offBar.length} control${offBar.length === 1 ? '' : 's'} ${
+                          offBar.length === 1 ? 'is' : 'are'
+                        } in here rather than on the bar. A control you press to watch the table change is worth a place out there.`
+                      : 'Every control is on the bar.'}
+                  </p>
+                  <button
+                    type="button"
+                    className="research-toggle"
+                    aria-haspopup="dialog"
+                    aria-expanded={layoutOpen}
+                    /* **And this box shuts on the way**, which is the rule
+                       `openPanel` already applies to every panel opened from
+                       here: the screen that arranges the bar is a screen the
+                       reader checks *against the bar*, and on a phone two
+                       stacked dialogs put a second full-screen box between
+                       them and it. It also keeps Escape honest — one press
+                       from the arrangement screen is back to the board rather
+                       than back to a box the reader had finished with. */
+                    onClick={() => {
+                      setLayoutOpen(true);
+                      setSettingsOpen(false);
+                    }}
+                    title="Choose which controls are on the bar, which row each one is on, and which are drawn as an icon"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M3.5 6h17M3.5 12h11M3.5 18h14" />
+                    </svg>
+                    <span className="research-toggle-label">Arrange the controls</span>
+                  </button>
                 </div>
               </div>
             </Modal>
+          )}
+
+          {/* **The arrangement screen, in the settings box's place rather than
+              over it.** The gear's own box shuts as this opens — see that
+              button — so this is a dialog at the page's own rung with the bar
+              it arranges above it and the board it belongs to behind, which is
+              what a reader arranging a bar needs to be able to see. A flag of
+              its own rather than a third `ui.panels` entry, for the reason
+              `settingsOpen` is one: these are boxes that are open, not places
+              the reader is, and neither is worth carrying to the other kind's
+              board. */}
+          {layoutOpen && (
+            <ResearchLayoutEditor
+              layout={layout}
+              absent={absentControls}
+              onChange={onLayoutChange}
+              onReset={() => onLayoutChange(null)}
+              onClose={() => setLayoutOpen(false)}
+            />
           )}
 
           {/* **The watchlist chooser and the saved searches, as dialogs.**
@@ -5473,17 +5877,36 @@ export function ResearchTable({
         {(stuck || isFull) && (
           <div className="research-condensed-rail">
             <div className="research-condensed-inner" ref={condRef}>
-            {/* **The tools lead this run, where the bar reads who → slice →
-                tools**, and the stick is what turns that around. This run is
-                drawn in the third row's own place now, so the controls that
-                *were* standing there are the ones that must not move: led by
-                the include marks instead, the five tools started 741px along a
-                1,156px line at 1200 and Filters, Schedule, Columns and Ranks
-                went behind the scroll arrow at the exact frame the row they
-                live on stopped moving. Reading order belongs to a bar you read
-                top to bottom; this is one line replacing one row. */}
+            {/* **This run has an order of its own, and the reader sets it.**
+
+                *(The paragraph here is kept and its finding is what the
+                setting is built on: "the tools lead this run, where the bar
+                reads who → slice → tools, and the stick is what turns that
+                around. This run is drawn in the last row's own place, so the
+                controls that* were *standing there are the ones that must not
+                move: led by the include marks instead, the five tools started
+                741px along a 1,156px line at 1200 and Filters, Schedule,
+                Columns and Ranks went behind the scroll arrow at the exact
+                frame the row they live on stopped moving. Reading order belongs
+                to a bar you read top to bottom; this is one line replacing one
+                row.")*
+
+                That is right, and it is right about **one particular
+                arrangement** — the three-run bar it was measured on. With the
+                rows the reader's own, no order written here can be the answer
+                for all of them, so the order is `layout.condensed`: theirs to
+                set, and defaulted to the bar read top to bottom, which is the
+                arrangement-independent version of the same reading.
+
+                **And which controls are on it is theirs too.** A reader who
+                has scrolled into the table wants the table, so the line can be
+                cut down to the three or four things they actually reach for
+                while reading it — `condensedOff`, kept apart from the order so
+                a control turned off keeps its place for when it comes back. The
+                gear is the one that cannot be turned off, being the only way
+                back to the controls from a scrolled board. */}
             <ScrollRow label="the board's controls" className="research-row research-condensed">
-              {rowMain}
+              {condensedRun.map(slotOf)}
             </ScrollRow>
             </div>
           </div>
@@ -5549,8 +5972,20 @@ export function ResearchTable({
               them changed would read the whole strip out on every press. */}
           {(loading || boardRows.length > 0 || marks.length > 0) && (
             <div className="research-count-row">
+            {/* Drawn before the strip and after the count — see `projKey`. */}
             {(loading || boardRows.length > 0) && (
-            <div className="research-count" role="status">
+            /* **A sentence takes the line; a caption shares it.** `418 of 640
+               pitchers` is a caption and is `flex: none` beside the marks, which
+               is the whole point of putting the two on one line. The comparison
+               branch below is not a caption — it is two clauses explaining what
+               the badges measure — and `flex: none` sizes a flex item to its
+               **max-content**, so that sentence laid out as one unwrappable
+               line and `.research-head` (`overflow-x: hidden`) cut it off.
+               Reported. See `.research-count-wide`. */
+            <div
+              className={`research-count${comparing ? ' research-count-wide' : ''}`}
+              role="status"
+            >
               {loading ? (
                 <LoadingLine>
                   {teams ? 'Reading the team leaderboard' : 'Reading the league leaderboard'}
@@ -5577,6 +6012,7 @@ export function ResearchTable({
               )}
             </div>
             )}
+            {projKey}
             {marks.length > 0 && (
               <div className="research-marks">
                 {marks.map((m) => (

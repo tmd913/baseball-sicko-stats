@@ -639,6 +639,51 @@ and that edge at **368**, fully on screen, with the right arrow now hidden; one
 press of the left returns it to 0. A hidden arrow does not hit-test, so the end
 a reader has reached is all control and no dead band.
 
+#### A wheel over one of these rows scrolls it sideways
+
+**Reported against the research board's control rows: *nothing happens when
+your mouse is over them and you scroll*.** That was true of every one of these
+rows and of the tab strip below, and it is the browser being literal rather
+than anything wrong with the row. A mouse wheel is `deltaY`; a `.tool-scroll-box`
+has no *vertical* overflow to spend it on, so the event goes to the nearest
+ancestor that does — which on the research board is the pane holding six hundred
+rows. The row under the cursor never moves. A trackpad's sideways swipe arrives
+as `deltaX` and has always worked, which is why this was only ever reported by
+somebody on a mouse; and the two arrows plus a scrollbar the app hides
+(`scrollbar-width: none`) were the whole of the way along.
+
+**The fix is in `useOverflowArrows`, which is why it is written here and not in
+one of the callers.** Both `ScrollRow` and `TabStrip` take that hook, so the app's
+tools rows, the research board's bar, the turn filter's day strip, the League
+strip and the player page's nine tabs all gained it at once — the same reason
+the arrows live there.
+
+Three rules, and each answers a way this goes wrong:
+
+- **`deltaY` only, and only when it is the bigger of the two.** A diagonal
+  trackpad gesture already has its horizontal half applied by the browser;
+  adding the vertical half on top moves the row at twice the speed of the
+  finger.
+- **The page gets the wheel back at either end.** The clamp is computed first
+  and the event is only taken where the box has somewhere to go, so a row
+  scrolled to its last control is not a 36px band the page cannot be scrolled
+  over. That is `overscroll-behavior`'s rule stated as a gesture.
+- **A native listener, not React's `onWheel`.** React binds wheel at the root
+  as **passive**, where `preventDefault` is a no-op and a console warning — so
+  the row would scroll sideways *and* the page down, which is worse than
+  nothing.
+
+`deltaMode` is pixels almost everywhere and lines on Firefox; a line is not a
+length one of these rows knows, so it is spent as one control's worth of it —
+36px, the square every button in them is.
+
+**Driven.** The board's first row at 390, `scrollWidth − clientWidth` = 676: a
+`deltaY: 220` wheel takes `scrollLeft` **0 → 220**, and the same wheel with the
+row already at its maximum leaves `defaultPrevented` **false**, so the pane
+scrolls instead. The player page's tab strip at 360, overflow 386: `0 → 180`
+with `defaultPrevented` **true**. At 1400, where neither row overflows, the
+wheel is untouched and the page scrolls as it always did.
+
 **The research board keeps the old rule and is untouched.** Its row is a
 different control set with a measured, load-bearing head height, and its
 labels — `Columns`, `Ranks`, `Teams`, `Search`, `Filters` — are the case the

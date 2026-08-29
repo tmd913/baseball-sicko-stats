@@ -4,7 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { addDays, baseballToday } from './etDate.js';
 import { playerKey } from './types.js';
-import type { PlayerKind, ResearchIncludeKey, WatchPlayer } from './types.js';
+import type {
+  PlayerKind,
+  ResearchControlsPref,
+  ResearchIncludeKey,
+  WatchPlayer,
+} from './types.js';
 
 /**
  * Everything saved for one user — and there are **two** lists of players in it,
@@ -178,6 +183,27 @@ export interface UserPrefs {
    * means that kind's projected defaults, the same convention.
    */
   projectedColumns?: Partial<Record<PlayerKind, string[]>>;
+  /**
+   * **How the research board's controls are arranged on its bar** — which row
+   * each one is on, in what order, which are drawn as their glyph alone, and
+   * the order the condensed run reads in once the bar has scrolled away.
+   *
+   * A fact about the person and so a saved preference rather than a URL
+   * parameter: it says nothing about which data the board is showing, which is
+   * the whole test the URL params are chosen by. A link therefore describes the
+   * same table whoever opens it, drawn in whatever arrangement the reader keeps.
+   *
+   * Absent means the default arrangement, the same absence-is-the-default
+   * convention as everything around it — so that default can move without
+   * anyone's record needing revisiting.
+   *
+   * **The vocabulary is the client's**, exactly as `theme`'s and
+   * `researchColumns`' are: a key this build does not recognize is dropped
+   * where the bar is drawn rather than rejected on the way in, so a record
+   * written by a newer build opens an older tab short one control instead of
+   * on nothing.
+   */
+  researchControls?: ResearchControlsPref;
   /** Keep players on the IL off the players view (the settings-menu toggle).
    *  Absent means off, which is the default — see `setHideInjured`. */
   hideInjured?: boolean;
@@ -1390,6 +1416,31 @@ export async function setActiveList(userId: string, listId: string | null): Prom
     // absence — the first list — rather than writing down a pointer to nothing.
     if (listId && cur.watchlists.some((l) => l.id === listId)) prefs.activeWatchlistId = listId;
     else delete prefs.activeWatchlistId;
+    return { prefs };
+  });
+  return next.prefs;
+}
+
+/**
+ * **How the research board's controls are arranged.** A `null` clears the entry
+ * back to the default arrangement rather than storing an object meaning "the
+ * default" — the rule every absence here follows, and what lets that default
+ * move later without anyone's record needing revisiting.
+ *
+ * The **vocabulary is the client's**, exactly as `theme`'s and
+ * `researchColumns`' are: the route validates that the shape arrived and
+ * nothing more, and a control key this server has never heard of is dropped
+ * where the bar is drawn. That is what keeps an older server from rejecting a
+ * newer browser's arrangement.
+ */
+export async function setResearchControls(
+  userId: string,
+  controls: ResearchControlsPref | null,
+): Promise<UserPrefs> {
+  const next = await mutate(userId, (cur) => {
+    const prefs = { ...cur.prefs };
+    if (controls) prefs.researchControls = controls;
+    else delete prefs.researchControls;
     return { prefs };
   });
   return next.prefs;

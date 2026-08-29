@@ -45,6 +45,7 @@ import {
 } from './types.js';
 import type {
   PlayerKind,
+  ResearchControlsPref,
   ResearchIncludeKey,
   ResearchWindow,
   SeasonArsenalPitch,
@@ -82,6 +83,7 @@ import {
   setMuteAudio,
   setTheme,
   setPercentileDensity,
+  setResearchControls,
   setStatRanks,
   setRecentPlayer,
   setSeenTransactions,
@@ -979,6 +981,82 @@ app.put(
       return;
     }
     res.json(await setStatRanks(userId(req), on));
+  }),
+);
+
+/**
+ * **How the research board's controls are arranged on its bar** — up to four
+ * rows of keys, the condensed run's order, which of them it leaves out, and how
+ * each control is drawn. A route of its own for the reason each of the ones around
+ * it is, and its update semantics are `theme`'s: an object that a `null` clears
+ * back to the default arrangement.
+ *
+ * **The shape is validated and the vocabulary is not**, which is the split
+ * `/api/prefs/theme` and `/api/prefs/research-columns` both make: which controls
+ * exist is the client's business (`ResearchLayout.tsx`), and a key it does not
+ * recognize is dropped where the bar is drawn. Validating the words here would
+ * mean a newer browser's arrangement being **rejected** by an older server
+ * instead of ignored by an older tab — and this is the one preference a reader
+ * would have to rebuild by hand.
+ *
+ * The caps are what keeps a preference blob a preference blob: four rows, and a
+ * key no longer than a key. They are deliberately generous against the client's
+ * own count rather than equal to it, for the same reason the vocabulary is not
+ * checked.
+ */
+app.put(
+  '/api/prefs/research-controls',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const { controls } = (req.body ?? {}) as { controls?: unknown };
+    const KEY = /^[a-z][a-z0-9-]{0,31}$/;
+    const keys = (v: unknown, max: number) =>
+      Array.isArray(v) && v.length <= max && v.every((k) => typeof k === 'string' && KEY.test(k));
+    // A map of key → word, and the words are not checked here either: which
+    // readings exist is the client's, exactly as the keys are.
+    const wordMap = (v: unknown) =>
+      !!v &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      Object.keys(v).length <= 64 &&
+      Object.entries(v as Record<string, unknown>).every(
+        ([k, w]) => KEY.test(k) && typeof w === 'string' && KEY.test(w),
+      );
+    const c = controls as ResearchControlsPref;
+    const valid =
+      controls === null ||
+      (!!controls &&
+        typeof controls === 'object' &&
+        !Array.isArray(controls) &&
+        Array.isArray(c.rows) &&
+        c.rows.length <= 4 &&
+        c.rows.every((r) => keys(r, 64)) &&
+        keys(c.condensed, 64) &&
+        keys(c.condensedOff, 64) &&
+        wordMap(c.display));
+    if (!valid) {
+      res.status(400).json({
+        error:
+          'controls must be null, or { rows: string[][] (max 4), condensed: string[], condensedOff: string[], display: Record<string, string> }',
+      });
+      return;
+    }
+    res.json(
+      await setResearchControls(
+        userId(req),
+        controls === null
+          ? null
+          : {
+              rows: c.rows,
+              condensed: c.condensed,
+              condensedOff: c.condensedOff,
+              display: c.display,
+              /* `iconOnly` is deliberately not carried through: it is read on
+                 the client and never written, so a PUT that omits it is what
+                 migrates the record. See `ResearchControlsPref`. */
+            },
+      ),
+    );
   }),
 );
 

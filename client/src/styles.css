@@ -863,10 +863,30 @@ body {
    the Schedule span's, the Rankings span's and the matchup picker's — and the
    list is now headed by `.research-window-select`, the first surviving member.
    The rules are unchanged; only the name at the top of the list moved. */
+/* **Drawn only on a phone — except the board's own two.** The three above are
+   a pill row's narrow-screen stand-in and are hidden until the query below;
+   `.research-pick-select` is a dropdown at every width, so "when it is drawn"
+   is split off from "what it looks like" rather than being declared here and
+   undone twice. */
 .research-window-select,
 .schedule-span-select,
 .mup-select {
   display: none;
+}
+.research-pick-select {
+  display: block;
+  /* In a wrapping run, only as wide as its own widest option — the same pair
+     the narrow-screen block below gives its selects, and for the same reason:
+     a select's minimum content size is its widest option, so without
+     `min-width: 0` one of them pushes the row sideways instead of the row
+     scrolling. */
+  flex: none;
+  min-width: 0;
+}
+.research-window-select,
+.schedule-span-select,
+.mup-select,
+.research-pick-select {
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
   appearance: none;
@@ -890,8 +910,22 @@ body {
 }
 .research-window-select:hover,
 .schedule-span-select:hover,
-.mup-select:hover {
+.mup-select:hover,
+.research-pick-select:hover {
   border-color: var(--accent);
+}
+/* The board's bar is a run of 36px controls at 13px, and a select standing in
+   it has to be one of them rather than a form field that wandered in. The two
+   are the run's own numbers; the padding is the shared block's, less the two
+   pixels a `.research-toggle` does not spend. */
+.research-pick-select {
+  padding: 0 30px 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.research-pick-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 /* On phones a pill row that would overflow off-screen gives way to a compact
    dropdown. The date presets were the first control here to do it and are gone
@@ -6745,14 +6779,40 @@ button.start-line:focus-visible {
   color: var(--muted);
   cursor: pointer;
 }
-/* 30px of solid ground is the 16px icon centered in the 44 plus its own margin,
-   so the chevron never sits on a gradient; the remaining 14 is the fade. */
+/* **The arrow reaches the edge of the band, not the edge of the run.**
+ *
+ * Reported: the side-scrolling arrows are too far in and waste space. They
+ * were, and the waste is measurable — an arrow is `position: absolute` against
+ * its run, and the run is **inset from the band it sits in**: the research
+ * board's rows land on `--table-bleed` so the count, the head and the table's
+ * first column all start on one line, and the app's own tools row lands on
+ * `--bar-pad` so it agrees with the date bar under it. So at 390 the right
+ * arrow ran 324 → 368 with **22px of dead gutter beyond it**, and the 44px it
+ * did cover was 44px of the run — the reader lost a control's width at each
+ * end *and* got a strip of nothing outside it.
+ *
+ * `--scroll-arrow-out` is that inset, declared by whichever rule created it, so
+ * the arrow can give it back. It is not one number: it is `--bar-pad` where the
+ * run un-pads to the bar's inner edge and `--table-bleed` where it does not,
+ * and in both the arithmetic lands the arrow **flush with the band's own box**
+ * — which is what makes this a rule rather than two offsets that agree today.
+ * Defaulted to `0px` so `.details-tabstrip`, whose strip already runs edge to
+ * edge, is untouched by a token it never sets.
+ *
+ * Nothing is clipped by it. `.view-tools` is `overflow-x: clip`, which clips at
+ * the **border** box, and the band's padding is exactly the inset being given
+ * back — so the arrow lands *on* the band's own edge and never outside it. It
+ * cannot push the pane sideways either, for the same reason: there is no
+ * negative offset to overflow with.
+ *
+ * 30px of solid ground is the 16px icon centered in the 44 plus its own margin,
+ * so the chevron never sits on a gradient; the remaining 14 is the fade. */
 .tabstrip-arrow-l {
-  left: 0;
+  left: calc(-1 * var(--scroll-arrow-out, 0px));
   background: linear-gradient(to right, var(--bg) 0 30px, transparent);
 }
 .tabstrip-arrow-r {
-  right: 0;
+  right: calc(-1 * var(--scroll-arrow-out, 0px));
   background: linear-gradient(to left, var(--bg) 0 30px, transparent);
 }
 .tabstrip-arrow:hover {
@@ -8247,6 +8307,10 @@ button.start-line:focus-visible {
   display: flex;
   align-items: center;
   --tabstrip-arrow-w: 44px;
+  /* What the line above left between this run and the band's own edge, so the
+     arrows can give it back — see `.tabstrip-arrow-l`. The row re-pads *in* to
+     `--bar-pad`, so that is the residue. */
+  --scroll-arrow-out: var(--bar-pad);
 }
 .tool-scroll-box {
   flex: 1 1 auto;
@@ -12352,20 +12416,19 @@ button.start-line:focus-visible {
    games every number on the board is drawn from, which is too large a thing to
    keep behind a disclosure."*
 
-   That was true of a bar with room for them and is not true of a bar with four
-   buttons on it. What replaces the argument rather than abandoning it is the
-   **button**: `Season` states what the span is set to without being pressed, so
-   the setting is as visible as it ever was and the five pills it opens are the
-   disclosure. The tabs themselves are unchanged — they were always styled off
-   `.view-switch`/`.view-tab` — and they live in `.research-pick-row` now, which
-   wraps rather than scrolls, a panel opened and closed in one gesture having no
-   standing height to defend. `flex: none` goes with the box it was for.
+   That was true of a bar with room for them, and it survives the two shapes
+   that followed in the same form: what makes the setting visible without being
+   pressed is that the control **states what it is set to**. That was a button
+   reading `Season`; it is the closed face of a `<select>` now
+   (`.research-pick-select`), which is the same claim made by the platform.
 
-   `.research-window-tab` keeps its own rule below for the same reason it always
-   had one: it is the tab inside whichever container is holding it. */
-.research-window-tab {
-  flex: none;
-}
+   **`.research-window-tab` has gone with its last reader**, which is this
+   file's own rule: it was folded onto `.view-tab`/`.lg-tab` and carried a
+   `flex: none` of its own, and the run it named — the five span pills — no
+   longer exists in any shape. Removing it removed one selector name from four
+   lists and one declaration. `.research-pos-tab` beside it stays: the how-to
+   page still draws a picture of the position pills, and a picture of pills is
+   pills. */
 
 /* **One row that scrolls, where it was a run that wrapped** — the measurement
    the badge row leaves behind, on the row that replaced it.
@@ -12863,6 +12926,11 @@ button.start-line:focus-visible {
    `.view-tools` and `.research-head` already pad by. */
 .research-row {
   margin-inline: 0;
+  /* This run keeps the band's own padding rather than un-padding to the bar's,
+     so the residue is the whole of `--table-bleed` — 22px in `.app`, 16 in the
+     player overlay, 12 in the full-page box. One declaration answers all three,
+     which is what that token is for. */
+  --scroll-arrow-out: var(--table-bleed, 0px);
 }
 /* **Left-aligned, where the app's tools row centers.** `.tool-scroll-inner`
    takes `margin: 0 auto`, which centers a run while it fits and collapses the
@@ -12923,48 +12991,22 @@ button.start-line:focus-visible {
   padding-inline: 7px 8px;
 }
 
-/* **A pick panel: one strip of pills, or two under their group names.**
+/* *(`.research-pick-panel`, `.research-pick-group`, `.research-pick-head` and
+   `.research-pick-row` stood here — the box the position and span pickers
+   opened into, a column of wrapping pill runs under their group names. Both
+   controls are `<select>`s now (see `.research-pick-select`) and the panels
+   went with them.
 
-   It is `.research-panel`'s box — the same row of the head Search and the
-   filter builder open into — with the pills laid out in it. The groups are a
-   column and each group is a wrapping row: eleven pills is two lines on a
-   phone and one on anything wider, and a *wrapping* run rather than a scrolling
-   one is right here for the reason the mark strip is the other way round. A
-   panel is opened, read and closed in one gesture, so its height is not a
-   standing cost; a strip that lives under the count is. */
-.research-pick-panel {
-  display: flex;
-  flex-direction: column;
-  /* **`align-items` is reset, and it has to be.** `.research-panel` above sets
-     `center`, which is right for the row it is — a field and its Clear button —
-     and in a column it centers every group on the head's own axis: driven, the
-     eleven pills opened as a centered block running from x=500 to the right
-     edge of a 1400 viewport, with the group's own name centered over it. The
-     board's gutter is the line everything else in this head starts on. */
-  align-items: stretch;
-  gap: 8px;
-}
-.research-pick-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-/* The group's name, in the app's own small-caps caption — the type
-   `.ov-perfs-head` and every other "what this run is" label in the app takes.
-   It names the side of the ball, which is the one thing a flat run of eleven
-   could not say. */
-.research-pick-head {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-.research-pick-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+   Two things they recorded are worth keeping. **`align-items` had to be reset**
+   off `.research-panel`'s `center`, which is right for the row that box is — a
+   field and its Clear button — and in a column centered every group on the
+   head's own axis: driven, the eleven pills opened as a centered block running
+   from x=500 to the right edge of a 1400 viewport, with the group's name
+   centered over it. The board's gutter is the line everything else in that head
+   starts on. And **a wrapping run rather than a scrolling one** was right there
+   for the reason the mark strip is the other way round: a panel is opened, read
+   and closed in one gesture, so its height is not a standing cost; a strip that
+   lives under the count is.)* */
 
 /* **The settings dialog's two groups.** A column of the same runs the bar used
    to hold, each under the question it answers. The groups' own heads take the
@@ -12990,6 +13032,275 @@ button.start-line:focus-visible {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
+}
+/* ---------------------------------------------------------------------------
+   The arrangement screen (`ResearchLayout.tsx`)
+   ---------------------------------------------------------------------------
+
+   Four boxes for the bar's four rows, a fifth for what is behind the gear and a
+   sixth for the sticky line, each holding chips a press moves between them.
+
+   **The chips are not `.research-order-chip`**, and that is a decision rather
+   than an oversight. That one is a *name in a row of names* — 28px, one word,
+   nowrap, and its whole job is to be one of thirty on a line. These carry a
+   second line saying what the control does, because this is the one screen in
+   the app where a reader meets all fourteen at once and several of them are
+   controls they have never opened; and they carry a switch of their own. Two
+   lines and a nested target is a different object, so it gets its own rules
+   rather than a fold that would have to be unpicked at the first divergence.
+   What *is* folded is the hint line above them (`.research-order-hint`), which
+   is the same object exactly: the line over a press-and-press reorder, with its
+   height reserved by a ghost. See `ReorderHint`.
+
+   The screen is one column at every width. A grid of four row-boxes side by
+   side was the alternative and it is the wrong shape twice over: the boxes
+   *are* the bar's rows, so stacking them is the picture of the thing being
+   arranged, and on a phone a four-column grid of chip lists is four scrollers.
+*/
+.rlay {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* One box: a heading, whatever note it carries, and its chips. The border is
+   what makes a row a *place* — without it four runs of chips down a dialog read
+   as one list with four labels in it, which is the one thing this screen cannot
+   afford to be ambiguous about. */
+.rlay-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+}
+/* The app's own small-caps caption, the type `.research-settings-head` and
+   `.research-pick-head` take — this box has a dialog title over it already and
+   six headings at heading weight under one would read as six titles. */
+.rlay-head {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.rlay-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+/* Wrapping rather than scrolling, which is `.research-settings`'s own rule one
+   dialog along and for the same reason: a horizontal scroller inside a modal is
+   the gesture that box is least able to tell from a dismissal. */
+.rlay-slots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+}
+/* **The chip is a column: the press target, then whichever switch this box
+   asks for.** Two targets in one shape is `.rl-split`'s arrangement and is here
+   for its reason — a single button that both picks a control up and changes how
+   it is drawn is a control the reader cannot aim — but stacked rather than side
+   by side, which is measured. Three segments beside a two-line label came to
+   **320px** against the **338** a 390px phone leaves inside this dialog, so a
+   row wrapped unpredictably: the switch beside the label on one chip and under
+   it on the next, down the same box. A column is the same shape at every width,
+   which is what a screen holding fifteen of them needs.
+
+   The border is on the wrapper so the halves read as one object. */
+.rlay-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 34px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius-inner);
+  overflow: hidden;
+}
+/* On the sticky line's list but not on the line — dim, which is this app's own
+   way of saying a thing is present and not in force. It keeps its place in the
+   order, which is the whole reason it is still drawn. */
+.rlay-chip.off {
+  opacity: 0.55;
+}
+/* Not a destination for what is in hand — the gear over the off-bar box. It
+   declines the press and says why in its `title`; a control that went quiet
+   under a press would be worse than one that refuses it out loud. */
+.rlay-chip.frozen {
+  opacity: 0.4;
+}
+.rlay-chip.frozen .rlay-chip-main {
+  cursor: not-allowed;
+}
+.rlay-chip-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  padding: 5px 9px;
+  /* `font-family`, not `font`: the shorthand resets `font-size`, which is the
+     trap this stylesheet records on every button reset it has. */
+  font-family: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.rlay-chip-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+/* The line that says what the control does. It is what makes the chip two rows
+   tall and it is the reason this screen is legible to somebody who has never
+   pressed `Starting`. */
+.rlay-chip-hint {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--faint);
+}
+/* **What the chip cannot promise**, on its own line under the hint.
+
+   Six of the fifteen controls take themselves off a reading that has no subject
+   for them, which is right on the bar and was silent here — reported as
+   `Starting` sitting in row 2 of this screen and nowhere on the batters board
+   behind it.
+
+   **`--muted`, not a warning color.** Nothing is wrong: the arrangement is
+   intact and the control comes back with the reading it belongs to, so this is
+   a *fact about right now* rather than a fault. Color in this app is spent on
+   state, and the state here is "not on screen", which is what the dimmer ink
+   already says everywhere else. The chip stays at full opacity for the same
+   reason — dimming the whole thing would say the **chip** was inactive, and it
+   is not: it can still be picked up and moved. */
+.rlay-chip-absent {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.rlay-chip-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Picked up and waiting for somewhere to go — filled, which is this app's way
+   of saying a control is doing something, and the same fill
+   `.research-order-chip.picked` takes. */
+.rlay-chip.picked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rlay-chip.picked .rlay-chip-main,
+.rlay-chip.picked .rlay-chip-label,
+.rlay-chip.picked .rlay-chip-hint {
+  color: var(--on-accent);
+}
+/* The switch keeps its own ground under a lifted chip: the fill above is what
+   says *this one is in hand*, and letting it run under the segments would take
+   the lit one's own fill with it — the reader would lose which reading is set
+   on the very chip they are moving. */
+.rlay-chip.picked .rlay-modes {
+  background: var(--panel);
+}
+/* **The chip's own switch, under its label** — three segments on the bar (how
+   the control is drawn) and two on the sticky line (whether it is on it).
+
+   **All the answers are drawn and the one in force is lit**, which is the
+   change the two-state version was reported for. `Word` / `Icon` named two of
+   the three states a control can be in and made the third — the one every
+   button on this bar is in unless told otherwise — the *absence* of a setting;
+   a reader looking for "both" found a switch that was in neither position. The
+   segments are the app's own segmented shape, the one `.view-tab` and the
+   position pills already take, at caption size.
+
+   `--bg` rather than the chip's `--bg-2` so the run reads as a control sitting
+   *on* the chip rather than as more of it. */
+.rlay-modes {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px 6px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.rlay-mode {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 6px;
+  /* `font-family`, not `font` — the shorthand resets `font-size`. */
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius-inner);
+  cursor: pointer;
+}
+.rlay-mode.on {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.rlay-mode:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Where a picked-up control lands when there is no chip to put it in front of —
+   the end of a row, and the whole of an empty one. Drawn **only while something
+   is in hand**: six dotted boxes standing open on a screen that already carries
+   one line of instruction is five more instructions than the gesture needs. */
+.rlay-tail {
+  min-height: 34px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: var(--control-radius-inner);
+  cursor: pointer;
+}
+.rlay-tail:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* What an empty row says with nothing in hand. It stands in the tail's place
+   rather than beside it, so the box does not change height on the press that
+   picks a control up — *reserve the box, don't move the page*, and here the two
+   shapes are near enough the same height that laying a ghost out would be
+   ceremony. Driven at 390: the empty line is 34px and the tail 34px. */
+.rlay-empty {
+  margin: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--faint);
+}
+.rlay-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The line under `The bar`, saying how much is behind the gear rather than on
+   it. `flex: 1 1 100%` like the heading above it, so it takes the line and the
+   button that follows starts a new one — a sentence sharing a line with the
+   control it introduces reads as that control's label. */
+.research-settings-note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 /* **The runs inside it wrap rather than scroll**, which is the one thing that
    changes about them here. On the bar they were `flex: none` groups that moved
@@ -13198,13 +13509,17 @@ button.start-line:focus-visible {
    shared with the Roster view, and it carries that view's label class rather
    than the board's. It was the one word left standing in a run of marks. */
 .research-condensed .research-toggle-label,
+.research-slot.is-icon .research-toggle-label,
 .research-condensed .schedule-toggle-label,
+.research-slot.is-icon .schedule-toggle-label,
 /* …and `.projected-toggle-label` for the same reason, one control along: the
    lens's button is `Projection.tsx`'s, shared with the Roster view, so it
    carries that view's label class rather than the board's. Two words left
    standing in a run of marks is what this list exists to prevent. */
 .research-condensed .projected-toggle-label,
-.research-condensed .research-inc-full {
+.research-slot.is-icon .projected-toggle-label,
+.research-condensed .research-inc-full,
+.research-slot.is-icon .research-inc-full {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -13235,8 +13550,11 @@ button.start-line:focus-visible {
    so the condensed run reads as chrome rather than as buttons that happen to
    be small. */
 .research-condensed .research-inc,
+.research-slot.is-icon .research-inc,
 .research-condensed .research-toggle,
-.research-condensed .schedule-toggle {
+.research-slot.is-icon .research-toggle,
+.research-condensed .schedule-toggle,
+.research-slot.is-icon .schedule-toggle {
   width: var(--control-h);
   padding: 0;
   justify-content: center;
@@ -13244,7 +13562,8 @@ button.start-line:focus-visible {
 /* Except the ones that carry a count: a funnel with `3` beside it is the one
    thing in this run saying how much is set, and squaring it would clip the
    number it exists to show. */
-.research-condensed .research-toggle:has(.research-toggle-count) {
+.research-condensed .research-toggle:has(.research-toggle-count),
+.research-slot.is-icon .research-toggle:has(.research-toggle-count) {
   width: auto;
   padding: 0 8px;
 }
@@ -13255,56 +13574,91 @@ button.start-line:focus-visible {
    at all. The exception is the Watchlist split's second half, which is *nothing
    but* a caret (its first half carries the star), so hiding it would leave an
    empty square. */
-.research-condensed .rl-btn-open:not(.rl-split-caret) .rl-caret {
+.research-condensed .rl-btn-open:not(.rl-split-caret) .rl-caret,
+.research-slot.is-icon .rl-btn-open:not(.rl-split-caret) .rl-caret {
   display: none;
 }
-/* **And the position and the span, which keep their words.**
+/* *(Three rules stood here and are gone with the control they were for:
+   `.research-pick-btn` was the position's and the span's shared class, and both
+   are `<select>`s now. They are kept in prose because what they record is a
+   trap, not a layout:
 
-   The run hides every label and squares what is left, and it is right about
-   every other button on this board: a label there is a word repeating a glyph.
-   These two are the opposite case — the label **is** the state. Squared, they
-   were two identical 36px boxes carrying a caret each, which is the exact fault
-   the bare caret beside the watchlist toggle was reported for, twice over.
-   Driven at 390 before this rule: `Batters` and `Season` both `w: 36`.
+   The condensed run hides every label and squares what is left, and it was
+   right about every other button on this board — a label there is a word
+   repeating a glyph. Those two were the opposite case, the label **being** the
+   state, so the run had to give three things back: the label, the box off the
+   square, and the caret. And **`display` was the wrong property** for the
+   first: those labels are not `display: none`, they are the app's
+   *visually-hidden* block — absolutely positioned, clipped to a pixel, left in
+   the accessibility tree because a button whose only content is an
+   `aria-hidden` glyph has no name at all. `display: inline` put the word back
+   in flow a pixel wide and the two buttons measured **22px**, which is their
+   padding and nothing else. Every declaration of that block has to be undone,
+   not the one that looks like the switch.
 
-   Three declarations because the run takes three away: the label back, the box
-   back off the square, and the caret back — that last one being hidden for
-   every `.rl-btn-open` that has a mark of its own, and these have no mark, only
-   the word. After every rule each overrides, and at one class more specificity
-   than any of them. */
-.research-condensed .research-toggle.research-pick-btn {
-  width: auto;
-  padding: 0 10px;
-  /* The trap this file records on `.research-toggle svg` and again on
-     `.research-chips > *`: an item in a flex row shrinks below its own content
-     the moment the line is tight, and this run's line is as tight as the phone
-     it is on. */
-  flex: none;
-}
-/* **`display` was the wrong property**, and it is worth writing down because
-   the run's own rule does not read like it: those labels are not `display:
-   none`, they are the app's **visually-hidden** block — absolutely positioned,
-   clipped to a pixel and left in the accessibility tree, because a button whose
-   only content is an `aria-hidden` glyph has no name at all. So `display:
-   inline` put the word back in flow and left it a pixel wide: driven, the two
-   buttons went 36 → **22px**, which is their padding and nothing else. Every
-   declaration of that block has to be undone, not the one that looks like the
-   switch. */
-.research-condensed .research-pick-btn .research-toggle-label {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: 0;
-  margin: 0;
-  overflow: visible;
-  clip: auto;
-  border: 0;
-}
-.research-condensed .rl-btn-open.research-pick-btn .rl-caret {
-  display: inline;
-}
+   A `<select>` needs none of it: it is not a `.research-toggle`, so the run's
+   squaring never reaches it, and its closed state has always been the word.)* */
 
-.research-condensed .research-include {
+/* **One control, drawn as its glyph alone — which is the condensed run's whole
+   grammar, asked for a control at a time.**
+
+   The five rules above are folded rather than copied, and that is this
+   stylesheet's own test applied: `.research-condensed` and
+   `.research-slot.is-icon` are **the same object** — a control with its word
+   taken off and its box squared to the app's 36px — reached by two different
+   questions. One is a scroll state ("the bar has gone, this line stands in for
+   it"), the other is a setting ("I know what the funnel means, give me the
+   pixels back"). Two rule sets that agree today are two rule sets that will one
+   day differ, and the day one of them gained the `:has(.research-toggle-count)`
+   exception and the other did not is the day a filter count got clipped.
+
+   `.research-slot` itself is `display: contents`, so the wrapper is a place to
+   hang this class and nothing else: the button inside stays a direct flex item
+   of the row, with the row's own gap and no box of its own in between — the
+   trick `.research-chrome` and `.research-bar` already use one level up.
+
+   **The position and the span need none of this and never could.** They are
+   `<select>`s (`.research-pick-select`), so the run's squaring does not reach
+   them at all, and `ResearchLayout.tsx` does not offer them the switch: their
+   label **is** their state, and there is no glyph for it to fall back to. The
+   three rules that used to give those two their words back inside the condensed
+   run are gone with the buttons — kept in prose above, for the `display`
+   -is-the-wrong-property trap they record. */
+/* **And its mirror: the word alone.**
+ *
+ * This one has no twin to fold onto — nothing else in this app takes the glyph
+ * *off* a button, where `.research-condensed` has been taking the word off one
+ * since the bar first condensed. So it is a rule of its own rather than a fold
+ * onto something that merely resembles it.
+ *
+ * **`svg`, less two exceptions, and both of them are load-bearing.** Every
+ * leading mark on this bar is a bare `<svg>` — a magnifier, a funnel, a star, a
+ * crest, two bars, a calendar — so one selector reaches all of them without a
+ * class being added to eight components. The two that must survive:
+ *
+ * - **`.ball-spin`**, the wait mark. `ScheduleToggle` and `ProjectedToggle`
+ *   draw the spinning baseball *in place of* their glyph while the read is out,
+ *   and that is the only mark those presses leave — rule 1 of the app's loading
+ *   system, stated inside the control. Hidden with the glyph, a press on a
+ *   text-only Schedule would do nothing visible for as long as the window takes.
+ * - **`.rl-caret`**, which is not a glyph but a *disclosure* — it says there is
+ *   more of this control, which is as true of a word as of an icon. The
+ *   condensed run hides it for the opposite reason (a 36px square is room for
+ *   one mark and the chevron is not the one worth keeping), and that is why
+ *   these two rules are not one.
+ *
+ * `.research-inc-code` goes by name: the ownership buttons' mark is a `<span>`
+ * carrying a letterform, not an `<svg>`, so the same instruction has to be
+ * given twice for one control. */
+.research-slot.is-text svg:not(.ball-spin):not(.rl-caret),
+.research-slot.is-text .research-inc-code {
+  display: none;
+}
+.research-slot {
+  display: contents;
+}
+.research-condensed .research-include,
+.research-slot.is-icon .research-include {
   gap: 4px;
 }
 /* How many rows survived the filters, and out of how many — without it a short
@@ -13361,6 +13715,43 @@ button.start-line:focus-visible {
 }
 .research-count-row > .research-count {
   flex: none;
+}
+/* **Except when the count is a sentence rather than a caption.**
+ *
+ * Reported as cut off. `flex: none` sizes a flex item to its **max-content**,
+ * which is exactly right for `418 of 640 pitchers` — a caption that must never
+ * scroll away past the marks beside it — and exactly wrong for the comparison
+ * line, which is two clauses saying what the badges measure and which way each
+ * hue runs. Laid out at max-content it never wrapped: measured at 680, the line
+ * ran to x=775 against a row ending at 658, **117px off the end**, and
+ * `.research-head` is `overflow-x: hidden`, so the reader lost the half of the
+ * sentence that says what the colors mean.
+ *
+ * **It takes the line rather than sharing it**, which is `flex: 1 1 100%` — the
+ * same "its own line" this file gives `.research-stick-line` and the settings
+ * dialog's runs. Sharing was the other option and it is worse where it matters:
+ * at 390 the marks would leave the sentence ~230px and it would wrap to four
+ * lines *beside* a strip squeezed to nothing, where a line of its own wraps to
+ * three and leaves the marks whole underneath.
+ *
+ * The head is **measured** (`--research-head-h`), so the column headings follow
+ * it down and back; and this line is drawn only while a comparison is on, which
+ * is a state the reader entered on purpose and can leave with one press.
+ * `flex-wrap` on the row is what lets a 100% basis claim a line at all, and it
+ * changes nothing in the ordinary case — the caption is `flex: none` and short,
+ * the marks are `min-width: 0` and scroll, so neither ever wraps. */
+.research-count-row {
+  flex-wrap: wrap;
+}
+/* The key is `flex: none` beside the count for the reason the count is: this
+   row's other child scrolls, and a key that scrolled away is a key the reader
+   cannot reach from the state it explains. */
+.research-count-row > .research-proj-key {
+  flex: none;
+}
+.research-count-row > .research-count-wide {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 /* **The line that says an applied search replaced this board**, and it is the
    same object as the projected line one selector up: a caption in the head
@@ -13439,7 +13830,14 @@ button.start-line:focus-visible {
    Lit when open the way every other key is — `.info-key-btn.active` fills with
    the accent, and with no border or ground of its own to fill, the accent goes
    on the mark. */
-.research-proj-line {
+/* **The box the key hangs its panel from**, and it is two boxes now: the
+   projected line still carries the key in its empty state, and the count row
+   carries it everywhere else — the line that said `PROJECTED · <span>` is gone,
+   the mark strip beside the count having said the same thing 33px below it.
+   Folded rather than given two rules that agree today: this is one job, which
+   is being the containing block a `position: static` key resolves against. */
+.research-proj-line,
+.research-count-row {
   position: relative;
 }
 .research-proj-key {
@@ -14073,7 +14471,6 @@ button.start-line:focus-visible {
   border-radius: var(--control-radius);
 }
 .view-tab,
-.research-window-tab,
 .lg-tab {
   display: inline-flex;
   align-items: center;
@@ -14089,18 +14486,15 @@ button.start-line:focus-visible {
   transition: color 0.14s ease, background 0.14s ease;
 }
 .view-tab:hover,
-.research-window-tab:hover,
 .lg-tab:hover {
   color: var(--text);
 }
 .view-tab.active,
-.research-window-tab.active,
 .lg-tab.active {
   color: var(--on-accent);
   background: var(--accent);
 }
 .view-tab:focus-visible,
-.research-window-tab:focus-visible,
 .lg-tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -16877,7 +17271,8 @@ button.start-line:focus-visible {
    and its tabs `.view-tab`, so it inherits outright). `flex: none` so it
    travels whole when the run wraps rather than folding in half — the reason
    `.research-window-row` carried it, before that box went with the bar's second
-   row (see `.research-window-tab`). */
+   row. (`.research-window-tab` is gone too, with the pill run it named — the
+   board's span is a `<select>` now.) */
 .schedule-span {
   flex: none;
   white-space: nowrap;
@@ -23991,20 +24386,28 @@ html[data-theme='light'] .league-table thead th {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The chooser half. *(This block read: "the caret-only half — square-ish rather
-   than pill-shaped padding, so it reads as a handle on the button beside it
-   rather than as a second button." It is kept, this file's rule for superseded
-   reasoning, because the shape argument still holds: the two halves share one
-   outline and are meant to read as one control. What changed is that the half
-   carries its word now — see the component — and a 9px squeeze around a label
-   is not a handle, it is a cramped button.)*
-
-   So the padding is the run's own `0 12px`, less two pixels on the left where
-   the seam is: the hairline between the halves already draws the boundary that
-   a full gutter would draw a second time. Measured at 1400, the half 29 → 70px
-   and the pair 136 → 177, with the third run unmoved. */
+/* **The chooser half: a caret in the app's own 36px square.**
+ *
+ * The word is off it again, asked for — see the component, which keeps the
+ * argument that put it there and says which half of it survives. What survives
+ * here is the *size*: the original block read "square-ish rather than
+ * pill-shaped padding, so it reads as a handle on the button beside it rather
+ * than as a second button", and that was a **29px** half, which is a caret with
+ * 10px either side and not a target anybody aims at. The half went to `0 12px`
+ * to hold a label; with the label gone it goes to the square every icon button
+ * in this app already is, which is the same handle argument at a size that can
+ * be pressed.
+ *
+ * `width` rather than padding, because a 9px glyph padded to 36 is an
+ * arithmetic that goes stale the moment the caret is redrawn. Measured at 1400
+ * against the old shape put back in place: the half **69 → 36px** and the pair
+ * **200 → 167**, with the run and the head unmoved. In the condensed run the
+ * pair is 54 + 36, and the caret is still drawn there — that run hides every
+ * other button's chevron and excepts this one, whose whole content it is. */
 .rl-split-caret {
-  padding-inline: 10px 12px;
+  width: var(--control-h);
+  padding-inline: 0;
+  justify-content: center;
 }
 .rl-caret {
   flex: none;
@@ -24058,6 +24461,19 @@ html[data-theme='light'] .league-table thead th {
    inside it 332, and no page overflow. */
 .rl-dialog-box {
   width: min(440px, 100%);
+}
+/* **Wider than the two saved-thing boxes, because this one is not a column of
+   names.** 440 is the cap a list of names earns — the paragraph above says
+   why — and this box holds *chips laid out the way the bar lays them out*: at
+   440 they came one to a line, so the picture of a row was a vertical stack,
+   which is the one thing the screen has to get right. 640 puts two across on a
+   desktop and the wrap is then the bar's own wrap; `min()`ed against the
+   backdrop like every dialog here, so a phone still decides its own and gets
+   the one-per-line reading the width actually calls for. Measured at 1400: the
+   box 640 wide with row 1's five chips on three lines; at 390, 358 wide, one to
+   a line, no page overflow. */
+.rlay-dialog-box {
+  width: min(640px, 100%);
 }
 /* `min-width: 0` at every flex level between the panel and the name, or the
    name's own cannot help: an item that is itself a flex container passes its
