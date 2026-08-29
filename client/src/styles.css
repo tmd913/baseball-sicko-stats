@@ -22660,11 +22660,38 @@ html[data-theme='light'] .league-table thead th {
    buttons once already. Hover is **not** scoped to `(hover: hover)`: the rule
    that scopes it is for full-width rows and cards in a scrolling list, and a
    small aimed target keeps its hover. */
+/* **The box was too tight on the thing inside it**, and reported as such. It
+   was `1px 9px 1px 7px` round a 20px glyph on a 20px line box — **24px tall**,
+   with the emoji's own ink all but touching the border top and bottom, and 5px
+   between it and the count it labels. An emoji is not a letterform: it fills its
+   em box where a digit sits well inside one, so the same padding that reads as
+   comfortable round `5` reads as cramped round `🥵`.
+
+   `4px 12px 4px 10px` with an 8px gap. Measured at 1400: the badge goes
+   **24 → 30px tall and 51.8 → 60.8 wide**, and the leaders card **270 → 276**
+   — six pixels, on a card whose height is not a row of anything. The horizontal
+   asymmetry is kept and moved with the rest (10 left, 12 right): the glyph
+   carries its own side bearing on the left where the count has none on the
+   right, so equal padding reads as more space after the number than before the
+   mark.
+
+   **30px is the app's own control height**, which is the second half of the
+   argument and the one that decides between 28 and 30: these are *doors*, each
+   opening its own cut of the ranked list, and the header's gear, a dialog's ✕
+   and the saved-things row's four icon buttons are all 30. A control under the
+   size the rest of the app aims at is a control that is harder to hit for no
+   stated reason.
+
+   **It costs no width anywhere it matters.** At 390 the three badges and their
+   two 6px gaps are **194.4px in a 320px row** (`scrollWidth` equal to
+   `clientWidth`, document overflow 0), so the phone has 125px spare — the row
+   gap is left at 6, the complaint being about the space *inside* a badge and
+   three boxes 6px apart already reading as three. */
 .ov-heat-cell {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 1px 9px 1px 7px;
+  gap: 8px;
+  padding: 4px 12px 4px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel-2);
