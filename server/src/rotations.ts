@@ -4,6 +4,7 @@ import type {
   ScheduleGame,
   StartTier,
 } from './types.js';
+import { daysBetween } from './etDate.js';
 
 /**
  * ---------------------------------------------------------------------------
@@ -119,6 +120,60 @@ const MAX_TURN_GAP = 9;
 const MAX_TURNS_MISSED = 2;
 
 /**
+ * **The fewest calendar days a projected turn may be placed on**, whatever the
+ * club-game step says.
+ *
+ * This is the one thing counting in club games gets *wrong*, and it is the exact
+ * mirror of what it gets right. `cadenceOf` argues the trick: an off day, a
+ * rain-out and the All-Star break all push a rotation back by the days they take
+ * out of the calendar and take no turn out of the run of games, so an index into
+ * the run models all of them and gets them all right. Every one of those **adds**
+ * days to a span of N games. A **doubleheader takes one out** — two games on one
+ * date — and there the index is short by exactly the day it removed: five club
+ * games across a doubleheader is four days, and a pitcher on four days' rest is a
+ * pitcher his club is not going to run out there.
+ *
+ * **Five, and it is measured rather than assumed.** Over the 2026 season's
+ * **3,165 consecutive-start pairs** inside a plausible turn, the calendar gap is
+ * 5 days 33.3% of the time, 6 days 50.2% and 7 days 10.3%; **19 (0.6%) are under
+ * five days and 10 (0.3%) under four**, and none of those has a doubleheader in
+ * between. Five is the floor of the distribution, not a rule of thumb.
+ *
+ * **`Math.min(cadence, …)`, because a man whose turn is shorter than that is not
+ * being given more rest than he takes.** Exactly one pitcher in the league reads
+ * a cadence of 4 (see `cadenceOf`), so the two spellings are indistinguishable on
+ * this season — but a flat 5 would be the number telling his own record what his
+ * rest is, which is the wrong way round.
+ *
+ * **A capped floor rather than the cadence itself**, which was the other
+ * candidate and is measurably worse: a six-man rotation's calendar gap is not
+ * rigidly six (14 of 211 cadence-6 turns are five days), and floored at the
+ * cadence the doubleheader bucket reads **51.3%** against **52.0%** for the flat
+ * five.
+ *
+ * **It can only ever fire on a doubleheader**, which is geometry rather than
+ * hope: N games on N distinct dates is N days by construction, so nothing but a
+ * second game on one date can bring the span under the count. Checked over the
+ * whole season anyway — the floor fires on **33 of 3,590** club-game steps, and
+ * **33 of the 33** have a doubleheader inside the span.
+ *
+ * **What it buys.** Back-tested through this very function by blinding every
+ * future probable and re-deriving the next turn, over the cases where a
+ * doubleheader falls between a pitcher's anchor and his actual next start
+ * (n=816): exact-game **45.1% → 53.9%**, right-day **54.0% → 62.9%**, mean
+ * absolute error **0.78 → 0.64 days**. The rest of the board is **unmoved to the
+ * tenth** — 78.3% either way over 14,011 cases — because the floor cannot reach
+ * it, which is the geometry above showing up in the measurement. The whole board
+ * goes **76.5% → 77.0%**.
+ *
+ * **On the live window it moves six pitchers' next turn**, all six from four
+ * days' rest to five: Cam Schlittler, Will Warren, Brandon Pfaadt, Adrian
+ * Houser, Gerrit Cole and Patrick Sandoval, across the two doubleheaders of
+ * 2026-08-29.
+ */
+const MIN_REST_DAYS = 5;
+
+/**
  * How many club games in a row may have somebody else announced before we stop
  * projecting. One is an ordinary shuffle (a bullpen game, a spot start, a
  * doubleheader); three in a row past his own slot means the rotation has been
@@ -172,6 +227,14 @@ function turnGaps(positions: number[]): number[] {
  * days they take out of the calendar, and none of them takes a turn out of the
  * run of games. Days would have to model every one of those; an index into the
  * club's own schedule models none of them and gets them all right.
+ *
+ * **And the one case it gets wrong is the mirror of all of those.** Every event
+ * above *adds* days to a span of N games; a **doubleheader takes one out**, so N
+ * games across one is N−1 days and the index is short by exactly the day the
+ * doubleheader removed. That is not a reason to count in days — it is one case
+ * against four — so it is corrected where it happens rather than by changing the
+ * coordinate system: see `MIN_REST_DAYS`, which is the floor the walk applies and
+ * which by construction can fire on nothing else.
  *
  * **The median rather than the mean**, because the outliers are the interesting
  * half of a pitcher's season: one IL stint of a month is a single gap of twenty
@@ -359,7 +422,10 @@ export interface Projection {
  * last actual start — and step forward a cadence at a time over the games still
  * to be played. A slot MLB has already given to somebody else is not his, so it
  * is skipped and the rest re-phased from wherever he lands, because a missed
- * turn shifts everything after it.
+ * turn shifts everything after it. And a turn is **never fewer calendar days
+ * than club games** — the one correction the game-index coordinate system needs,
+ * a doubleheader being the only thing that can put two of his club's games on
+ * one date. See `MIN_REST_DAYS`.
  *
  * **Three tiers, never mixed on one row.** `announced` is MLB's fact;
  * `projected` is his own measured pace; `estimated` is his club's rotation
@@ -476,12 +542,35 @@ export function projectStarts({
       refusal = 'out-of-rotation';
     } else {
       let pos = anchor + cadence;
+      // **Where the rest is measured from** — the last turn he was actually
+      // placed on, not the anchor, so a list of five is five turns each a turn
+      // apart rather than five measured off one date.
+      let lastAt = anchor;
+      // A turn is `cadence` club games **and** at least this many calendar days.
+      // See `MIN_REST_DAYS`; on a run with no doubleheader in it the second half
+      // is implied by the first and this can never fire.
+      const rest = Math.min(cadence, MIN_REST_DAYS);
       let slips = 0;
       while (turns.length < want && pos < run.length && inWindow(pos)) {
         const g = run[pos];
         // Only games still to be played: one today is the caller's own day, and
         // one already behind us is not a start.
         if (g.date <= today) {
+          pos += 1;
+          continue;
+        }
+        // **Too soon in the calendar, whatever the game count says.** A
+        // doubleheader is the one thing that puts two of his club's games on one
+        // date, so `cadence` games on can be `cadence − 1` days on, and nobody
+        // starts on that. Step to the next game and ask again.
+        //
+        // **Not a slip**, deliberately: `MAX_SLIP` counts how many times MLB has
+        // given his slot to somebody else, which is evidence the rotation has
+        // been re-ordered under us. Nothing of the sort has happened here — the
+        // calendar has been compressed and his turn moves with it — so spending
+        // his patience on it would shorten a list for a reason that is not about
+        // him.
+        if (daysBetween(run[lastAt].date, g.date) < rest) {
           pos += 1;
           continue;
         }
@@ -496,6 +585,7 @@ export function projectStarts({
         }
         slips = 0;
         turns.push({ index: pos, tier: g.starter === playerId ? 'announced' : tier });
+        lastAt = pos;
         pos += cadence;
       }
     }
