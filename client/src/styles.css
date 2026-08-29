@@ -5673,6 +5673,32 @@ button.start-line:focus-visible {
    read and a 12px corner is something you press. `margin-left: auto` puts it at
    the right end of the line it wraps onto, which on a phone is under the
    matchup rather than beside it. */
+/* **`Gm 1` / `Gm 2` — which half of a doubleheader the row is.**
+
+   Drawn only where the club plays twice that day, which is a handful of rows a
+   season and the only rows on which it says anything: two halves of a pair are
+   otherwise the same line twice — same date, same opponent, same side — and one
+   of them may be his start while the other is not.
+
+   **A fact, so it takes no color.** The scale this app spends color on is
+   *state* — a live inning, a postponement, a tier — and which game of a pair
+   this is is neither; it is a number that tells two identical lines apart. So it
+   is `--faint` at the `.ovw-next-vs` weight beside it, the same treatment the
+   opposing starter's name takes on the same line, and it is deliberately not
+   the `.start-tag` pill two spans along: that pill is the row's *tier*, and a
+   second pill on the line would read as a second claim about how firm the start
+   is.
+
+   It sits immediately after the matchup, which is the thing it qualifies, and
+   before the opposing starter — so the line reads *when · who · which of the
+   two · against whom*. Tabular figures for nothing (there are two of them), but
+   `flex: none` so a long opponent line cannot squeeze `Gm 2` onto two
+   characters. */
+.start-gm {
+  flex: none;
+  color: var(--faint);
+  font-weight: 600;
+}
 .start-tag {
   margin-left: auto;
   flex: none;

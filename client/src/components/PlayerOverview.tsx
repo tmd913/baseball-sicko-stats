@@ -878,6 +878,17 @@ function StartRow({
   const when = prettyGameDate(start.date);
   const time = formatStartTime(start.startTime);
   const matchup = `${start.home ? 'vs' : '@'} ${start.opponent}`;
+  /**
+   * **Which half of the doubleheader**, and nothing at all on the ordinary day.
+   *
+   * The server sends a number only where his club plays twice (see
+   * `ProjectedStart.gameNumber`), which is *a mark that would be on every row
+   * marks nothing* decided on the wire rather than here. It matters because two
+   * of these rows can otherwise be the same line: same date, same opponent,
+   * same side — and a reader looking at `Sat, Sep 22 · vs NYM` twice has no way
+   * to tell which of the two his man has.
+   */
+  const half = start.gameNumber === null ? null : `Gm ${start.gameNumber}`;
   const sp = start.probablePitcher;
 
   // **A row with nothing behind it is not a press**, which is the feed's own
@@ -893,6 +904,7 @@ function StartRow({
 
   const title =
     `${TIER_LEAD[start.tier]}: ${when}${time ? ` at ${time}` : ''} ${matchup}` +
+    (half ? ` · game ${start.gameNumber} of a doubleheader` : '') +
     (sp ? ` · against ${handThrows(sp.hand)} ${sp.name}` : '') +
     (expandable ? ' · open to see how that lineup has hit' : '');
 
@@ -907,6 +919,9 @@ function StartRow({
         {time ? ` · ${time}` : ''}
       </span>
       <span className="ovw-next-opp">{matchup}</span>
+      {/* Immediately after the matchup, which is the thing it qualifies — the
+          two rows of a pair differ in nothing else. */}
+      {half && <span className="start-gm">{half}</span>}
       {sp && (
         <span className="ovw-next-vs">
           vs {handThrows(sp.hand)} {surname(sp.name)}
@@ -947,7 +962,7 @@ function StartRow({
           row has none, so the two states cannot contradict each other. */}
       {open && (
         <Modal
-          title={`${name} — ${when} ${matchup}`}
+          title={`${name} — ${when} ${matchup}${half ? ` (${half})` : ''}`}
           titleId={`start-opponent-${start.gamePk}`}
           className="play-detail-box"
           onClose={() => setOpen(false)}

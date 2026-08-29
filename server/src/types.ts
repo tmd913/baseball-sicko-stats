@@ -243,6 +243,17 @@ export interface ProjectedStart {
    *  distinction every older client reads, and `tier === 'announced'` is the
    *  same test. */
   announced: boolean;
+  /**
+   * **Which half of a doubleheader this is** — 1 or 2 — or **null where his club
+   * plays once that day**, which is every row but a handful a season.
+   *
+   * Null rather than a `1` on every ordinary row, which is *a mark that would be
+   * on every row marks nothing* applied to a field: the number is only ever
+   * worth printing when there is another game beside it to be told apart from,
+   * so the wire says whether there is rather than making the client work it out
+   * from a list that holds one of the two.
+   */
+  gameNumber: number | null;
   /** Which of the three this row is — see `StartTier`. */
   tier: StartTier;
   /** The **other** side's announced starter — his counterpart. Null until that
@@ -1857,6 +1868,18 @@ export interface ScheduleGame {
   gamePk: number;
   /** The ET baseball day the game counts on, `YYYY-MM-DD`. */
   date: string;
+  /**
+   * **Which game of the day this is** — 1 for a single game, 1 or 2 for the
+   * halves of a doubleheader.
+   *
+   * It is what a day's games are **ordered** by, and that is what it is on the
+   * wire for rather than for the label it also buys. `gamePk` is not an order:
+   * measured over the 2026 season's 44 doubleheader club-days, id order and
+   * game order **disagree on 30 of them**, a makeup added to a date taking a
+   * fresh and higher id while being the opener. First pitch agrees with this
+   * field 44 of 44.
+   */
+  gameNumber: number;
   /** ISO first pitch, or null where the schedule gives none. */
   startTime: string | null;
   homeId: number;

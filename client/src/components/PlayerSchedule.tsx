@@ -468,6 +468,10 @@ export function SchedulePreview({
 }) {
   const when = prettyGameDate(game.date);
   const matchup = opponentText(game, teamId);
+  /** Which half of the doubleheader — `GameRow`'s own test, which see. The head
+   *  of this box is the only thing in it that says which fixture it is about,
+   *  and a pair of them are otherwise the same sentence twice. */
+  const half = gamesOn(index, teamId, game.date).length > 1 ? `Gm ${game.gameNumber}` : null;
   const vs = opposingStarter(index, game, teamId);
   const oppId = game.homeId === teamId ? game.awayId : game.homeId;
   const oppAbbr = game.homeId === teamId ? game.away : game.home;
@@ -475,7 +479,7 @@ export function SchedulePreview({
   const bats = useHandedness(report.id)?.bats ?? null;
   return (
       <Modal
-        title={`${name} — ${when} ${matchup}`}
+        title={`${name} — ${when} ${matchup}${half ? ` (${half})` : ''}`}
         titleId={`game-opponent-${game.gamePk}`}
         className="play-detail-box"
         onClose={onClose}
@@ -751,6 +755,21 @@ function GameRow({
   const when = prettyGameDate(game.date);
   const time = formatStartTime(game.startTime);
   const matchup = opponentText(game, teamId);
+  /**
+   * **Which half of the doubleheader**, where his club plays twice that day.
+   *
+   * Read off the index rather than sent down: this list is built from
+   * `ScheduleGame`s and the index already holds the club's whole day, so the
+   * test is the count of games on it. (The Projected Starts block cannot ask
+   * that question — its list holds one half of any pair — which is why
+   * `ProjectedStart` carries the number on the wire and this does not.)
+   *
+   * It is worth drawing here for the same reason it is there: the two rows of a
+   * pair are otherwise the same line twice — same date, same opponent, same
+   * side — and on this list one of them may carry a start tag and the other
+   * not.
+   */
+  const half = gamesOn(index, teamId, game.date).length > 1 ? `Gm ${game.gameNumber}` : null;
   const vs = opposingStarter(index, game, teamId);
   const oppId = game.homeId === teamId ? game.awayId : game.homeId;
   /** **`canPreviewFixture`'s to decide**, so this row and the cell in the
@@ -769,6 +788,7 @@ function GameRow({
   const turn = tier === null || tier === 'announced' || cadence == null ? '' : ` (a turn every ${cadence} club ${cadence === 1 ? 'game' : 'games'})`;
   const title =
     `${weekday}, ${when}${time ? ` at ${time}` : ''} ${matchup}` +
+    (half ? ` · game ${game.gameNumber} of a doubleheader` : '') +
     (tier ? ` · ${TIER_TITLE[tier]}${turn}` : '') +
     (vs ? ` · against ${vs.full} — ${VS_TITLE[vs.tier]}` : '') +
     (expandable
@@ -787,6 +807,7 @@ function GameRow({
         {time ? ` · ${time}` : ''}
       </span>
       <span className="ovw-next-opp">{matchup}</span>
+      {half && <span className="start-gm">{half}</span>}
       {vs && (
         <span className={`ovw-next-vs${vs.tier === 'announced' ? '' : ` sched-vs-${vs.tier}`}`}>
           {vs.label}

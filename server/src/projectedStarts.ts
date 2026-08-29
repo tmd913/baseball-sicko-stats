@@ -47,6 +47,10 @@ function toStart(
   names: Map<number, string>,
   hands: Map<number, string | null>,
   abbrevs: Map<number, string>,
+  /** How many games his club plays that day — 1 all but a handful of times a
+   *  season, and the test that decides whether the row names its half. See
+   *  `ProjectedStart.gameNumber`. */
+  onTheDay: number,
 ): ProjectedStart {
   const home = g.homeId === teamId;
   const opponentId = home ? g.awayId : g.homeId;
@@ -65,6 +69,9 @@ function toStart(
     venueId: g.venueId,
     opponent: abbrevs.get(opponentId) ?? '—',
     announced: tier === 'announced',
+    // Only where there is a second game to be told apart from — a `1` on every
+    // ordinary row is a mark that marks nothing.
+    gameNumber: onTheDay > 1 ? g.gameNumber : null,
     tier,
     probablePitcher,
   };
@@ -155,8 +162,17 @@ export async function getProjectedStarts(playerId: number): Promise<ProjectedSta
       : Promise.resolve(new Map<number, string | null>()),
   ]);
 
+  // How many games his club plays on each day one of his turns falls on. It is
+  // counted off the club's own run rather than off `rows`, which holds at most
+  // one half of any pair — his turn is one game, and the fact the row needs is
+  // about the *day*.
+  const onDay = new Map<string, number>();
+  for (const g of run) onDay.set(g.date, (onDay.get(g.date) ?? 0) + 1);
+
   return {
-    starts: rows.map(({ g, tier }) => toStart(g, teamId, tier, names, hands, abbrevs)),
+    starts: rows.map(({ g, tier }) =>
+      toStart(g, teamId, tier, names, hands, abbrevs, onDay.get(g.date) ?? 1),
+    ),
     cadence: p.cadence,
     refusal: p.refusal,
   };

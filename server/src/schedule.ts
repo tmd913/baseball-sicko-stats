@@ -106,6 +106,9 @@ interface ScheduleResponse {
       gamePk?: number;
       gameDate?: string;
       officialDate?: string;
+      /** 1 for a single game; 1 or 2 for the halves of a doubleheader — the
+       *  only field that orders a day's games. See `dedupe`. */
+      gameNumber?: number;
       status?: StatusFields;
       venue?: { id?: number };
       teams?: {
@@ -234,7 +237,33 @@ function dedupe(games: ScheduleGame[]): ScheduleGame[] {
   // keeps the *original* slot — which for a makeup is the right one anyway, both
   // copies carrying the same `officialDate`. Re-sorting makes that independent of
   // the order MLB happened to send.
-  return [...byPk.values()].sort((a, b) => a.date.localeCompare(b.date) || a.gamePk - b.gamePk);
+  //
+  // **A doubleheader is ordered by `gameNumber`, and it used to be by `gamePk`.**
+  // That was wrong and measurably so: over the 2026 season's 44 doubleheader
+  // club-days, `gamePk` order **disagrees with `gameNumber` order on 30 of them
+  // (68%)** — a makeup added to a date is assigned a fresh, higher id and is
+  // very often the *opener*. `gameNumber` is the field that carries the answer,
+  // and it agrees with first pitch **44 of 44**, so it is the truth about which
+  // game is played first as well as about which is numbered first.
+  //
+  // Everything downstream is an index into this list, so the order was not
+  // cosmetic. Back-tested by blinding every future probable and re-deriving the
+  // next turn, over the cases where a doubleheader falls between a pitcher's
+  // anchor and his actual next start, ordering by `gameNumber` takes the
+  // engine's exact-game hit rate from **43.2% to 46.3% (n=718)** with the rest
+  // of the board unmoved (78.1% either way, 14,119 cases) — the same walk, over
+  // a run that is finally in the order the games are played in. It also fixes
+  // the Schedule view's stacked pair, which drew the nightcap above the opener
+  // on those same 30 days, and `nextGame.ts`'s "next game", which could name
+  // the wrong half of one.
+  //
+  // `gamePk` is kept as the last tiebreak, for a payload that somehow gives two
+  // games of a day the same number: a stable order is worth more than an
+  // arbitrary one. `savant.ts::orderGames` settles a player's own games the same
+  // way and for the same reason, and carries the same warning about `gamePk`.
+  return [...byPk.values()].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.gameNumber - b.gameNumber || a.gamePk - b.gamePk,
+  );
 }
 
 async function fetchSeason(from: string, to: string): Promise<Entry> {
@@ -242,7 +271,10 @@ async function fetchSeason(from: string, to: string): Promise<Entry> {
   const url =
     `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${year}` +
     `&gameType=R&hydrate=probablePitcher` +
-    `&fields=dates,date,games,gamePk,gameDate,officialDate,status,abstractGameState,` +
+    // `gameNumber` is what orders a doubleheader — see `dedupe`, which sorts on
+    // it. Two bytes a game against `gamePk`'s seven and it is the only ordering
+    // the payload actually carries.
+    `&fields=dates,date,games,gamePk,gameNumber,gameDate,officialDate,status,abstractGameState,` +
     // `venue` is the parent and `id` is already on the list — this whitelist is
     // leaf-matched, so naming the parent is what makes `venue.id` arrive.
     `codedGameState,detailedState,teams,away,home,team,id,venue,probablePitcher,fullName`;
@@ -284,6 +316,11 @@ async function fetchSeason(from: string, to: string): Promise<Entry> {
         // other date in this app means; `dates[].date` agrees with it and is
         // the fallback for a payload that omits one.
         date: g.officialDate ?? d.date ?? '',
+        // 1 for a single game, 1 or 2 for the halves of a doubleheader — what
+        // orders a day. Defaulted to 1 rather than left null: every downstream
+        // sort wants a number, and a game MLB gave no `gameNumber` is a game
+        // with no second half to be ordered against.
+        gameNumber: g.gameNumber ?? 1,
         startTime: g.gameDate ?? null,
         homeId,
         awayId,
@@ -299,11 +336,12 @@ async function fetchSeason(from: string, to: string): Promise<Entry> {
       });
     }
   }
-  // Date order, and a doubleheader in game order. The API returns them that way
-  // and nothing promises it; both the client's left-to-right day and
-  // `rotations.ts`'s whole coordinate system are an index into this list.
-  // One entry per game before anything reads them — see `dedupe`, which is where
-  // the season-wide read differs from the date-range one it replaced.
+  // Date order, and a doubleheader in **game number** order — see `dedupe`,
+  // which is where that sort lives and which measurement moved it off `gamePk`.
+  // Both the client's left-to-right day and `rotations.ts`'s whole coordinate
+  // system are an index into this list.
+  // One entry per game before anything reads them — see `dedupe`, which is also
+  // where the season-wide read differs from the date-range one it replaced.
   const season = dedupe(all);
   const games = season.filter((g) => g.date >= from && g.date <= to);
   // The runs are read off the **whole** season and the projections bounded to the
