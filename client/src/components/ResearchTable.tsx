@@ -1362,19 +1362,11 @@ export interface ResearchUi {
      *  the same surprise as coming back to find it empty. */
     lists: boolean;
     searches: boolean;
-    /**
-     * **The position picker and the span picker** — the two runs of pills the
-     * bar used to draw flat, now behind the buttons that state what they are
-     * set to.
-     *
-     * They are panels rather than dialogs because they are *one strip of pills
-     * each*, which is the test `ColumnPicker` states from the other side: a
-     * panel several hundred pixels tall wedged into the chrome pushes the table
-     * down the page, and eleven pills in a row is not that. `settings` is the
-     * one that is, and it is a dialog and so is not here — see `settingsOpen`.
-     */
-    pos: boolean;
-    window: boolean;
+    /* *(`pos` and `window` stood here — the position picker and the span
+        picker, as panels opening into the head. Both are `<select>`s now and a
+        platform list has no "open" this app can hold, so the two flags went
+        with them. The paragraph that argued them as panels rather than dialogs
+        is kept where the controls are, in `slotPos`.)* */
     /** The projected lens's span picker — the days it is drawn over. Open is a
      *  fact about where you were, like the other three. */
     projected: boolean;
@@ -1426,8 +1418,6 @@ export const freshResearchUi = (): ResearchUi => ({
     projCustom: false,
     lists: false,
     searches: false,
-    pos: false,
-    window: false,
   },
   draft: { column: null, op: 'gte', value: '' },
   shown: PAGE_SIZE,
@@ -2129,8 +2119,6 @@ export function ResearchTable({
     projected: projectedOpen,
     lists: listsOpen,
     searches: searchesOpen,
-    pos: posOpen,
-    window: windowOpen,
   } = ui.panels;
   /**
    * **The settings dialog, and it is local state where the panels beside it are
@@ -2318,8 +2306,6 @@ export function ResearchTable({
         projected: false,
         lists: false,
         searches: false,
-        pos: false,
-        window: false,
       };
       const panels = { ...u.panels, ...(on ? shut : {}), [which]: on };
       // **The span picker's own door goes wherever its panel goes**, and that
@@ -3849,126 +3835,23 @@ export function ResearchTable({
     </>
   );
 
-  /**
-   * **The span, as a strip in the head rather than a run in the bar.**
-   *
-   * It was five pills flat on the bar's second row, plus a `<select>` beside
-   * them for a phone. It is now behind a button that states what it is set to,
-   * and that button is one of the four the bar has left — which is the whole
-   * point of the change: five pills were five pills' worth of bar spent saying
-   * `Season` four fifths of the time.
-   *
-   * **A panel and not a dialog**, which is the test `ColumnPicker` states from
-   * the other side: a box several hundred pixels tall wedged into the chrome
-   * pushes the table down the page, and a strip of five is not that. The
-   * `<select>` went with the change — a strip in the head is full-width at
-   * every width, so there is no narrow case left for a dropdown to answer, and
-   * the media query that swapped them is gone.
-   *
-   * **Picking closes it**, which is the day strip's own asymmetry read the easy
-   * way: a press here *is* the answer, so there is nothing left to keep open.
-   *
-   * **Not reachable at all under the projected lens**, which is the old rule
-   * moved with the control rather than dropped: a projection is his season
-   * blended with his last thirty days, always, so under the lens these five
-   * decide nothing — and a reader who pressed `7d` and watched the table not
-   * move would be owed an explanation this chrome has no room for. The setting
-   * survives the lens and the board comes back to it, exactly as the turn
-   * filter's days survive a crossing to the batters. The *button* is not drawn
-   * either, so there is no lit control pointing at a panel nothing can open.
-   */
-  const windowStrip = (
-    <div className="research-panel research-pick-panel">
-      <div className="research-pick-row" role="tablist" aria-label="Time span">
-        {RESEARCH_WINDOWS.map((w) => (
-          <button
-            key={String(w)}
-            type="button"
-            role="tab"
-            aria-selected={statWindow === w}
-            className={`research-window-tab${statWindow === w ? ' active' : ''}`}
-            onClick={() => {
-              onWindowChange(w);
-              openPanel('window', false);
-            }}
-            title={
-              w === 'season'
-                ? 'The whole season to date'
-                : `The last ${w} days of games, ending yesterday`
-            }
-          >
-            {windowLabel(w)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  /* *(The two **panels** that stood here are gone, and the paragraphs that
+      argued them are kept in `slotPos` and in the stylesheet's own
+      `.research-pick-select` block, which is this file's rule for superseded
+      reasoning. They were `windowStrip` and `posStrip` — a strip of five spans
+      and eleven positions in two named groups, opened into `.research-head` by
+      a button that stated what it was set to.
 
-  /**
-   * **The positions, grouped by the side of the ball they belong to.**
-   *
-   * Eleven pills in one run is a control you have to read along to find `SS`,
-   * which is what the `<select>` beside them existed to answer on a phone. In
-   * two named groups it is two short runs — `Batters · C · 1B · 2B · 3B · SS ·
-   * IF · OF` and `Pitchers · SP · RP` — and the heading over each is the thing
-   * a flat run could never say: that the eight and the two are not one list.
-   * The whole-board pill leads its own group, being what that group is when
-   * nothing under it is narrowed.
-   *
-   * **The group headings are `<div role="presentation">` rather than headings**,
-   * for the reason `Top Performers` is a `span` on the Overview: this panel is
-   * inside a `tablist` whose tabs are the pills, and a heading between them
-   * would be announced as structure in a list that has none. The tablist's own
-   * `aria-label` names what is being picked; each group carries `aria-label` on
-   * its own row.
-   *
-   * **On the team reading it is the two sides and no groups** — a club plays
-   * every position, so nine of the eleven have nothing to select, and an
-   * `optgroup` over a run of one reads as a heading with nothing under it. That
-   * is the rule `TEAM_SIDES` already carried down from the `<select>` it
-   * replaces.
-   */
-  const posStrip = (
-    <div className="research-panel research-pick-panel">
-      {(teams ? [{ label: null, items: TEAM_SIDES }] : POSITION_GROUPS).map((g) => (
-        <div className="research-pick-group" key={g.label ?? 'sides'}>
-          {g.label && (
-            <div className="research-pick-head" role="presentation">
-              {g.label}
-            </div>
-          )}
-          <div
-            className="research-pick-row"
-            role="tablist"
-            aria-label={g.label ?? (teams ? 'Side' : 'Position')}
-          >
-            {g.items.map((p) => {
-              const on = teams ? researchKindFor(pos) === p.kind : pos === p.key;
-              return (
-                <button
-                  key={p.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  className={`research-pos-tab${on ? ' active' : ''}`}
-                  title={(hasEligibility && p.espnTitle) || p.title}
-                  /* On the team reading the press is a no-op where the kind is
-                     already right — pressing `Hitting` on a board reached from
-                     the `SS` pill must not spend that pill. */
-                  onClick={() => {
-                    if (!(teams && researchKindFor(pos) === p.kind)) onPosChange(p.key);
-                    openPanel('pos', false);
-                  }}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+      What they were right about is the fault the pill runs had: eleven pills
+      behind a horizontal scroll is a control you have to drag through to find
+      `SS`. What they were wrong about is that a platform list cannot group or
+      carry a per-option title — `<optgroup>` and `<option title>` do both —
+      and about the cost: a panel opens into the head, so a press **moved the
+      table down the page** and moved it back, over a board where every pixel
+      of height is a row. Both controls are `<select>`s again, at every width,
+      and the media query that used to swap them in on a phone is not coming
+      back with them.)* */
+
 
   /* *(The paragraph that stood here argued `.research-tools` — the four
       disclosure buttons as **one flex item**, so a wrapping bar moved them
@@ -4533,17 +4416,6 @@ export function ResearchTable({
 
 
   /**
-   * **What the position button says**, which is the whole reason a button
-   * replaces the run: the run said eleven things and the reader only ever needs
-   * the one that is set. `Batters` is the default and reads as one, so nothing
-   * on the bar has to say *default*.
-   */
-  const posLabel =
-    (teams ? TEAM_SIDES : POSITIONS).find((p) =>
-      teams ? researchKindFor(pos) === p.kind : p.key === pos,
-    )?.label ?? 'Batters';
-
-  /**
    * ---------------------------------------------------------------------------
    * The bar: four controls, and everything else behind one of them
    * ---------------------------------------------------------------------------
@@ -4830,36 +4702,108 @@ export function ResearchTable({
     </>
   );
 
+  /**
+   * **The position, as a dropdown.**
+   *
+   * *(It has been three shapes. Eleven pills flat on the bar, with a `<select>`
+   * swapped in under 640 — and the paragraph that argued the swap is kept in
+   * the stylesheet because it was right about the fault: "eleven pills behind a
+   * horizontal scroll is a control you have to drag through to find `SS`". Then
+   * a button stating what it is set to, opening a grouped strip in the head,
+   * which was argued as having both halves of a select — the closed state on
+   * the button and a **groupable** open state the platform list was said not to
+   * do.)*
+   *
+   * **That last claim was the weak one, and it is what this reverts.** A
+   * platform list groups perfectly well — `<optgroup>` is the element the
+   * board's own reading of it already named — and it carries a per-option
+   * `title` too, which was the other thing the panel was said to be needed for.
+   * What the panel could never be is *the shape a reader expects*: asked for
+   * directly, twice.
+   *
+   * **And the swap it makes is a good one on this bar in particular.** A panel
+   * opens into `.research-head`, which means a press here **moves the table
+   * down the page** by the panel's height and moves it back when a pill is
+   * pressed — over a board where every pixel of height is a row. A native list
+   * is drawn by the platform *over* everything and costs the page nothing.
+   *
+   * **One shape at every width**, so the media query that swapped pills for a
+   * select is not coming back with it: this is the select at 390 and at 1920
+   * alike.
+   *
+   * On the team reading it is the two sides and **no groups** — a club plays
+   * every position, so nine of the eleven have nothing to select, and an
+   * `optgroup` over a run of one reads as a heading with nothing under it. That
+   * is the rule `TEAM_SIDES` carried down from the first `<select>`, arriving
+   * back at one. Picking the side already set fires no `change` at all, which
+   * is the "pressing `Hitting` on a board reached from the `SS` pill must not
+   * spend that pill" rule for free.
+   */
   const slotPos = (
-    <>
-      {/* The position, stating what it is set to. `.active` alone and never
-          `.on`: every board is on *some* position, so a lit button here would
-          be a mark on every board, which marks nothing. */}
-      <SavedButton
-        label={posLabel}
-        title={teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'}
-        open={posOpen}
-        onToggle={() => openPanel('pos', !posOpen)}
-        className="research-pick-btn"
-      />
-    </>
+    <select
+      className="research-pick-select"
+      aria-label={
+        teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'
+      }
+      title={
+        teams ? 'Which side of the ball the clubs are read on' : 'Which position the board is narrowed to'
+      }
+      value={teams ? (researchKindFor(pos) === 'pitcher' ? 'pitchers' : 'batters') : pos}
+      onChange={(e) => onPosChange(e.target.value as ResearchPos)}
+    >
+      {teams
+        ? TEAM_SIDES.map((p) => (
+            <option key={p.key} value={p.key} title={p.title}>
+              {p.label}
+            </option>
+          ))
+        : POSITION_GROUPS.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map((p) => (
+                <option
+                  key={p.key}
+                  value={p.key}
+                  /* The eligibility wording the pills carried — `Eligible at
+                     shortstop in ESPN` — which the panel was said to be the
+                     only shape that could hold. An `<option>` takes a `title`
+                     like anything else. */
+                  title={(hasEligibility && p.espnTitle) || p.title}
+                >
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+    </select>
   );
 
+  /** …and the span, on the same terms and for the same reasons — a flat list of
+   *  five, which is the one thing a strip of five pills and a dropdown are
+   *  equally good at, so what decides it is that the two controls beside each
+   *  other should be one shape. **Not drawn under the projected lens**, which
+   *  is `noSubject`'s business now rather than a condition written here. */
   const slotWindow = (
-    <>
-      {/* …and the span, on the same terms, and **not drawn under the projected
-          lens** — the rule that took the pill row off the bar there, arriving on
-          the button that replaced it. See `windowStrip`. */}
-      {!projectedOn && (
-        <SavedButton
-          label={windowLabel(statWindow)}
-          title="How much of the season every number on the board is drawn from"
-          open={windowOpen}
-          onToggle={() => openPanel('window', !windowOpen)}
-          className="research-pick-btn"
-        />
-      )}
-    </>
+    <select
+      className="research-pick-select"
+      aria-label="How much of the season every number on the board is drawn from"
+      title="How much of the season every number on the board is drawn from"
+      value={String(statWindow)}
+      onChange={(e) => onWindowChange(toResearchWindow(e.target.value))}
+    >
+      {RESEARCH_WINDOWS.map((w) => (
+        <option
+          key={String(w)}
+          value={String(w)}
+          title={
+            w === 'season'
+              ? 'The whole season to date'
+              : `The last ${w} days of games, ending yesterday`
+          }
+        >
+          {windowLabel(w)}
+        </option>
+      ))}
+    </select>
   );
 
   /**
@@ -4873,17 +4817,10 @@ export function ResearchTable({
    * new is that this file no longer decides the place: `layout` does, and the
    * reader owns `layout`.
    *
-   * **A `null` here means the control has no subject on this reading**, and it
-   * is the rule the bar already followed a control at a time: the ownership
-   * sets, the watchlist, Compare, Projected, the turn filter and the saved
-   * searches take themselves off the team reading; Columns and Ranks go in
-   * schedule mode; the span goes under the projected lens. Read off this map
-   * they behave exactly as they did — a key whose slot is `null` is drawn
-   * nowhere, on the bar or behind the gear, rather than being disabled or
-   * leaving a gap in a row. The **arrangement is untouched** by any of it, so
-   * crossing to the clubs and back finds every control where it was left.
+   * **Which of them have a subject on this reading is `noSubject`'s question**,
+   * not this map's — see it directly below.
    */
-  const slots: Partial<Record<ResearchControlKey, ReactNode>> = {
+  const slots: Record<ResearchControlKey, ReactNode> = {
     /* **The gear is placed like everything else**, and the only thing special
        about it is that it cannot be taken off the bar or off the sticky line —
        `REQUIRED_CONTROL`, enforced in `readResearchLayout` so a stored
@@ -4893,22 +4830,83 @@ export function ResearchTable({
     settings: gearButton,
     search: slotSearch,
     pos: slotPos,
-    window: projectedOn ? null : slotWindow,
-    include: teams ? null : slotInclude,
-    watchlist: teams ? null : slotWatchlist,
-    searches: teams ? null : slotSearches,
+    window: slotWindow,
+    include: slotInclude,
+    watchlist: slotWatchlist,
+    searches: slotSearches,
     teams: slotTeams,
     filters: slotFilters,
-    turns: kind === 'pitcher' && !teams ? slotTurns : null,
-    compare: teams ? null : slotCompare,
+    turns: slotTurns,
+    compare: slotCompare,
     schedule: slotSchedule,
-    projected: teams ? null : slotProjected,
-    columns: schedule ? null : slotColumns,
-    ranks: schedule || projectedOn ? null : slotRanks,
+    projected: slotProjected,
+    columns: slotColumns,
+    ranks: slotRanks,
   };
 
+  /**
+   * **Why a control has nothing to be about on this reading**, in words, or
+   * `undefined` where it does.
+   *
+   * This is the rule the bar already followed a control at a time — *a control
+   * whose whole subject has been swapped out is a setting lying about its own
+   * reach* — collected into one function, and collecting it is the point. It
+   * used to be a condition per entry in the map above and a `null` where it
+   * fired, which drew the bar correctly and left the **arrangement screen**
+   * showing fifteen chips with no hint that four of them were not on the board
+   * behind it. Reported as exactly that: `Starting` sitting in row 2 of the
+   * editor and nowhere on a batters board.
+   *
+   * One function, two readers — the bar tests it to decide whether to draw a
+   * control, and the editor prints it under the chip. *One arithmetic, one
+   * implementation*: a condition written in both places is a condition that
+   * comes to disagree, and the way it would disagree is the editor promising a
+   * control the board will not draw.
+   *
+   * The wording completes *"Not on the bar right now — …"*.
+   */
+  const noSubject = (k: ResearchControlKey): string | undefined => {
+    /* A board of thirty clubs has no owners, no watchlist, no comparison of
+       players, no per-man projection and no rotation turn. */
+    const clubs = 'the board is reading clubs, not players';
+    switch (k) {
+      case 'include':
+      case 'watchlist':
+      case 'searches':
+      case 'compare':
+      case 'projected':
+        return teams ? clubs : undefined;
+      /* A turn is a fact about a pitcher. The range it holds survives the
+         crossing, so coming back to the arms finds the days still picked. */
+      case 'turns':
+        return teams ? clubs : kind !== 'pitcher' ? 'the board is reading batters' : undefined;
+      /* A projection is his season blended with his last thirty days, always,
+         so the five spans decide nothing under the lens. */
+      case 'window':
+        return projectedOn ? 'the projected lens always reads one span' : undefined;
+      /* The day columns are a vocabulary nobody picks. */
+      case 'columns':
+        return schedule ? 'the Schedule view draws days instead of stats' : undefined;
+      /* …and a percentile is a standing among *qualified* players on a measured
+         board, which nobody is for a week nobody has played. */
+      case 'ranks':
+        return schedule
+          ? 'the Schedule view draws days instead of stats'
+          : projectedOn
+            ? 'a projection is never ranked against measured players'
+            : undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  /** What the arrangement screen prints under the chips it cannot promise. */
+  const absentControls = Object.fromEntries(
+    RESEARCH_CONTROLS.map((c) => [c.key, noSubject(c.key)]).filter(([, why]) => !!why),
+  ) as Partial<Record<ResearchControlKey, string>>;
+
   /** Which of them have something to draw on this reading. */
-  const liveSlot = (k: ResearchControlKey) => !!slots[k];
+  const liveSlot = (k: ResearchControlKey) => !noSubject(k);
 
   /**
    * **One control, wrapped only so the arrangement can reach it.**
@@ -5028,8 +5026,6 @@ export function ResearchTable({
           They lead the run because they are what the two buttons beside Search
           open, and because they are the smallest: one strip and two, where
           Filters is a builder and the day strip is a fortnight. */}
-      {posOpen && posStrip}
-      {windowOpen && !projectedOn && windowStrip}
       {/* **The two saved-thing panels are dialogs now, and are drawn beside the
           Columns picker rather than here.** Two paragraphs of this file's
           history sit under that one sentence and both are worth keeping:
@@ -5632,6 +5628,7 @@ export function ResearchTable({
           {layoutOpen && (
             <ResearchLayoutEditor
               layout={layout}
+              absent={absentControls}
               onChange={onLayoutChange}
               onReset={() => onLayoutChange(null)}
               onClose={() => setLayoutOpen(false)}

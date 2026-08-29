@@ -531,6 +531,7 @@ function ControlChip({
   picked,
   moving,
   display,
+  absent,
   hidden,
   frozen,
   onPress,
@@ -542,6 +543,9 @@ function ControlChip({
   /** Something else is in hand, so this chip is a *destination* and says so. */
   moving: boolean;
   display?: ResearchControlDisplay;
+  /** Why this control has no subject on the reading the board is showing right
+   *  now, or absent where it has one — `ResearchTable::noSubject`, in words. */
+  absent?: string;
   /** Drawn dim, being on the sticky line's list but not on the line. */
   hidden?: boolean;
   /** Not a destination for what is in hand — the gear over the off-bar box, the
@@ -577,6 +581,23 @@ function ControlChip({
       >
         <span className="rlay-chip-label">{meta.label}</span>
         <span className="rlay-chip-hint">{meta.hint}</span>
+        {/* **What this chip cannot promise.** Six of the fifteen take
+            themselves off a reading that has no subject for them — a turn is a
+            fact about a pitcher, a comparison is of players, a percentile is a
+            standing among measured ones — and that rule has always been right
+            on the *bar*. It was silent here, which was reported: `Starting`
+            sitting in row 2 of this screen and nowhere on a batters board, with
+            nothing on either to say which of the two was wrong.
+
+            The *place* is stated and the arrangement is not touched, because
+            the arrangement is not what changed: crossing to the clubs and back
+            finds every control exactly where it was left. So this is a line on
+            the chip rather than a chip moved into some other box, and the chip
+            stays pressable — a reader arranging their pitching bar while
+            looking at a batters board is doing something perfectly ordinary. */}
+        {absent && (
+          <span className="rlay-chip-absent">Not on the bar right now — {absent}</span>
+        )}
       </button>
       {/* **Text, icon or both — three segments, and the third is the default.**
           It was a two-state switch reading `Word`/`Icon` and it was reported as
@@ -694,11 +715,16 @@ function DropTail({
  */
 export function ResearchLayoutEditor({
   layout,
+  absent,
   onChange,
   onReset,
   onClose,
 }: {
   layout: ResearchLayout;
+  /** Which controls the board behind this box is not drawing, and why — keyed
+   *  by control, in words. See `ResearchTable::noSubject`, which is the one
+   *  place that decides it for both. */
+  absent: Partial<Record<ResearchControlKey, string>>;
   onChange: (next: ResearchLayout) => void;
   onReset: () => void;
   onClose: () => void;
@@ -825,6 +851,7 @@ export function ResearchLayoutEditor({
         picked={picked === key}
         moving={moving}
         frozen={frozen}
+        absent={absent[key]}
         display={displayOf(layout, key)}
         onPress={() =>
           picked === null
@@ -937,6 +964,7 @@ export function ResearchLayoutEditor({
                 meta={researchControlMeta(k)}
                 picked={pickedCond === k}
                 moving={pickedCond !== null}
+                absent={absent[k]}
                 hidden={layout.condensedOff.includes(k)}
                 onPress={() =>
                   pickedCond === null

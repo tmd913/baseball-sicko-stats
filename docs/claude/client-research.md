@@ -31,37 +31,59 @@ things, which is a dialog's shape by the volume test `ColumnPicker` settled
 here) and wrong about the lenses, and it applied one answer to both.
 
 **So the shape stops being a decision this file makes.** The bar is **up to four
-rows**; the reader says which control is on which row and in what order, which
-give up their word for their glyph, and what order the condensed run reads in.
+rows**; the reader says which control is on which row and in what order,
+whether each is drawn as its icon, its word or both, and which controls the
+sticky line carries once the bar has scrolled away and in what order.
 Anything on no row is behind the gear — which is exactly where the four-button
 bar put all thirteen — so **the shape below is one of the arrangements this can
 be set to**, and so is the three-run bar before it. `ResearchLayout.tsx` is the
 vocabulary, the default, the normalizer and the screen; `ResearchTable.tsx`
 draws the controls, as it always did.
 
-#### The fourteen, and the one that is not among them
+#### The fifteen, and the one that is required
 
-Every control the bar ever held is placeable: `search`, `pos`, `window`,
-`include`, `watchlist`, `searches`, `teams`, `filters`, `turns`, `compare`,
-`schedule`, `projected`, `columns`, `ranks`.
+Every control the bar ever held is placeable, the gear among them: `settings`,
+`search`, `pos`, `window`, `include`, `watchlist`, `searches`, `teams`,
+`filters`, `turns`, `compare`, `schedule`, `projected`, `columns`, `ranks`.
 
-**The gear is not.** It is drawn first on the first row, always, and is in no
-arrangement — a gear moved off the bar would take the screen that moves it back
-with it. That is the only exception and it is the whole of it.
+**The gear can be moved and cannot be removed.** Put it at the end of row 3 or
+the head of row 1 as you like; what is refused is taking it *off* — a gear
+behind the gear would take the screen that puts it back with it, and the
+arrangement lives on the user's record, so there would be nothing on screen to
+undo it with. `REQUIRED_CONTROL`, and it is enforced as a **fill** rather than a
+rejection: `readResearchLayout` puts it back at the head of the first row if a
+stored arrangement has lost it, which is also how an arrangement written before
+the gear was placeable opens — with the gear exactly where that build drew it.
 
-**Two of the fourteen cannot be asked for as an icon**, and it is the four-button
-bar's own sentence: `Position` and `Season / window` exist to say what they are
-set to, *and a glyph cannot say `SS`*. Drawn as glyphs they square to two
-identical carets, which is the exact fault the condensed run carries a
-three-declaration override to prevent (see **the condensed run**, below). The
-editor does not offer the switch on those two rather than offering it and
-declining it.
+It was outside the arrangement for one round, drawn first on the first row and
+unmovable. That is the same guarantee with the reader's choice of place taken
+away, and it cost something real elsewhere: the *first row* then had to be drawn
+even when empty, because it was the only place the gear could go. With the gear
+placed, **every** empty row goes, and the bar still cannot come out with no rows
+at all.
+
+The one move the arrangement screen refuses is the gear over the `Behind the
+gear` box: those chips go `frozen` (dim, `disabled`, saying why in their
+`title`), the box's drop tail is not drawn, and the box says `Board settings has
+to stay on the bar.` A control that went quiet under a press would be worse than
+one that declines it out loud. Driven: with the gear in hand all four off-bar
+chips are frozen, the tail is gone, pressing one leaves the gear still in hand,
+and dropping it in front of `Filters` moves it to row 3.
+
+**Three of the fifteen have nothing to choose between**, for two opposite
+reasons. `pos` and `window` **have no glyph** — the four-button bar's own
+sentence: they exist to say what they are set to, *and a glyph cannot say `SS`*.
+They are `<select>`s now (see below), which makes the point structural rather
+than stylistic: their closed face **is** the state, and there is no mark for it
+to fall back to. `settings` **has no word**: the gear names itself through
+`sr-only` and has never carried a visible label anywhere in this app. The editor
+draws no switch on those three rather than drawing one that declines.
 
 #### The default is two rows, and the two off it are the two the gear was right about
 
 | | |
 | --- | --- |
-| **Row 1** — what the board *is* of | Search · Position · Season · the ownership sets · Watchlist |
+| **Row 1** — what the board *is* of | the gear · Search · Position · Season · the ownership sets · Watchlist |
 | **Row 2** — what is *done* to it | Filters · Starting · Compare · Schedule · Projected · Columns · Ranks |
 | **Behind the gear** | Saved searches · Teams |
 
@@ -94,8 +116,8 @@ A row that has been given nine controls **scrolls**; it does not wrap into a
 shape the reader did not ask for. That is the rule the three-run bar already ran
 on and the reason a button added to a run costs an arrow rather than a line.
 
-**A row with nothing on it is not drawn**, and that is not only about a reader
-who has left one empty. On the **clubs** board every control in a row can take
+**A row with nothing on it is not drawn**, the first included, and that is not
+only about a reader who has left one empty. On the **clubs** board every control in a row can take
 itself off — `slots` maps a key with no subject to `null`, which is the
 `!teams`/`!schedule`/`!projectedOn` rule the bar already followed a control at a
 time — so an arrangement whose second row is the ownership sets, the watchlist
@@ -104,7 +126,9 @@ chrome over the table with nothing in it, which is the one thing this whole
 section is measured against. Driven on the clubs board with the four-row
 arrangement: 4 rows → **3**, the empty one gone, the other three unmoved.
 
-Only the **first** row is kept whatever is on it, being where the gear is.
+That every row can go is only safe because the gear is required to be
+*somewhere*: at least one row always has something on it, so the bar can never
+come out with no rows at all.
 
 **The arrangement itself is untouched by any of that.** A control taken off by
 the reading is drawn nowhere — not on the bar, not behind the gear, and not
@@ -147,7 +171,7 @@ after: 4 rows → 3 at `scrollTop` 0 leaves the rail undrawn, a scroll to 400
 draws it with the first table row at **340 − 400 = −60** exactly, coming back to
 0 undraws it, and crossing to the clubs board draws nothing.
 
-#### The condensed run has an order of its own
+#### The condensed run has an order of its own, and a membership
 
 *(The paragraph that decided this run's order is kept and its finding is what
 the setting is built on: the tools lead it where the bar reads who → slice →
@@ -164,36 +188,82 @@ written in this file can be the answer for all of them. So the run reads in
 bottom** — the arrangement-independent version of the same reading. The gear
 leads it whatever they say.
 
-**It is an order and not a membership.** Every control on the bar is on the
-sticky line; `readResearchLayout` filters the stored order to what is on the bar
-and then *completes* it from the bar, so a control promoted onto a row joins the
-line without the reader being asked a second question, and one taken off the bar
-leaves the line with it. Asking twice about one control is how the two come to
-disagree.
+**The order and the membership are two lists, and keeping them apart is the
+point.** `condensed` is every on-bar key exactly once, whether or not it is
+drawn; `condensedOff` is the ones that are not. So a reader who turns Compare
+off there and back on again gets it back **in the place it had** rather than at
+the end of the line — which one list could not do, having thrown the place away
+when it dropped the key.
 
-#### Icon or word, per control
+`condensed` is still *completed* from the bar on the way in: a control promoted
+onto a row joins the line without the reader being asked a second question, and
+one taken off the bar leaves the line with it. What `condensedOff` adds is the
+answer completion cannot ask — *do you want it there*. A reader who has scrolled
+into the table wants the table, so the line can be cut to the three or four
+things they actually reach for while reading it.
 
-The switch is on the chip, in the one screen where a reader is looking at all
-fourteen at once. `.research-slot` is a `display: contents` wrapper — the button
-inside stays a direct flex item of its row, with the row's own gap and no box in
-between, the trick `.research-chrome` and `.research-bar` already use one level
-up — and `.is-icon` on it is **folded onto `.research-condensed`'s own selector
-list** rather than written a second time.
+**The gear cannot be turned off there either**, and for a sharper version of the
+same reason it cannot leave the bar: that line *is* the bar once the board is
+scrolled, and a reader who has turned every other control off has said they want
+the table — which is exactly when the one way back to the controls has to still
+be under the finger.
 
-That fold is the point. The two are the same object — a control with its word
+#### Both, icon or text — three readings, not a switch
+
+It was a two-state switch reading `Word` / `Icon`, and it was **reported as
+confusing**, rightly. A control with a glyph and a word can be in three states,
+and that switch named two of them: the third — *both*, which is what every
+button on this bar is unless it is told otherwise — was the *absence* of a
+setting rather than one of its choices, so a reader looking for it found a
+switch in neither position. Three segments now, all drawn, the one in force lit.
+
+**`both` is still what an absent entry means**, which is a different question
+from what the editor shows. Absence-is-the-default is the storage convention
+every preference in this app follows and is what lets a default move without
+anyone's record needing revisiting; the third segment is what lets the reader
+*see* it. So `display` stores only `icon` and `text`, and pressing `Both` deletes
+the entry rather than writing the word.
+
+`.research-slot` is a `display: contents` wrapper — the button inside stays a
+direct flex item of its row, with the row's own gap and no box in between, the
+trick `.research-chrome` and `.research-bar` already use one level up. Driven:
+the wrapper computes `display: contents`, the gear inside it is 36 × 36 and the
+row 36 tall, which is what it was before the wrapper existed. `both` takes no
+class at all.
+
+**`.is-icon` is folded onto `.research-condensed`'s own selector list**, and
+that fold is the point: the two are the same object — a control with its word
 taken off and its box squared to the app's 36px — reached by two different
-questions: one a *scroll state* ("the bar has gone, this line stands in for
-it"), the other a *setting* ("I know what the funnel means, give me the pixels
-back"). Two rule sets that agree today are two rule sets that will one day
-differ, and the day one of them gained the `:has(.research-toggle-count)`
-exception and the other did not is the day a filter count got clipped. Driven:
-`Filters` set to icon on a two-row bar measures **36px**, the same square the
-condensed run gives it.
+questions, one a *scroll state* ("the bar has gone, this line stands in for it")
+and one a *setting* ("I know what the funnel means, give me the pixels back").
+Two rule sets that agree today are two that will one day differ, and the day one
+gained the `:has(.research-toggle-count)` exception and the other did not is the
+day a filter count got clipped.
 
-What is deliberately *not* folded is the `.research-pick-btn` block that puts
-the position's and the span's words back inside the condensed run: those two
-cannot be set to icon at all, so an override for them here would be a rule for a
-state nothing can reach.
+**`.is-text` is its mirror and has no twin to fold onto** — nothing else in this
+app takes the glyph *off* a button, where the condensed run has been taking the
+word off one since the bar first condensed. It is `svg` less two exceptions,
+which is what reaches eight components' worth of leading marks without a class
+being added to any of them:
+
+- **`.ball-spin` survives.** `ScheduleToggle` and `ProjectedToggle` draw the
+  spinning baseball *in place of* their glyph while the read is out, and that is
+  the only mark those presses leave — rule 1 of the app's loading system, stated
+  inside the control. Hidden with the glyph, a press on a text-only Schedule
+  would do nothing visible for as long as the window takes.
+- **`.rl-caret` survives.** It is not a glyph but a *disclosure*: it says there
+  is more of this control, which is as true of a word as of an icon. The
+  condensed run hides it for the opposite reason — a 36px square is room for one
+  mark and the chevron is not the one worth keeping — which is why these two
+  rules are not one.
+
+`.research-inc-code` is named separately: the ownership buttons' mark is a
+`<span>` carrying a letterform rather than an `<svg>`, so one instruction has to
+be given twice for one control.
+
+Driven at 1400, `Filters` through all three: **both** 88px with one glyph
+showing, **icon** 36 with none of its word, **text** 67 with no glyph and the
+word intact.
 
 #### The gesture is a press and a press
 
@@ -213,7 +283,7 @@ tail is gone, pressing one leaves the gear still in hand, and dropping it in
 front of `Filters` moves it to row 3.
 
 **The switch is under the chip's label rather than beside it**, and that is
-measured: three segments and a two-line label came to **320px** against the
+measured, too: three segments and a two-line label came to **320px** against the
 **338** a 390px phone leaves inside this dialog, so a row layout wrapped
 unpredictably — the switch beside the label on one chip and under it on the
 next, down the same box. A column is the same shape at every width, which is
@@ -248,6 +318,100 @@ picture of a row was a vertical stack, which is the one thing this screen has to
 get right. Measured at 1400: 640 wide, row 1's five chips on three lines. At
 390: 358 wide at x=16, one chip to a line (the reading that width actually
 calls for), page overflow **0**.
+
+#### The screen says which controls the board is not drawing
+
+**Reported: four controls sat on row 2 of the editor and only three were on the
+bar.** Nothing was wrong — `Starting` is the pitching board's control and takes
+itself off a batters board, which is this file's oldest rule about the bar (*a
+control whose whole subject has been swapped out is a setting lying about its
+own reach*). What was wrong is that **the arrangement screen was silent about
+it**: fifteen chips, six of them conditional, and nothing on either surface to
+say which of the two was telling the truth.
+
+The conditions are one function now — `ResearchTable::noSubject`, which returns
+*why* in words or nothing at all. **Two readers, one arithmetic**: the bar tests
+it to decide whether to draw a control, and the editor prints it under the chip
+as `Not on the bar right now — the board is reading batters`. They used to be a
+condition per entry in the slot map and a `null` where one fired, which drew the
+bar correctly and could not be read by anything else; written in two places they
+come to disagree, and the way they would is the editor promising a control the
+board will not draw.
+
+The six and their reasons:
+
+| | not drawn when | because |
+| --- | --- | --- |
+| ownership sets, Watchlist, Saved searches, Compare, Projected | the clubs board | it is reading clubs, not players |
+| Starting | the batters board, or clubs | a turn is a fact about a pitcher |
+| Season / window | the projected lens | that lens always reads one span |
+| Columns | Schedule mode | it draws days instead of stats |
+| Ranks | Schedule mode, or the projected lens | …and a projection is never ranked against measured players |
+
+**The place is stated and the arrangement is not touched.** Crossing to the
+clubs and back finds every control exactly where it was left, so this is a line
+on the chip rather than a chip moved into some other box, and the chip stays
+pressable — arranging a pitching bar while looking at a batters board is
+ordinary. `--muted` and not a warning color, and the chip stays at full opacity:
+nothing is wrong, and dimming the chip would say the *chip* was inactive when it
+is the control that is off screen.
+
+Driven on all three readings: on the batters board only `Starting` carries the
+line; on the pitching board none of the six does; on the clubs board six chips
+carry it and `Schedule`, `Search`, `Filters`, `Position` and `Season` do not.
+
+#### The position and the span are dropdowns
+
+Asked for directly. They have now been three shapes, and the middle one is the
+one being reverted.
+
+1. **Eleven pills flat on the bar**, with a `<select>` swapped in under 640px.
+2. **A button stating what it is set to**, opening a grouped strip into
+   `.research-head`.
+3. **A `<select>` at every width.**
+
+**What (2) was right about is the fault in (1)**, and that paragraph is kept in
+the stylesheet: *eleven pills behind a horizontal scroll is a control you have
+to drag through to find `SS`*. What it was wrong about is the claim that decided
+it — that a platform list does badly the half a strip does well, *"being unable
+to group or to carry `Eligible at shortstop in ESPN`"*. It does both:
+`<optgroup>` is the element the board's own team reading already named, and
+`<option title>` carries the eligibility wording. Driven: `Batters: Batters, C,
+1B, 2B, 3B, SS, IF, OF` over `Pitchers: Pitchers, SP, RP`, and two ungrouped
+options on the clubs board, which is `TEAM_SIDES`' rule arriving back where it
+started.
+
+**And a panel costs the page something a list does not.** It opens into
+`.research-head`, so a press **moves the table down** by the panel's height and
+moves it back when a pill is pressed — over a board where every pixel of height
+is a row. A platform list is drawn over everything and costs nothing.
+
+**One shape at every width**, so the media query that swapped pills for a select
+is not coming back with it. `.research-pick-select` folds onto the app's one
+`<select>` look — the block `.schedule-span-select` and `.mup-select` take —
+with *when it is drawn* split off from *what it looks like*, since those two are
+a phone's stand-in for a pill row and these are not. Measured at 1400 and 390
+alike: both selects **36px** tall in a 36px row, `Season` 91px wide and `Batters`
+110, page overflow 0, and `.research-head` holding **no panels**. Driven through:
+`SS` narrows the count 491 → 81 and writes `pos=SS`; `30d` writes `win=30`;
+`Pitchers` crosses to the 642-row board.
+
+Picking the side already set on the clubs board fires no `change` at all, which
+gives *"pressing `Hitting` on a board reached from the `SS` pill must not spend
+that pill"* for free.
+
+**Three things went with the panels.** `windowStrip` and `posStrip`; the `pos`
+and `window` entries in `ui.panels` (a platform list has no "open" this app can
+hold); and `.research-window-tab`, which was the span pill folded onto
+`.view-tab`/`.lg-tab` and now has no reader in any shape — removed with its last
+one, which is this repo's rule. `.research-pos-tab` beside it stays: the how-to
+page still draws a *picture* of the position pills, and a picture of pills is
+pills. The condensed run's three `.research-pick-btn` overrides went too, and
+what they recorded is kept in prose because it is a trap rather than a layout —
+those labels are the app's *visually-hidden* block, so `display: inline` put the
+word back in flow a pixel wide and the two buttons measured **22px**, their
+padding and nothing else. A `<select>` needs none of it: the run's squaring never
+reaches it, and its closed state has always been the word.
 
 #### Two things the arrangement changed underneath
 
