@@ -6745,14 +6745,40 @@ button.start-line:focus-visible {
   color: var(--muted);
   cursor: pointer;
 }
-/* 30px of solid ground is the 16px icon centered in the 44 plus its own margin,
-   so the chevron never sits on a gradient; the remaining 14 is the fade. */
+/* **The arrow reaches the edge of the band, not the edge of the run.**
+ *
+ * Reported: the side-scrolling arrows are too far in and waste space. They
+ * were, and the waste is measurable — an arrow is `position: absolute` against
+ * its run, and the run is **inset from the band it sits in**: the research
+ * board's rows land on `--table-bleed` so the count, the head and the table's
+ * first column all start on one line, and the app's own tools row lands on
+ * `--bar-pad` so it agrees with the date bar under it. So at 390 the right
+ * arrow ran 324 → 368 with **22px of dead gutter beyond it**, and the 44px it
+ * did cover was 44px of the run — the reader lost a control's width at each
+ * end *and* got a strip of nothing outside it.
+ *
+ * `--scroll-arrow-out` is that inset, declared by whichever rule created it, so
+ * the arrow can give it back. It is not one number: it is `--bar-pad` where the
+ * run un-pads to the bar's inner edge and `--table-bleed` where it does not,
+ * and in both the arithmetic lands the arrow **flush with the band's own box**
+ * — which is what makes this a rule rather than two offsets that agree today.
+ * Defaulted to `0px` so `.details-tabstrip`, whose strip already runs edge to
+ * edge, is untouched by a token it never sets.
+ *
+ * Nothing is clipped by it. `.view-tools` is `overflow-x: clip`, which clips at
+ * the **border** box, and the band's padding is exactly the inset being given
+ * back — so the arrow lands *on* the band's own edge and never outside it. It
+ * cannot push the pane sideways either, for the same reason: there is no
+ * negative offset to overflow with.
+ *
+ * 30px of solid ground is the 16px icon centered in the 44 plus its own margin,
+ * so the chevron never sits on a gradient; the remaining 14 is the fade. */
 .tabstrip-arrow-l {
-  left: 0;
+  left: calc(-1 * var(--scroll-arrow-out, 0px));
   background: linear-gradient(to right, var(--bg) 0 30px, transparent);
 }
 .tabstrip-arrow-r {
-  right: 0;
+  right: calc(-1 * var(--scroll-arrow-out, 0px));
   background: linear-gradient(to left, var(--bg) 0 30px, transparent);
 }
 .tabstrip-arrow:hover {
@@ -8247,6 +8273,10 @@ button.start-line:focus-visible {
   display: flex;
   align-items: center;
   --tabstrip-arrow-w: 44px;
+  /* What the line above left between this run and the band's own edge, so the
+     arrows can give it back — see `.tabstrip-arrow-l`. The row re-pads *in* to
+     `--bar-pad`, so that is the residue. */
+  --scroll-arrow-out: var(--bar-pad);
 }
 .tool-scroll-box {
   flex: 1 1 auto;
@@ -12863,6 +12893,11 @@ button.start-line:focus-visible {
    `.view-tools` and `.research-head` already pad by. */
 .research-row {
   margin-inline: 0;
+  /* This run keeps the band's own padding rather than un-padding to the bar's,
+     so the residue is the whole of `--table-bleed` — 22px in `.app`, 16 in the
+     player overlay, 12 in the full-page box. One declaration answers all three,
+     which is what that token is for. */
+  --scroll-arrow-out: var(--table-bleed, 0px);
 }
 /* **Left-aligned, where the app's tools row centers.** `.tool-scroll-inner`
    takes `margin: 0 auto`, which centers a run while it fits and collapses the
@@ -24308,20 +24343,28 @@ html[data-theme='light'] .league-table thead th {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The chooser half. *(This block read: "the caret-only half — square-ish rather
-   than pill-shaped padding, so it reads as a handle on the button beside it
-   rather than as a second button." It is kept, this file's rule for superseded
-   reasoning, because the shape argument still holds: the two halves share one
-   outline and are meant to read as one control. What changed is that the half
-   carries its word now — see the component — and a 9px squeeze around a label
-   is not a handle, it is a cramped button.)*
-
-   So the padding is the run's own `0 12px`, less two pixels on the left where
-   the seam is: the hairline between the halves already draws the boundary that
-   a full gutter would draw a second time. Measured at 1400, the half 29 → 70px
-   and the pair 136 → 177, with the third run unmoved. */
+/* **The chooser half: a caret in the app's own 36px square.**
+ *
+ * The word is off it again, asked for — see the component, which keeps the
+ * argument that put it there and says which half of it survives. What survives
+ * here is the *size*: the original block read "square-ish rather than
+ * pill-shaped padding, so it reads as a handle on the button beside it rather
+ * than as a second button", and that was a **29px** half, which is a caret with
+ * 10px either side and not a target anybody aims at. The half went to `0 12px`
+ * to hold a label; with the label gone it goes to the square every icon button
+ * in this app already is, which is the same handle argument at a size that can
+ * be pressed.
+ *
+ * `width` rather than padding, because a 9px glyph padded to 36 is an
+ * arithmetic that goes stale the moment the caret is redrawn. Measured at 1400
+ * against the old shape put back in place: the half **69 → 36px** and the pair
+ * **200 → 167**, with the run and the head unmoved. In the condensed run the
+ * pair is 54 + 36, and the caret is still drawn there — that run hides every
+ * other button's chevron and excepts this one, whose whole content it is. */
 .rl-split-caret {
-  padding-inline: 10px 12px;
+  width: var(--control-h);
+  padding-inline: 0;
+  justify-content: center;
 }
 .rl-caret {
   flex: none;

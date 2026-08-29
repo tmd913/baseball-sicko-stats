@@ -249,6 +249,42 @@ get right. Measured at 1400: 640 wide, row 1's five chips on three lines. At
 390: 358 wide at x=16, one chip to a line (the reading that width actually
 calls for), page overflow **0**.
 
+#### Two things the arrangement changed underneath
+
+**The scroll arrows reach the edge of the band now.** Reported as wasting
+space, and they were: an arrow is `position: absolute` against its run, and the
+run is *inset from the band it sits in* — the board's rows land on
+`--table-bleed` so the count, the head and the table's first column start on one
+line, and the app's tools row lands on `--bar-pad` so it agrees with the date
+bar under it. Measured at 390, the right arrow ran **324 → 368 with 22px of dead
+gutter beyond it**, and the 44 it covered was 44 of the *run*: a control's width
+lost at each end, and a strip of nothing outside it.
+
+`--scroll-arrow-out` is that inset, declared by whichever rule created it, and
+the arrow gives it back. It is not one number — `--bar-pad` where the run
+un-pads to the bar's inner edge, `--table-bleed` where it does not — and in both
+the arithmetic lands the arrow **flush with the band's own box**, which is what
+makes it a rule rather than two offsets that agree today. Defaulted to `0px`, so
+`.details-tabstrip`, whose strip already runs edge to edge, is untouched by a
+token it never sets. Nothing is clipped: `.view-tools` is `overflow-x: clip`,
+which clips at the *border* box, and the padding being given back is exactly the
+inset. Measured after, at 390: **0 → 44** and **346 → 390**, the same numbers the
+player page's strip has always had, with page overflow 0.
+
+**And the watchlist chooser is a caret again.** The word came off, asked for.
+The paragraph that put it there is kept in `ResearchTable.tsx` and half of it
+still holds — *the caret alone was a 29×36 target with no name on it in a run
+where every other button carries its word* — but that was an argument about a
+bar where **every** button carried its word, which is no longer the bar: the
+reader says how each control is drawn, and on any arrangement with icons in it a
+caret beside a star is the run's own grammar. What the word bought is kept
+another way: the half is the app's own **36px square** rather than the 29px
+squeeze it was, so it is a target you can aim at, and `SavedButton` gives a
+label-less button its `title` as an `aria-label`. Measured at 1400 against the
+old shape put back in place: the half **69 → 36px**, the pair **200 → 167**, the
+run and the head unmoved. The condensed run still draws this caret and no other,
+that half being nothing but one.
+
 #### Where it is stored
 
 `UserPrefs.researchControls`, a saved preference and **not** a URL parameter: it

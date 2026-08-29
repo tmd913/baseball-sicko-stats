@@ -3750,30 +3750,34 @@ export function ResearchTable({
           ) : (
             <div className="rl-split">
               {watchlistToggle}
-              {/* **The word is back, and the paragraph that took it away is
-                  kept rather than deleted.** It read: *a caret, not a second
-                  word — `Watchlist · Lists ▾` is two nouns for one thing, the half
-                  beside this one already names the list, so all this half has to
-                  say is* there are others. That argument was made about a bar
-                  where the toggle always said `Watchlist`, and it is the half
-                  that was right: two nouns for one thing is what it read as.
+              {/* **The caret alone, and the word is gone again.** Asked for
+                  in as many words, and the paragraph that put the word there is
+                  kept rather than deleted, because half of it is still the
+                  reason this half has a `title` and an `aria-label` at all:
 
-                  What it missed is that the toggle stopped saying `Watchlist`
-                  the same day — it names the **active list**, so the pair reads
-                  `Closers │ Lists ⌄`, which is a list and the button that
-                  changes it rather than one noun twice. And the caret alone was
-                  a 29×36 target with no name on it in a run where every other
-                  button carries its word: nothing on screen said what pressing
-                  it would do, and the only thing that did was a `title` a touch
-                  device never sees. Measured at 1400, the half went **29 → 70px** and the
-                  pair 136 → 177, with the third run and the head unmoved.
+                  *"a caret, not a second word — `Watchlist · Lists ▾` is two
+                  nouns for one thing, the half beside this one already names
+                  the list, so all this half has to say is* there are others.
+                  *…What that missed is that the caret alone was a 29×36 target
+                  with no name on it in a run where every other button carries
+                  its word: nothing on screen said what pressing it would do,
+                  and the only thing that did was a `title` a touch device never
+                  sees."*
+
+                  Both halves of that were right about a bar where **every**
+                  button carried its word. That is no longer the bar: the reader
+                  says how each control is drawn, and on any arrangement with
+                  icons in it a caret beside a star is the run's own grammar
+                  rather than the one wordless thing in it. So the word goes and
+                  what it bought is kept another way — the half is the app's own
+                  36px square rather than the 29px squeeze it was, so it is a
+                  target you can aim at, and `SavedButton` gives a label-less
+                  button its `title` as an `aria-label`, so it still names
+                  itself to everything that is not a pointer.
 
                   It is still one shape and still two targets — see `.rl-split`,
-                  which is unchanged. The condensed run hides the word with every
-                  other label and the half goes back to being a caret in a 36px
-                  square, which is that run's whole grammar. */}
+                  which is unchanged. */}
               <SavedButton
-                label="Lists"
                 title="Choose a watchlist, or rename, share and add one"
                 open={listsOpen}
                 onToggle={() => openPanel('lists', !listsOpen)}
