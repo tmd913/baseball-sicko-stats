@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
 /** What one `deltaMode: 1` line is worth to a row that scrolls sideways — the
  *  app's own control height, since a "line" of one of these rows is a button. */
-const WHEEL_LINE = 36;
 
 /**
  * **Whether a scrolling row overflows, and which way there is more of it.**
@@ -35,12 +34,6 @@ export function useOverflowArrows(
   wrapRef: RefObject<HTMLDivElement | null>,
   /** Anything else the caller wants measured off the same pass. */
   publish?: (box: HTMLElement, wrap: HTMLElement) => void,
-  /**
-   * **Whether a vertical wheel over this row moves it sideways** — true for a
-   * control row, and false for anything the page is entitled to scroll over.
-   * See the wheel effect below, which is the whole of what this switches.
-   */
-  claimsWheel = true,
 ) {
   const [state, setState] = useState({ over: false, left: false, right: false });
   const measure = useCallback(() => {
@@ -86,85 +79,56 @@ export function useOverflowArrows(
   }, [boxRef, measure]);
 
   /**
-   * **A wheel over a sideways row scrolls it sideways.**
+   * **A vertical wheel over one of these rows scrolls the page, and used to
+   * scroll the row sideways.**
    *
-   * Reported against the board's control rows: *nothing happens when your
-   * mouse is over them and you scroll*. That is the browser being literal
-   * rather than a bug in the row — a mouse wheel is `deltaY`, this box has no
-   * vertical overflow to spend it on, so the event goes to the nearest
-   * ancestor that does, which on the research board is the pane holding six
-   * hundred rows. The row a reader is pointing at never moves, and the only
-   * ways along it are the arrows and a drag of a scrollbar the app hides
-   * (`scrollbar-width: none`). A trackpad's sideways swipe already arrives as
-   * `deltaX` and works today, which is why this was only ever reported by
-   * somebody on a mouse.
+   * The rule that stood here was reported into existence and reported out of
+   * it, and both reports are worth keeping because the second is not a reversal
+   * of the first so much as a correction of what the first was actually about.
    *
-   * **`deltaY` only, and only when it is the bigger of the two.** A trackpad
-   * gesture that is genuinely diagonal already has its horizontal half
-   * applied by the browser, and adding the vertical half to it would move
-   * this row at twice the speed of the finger.
+   * **What it was:** a native, non-passive `wheel` listener turning `deltaY`
+   * into horizontal travel, `preventDefault`ing where the box had somewhere to
+   * go. It answered *"nothing happens when your mouse is over them and you
+   * scroll"* — true, and the browser being literal rather than the row being
+   * wrong: a `deltaY` over a box with no vertical overflow goes to the nearest
+   * ancestor that has some, which on the research board is the pane holding six
+   * hundred rows.
    *
-   * **And the page gets the wheel back at either end.** A row scrolled to its
-   * last control that went on swallowing the wheel would be a 36px band the
-   * page cannot be scrolled over — the `overscroll-behavior` rule stated as a
-   * gesture. So the clamp is computed first and the event is only taken
-   * (`preventDefault`) where this box actually has somewhere to go.
+   * **Why it is gone:** *"now when I scroll vertically on tabs that can scroll
+   * horizontally, it scrolls horizontally instead."* A reader scrolling down
+   * over the player page's nine tabs got the tabs and not the page — measured
+   * at 390 on 2026-08-29, four wheel-downs took `.details-tabs` `scrollLeft`
+   * **0 → 240** with the pane at **0** throughout, and the same wheel fifty
+   * pixels lower took the pane **0 → 240**. A tab strip crossing the whole
+   * width of the page is a band a reader has to scroll *past*, and taking their
+   * gesture to move something they were not looking at is the same fault the
+   * Overview's carousel had, one row thinner. The Overview declined this
+   * listener when that was found; this is the rest of the answer.
    *
-   * **A native listener, not React's `onWheel`.** React binds wheel at the
-   * root as **passive**, where `preventDefault` is a no-op and a console
-   * warning — so the page would scroll *as well*, which is the whole of what
-   * this is for.
+   * **What stops the first report coming back, measured rather than assumed.**
+   * Checked on the player page's tab strip at 390 (`scrollWidth − clientWidth`
+   * = 356), after the removal:
    *
-   * ### It is a control row's rule, and `claimsWheel` is where that is said
+   * | | `.details-tabs` `scrollLeft` |
+   * | --- | --- |
+   * | one press of the right arrow | 0 → **312** |
+   * | a trackpad's sideways `deltaX: 150` | 0 → **150** |
+   * | a vertical wheel over the strip | **0**, and the pane 0 → 360 |
    *
-   * **Every argument above is about a 36px band of buttons**: a row that has
-   * nowhere of its own to spend a `deltaY`, whose only other way along it is a
-   * pair of arrows, and over which the page loses nothing worth having. None of
-   * that holds for a row that is a **carousel of tall cards** — there the band
-   * is a third of the screen, the dots are already a way along it, and the page
-   * under the reader's finger is exactly where a downward wheel belongs.
+   * The arrows are what answer for a mouse, they are drawn whenever the row
+   * overflows, and **one press covers most of the row** — which is the number
+   * that makes this safe: the original report was written when the arrows
+   * existed too, and what it was really about is that the *pane* moved instead
+   * of the row. The page moving is the thing being asked for now, and the row
+   * still has a control that moves it.
    *
-   * **And on a snapping row it takes the gesture and then cannot even spend
-   * it.** `box.scrollLeft = next` inside a `scroll-snap-type: x mandatory`
-   * container is corrected to the nearest snap point on the same frame, so a
-   * step shorter than half the card pitch lands back where it started. The
-   * Overview's day carousel is one card per scrollport — a 398px pitch against
-   * a wheel notch of 120 — so **no notch could ever move it**, and the
-   * `preventDefault` above meant the page could not move either.
-   *
-   * Measured in a 430×900 window on 2026-08-29, pointer over the day cards:
-   * six wheel-downs of 120 left `scrollY` at **0** and the row's `scrollLeft`
-   * at **398**, unmoved — nothing on the page responded at all. Twenty pixels
-   * higher, over the heading, the same event scrolled the page. Two of those
-   * carousels are on the Overview at 370px each, so **740px of a 2,685px page
-   * was dead to the wheel**. Reported as *"it sometimes sticks and doesn't let
-   * me scroll"*, and the swipe row was the right suspect.
+   * (`shift`+wheel was measured as well and is **not** a fourth way here: it
+   * read 0 → 60 before the removal and 0 → 0 after, so what was answering it
+   * was this listener rather than the browser. Chrome translates a shifted
+   * wheel above the DOM on a real trackpad or mouse, which a synthesized
+   * `modifiers: 8` does not reach — so that is untested rather than absent, and
+   * it is written down as untested rather than claimed.)
    */
-  useEffect(() => {
-    const box = boxRef.current;
-    if (!box || !claimsWheel) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY === 0 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      const max = box.scrollWidth - box.clientWidth;
-      if (max <= 1) return;
-      /* `deltaMode` is pixels almost everywhere and lines on Firefox; a line is
-         not a length this row knows, so it is spent as one control's worth of
-         it — `--control-h`, the 36px square every button here is. */
-      const step =
-        e.deltaMode === 1
-          ? e.deltaY * WHEEL_LINE
-          : e.deltaMode === 2
-            ? e.deltaY * box.clientWidth
-            : e.deltaY;
-      const next = Math.min(max, Math.max(0, box.scrollLeft + step));
-      if (next === box.scrollLeft) return;
-      e.preventDefault();
-      box.scrollLeft = next;
-      measure();
-    };
-    box.addEventListener('wheel', onWheel, { passive: false });
-    return () => box.removeEventListener('wheel', onWheel);
-  }, [boxRef, measure, claimsWheel]);
 
   /** A press moves the row by most of a pane — enough to be a page rather than
    *  a nudge, and short of a whole one so the control at the edge stays on

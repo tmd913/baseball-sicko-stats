@@ -2135,20 +2135,18 @@ function DayCarousel({
   const boxRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   /**
-   * **It declines the wheel**, which is the fourth argument and the one thing
-   * this row wants from that hook that a control row does not.
-   *
-   * `useOverflowArrows` turns a vertical wheel into sideways travel because a
-   * 36px band of buttons has nowhere else to spend one. This row is a third of
-   * the screen tall, it has dots, and the page beneath it is where a downward
-   * wheel belongs — and worse, it snaps: a 120px notch inside `scroll-snap-type:
-   * x mandatory` is corrected straight back to the card it started on, so the
-   * handler took the gesture and then could not spend it. Measured at 430×900
-   * on 2026-08-29: six wheel-downs over the cards moved neither the page
-   * (`scrollY` 0) nor the row (`scrollLeft` 398), while the same event twenty
-   * pixels higher scrolled the page. See the wheel effect in `TabStrip.tsx`.
+   * **The `claimsWheel: false` this used to pass is gone with the rule it
+   * turned off.** `useOverflowArrows` bound a non-passive `wheel` listener that
+   * turned a vertical wheel into sideways travel; this row opted out of it
+   * because the band is a third of the screen tall and it *snaps* — a 120px
+   * notch inside `scroll-snap-type: x mandatory` is corrected straight back to
+   * the card it started on, so the handler took the gesture and could not spend
+   * it (measured at 430×900: six wheel-downs moved neither the page nor the
+   * row). The tab strips were then reported for the milder form of the same
+   * fault and the listener came out altogether, so there is nothing left to
+   * decline. See `TabStrip.tsx`, which keeps both halves of that history.
    */
-  const { state, measure } = useOverflowArrows(boxRef, wrapRef, undefined, false);
+  const { state, measure } = useOverflowArrows(boxRef, wrapRef);
   const over = state.over;
   const [active, setActive] = useState(OPENS_ON);
 
