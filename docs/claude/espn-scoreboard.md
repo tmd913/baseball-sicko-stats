@@ -96,6 +96,63 @@ safe rather than merely right this afternoon:
 17), which is what the 120-of-120 check validates: everything else counts, the
 same fail-safe direction `toRosterPlayer` takes for the slot chip.
 
+#### A doubleheader is two stat lines, and the day took one of them
+
+**Reported as "I have 2 SVHD but it only shows 1", with the OPS, ERA and WHIP
+totals wrong beside it**, on 2026-08-29. One fault, in the summation above.
+
+ESPN files **one `{day}/0/5` stat line per game**, so a man who played twice
+carries two of them on the same roster entry — and `scoringPeriodTotals` took
+the line with `.find`, which is the first. **Which one it dropped is not even
+stable**: the first is routinely the empty `{}` of the game that has not started,
+so a reliever's whole day could vanish. That is what happened here — team 6's
+second-game hold was in the second line, and with the first taken the day
+carried no `83` at all.
+
+Measured on the live league at the moment of the report (period 20, scoring
+period 158, **thirteen** roster entries league-wide carrying two lines), the
+whole side moved:
+
+| | first line | every line |
+| --- | --- | --- |
+| SVHD | **1** | **2** |
+| K | 66 | 67 |
+| OPS | .667 | .645 |
+| ERA | 2.455 | 2.413 |
+| WHIP | 1.125 | 1.106 |
+
+and the opponent moved with it (`K 45 → 46`, `OPS .712 → .702`, `ERA 4.787 →
+4.688`, `WHIP 1.255 → 1.229`), which is what makes this a fault in the scoreboard
+rather than in one side of it.
+
+**Why the 120-of-120 check above did not catch it, and the check that does.**
+Period 18 has no day with two lines on it, so it reproduces ESPN's
+`cumulativeScore` either way — the validation was run on the one settled week
+that could not tell the two summations apart. **Period 19 can**: its scoring
+period 146 carries thirteen doubled entries, and rebuilding the fortnight from
+its days reproduces **227 of its 276 cells taking the first line and 264 taking
+them all**. The twelve that still miss are four teams' one-and-two-unit
+disagreements in `H`, `ER` and hits allowed with the rates they feed, in **both**
+directions — which is the official-scoring revision `REVISION_TTL_MS` already
+measures, arriving from the other side: a settled period's `cumulativeScore` is
+frozen at what it was and its day lines have since been restated.
+
+**The day-totals blob goes to `-v2` and nothing else moves.** Every one written
+before this holds one game of a two-game day, and a settled day is read back
+with **no freshness test at all** — so the day-by-day chart would have gone on
+drawing the short figure for the rest of the season. It is the cache-version
+rule in its *meaning* form: no field was added, the arithmetic changed. The
+scoreboard's own `-v3` and the span's `-v1` are untouched, both being written
+only for a frozen period, where `today` is null and this summation is never
+reached.
+
+**It also corrects a probe recorded further down this file.** *A response
+carries exactly one day's stat lines* was measured as `136/0/5` **and nothing
+else, 28 of 28** — true of that day, and read since as a fact about the shape.
+It is a fact about a day with no doubleheader in it. What the probe establishes
+is still what it was for — a response cannot be mined for a *different* day —
+and the count of lines for *this* day is not one.
+
 **Which view to read it from was chosen on payload**, measured on one matchup
 period of the live league: `mScoreboard` at `scoringPeriodId=0` is **23KB and
 carries no roster at all**, the same read at the day is **488KB** and carries

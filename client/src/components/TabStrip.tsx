@@ -35,6 +35,12 @@ export function useOverflowArrows(
   wrapRef: RefObject<HTMLDivElement | null>,
   /** Anything else the caller wants measured off the same pass. */
   publish?: (box: HTMLElement, wrap: HTMLElement) => void,
+  /**
+   * **Whether a vertical wheel over this row moves it sideways** — true for a
+   * control row, and false for anything the page is entitled to scroll over.
+   * See the wheel effect below, which is the whole of what this switches.
+   */
+  claimsWheel = true,
 ) {
   const [state, setState] = useState({ over: false, left: false, right: false });
   const measure = useCallback(() => {
@@ -108,10 +114,35 @@ export function useOverflowArrows(
    * root as **passive**, where `preventDefault` is a no-op and a console
    * warning — so the page would scroll *as well*, which is the whole of what
    * this is for.
+   *
+   * ### It is a control row's rule, and `claimsWheel` is where that is said
+   *
+   * **Every argument above is about a 36px band of buttons**: a row that has
+   * nowhere of its own to spend a `deltaY`, whose only other way along it is a
+   * pair of arrows, and over which the page loses nothing worth having. None of
+   * that holds for a row that is a **carousel of tall cards** — there the band
+   * is a third of the screen, the dots are already a way along it, and the page
+   * under the reader's finger is exactly where a downward wheel belongs.
+   *
+   * **And on a snapping row it takes the gesture and then cannot even spend
+   * it.** `box.scrollLeft = next` inside a `scroll-snap-type: x mandatory`
+   * container is corrected to the nearest snap point on the same frame, so a
+   * step shorter than half the card pitch lands back where it started. The
+   * Overview's day carousel is one card per scrollport — a 398px pitch against
+   * a wheel notch of 120 — so **no notch could ever move it**, and the
+   * `preventDefault` above meant the page could not move either.
+   *
+   * Measured in a 430×900 window on 2026-08-29, pointer over the day cards:
+   * six wheel-downs of 120 left `scrollY` at **0** and the row's `scrollLeft`
+   * at **398**, unmoved — nothing on the page responded at all. Twenty pixels
+   * higher, over the heading, the same event scrolled the page. Two of those
+   * carousels are on the Overview at 370px each, so **740px of a 2,685px page
+   * was dead to the wheel**. Reported as *"it sometimes sticks and doesn't let
+   * me scroll"*, and the swipe row was the right suspect.
    */
   useEffect(() => {
     const box = boxRef.current;
-    if (!box) return;
+    if (!box || !claimsWheel) return;
     const onWheel = (e: WheelEvent) => {
       if (e.deltaY === 0 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
       const max = box.scrollWidth - box.clientWidth;
@@ -133,7 +164,7 @@ export function useOverflowArrows(
     };
     box.addEventListener('wheel', onWheel, { passive: false });
     return () => box.removeEventListener('wheel', onWheel);
-  }, [boxRef, measure]);
+  }, [boxRef, measure, claimsWheel]);
 
   /** A press moves the row by most of a pane — enough to be a page rather than
    *  a nudge, and short of a whole one so the control at the edge stays on

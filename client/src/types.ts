@@ -2582,6 +2582,11 @@ export interface EspnScoreboard {
   /** The days the totals cover — for a live matchup, the days played so far. */
   start: string | null;
   end: string | null;
+  /** The period's **whole** last day, which on a live week runs one day past
+   *  `end`. The right bound for the moves list and the wrong one for anything
+   *  counted — see `espn.ts::EspnScoreboard.fullEnd` and
+   *  `MatchupCard::movesFor`. */
+  fullEnd: string | null;
   live: boolean;
   /** How many acquisitions a manager gets in this matchup period, or null where
    *  the league does not limit them per period — which is what makes the client

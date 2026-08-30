@@ -1435,6 +1435,41 @@ that this is one league's seven weeks and ESPN documents none of it, so the
 constant is a **measurement rather than a spec** — and where it is ever wrong,
 the count is ESPN's own and is the authority.
 
+#### And the bound is the whole period, not the days played
+
+**Reported as "the moves section of the matchup is a day late"**, on 2026-08-29,
+and it is the rule above meeting a date that was truncated under it.
+
+`EspnScoreboard.end` is the **observed** span — the days ESPN has materialised,
+which on a live week stops at today, deliberately, because it is the span the
+figures above the section actually cover. It is the wrong bound for this list.
+The section is not a count of days played but of acts booked against this
+period, and the 13:00 rule books an afternoon move against **tomorrow** — so on
+every day of a live week but its last, the two disagree by exactly one day and
+the afternoon's pickups fell outside the list. They appeared the next morning,
+when the observed span caught up. Hence *a day late*, and the count above them
+went on saying otherwise the whole time.
+
+**Measured on the live league**, team 6 swapping Didier Fuentes for Michael Wacha
+at **13:25 ET on Friday 2026-08-28** — `periodDay` 2026-08-29 against a Friday
+`end` of 2026-08-28. The section stood at **5 rows all Friday afternoon and
+evening** and at **7** on Saturday morning, with nothing having happened in
+between.
+
+So the server ships `EspnScoreboard.fullEnd` beside `end` — the period's whole
+last day, `max(observed, declared)`, which is `getMatchupWindow`'s own arithmetic
+rather than a second opinion about it — and `movesFor` takes that. Read off the
+route on the same afternoon: periods 17, 18 and 19 answer `fullEnd === end`
+(a settled period observes its whole length), and period 20 answers `end
+2026-08-29, fullEnd 2026-09-06`.
+
+**On the period's last day the two dates are equal**, which is what keeps the
+13:00 rule intact rather than half-intact: a Sunday-afternoon move still maps to
+Monday, still falls outside, and still spends next week's allowance. And it
+inherits `getMatchupWindow`'s own honest failure — a period longer than it
+declares reads short until observation catches it up, erring toward fewer days
+than the period has and never more.
+
 **A trade is an add and is not an acquisition**, which the same sweep measured:
 team 11's seven adds in period 15 are seven trade arrivals and ESPN's counter
 for that week is **0**. They are still players the manager took in, so they are

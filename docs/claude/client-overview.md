@@ -210,6 +210,47 @@ genuinely consumes a gesture, and this one consumes nothing the page wanted.
 `overscroll-behavior-x: none` is declared, in the one axis this box scrolls, so
 a flick that runs out of days does not carry the page.
 
+#### And it declines the wheel, which the hook gives away by default
+
+**The sentence above was true of `touch-action` and false of the row**, because
+the hook it borrows brought a gesture rule of its own with it.
+`useOverflowArrows` binds a **non-passive** `wheel` listener that turns a
+vertical wheel into sideways travel, and every argument for that is about a 36px
+band of buttons: a row with nowhere of its own to spend a `deltaY`, whose only
+other way along it is a pair of arrows, and over which the page loses nothing
+worth having. None of it holds here — the band is a third of the screen, the
+dots are already a way along it, and the page under the pointer is exactly where
+a downward wheel belongs.
+
+**And on a snapping row it took the gesture and then could not spend it.**
+`box.scrollLeft = next` inside `scroll-snap-type: x mandatory` is corrected to
+the nearest snap point on the same frame, so a step shorter than half the card
+pitch lands back where it started. This row is one card per scrollport — a
+**398px pitch against a wheel notch of 120** — so no notch could ever move it,
+and the `preventDefault` meant the page could not move either.
+
+Measured at 430×900 on 2026-08-29, pointer over the day cards:
+
+| | `scrollY` | `.ov-days` `scrollLeft` |
+| --- | --- | --- |
+| six wheel-downs of 120, before | **0** | **398** |
+| the same, twenty pixels higher (the heading) | 120 | 398 |
+| six wheel-downs of 120, after | **720** | **398** |
+
+Nothing on the page responded at all, and there are **two** of these carousels
+at 370px each, so **740px of a 2,685px page was dead to the wheel**. Reported as
+*"there are some scrolling issues on the overview page, it sometimes sticks and
+doesn't let me scroll — the swipe for the day cards seems like it might be the
+culprit"*, and the suspect was right.
+
+So `useOverflowArrows` takes a fourth argument, `claimsWheel`, defaulting to the
+control row's behavior and passed `false` here. **A sideways trackpad swipe is
+unaffected** — that arrives as `deltaX` and the browser scrolls the row itself
+without any listener: measured after, four `deltaX: 150` events over the cards
+took the row **398 → 796** (`TOMORROW`) with `scrollY` still 0, and a synthesized
+touch drag took it back to **0** (`YESTERDAY`) while a vertical drag scrolled the
+page to **602** and left the row alone.
+
 **Three dots, drawn only while the row overflows** — the measurement deciding
 rather than the breakpoint. They are buttons as well as a position: a pointer
 user has no swipe, and the peek is the only other thing saying there is more.
@@ -231,6 +272,14 @@ rule holding. (A finger could not be synthesized here — neither
 headless, measured at 0px over six attempts — so what is verified is the snap,
 the dots, the centering and the page staying put; the touch-drag itself is the
 browser's own `scroll-snap-type: x mandatory`.)
+
+*(**Superseded on the parenthesis alone.** A finger *can* be synthesized: the
+missing piece was `Emulation.setDeviceMetricsOverride` with `hasTouch: true`,
+without which `Input.dispatchTouchEvent` is delivered to a page that has no touch
+handling to deliver it to. Measured on 2026-08-29 at 430×900 with it set, a
+300px `touchStart`/`touchMove`×12/`touchEnd` drag moved the row a whole card and
+a vertical one scrolled the page — the two rows of the table under *And it
+declines the wheel* below. Everything else in this paragraph stands.)*
 
 ### And the same three days for the opponent
 

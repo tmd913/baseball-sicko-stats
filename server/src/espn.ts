@@ -3308,6 +3308,30 @@ export interface EspnScoreboard {
    *  Null where the period anchor could not be read. */
   start: string | null;
   end: string | null;
+  /**
+   * The period's **whole** last day, `max(observed, declared)` — the same
+   * reading `getMatchupWindow` publishes, for the one thing on this page that
+   * is not a total.
+   *
+   * `end` is deliberately truncated at today and the numbers under it are the
+   * days played, so it is the right bound for everything the scoreboard
+   * *counts*. It is the wrong bound for the **moves** list, which is not a
+   * count of days played but of acts booked against this period — and ESPN
+   * books an afternoon move against *tomorrow* (`MatchupCard::periodDay`, the
+   * measured 13:00 ET boundary). On every day of the week but the last those
+   * two disagree by exactly one day, so today's afternoon pickups fell outside
+   * `end` and appeared only the next morning, when the observed span caught up.
+   * Measured on the live league at 20:26 ET on 2026-08-29: one topic filed at
+   * 13:50 ET, `periodDay` 2026-08-30, against an `end` of 2026-08-29.
+   *
+   * On the period's last day the two are equal, which is what keeps the
+   * boundary rule intact: a Sunday-afternoon move still belongs to next week
+   * and is still excluded. It inherits `getMatchupWindow`'s own honest failure
+   * — a period longer than it declares reads short until observation catches
+   * it up — and errs toward showing fewer days than the period has, never
+   * more.
+   */
+  fullEnd: string | null;
   /** Whether this is the period being played — nothing on it is final. */
   live: boolean;
   /** How many acquisitions a manager gets in this matchup period, or null where
@@ -3823,16 +3847,42 @@ async function scoringPeriodTotals(
         // `statSourceId: 0` is the real line rather than a projection, and
         // `statSplitTypeId: 5` the one-day split. A player who has not taken
         // the field carries an entry with no stats in it at all.
-        const line = (e.playerPoolEntry?.player?.stats ?? []).find(
-          (st) =>
-            st.scoringPeriodId === scoringPeriodId &&
-            st.statSourceId === 0 &&
-            st.statSplitTypeId === 5,
-        )?.stats;
-        if (!line) continue;
-        for (const [id, v] of Object.entries(line)) {
-          if (typeof v === 'number' && Number.isFinite(v)) {
-            acc[Number(id)] = (acc[Number(id)] ?? 0) + v;
+        //
+        // **Every matching line, not the first — a doubleheader is two of
+        // them.** ESPN files one `{day}/0/5` entry *per game*, so a man who
+        // played twice carries two, and `.find` took whichever came first and
+        // dropped the other outright. Which of the two it dropped is not even
+        // stable: the first is routinely the empty `{}` of the game that has
+        // not started, so a reliever's whole day could vanish.
+        //
+        // Measured on the live league, 2026-08-29 (period 20, scoring period
+        // 158, thirteen roster entries league-wide carrying two lines): team
+        // 6's second-game hold was dropped, and with it the category the fault
+        // was reported as — **SVHD 1 → 2**, and beside it **K 66 → 67, OPS
+        // .667 → .645, ERA 2.455 → 2.413, WHIP 1.125 → 1.106**. Its opponent
+        // moved too, which is what makes this a scoreboard fault rather than
+        // one side's.
+        //
+        // **Checked against ESPN's own final `cumulativeScore` on a settled
+        // week that has a doubleheader in it**, which is what the original
+        // 120-of-120 validation happened to miss: period 18 has no day with
+        // two lines on it and matches either way, and **period 19 — whose
+        // scoring period 146 has thirteen — mismatches 49 of its 276 cells
+        // taking the first line and 12 taking them all.** The twelve that
+        // remain are four teams' one-or-two-unit disagreements in H, ER and
+        // hits allowed with the rates they feed, which is the same official
+        // scoring revision `REVISION_TTL_MS` measures, in both directions.
+        for (const line of e.playerPoolEntry?.player?.stats ?? []) {
+          if (
+            line.scoringPeriodId !== scoringPeriodId ||
+            line.statSourceId !== 0 ||
+            line.statSplitTypeId !== 5
+          )
+            continue;
+          for (const [id, v] of Object.entries(line.stats ?? {})) {
+            if (typeof v === 'number' && Number.isFinite(v)) {
+              acc[Number(id)] = (acc[Number(id)] ?? 0) + v;
+            }
           }
         }
       }
@@ -3849,8 +3899,16 @@ type DayTotals = Record<number, Record<number, number>>;
  *  have been played and whose lineups can no longer be edited, so what came out
  *  of it is a fact. ~1.6KB on the live 12-team league against the ~125KB read
  *  it is reduced from — store the answer, not the payload. */
+//
+//  **`-v2` is the doubleheader**, and it is the cache-version rule in its
+//  *meaning* form rather than its shape one: nothing on this blob gained a
+//  field, and every one written before `scoringPeriodTotals` summed all of a
+//  day's stat lines holds one game of a two-game day. A settled day is read
+//  back with no freshness test at all, so those would have gone on serving the
+//  short figure to the day-by-day chart for the rest of the season. See
+//  *A doubleheader is two stat lines* in **The league scoreboard**.
 const dayTotalsBlobKey = (leagueId: number, scoringPeriod: number) =>
-  `espn-day-totals-${leagueId}-${scoringPeriod}-v1.json`;
+  `espn-day-totals-${leagueId}-${scoringPeriod}-v2.json`;
 
 const dayTotalsCache = new Map<string, { totals: DayTotals; fetchedAt: number }>();
 const dayTotalsInFlight = new Map<string, Promise<DayTotals>>();
@@ -4558,9 +4616,20 @@ export async function getScoreboard(
   const span = at >= 0 ? meta.periods[at] : null;
   const live = asked !== null && asked === current;
 
-  const [start, end] = await Promise.all([
+  // The whole period as well as the observed part of it — see
+  // `EspnScoreboard.fullEnd`. `declaredDays` is `getMatchupWindow`'s own, so
+  // the two readings of a period cannot come to disagree; a settled period
+  // observes its whole length and the pair is one date twice.
+  const fullLast =
+    span && span.first
+      ? span.first +
+        Math.max(span.last - span.first + 1, declaredDays(meta.settings, asked as number)) -
+        1
+      : null;
+  const [start, end, fullEnd] = await Promise.all([
     span && span.first ? dateForPeriod(span.first) : Promise.resolve(null),
     span && span.last ? dateForPeriod(span.last) : Promise.resolve(null),
+    fullLast ? dateForPeriod(fullLast) : Promise.resolve(null),
   ]);
 
   // Every period, dated by the very same two calls — written as one expression
@@ -4610,6 +4679,7 @@ export async function getScoreboard(
     periods,
     start,
     end,
+    fullEnd,
     live,
     categories: meta.categories,
     matchups,
