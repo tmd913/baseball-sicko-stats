@@ -10914,6 +10914,28 @@ button.start-line:focus-visible {
   min-width: 132px;
   text-align: left;
 }
+/* **One block per game of the day**, because a doubleheader is two games on one
+   date and the cell that drew one of them was drawing half the day. The blocks
+   are stacked in the order the games are played (`SummaryTable::gamesOnDay`
+   sorts on `gameNumber`, the field `schedule.ts::dedupe` established for this),
+   and which half a block is goes on its `title` — the stack has already said the
+   club plays twice, and a `Gm 2` in the cell would be a third line of text in a
+   58px row.
+
+   **The gap is 6px and is what separates two games from one four-line game.**
+   Measured at 1200 against the live roster on 2026-08-29, where the Yankees
+   played twice (`BOS 6–0 NYY · Final` over `BOS 1–3 NYY · Top 6`): a row with
+   two games is **89px** against the table's 58, and only the rows of a club
+   playing twice move — **4 of the 20** on screen, the other sixteen measuring
+   58 exactly. Nothing declares a row height here; the padding and the content
+   set it, so the growth needs no rule of its own, and it is spent on the rows
+   that have something more to say. */
+.sum-opp-game {
+  display: block;
+}
+.sum-opp-game + .sum-opp-game {
+  margin-top: 6px;
+}
 .sum-opp-main {
   display: block;
   font-size: 12px;
@@ -14434,16 +14456,33 @@ button.start-line:focus-visible {
 .research-opp-detail {
   color: var(--muted);
 }
+/* **One block per game of the day**, for the reason `.sum-opp-game` states: a
+   doubleheader is two games on one date, and the cell that drew one of them was
+   drawing half the day. Ordered on `gameNumber`, which half a block is on the
+   `title`; the 6px is `.sum-opp-game`'s own, so the two columns that say the
+   same thing separate their games by the same distance. */
+.research-opp-game {
+  display: block;
+}
+.research-opp-game + .research-opp-game {
+  margin-top: 6px;
+}
 /* Color is for state on these tables and nothing else, which is why the stat
    columns are monochrome and these two are not: a live inning is the green the
    summary table's own cell uses, and a postponement its amber. Scoped to the
    span rather than the cell so sorting *by* this column — which tints the whole
    cell accent — cannot be the moment the state stops being legible, the same
-   trap the trend columns' `td` scoping avoids. */
-.research-table td.research-opp-live .research-opp-detail {
+   trap the trend columns' `td` scoping avoids.
+
+   **The state class moved from the `<td>` to the block**, which is what a
+   doubleheader forces: the cell has one state class and its two games need not
+   share a state, so a `final` opener under a `live` nightcap took the nightcap's
+   green on the word `Final`. The `<td>` keeps its own for the cell's shape; the
+   color reads the block's. */
+.research-table .research-opp-game.research-opp-live .research-opp-detail {
   color: var(--hit);
 }
-.research-table td.research-opp-postponed .research-opp-detail {
+.research-table .research-opp-game.research-opp-postponed .research-opp-detail {
   color: var(--hr);
 }
 

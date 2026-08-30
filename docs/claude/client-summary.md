@@ -725,6 +725,64 @@ falls to null and the strip draws nothing rather than borrowing a number. That
 is the documented case, caught by instrumenting `GamePark` rather than guessed
 at.
 
+### A doubleheader is two games, and the cell was drawing one
+
+**Reported as** *"when there are doubleheaders the opponent column should show
+both games. The schedule view does show both, but the others do not."* The
+Schedule view is the surface that already had the rule — *a doubleheader is two
+games on one date*, stacked in `gameNumber` order — and the stats reading did
+not.
+
+**The cause is one function answering a question it was not asked.** `pickGame`
+picks the game that *speaks for the row*: the live one, else the next scheduled,
+else the last played. That is the right answer for the lineup pip on the
+headshot, for the corner mark and for the live row tint, all of which are about
+one game. The **opponent cell is about a day**, and on a doubleheader `pickGame`
+handed it half of one. Measured on the live roster on 2026-08-29, Aaron Judge:
+`gm1 vs BOS final` and `gm2 vs BOS live`, the live one preferred, and the
+completed opener nowhere on the page.
+
+**So the cell takes `gamesOnDay(r, game)`** — the representative game and the
+rest of *its* day, ordered by `gameNumber` then `gamePk`. Two things follow from
+writing it that way rather than as "every game in the range":
+
+- **It widens to a day and never past one.** The representative game still
+  chooses which day the cell is about, so over a multi-day range this is the
+  same day the cell was already showing with the rest of that day beside it. It
+  cannot become a list of the range, which is what the paragraph above the cell
+  has always promised (*stats aggregate every game in the range; this cell
+  reflects one*).
+- **The order is `gameNumber`, not `gamePk`.** The Schedule view's `dedupe`
+  established that: `gamePk` order disagrees with played order on **30 of the
+  2026 season's 44** doubleheader club-days, and putting the nightcap on top is
+  a lie about which game is which.
+
+**Which half a block is goes on its `title` and never in the cell**, the
+Schedule view's own rule for its own stack: the two blocks have already said the
+club plays twice, and a `Gm 2` written into the cell is a third line of text in
+a 58px row. Both the block and its door carry it — `BOS at NYY — game 2 of a
+doubleheader — the game's page` — so the two presses in one cell can be told
+apart before either is taken.
+
+**The state class moved from the `<td>` to the block**, which is what two games
+force: the cell has one state and a doubleheader need not — an opener that is
+`final` under a nightcap that is `live` took one tint between them, and the word
+`Final` read green. Measured after: `Final` at `rgb(158,161,162)` and `Top 6` at
+`rgb(134,207,134)` in the same cell.
+
+**What it costs is height, on the rows that have something more to say.**
+Nothing declares a row height here — the padding and the content set it — so
+the growth needs no rule of its own. Measured against the live roster on
+2026-08-29, where the Yankees played twice:
+
+| | rows with two games | every other row |
+| --- | --- | --- |
+| 1200 | **89px** (4 of 20 on screen) | 58px |
+| 390 | **89px** (5) | 58px |
+
+and the page body overflows by **0** at 390 either way, this being a taller cell
+rather than a wider one.
+
 ### This week's matchup, and this week's opponent
 
 **Two controls at the head of the readings run that are not about your own

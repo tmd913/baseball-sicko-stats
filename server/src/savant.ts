@@ -27,6 +27,7 @@ import { getLeaguePitchAverage } from './pitchLeague.js';
 import { toSavantName } from './names.js';
 import type {
   ClubStatus,
+  GameFacts,
   FacedBatter,
   PlayerStatus,
   RosterStatus,
@@ -1816,6 +1817,7 @@ function blankStatus(rosterStatus: RosterStatus | null): PlayerStatus {
     gameState: null,
     opponent: null,
     isHome: null,
+    otherGame: null,
     ...noGameFacts(),
   };
 }
@@ -1836,21 +1838,21 @@ function gameFacts(
   isHome: boolean,
   opponent: string,
   probable: ProbablePitcher | null,
-): Pick<
-  PlayerStatus,
-  | 'gameState'
-  | 'opponent'
-  | 'isHome'
-  | 'teamScore'
-  | 'opponentScore'
-  | 'currentInning'
-  | 'inningState'
-  | 'startTime'
-  | 'probablePitcher'
-> {
+  /** Which half of a doubleheader this is — carried so the two blocks of a
+   *  stacked cell can be drawn in the order the games are played. See
+   *  `GameFacts.gameNumber`. */
+  gameNumber: number | null = null,
+  // `GameFacts` rather than the `Pick<PlayerStatus, …>` it used to be: the two
+  // differ only in nullability, and this function is only ever called *with a
+  // game*, so `gameState`, `opponent` and `isHome` are facts here where on a
+  // `PlayerStatus` they are "no game today". The narrower type is what lets the
+  // same object stand on its own as `ClubStatus` and as `otherGame`; spread
+  // into a `PlayerStatus` it still satisfies the wider fields.
+): GameFacts {
   const live = status.state === 'live';
   const scheduled = status.state === 'scheduled';
   return {
+    gameNumber,
     gameState: status.state,
     opponent,
     isHome,
@@ -1879,6 +1881,7 @@ function noGameFacts(): Omit<
   'gameState' | 'opponent' | 'isHome'
 > {
   return {
+    gameNumber: null,
     teamScore: null,
     opponentScore: null,
     currentInning: null,
@@ -1931,6 +1934,46 @@ function currentOf<T>(games: T[], stateOf: (g: T) => GameStatus['state']): T | n
     games.find((g) => stateOf(g) === 'live') ??
     games.find((g) => stateOf(g) === 'scheduled') ??
     games[games.length - 1]
+  );
+}
+
+/**
+ * **The game `currentOf` did not pick**, which on an ordinary day is nothing at
+ * all.
+ *
+ * The pick answers *which game speaks for this row*, and it is the right answer
+ * for the lineup pip, the live tint and the corner mark, all of which are about
+ * one game. The **opponent cell** is about a *day*, and a doubleheader drew one
+ * half of one — reported as *"when there are doubleheaders the opponent column
+ * should show both games"*. So the other half rides beside the pick rather than
+ * replacing it, and every other reader of this map is untouched.
+ *
+ * **One, not a list.** A club plays at most twice in a day — MLB has scheduled
+ * no triple-header since 1920 — so a list would be a shape the data cannot
+ * fill, and the two of them are ordered on the client by `gameNumber`, which is
+ * the field `schedule.ts::dedupe` established for exactly this: `gamePk` order
+ * disagrees with played order on **30 of the 2026 season's 44** doubleheader
+ * club-days.
+ */
+function otherOf<T>(all: T[], pick: T, facts: (g: T) => GameFacts): GameFacts | null {
+  const other = all.find((g) => g !== pick);
+  return other ? facts(other) : null;
+}
+
+/** `otherOf` over the `{ game, isHome }` pairs both status maps are built from,
+ *  which is the one shape it is called on twice. */
+function otherFacts(
+  entries: { game: DayGame; isHome: boolean }[],
+  pick: { game: DayGame; isHome: boolean },
+): GameFacts | null {
+  return otherOf(entries, pick, ({ game, isHome }) =>
+    gameFacts(
+      game.status,
+      isHome,
+      isHome ? game.awayTeam : game.homeTeam,
+      isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
+      game.gameNumber,
+    ),
   );
 }
 
@@ -2013,7 +2056,13 @@ export async function getPlayerStatuses(
         isHome,
         isHome ? game.awayTeam : game.homeTeam,
         isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
+        game.gameNumber,
       ),
+      // **…and the half of the day the pick left out.** Everything else on a
+      // board row is about the picked game and stays that way; the opponent
+      // cell is about the *day*, and on a doubleheader it was drawing half of
+      // one. See `GameFacts.otherGame`.
+      otherGame: otherFacts(entries, pick),
     });
   }
 
@@ -2033,7 +2082,21 @@ export async function getPlayerStatuses(
       // two halves of one game to come from two different picks of it.
       // `PlayerGame.probablePitcher` is already the *other* side's announced
       // starter, which is precisely what the first pass hands over too.
-      ...gameFacts(game.status, game.isHome, game.opponent, game.probablePitcher),
+      ...gameFacts(
+        game.status,
+        game.isHome,
+        game.opponent,
+        game.probablePitcher,
+        game.gameNumber,
+      ),
+      // The same day's other game, off the report this pass is reading rather
+      // than off the boxscore pass above — restated for the reason the line
+      // above it is: the pass that overrides the game overrides everything the
+      // cell says about it, or the two halves of one cell come from two
+      // different picks of the day.
+      otherGame: otherOf(rep.games.filter((g) => g.date === game.date), game, (g) =>
+        gameFacts(g.status, g.isHome, g.opponent, g.probablePitcher, g.gameNumber),
+      ),
       ...(rep.kind === 'pitcher'
         ? { pitchingRole: game.pitchingRole, entryInning: game.entryInning }
         : { lineupStatus: game.lineupStatus, lineupSpot: game.lineupSpot }),
@@ -2110,8 +2173,9 @@ export async function getClubStatuses(
       // The **other** side's probable, which is who this club's hitters face —
       // the same reading the player map takes, written from the club's side.
       isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
+      game.gameNumber,
     );
-    clubs.set(teamId, facts as ClubStatus);
+    clubs.set(teamId, { ...facts, otherGame: otherFacts(entries, pick) } as ClubStatus);
   }
   return clubs;
 }

@@ -2359,6 +2359,45 @@ change: `null` is what it already reads as *no score yet*. The summary table
 never had the fault, drawing off a report rather than off this map, so this is
 the same convergence as the paragraphs above.
 
+#### And a doubleheader is two blocks in that cell
+
+**The same fault as the summary table's own opponent column, one tab over**, and
+reported against that one: *"when there are doubleheaders the opponent column
+should show both games. The schedule view does show both, but the others do
+not."*
+
+`currentOf` picks the game that speaks for a row — live, else next scheduled,
+else last played — and that is the right answer for the lineup pip and the IL
+badge, which are about one game. This cell is about the **day**, so it drew half
+of a doubleheader. It is the same shape of fix on both surfaces because it is
+the same mistake: a function answering *which game* being asked *which day*.
+
+**The map gained `otherGame` beside the pick** (`savant.ts::otherOf`), on both
+the player map and the `clubs` fallback so the two cannot come to disagree, with
+`gameNumber` on each so the cell can order them. **One field rather than a
+list**: a club plays at most twice in a day — MLB has scheduled no
+triple-header since 1920 — and a list would be a shape the data cannot fill.
+Measured on 2026-08-29, a day with two doubleheaders: **61 of 1,366** player
+entries carry a second game and **4 of 30** clubs do.
+
+**What it costs, on the request whose payload this file has always counted**:
+472,126 bytes against 414,335, and **14,754 against 13,667 gzipped** — the
++1.1KB that actually travels, `compression()` being on. The population is
+unchanged: `saysSomething` is untouched, a second game being something that can
+only be true of a man who already has a first.
+
+**The state class moved from the `<td>` to the block.** The cell has one state
+class and a doubleheader's two games need not share a state, so an opener that
+is `final` under a nightcap that is `live` took the nightcap's green on the word
+`Final`. Measured after, in one cell: `@ NYY 6–0 · Final` at
+`rgb(158,161,162)` and `@ NYY 1–3 · Top 6` at `rgb(134,207,134)`. Which half a
+block is goes on its `title` and never in the cell — the Schedule view's own
+rule, and the 58px row is why.
+
+**Height is what it spends, on the rows that have more to say.** Driven at 1400
+on the live board: **3 of 50** opponent cells draw two blocks, those rows
+measure **91px**, and every other row on screen measures **58** exactly.
+
 #### A rostered man with no stat line is a row, and the row is empty
 
 **Reported as: "why don't I see Walker Jenkins in the research table? I should

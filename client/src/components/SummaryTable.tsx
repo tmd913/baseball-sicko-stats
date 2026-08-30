@@ -83,6 +83,39 @@ function pickGame(report: PlayerReport): PlayerGame | null {
 }
 
 /**
+ * **The cell is about a day, not about a game** — which is the whole of the
+ * doubleheader fix.
+ *
+ * `pickGame` above answers *which game speaks for this row*, and everything
+ * else on the row still asks it: the lineup pip on the headshot, the corner
+ * mark, the live tint. The **opponent cell** was asking it too, and on a
+ * doubleheader that meant one half of the day drawn and the other not drawn at
+ * all. Reported as *"when there are doubleheaders the opponent column should
+ * show both games. The schedule view does show both, but the others do not"* —
+ * and the Schedule view is the surface that already had the rule, stacking a
+ * day's fixtures because *a doubleheader is two games on one date*.
+ *
+ * Measured on the live roster on 2026-08-29: Aaron Judge, `gm1 vs BOS final`
+ * and `gm2 vs BOS live`. `pickGame` prefers the live one, so the cell drew the
+ * nightcap and the completed opener was nowhere on the page.
+ *
+ * **It widens to a day and never past one.** The representative game keeps
+ * choosing which day the cell is about — so over a multi-day range this is the
+ * same day it was already showing, with the rest of that day beside it, and it
+ * can never become a list of the range. Ordered by `gameNumber` then `gamePk`,
+ * the order `schedule.ts::dedupe` established and for its reason: `gamePk`
+ * order disagrees with `gameNumber` order on 30 of the 2026 season's 44
+ * doubleheader club-days, and putting the nightcap on top is a lie about which
+ * game is which.
+ */
+function gamesOnDay(report: PlayerReport, game: PlayerGame | null): PlayerGame[] {
+  if (!game) return [];
+  const day = report.games.filter((g) => g.date === game.date);
+  if (day.length < 2) return [game];
+  return [...day].sort((a, b) => (a.gameNumber ?? 1) - (b.gameNumber ?? 1) || a.gamePk - b.gamePk);
+}
+
+/**
  * The opponent / game cell: the matchup before first pitch, the live score +
  * inning while it's on, the final score once it's over.
  *
@@ -93,10 +126,40 @@ function pickGame(report: PlayerReport): PlayerGame | null {
  * under way the starter drops off: by then the line that matters is the score
  * and the inning, and the batter is as likely to be facing a reliever.
  */
-function OpponentCell({ r, game }: { r: PlayerReport; game: PlayerGame | null }) {
+function OpponentCell({ r, games }: { r: PlayerReport; games: PlayerGame[] }) {
+  if (games.length === 0) return <td className="sum-opp sum-opp-empty">—</td>;
+  return (
+    <td className={`sum-opp${games.length > 1 ? ' sum-opp-multi' : ''}`}>
+      {games.map((g) => (
+        <OpponentGame key={g.gamePk} r={r} game={g} half={games.length > 1 ? g.gameNumber : null} />
+      ))}
+    </td>
+  );
+}
+
+/**
+ * One game inside that cell — everything `OpponentCell` used to be, less the
+ * `<td>`.
+ *
+ * **Which half of a doubleheader is on the title and never in the cell**, the
+ * rule the Schedule view's own stack already follows and for the same reason:
+ * the two blocks say the club plays twice, and they are stacked in the order
+ * the games are played, so a `Gm 2` written into the cell would be a line of
+ * text spent on something the stack has said. What the stack cannot say is
+ * *which block is which*, and the title says it.
+ */
+function OpponentGame({
+  r,
+  game,
+  half,
+}: {
+  r: PlayerReport;
+  game: PlayerGame;
+  /** `1` or `2` on a doubleheader, null on an ordinary day. */
+  half: number | null;
+}) {
   const openPreview = usePreviewDoor();
   const openGame = useGameDoor();
-  if (!game) return <td className="sum-opp sum-opp-empty">—</td>;
   /* **Only a game nobody has played is a preview.** The dialog is a reading of
      a matchup *before* it — his split against the man they have named, or the
      lineup waiting for him — and once there is a score the cell is showing one,
@@ -153,19 +216,24 @@ function OpponentCell({ r, game }: { r: PlayerReport; game: PlayerGame | null })
    * game has no `sides` and a played one had nothing to open. The line is one
    * press again, and `sides` survives as the test for which shape this is.
    */
+  const dh = half === null ? '' : ` — game ${half} of a doubleheader`;
   const main =
     sides === null || score === null ? (
-      <OpponentPress onPress={press} label={matchup} />
+      <OpponentPress
+        onPress={press}
+        label={matchup}
+        title={half === null ? undefined : `${matchup}${dh}`}
+      />
     ) : (
       <OpponentPress
         onPress={gamePress}
         label={score}
         opens="page"
-        title={`${game.awayTeam} at ${game.homeTeam} — the game’s page`}
+        title={`${game.awayTeam} at ${game.homeTeam}${dh} — the game’s page`}
       />
     );
   return (
-    <td className={`sum-opp sum-opp-${kind}`}>
+    <span className={`sum-opp-game sum-opp-${kind}`} title={half === null ? undefined : dh.slice(3)}>
       <span className="sum-opp-main">
         {main}
         {scheduled && <span className="sum-opp-time">{detail}</span>}
@@ -176,7 +244,7 @@ function OpponentCell({ r, game }: { r: PlayerReport; game: PlayerGame | null })
           vs {handThrows(sp.hand)} {surname(sp.name)}
         </span>
       )}
-    </td>
+    </span>
   );
 }
 
@@ -1005,6 +1073,9 @@ function LeadCells({
   onOpenDetails,
 }: {
   r: PlayerReport;
+  /** The one game that speaks for the row — the corner mark's and the lineup
+   *  pip's. The **opponent cell** is about the whole of that game's day; see
+   *  `gamesOnDay`. */
   game: PlayerGame | null;
   role: LiveRole | null;
   corner: Corner;
@@ -1085,7 +1156,7 @@ function LeadCells({
               chip that widens the one column this table can least afford. */}
         </RowIdentity>
       </th>
-      {showOpponent && <OpponentCell r={r} game={game} />}
+      {showOpponent && <OpponentCell r={r} games={gamesOnDay(r, game)} />}
     </>
   );
 }
