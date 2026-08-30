@@ -421,24 +421,22 @@ export function ratePercent(rate: string | null | undefined): string {
   return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '—';
 }
 
-export function lineSummary(
-  line: BattingLine,
-  /**
-   * **Whether the strikeouts are part of the line**, and the default is that
-   * they are.
-   *
-   * A game line is a **record of what happened**, and a strikeout is part of
-   * what happened — which is right on the feed and on a player's card, the two
-   * surfaces this was written for. The Overview's top-performer row is not that
-   * object: it is a **ranking**, and the line under the name is there to say
-   * *why this man is first today*. A strikeout is never why. Printing it there
-   * put `3 K` in the middle of the best day anybody on the roster had.
-   *
-   * An option rather than a second function, so the two readings stay one
-   * implementation and cannot come to disagree about how a double is spelled.
-   */
-  opts?: { strikeouts?: boolean },
-): string {
+/**
+ * **A batter's line as a phrase** — `2-4, 1 R, HR, 2 RBI, .833 OPS` — with
+ * every term dropped at nought, which is what makes it a phrase rather than a
+ * line. The feed, the player card and the game log read it.
+ *
+ * **It carried a `{ strikeouts: false }` option and no longer does.** That was
+ * written for the Overview's top-performer row on the argument that the row is
+ * a *ranking* — the line under the name says why this man is first today, and a
+ * strikeout is never why, so printing one put `3 K` in the middle of the best
+ * day anybody had. The argument was right and the row has gone further: it
+ * prints the league's own scoring categories now (`OverviewView::playedSummary`)
+ * and does not call this at all. An option with no reader is an option nobody
+ * misses, so it went with its last one; the reasoning is kept here because the
+ * next surface tempted to print a strikeout in a ranking will want it.
+ */
+export function lineSummary(line: BattingLine): string {
   const parts: string[] = [`${line.hits}-${line.ab}`];
   const extras: string[] = [];
   if (line.runs) extras.push(`${line.runs} R`);
@@ -448,9 +446,7 @@ export function lineSummary(
   if (line.rbi) extras.push(`${line.rbi} RBI`);
   if (line.sb) extras.push(line.sb > 1 ? `${line.sb} SB` : 'SB');
   if (line.bb) extras.push(line.bb > 1 ? `${line.bb} BB` : 'BB');
-  if (line.so && opts?.strikeouts !== false) {
-    extras.push(line.so > 1 ? `${line.so} K` : 'K');
-  }
+  if (line.so) extras.push(line.so > 1 ? `${line.so} K` : 'K');
   if (line.hbp) extras.push('HBP');
   const ops = lineOps(line);
   if (ops !== null) extras.push(`${formatRate(ops)} OPS`);

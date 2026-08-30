@@ -1040,6 +1040,85 @@ narrower than *what happened in this game*:
   in: five hits and no walks is a different outing from one hit and four, and
   the term was spending a word to hide which.
 
+#### The played row is the league's categories too, and the phrase is gone
+
+**Reported as:** *"for batters/pitchers on the matchup leaders section of the
+overview page, it should show the fantasy categories (R, HR, RBI, SB, OPS) and
+(K, W, ERA, WHIP, SVHD). For batters it should show H/AB first, and for pitchers
+it should show IP, H, BB first and it should only show W or SVHD if they have
+one."*
+
+**It is the argument two sections up, made of the other half of the switch.**
+`projSummary` stopped being a fixed phrase when the same objection was put to it
+— *plate appearances are not a category* — and the **measured** row kept a box
+score line, so a block headed `R HR RBI SB OPS` printed `6.0 IP, 3 H, 0 R, 0 ER,
+2 BB, 7 K` under it. The two readings of one row differ in the *numbers* now and
+not in *which* numbers, which is what a `Summary`/`Projected` switch is supposed
+to be, and the eye carries from a card's `HR 3` to the `1 HR` that is one man's
+share of it under either lens.
+
+**The line still leads, because a result is a result.** What was right about the
+old note is that a played day has a form every reader of a box score knows; what
+was wrong is that the form was the whole row. So the terms that are *not*
+categories and are still read first survive in front — `H-AB` for a batter,
+`IP, H, BB` for a pitcher, the three an outing is identified by and the two WHIP
+is made of, which is what lets a `0.50 WHIP` further along be checked rather
+than taken. **`R` and `ER` went**: ER is what ERA is made of and ERA is the
+category, and R differs from it only where an error has come in, which is a fact
+for a box score rather than for a row saying why this man is first.
+
+**Only a decision he earned is printed**, which is the one exception the report
+asked for and the one the arithmetic wants: `0 W, 0 SVHD` spends two terms
+saying nothing happened, and unlike `0 R` it is not a nought anybody is
+comparing down the list — a decision either occurred or did not. Everything else
+prints at nought, `0 SB` included, for the reason the pitching line already
+carried: a term silently omitted leaves the reader counting commas. The filter
+is `projSummary`'s own two id sets unioned, so a league scoring `SV` and `HD`
+apart — or scoring `L`, which this app has no data for and would therefore drop
+as unearned — needs no case of its own. **A lead term the league happens to
+score is not printed twice**, deduped on `statId` rather than on the label.
+
+**Driven on the live league, one `Rank all` list captured before and after and
+the rows paired on name and value** so nothing moved under the comparison —
+**29 of the 35 pairs changed**, which is the population, the six that did not
+being men whose phrase already happened to be their categories:
+
+| | before | after |
+| --- | --- | --- |
+| Wacha | `8.0 IP, 4 H, 0 R, 0 ER, 10 K, 0 BB, W` | `8.0 IP, 4 H, 0 BB, 10 K, 1 W, 0.00 ERA, 0.50 WHIP` |
+| Painter, no decision | `6.0 IP, 2 H, 3 R, 3 ER, 6 K, 3 BB` | `6.0 IP, 2 H, 3 BB, 6 K, 4.50 ERA, 0.83 WHIP` |
+| Scott, a save | `1.0 IP, 0 H, 0 R, 0 ER, 2 K, 0 BB, SV` | `1.0 IP, 0 H, 0 BB, 2 K, 0.00 ERA, 0.00 WHIP, 1 SVHD` |
+| Contreras | `2-4, 3 RBI, .900 OPS` | `2-4, 0 R, 0 HR, 3 RBI, 0 SB, .900 OPS` |
+| Bauers | `2-2, 2 R, SB, 3 BB, 2.000 OPS` | `2-2, 2 R, 0 HR, 0 RBI, 1 SB, 2.000 OPS` |
+
+Contreras is the batting case worth reading twice: the phrase dropped `R` and
+`SB` at nought, so a row saying *why he is second* was silent about two of the
+five things it is being scored on. And **McLean read `1 R, 0 ER`** on the same
+capture, which is the concrete answer to *why drop `R`* — an unearned run is a
+real difference and a box score's to carry, not this row's.
+
+**`1 W` rather than a bare `W`**, which the phrase used: every other term on the
+row is a figure and its label, and the row is now a readout of categories rather
+than a sentence about a game. A league scoring `SV` and `HD` separately prints
+`1 SV` by the same rule.
+
+**Two lines is still the worst case**, which is the measurement that had to
+hold — `.ov-perf-line` wraps rather than clipping and the layout note at the
+720px breakpoint is written on that being its ceiling. Measured over all 24 rows
+on the page, at four widths:
+
+| window | rows wrapping | tallest line | page overflow |
+| --- | --- | --- | --- |
+| 390 | 5 of 24 | **2 lines** (26px) | 0 |
+| 620 | 0 of 24 | 1 line | 0 |
+| 720 | 6 of 24 | **2 lines** | 0 |
+| 1200 | 2 of 24 | **2 lines** | 0 |
+
+**`lineSummary`'s `strikeouts` option went with its last reader**, this row
+having been that reader — the reasoning above is kept in the function's own doc
+because the next ranking tempted to print a strikeout will want it, and the
+feed, the player card and the game log go on with the default they always had.
+
 **Color is spent on state, not on emphasis.** The value column is monochrome:
 the number is already the reason the row is where it is in the list, and a green
 scale down three rows would be the ranking said twice.
