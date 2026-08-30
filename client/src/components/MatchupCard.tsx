@@ -802,9 +802,21 @@ export function MatchupCard({
   /**
    * The two lists under the count. Null means the feed cannot answer for this
    * week — see `movesFor`, which is where that is decided and why.
+   *
+   * **Bounded by `fullEnd` rather than `end`, and that is the whole of the
+   * difference between a list and a list a day behind.** `end` truncates at the
+   * day being played, which is right for every figure above this section and
+   * wrong for this one: a move made after 13:00 ET is booked against
+   * *tomorrow* by `periodDay`'s own measured rule, so on a live week every
+   * afternoon pickup landed one day past the bound and showed up only the next
+   * morning. Measured on the live league at 20:26 ET on 2026-08-29: a topic
+   * filed at 13:50 ET carried `periodDay` 2026-08-30 against an `end` of
+   * 2026-08-29. On the period's last day the two dates are equal, so a Sunday
+   * afternoon's move still belongs to next week and is still left out.
    */
-  const awayMoves = away ? movesFor(away, transactions, board.start, board.end) : null;
-  const homeMoves = movesFor(home, transactions, board.start, board.end);
+  const movesEnd = board.fullEnd ?? board.end;
+  const awayMoves = away ? movesFor(away, transactions, board.start, movesEnd) : null;
+  const homeMoves = movesFor(home, transactions, board.start, movesEnd);
   /** Whether the section has anything to say at all beyond a count — which is
    *  what keeps it on screen for a league ESPN reports no counter for, where
    *  the two figures are dashes and the lists are the whole of it. */

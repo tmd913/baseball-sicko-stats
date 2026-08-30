@@ -2134,7 +2134,21 @@ function DayCarousel({
    */
   const boxRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const { state, measure } = useOverflowArrows(boxRef, wrapRef);
+  /**
+   * **It declines the wheel**, which is the fourth argument and the one thing
+   * this row wants from that hook that a control row does not.
+   *
+   * `useOverflowArrows` turns a vertical wheel into sideways travel because a
+   * 36px band of buttons has nowhere else to spend one. This row is a third of
+   * the screen tall, it has dots, and the page beneath it is where a downward
+   * wheel belongs — and worse, it snaps: a 120px notch inside `scroll-snap-type:
+   * x mandatory` is corrected straight back to the card it started on, so the
+   * handler took the gesture and then could not spend it. Measured at 430×900
+   * on 2026-08-29: six wheel-downs over the cards moved neither the page
+   * (`scrollY` 0) nor the row (`scrollLeft` 398), while the same event twenty
+   * pixels higher scrolled the page. See the wheel effect in `TabStrip.tsx`.
+   */
+  const { state, measure } = useOverflowArrows(boxRef, wrapRef, undefined, false);
   const over = state.over;
   const [active, setActive] = useState(OPENS_ON);
 
