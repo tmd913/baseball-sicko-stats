@@ -684,6 +684,54 @@ scrolls instead. The player page's tab strip at 360, overflow 386: `0 → 180`
 with `defaultPrevented` **true**. At 1400, where neither row overflows, the
 wheel is untouched and the page scrolls as it always did.
 
+##### And it is gone again — the second report, which is the first one's cost
+
+**Reported as: *"now when I scroll vertically on tabs that can scroll
+horizontally, it scrolls horizontally instead."*** Everything above describes
+what the app did and why; this is what it cost, and the listener has been
+removed.
+
+**The two reports are not opposites so much as one correction of the other.**
+The first was *"nothing happens when your mouse is over them and you scroll"* —
+and what actually happened was that the **pane** scrolled and the row did not.
+The fix took the gesture away from the pane. A tab strip crossing the whole
+width of the page is a band a reader has to scroll *past*, though, and taking
+their gesture to move something they were not looking at is the Overview
+carousel's fault one row thinner: the carousel declined this listener when that
+was found (see *And it declines the wheel* in **The Overview**), and this is the
+rest of the same answer.
+
+Measured at 390 on 2026-08-29, pointer on the player page's tab strip
+(`scrollWidth − clientWidth` = 356):
+
+| | `.details-tabs` `scrollLeft` | the pane |
+| --- | --- | --- |
+| four wheel-downs, before | **0 → 240** | **0** throughout |
+| the same wheel 50px lower, before | 0 | 0 → 240 |
+| four wheel-downs, after | **0** | **0 → 360** |
+
+and on the Roster's own tools row at 390 (overflow 333) after: `scrollLeft`
+**0**, pane **0 → 360**.
+
+**What stops the first report coming back is the arrows, and the number is what
+makes that safe rather than the claim.** They are drawn whenever the row
+overflows, and on that same strip **one press of the right arrow takes
+`scrollLeft` 0 → 312** — most of the row. A trackpad's sideways `deltaX: 150`
+still moves it 0 → 150, the browser's own behavior on an `overflow-x` box,
+untouched by any of this. The original report was written when the arrows
+existed too.
+
+(`shift`+wheel was measured and is **not** a third way, or not a demonstrable
+one: 0 → 60 before the removal and 0 → 0 after, so what answered it was this
+listener rather than the browser. Chrome translates a shifted wheel above the
+DOM, which a synthesized `modifiers: 8` does not reach — untested rather than
+absent, and written down as untested.)
+
+**`WHEEL_LINE` and the `claimsWheel` flag went with it**, the flag having
+existed for exactly one caller that wanted the rule off and there now being no
+rule to turn off. Bundle: JS **801.64 → 801.15 KB** raw, **236.46 → 236.28**
+gzipped — a change that removes more than it adds.
+
 **The research board keeps the old rule and is untouched.** Its row is a
 different control set with a measured, load-bearing head height, and its
 labels — `Columns`, `Ranks`, `Teams`, `Search`, `Filters` — are the case the

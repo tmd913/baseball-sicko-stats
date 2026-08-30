@@ -243,13 +243,22 @@ at 370px each, so **740px of a 2,685px page was dead to the wheel**. Reported as
 doesn't let me scroll — the swipe for the day cards seems like it might be the
 culprit"*, and the suspect was right.
 
-So `useOverflowArrows` takes a fourth argument, `claimsWheel`, defaulting to the
+So `useOverflowArrows` took a fourth argument, `claimsWheel`, defaulting to the
 control row's behavior and passed `false` here. **A sideways trackpad swipe is
 unaffected** — that arrives as `deltaX` and the browser scrolls the row itself
 without any listener: measured after, four `deltaX: 150` events over the cards
 took the row **398 → 796** (`TOMORROW`) with `scrollY` still 0, and a synthesized
 touch drag took it back to **0** (`YESTERDAY`) while a vertical drag scrolled the
 page to **602** and left the row alone.
+
+*(**The flag is gone, and so is the rule it turned off.** The tab strips were
+reported for the milder form of the same fault — *"now when I scroll vertically
+on tabs that can scroll horizontally, it scrolls horizontally instead"* — and
+the listener came out of `useOverflowArrows` altogether, so there is nothing
+left for a caller to decline. Everything above is why this row was the first to
+say no; see **The client shell**, *And it is gone again*, for the measurements
+that took it out for the rest of them. The three figures in the paragraph above
+are unchanged, none of them having been this listener's.)*
 
 **Three dots, drawn only while the row overflows** — the measurement deciding
 rather than the breakpoint. They are buttons as well as a position: a pointer
