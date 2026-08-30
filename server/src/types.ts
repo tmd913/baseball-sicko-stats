@@ -1310,7 +1310,11 @@ export interface RosterStatus {
  *
  * Thirty entries at most, off the day the player map is already built from.
  */
-export interface ClubStatus {
+export interface GameFacts {
+  /** 1 for a single game, 1 or 2 for the halves of a doubleheader — what orders
+   *  a day's two games, `gamePk` disagreeing with the played order on 30 of the
+   *  2026 season's 44 doubleheader club-days. Null on a game MLB gave none. */
+  gameNumber: number | null;
   gameState: GameStatus['state'];
   /** The other club's abbreviation, from this club's side. */
   opponent: string;
@@ -1324,6 +1328,20 @@ export interface ClubStatus {
    *  reading `PlayerStatus.probablePitcher` carries, which is who his hitters
    *  would face. */
   probablePitcher: ProbablePitcher | null;
+}
+
+export interface ClubStatus extends GameFacts {
+  /** **The club's other game that day**, on a doubleheader — the same facts
+   *  about the game `currentOf` did not pick, and null on the ordinary day.
+   *
+   *  The pick answers *which game speaks for this row* and every other thing on
+   *  a row still asks it; the **opponent cell** is about the day, and drawing
+   *  one half of a doubleheader was the cell answering a question nobody asked
+   *  of it. One field rather than a list because a club plays at most twice —
+   *  MLB has scheduled no triple-header since 1920 — and a list would be a
+   *  shape the data cannot fill. Never nested: this is always null on the
+   *  object hanging here. */
+  otherGame: GameFacts | null;
 }
 
 /**
@@ -1390,6 +1408,11 @@ export interface PlayerStatus {
    *  at first pitch: by then the score is the line that matters and the batter
    *  is as likely to be facing a reliever. */
   probablePitcher: ProbablePitcher | null;
+  /** Which half of a doubleheader the facts above are, and the other half. Both
+   *  null on the ordinary one-game day; see `ClubStatus.otherGame`, which is the
+   *  same field for the club fallback and the same shape. */
+  gameNumber: number | null;
+  otherGame: GameFacts | null;
 }
 
 /** A player as returned in the day's report. */

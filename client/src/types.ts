@@ -1201,7 +1201,10 @@ export interface RosterStatus {
  *
  * Thirty entries at most, off the day the player map is already built from.
  */
-export interface ClubStatus {
+export interface GameFacts {
+  /** 1 for a single game, 1 or 2 for the halves of a doubleheader — what orders
+   *  a day's two games in a stacked cell. Null on a game MLB gave none. */
+  gameNumber: number | null;
   gameState: GameStatus['state'];
   /** The other club's abbreviation, from this club's side. */
   opponent: string;
@@ -1215,6 +1218,13 @@ export interface ClubStatus {
    *  reading `PlayerStatus.probablePitcher` carries, which is who his hitters
    *  would face. */
   probablePitcher: ProbablePitcher | null;
+}
+
+export interface ClubStatus extends GameFacts {
+  /** **The club's other game that day**, on a doubleheader, and null otherwise
+   *  — see `savant.ts::otherOf`. Never nested: always null on the object
+   *  hanging here. */
+  otherGame: GameFacts | null;
 }
 
 /**
@@ -1261,6 +1271,11 @@ export interface PlayerStatus {
    *  Scheduled games only, as on the summary table, which drops him once the
    *  game is under way. */
   probablePitcher: ProbablePitcher | null;
+  /** Which half of a doubleheader everything above is, and the other half. Both
+   *  null on the ordinary one-game day. The pick is what the lineup pip and the
+   *  IL badge are about; the opponent cell is about the whole day. */
+  gameNumber: number | null;
+  otherGame: GameFacts | null;
 }
 
 export interface PlayerReport extends WatchPlayer {

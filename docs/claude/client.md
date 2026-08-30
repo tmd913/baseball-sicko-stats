@@ -1877,6 +1877,73 @@ number both times with no `.loading-block` on the page.
 (+1.39KB and +0.41KB). CSS untouched at 165.43 KB / 29.70 gzipped — this change
 draws nothing.
 
+#### And past half an hour the page is replaced rather than refreshed
+
+**Reported as** *"is there any way you can refresh the whole page when it's been
+a long time since you last visited the site? It takes a bit for the live polling
+to update so you see stale data for a bit in this scenario which is kinda
+confusing."* Everything above is the right answer to a short absence and the
+wrong one to a long one, in two ways that are both rules this file already
+states.
+
+- **Rule 1 protects the wrong thing.** *Never over data* holds the last answer
+  on screen while the next is in flight, and that is worth doing for a reader
+  who stepped away for a minute. After a night those figures are not stale, they
+  are **wrong**, and holding them up under a date bar reading `Today` is the
+  fault the whole section above was written about, surviving inside the fix for
+  it.
+- **The list only covers the shell.** `refreshOnResume` re-reads what `App`
+  owns. A page *inside* it — the MLB scoreboard, a player page's eight tabs, a
+  game page — re-reads only when its own component next mounts, and a resume
+  mounts nothing. Those draw yesterday until something makes them remount, and
+  no addition to the list reaches them, because the list is not where they live.
+
+So past **`RELOAD_AFTER_MS`** the resume calls `window.location.reload()` and
+nothing else. **The threshold is thirty minutes, argued from what this app
+already treats as current**: the longest staleness window it has is
+`SEASON_STALE_MS` (five minutes) and the poll is twenty seconds, so half an hour
+is six times the longest window any answer here is believed for — past which
+nothing on screen has a claim to be current — while being long enough that
+crossing to another tab, another app or another window never costs a reader
+their place. Deliberately **not** the day rollover alone: the report is as much
+about returning to a live afternoon as about returning the next morning.
+
+**`useResumed` hands the callback the length of the absence** rather than only
+the fact of one, that being the only place that knows it.
+
+**And `blur` starts the clock as well as `visibilitychange`.** A window left
+open under another one is away, and `visibilitychange` does not fire for it —
+`focus` was already listened for, but nothing had armed the flag, so `check`
+returned at its first line and a whole afternoon's absence did nothing at all.
+The two events pair; a blur that is not really an absence (the address bar, a
+devtools panel) is answered by its own `focus` a moment later and never reaches
+the threshold.
+
+**What a reload costs, stated rather than waved at.** The view, the range, the
+open detail page and every other reading are in the query string by this app's
+own rule, so the page comes back to itself — measured, `?preset=Today&view=
+overview&roster=fantasy` in and the same string out. What does not survive is
+the scroll position, an open dialog deliberately kept out of the URL (the
+Columns picker, the filter builder, `InfoKey`), and the bundle's parse; the
+files themselves are cached. At 1200×900 against the live league the Overview is
+on screen with its matchup card and its performers **766ms** after the reload
+and **198ms** on a second one, the difference being the server's own caches —
+and the frame is held behind the boot `Splash`, which *names what it is
+reading*, where the quiet resume shows the previous day's figures for as long as
+the reads take and says nothing about it.
+
+**The write queue is drained first**, the same rule the league-onboarding reload
+follows and for a sharper reason here: an app backgrounded in the breath after a
+toggle was suspended with that `PUT` in flight and resumes it with the page.
+Awaiting a no-op through `queueUserWrite` settles once everything already in the
+chain has, and costs nothing when the queue is empty — which, after half an hour
+away, is the ordinary case.
+
+**Driven with the threshold temporarily at 4s and then at its real value**, the
+only way to exercise both halves in one sitting: a stamp written onto `window`
+**survives** a 25-second absence at thirty minutes and is **gone** at four
+seconds, with the same URL either way.
+
 ### A rate is `.xxx` and a share is a percent, and the two are not interchangeable
 
 **Baseball writes some of its rates with a leading dot and three decimals and

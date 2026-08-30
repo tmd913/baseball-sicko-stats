@@ -1599,7 +1599,7 @@ export function useDelayedFlag(on: boolean, delay = WAIT_DELAY) {
  * current, and firing a full refresh on every alt-tab would spend a request per
  * glance. Away for longer than that and it re-reads.
  */
-export function useResumed(onResume: () => void, minAwayMs = LIVE_POLL_MS) {
+export function useResumed(onResume: (awayMs: number) => void, minAwayMs = LIVE_POLL_MS) {
   /* Read off a ref rather than named in the deps: the callback closes over half
      of App's state and re-identifies constantly, and a dep would tear the
      listeners down and rebuild them on every render. The same trick the league
@@ -1623,19 +1623,43 @@ export function useResumed(onResume: () => void, minAwayMs = LIVE_POLL_MS) {
       if (!hiddenAt) return;
       const away = Date.now() - hiddenAt;
       hiddenAt = 0;
-      if (away >= minAwayMs) cb.current();
+      // **How long, not merely that it happened.** A caller that only knew a
+      // return had occurred could re-read; deciding whether the page is worth
+      // keeping at all is a question about the *length* of the absence, and
+      // this is the only place that knows it. See `RELOAD_AFTER_MS`.
+      if (away >= minAwayMs) cb.current(away);
     };
     const shown = (e: PageTransitionEvent) => {
       if (e.persisted && !hiddenAt) hiddenAt = Date.now() - minAwayMs;
       check();
     };
+    /**
+     * **A window nobody is looking at is away, even where it is still
+     * "visible".** `visibilitychange` fires for a tab that is switched away
+     * from, a browser that is minimized and an app that is backgrounded — and
+     * **not** for a window left open under another one, which on a desk is the
+     * commonest way of all to leave a page for an afternoon. That absence was
+     * invisible here: `focus` was already listened for, but nothing had started
+     * the clock, so `check` returned at its first line and the return did
+     * nothing.
+     *
+     * So `blur` starts it as well. The two events pair, the threshold is the
+     * same, and a blur that is not really an absence — a press on the address
+     * bar, a devtools panel taking focus — is answered by the same `focus` a
+     * moment later and never reaches `minAwayMs`.
+     */
+    const left = () => {
+      if (!hiddenAt) hiddenAt = Date.now();
+    };
     document.addEventListener('visibilitychange', check);
     window.addEventListener('pageshow', shown);
     window.addEventListener('focus', check);
+    window.addEventListener('blur', left);
     return () => {
       document.removeEventListener('visibilitychange', check);
       window.removeEventListener('pageshow', shown);
       window.removeEventListener('focus', check);
+      window.removeEventListener('blur', left);
     };
   }, [minAwayMs]);
 }

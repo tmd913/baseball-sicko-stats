@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { TREND_WINDOWS } from '../types';
 import type {
   ClubStatus,
+  GameFacts,
   EspnCategory,
   PlayerKind,
   PlayerStatus,
@@ -490,8 +491,39 @@ function OpponentCell({
   status: PlayerStatus | null | undefined;
   club: ClubStatus | null | undefined;
 }) {
-  const game = status?.opponent ? status : club ?? null;
-  if (!game?.opponent) return <>{'—'}</>;
+  const picked = status?.opponent ? status : club ?? null;
+  if (!picked?.opponent) return <>{'—'}</>;
+  /**
+   * **A doubleheader is two blocks, in the order the games are played.**
+   *
+   * The map's pick answers *which game speaks for this row* — the lineup pip
+   * and the IL badge are about that one — and this cell is about the **day**,
+   * so it drew half of one. Reported against the summary table's own opponent
+   * column (*"the schedule view does show both, but the others do not"*); this
+   * is the same fault on the same column one tab over, and the fix is the same
+   * shape: the server ships `otherGame` beside the pick and the cell orders the
+   * two on `gameNumber`, `gamePk` order disagreeing with played order on 30 of
+   * the 2026 season's 44 doubleheader club-days.
+   */
+  const both = picked.otherGame
+    ? [picked as GameFacts, picked.otherGame].sort(
+        (a, b) => (a.gameNumber ?? 1) - (b.gameNumber ?? 1),
+      )
+    : [picked as GameFacts];
+  return (
+    <>
+      {both.map((g, i) => (
+        <OpponentGame key={g.gameNumber ?? i} game={g} half={both.length > 1 ? g.gameNumber : null} />
+      ))}
+    </>
+  );
+}
+
+/** One game inside that cell. Which half of a doubleheader it is goes on the
+ *  `title` and never in the cell, the rule the Schedule view's own stack
+ *  follows: the stack has said the club plays twice, and a third line of text
+ *  is what the 58px row cannot afford. */
+function OpponentGame({ game, half }: { game: GameFacts; half: number | null }) {
   const scheduled = game.gameState === 'scheduled';
   const matchup = `${game.isHome ? 'vs' : '@'} ${game.opponent}`;
   const score =
@@ -513,7 +545,15 @@ function OpponentCell({
           ? 'Final'
           : null;
   return (
-    <>
+    <span
+      /* **The state class is on the block, not the cell.** It was on the `<td>`,
+         which was right while a cell was one game and wrong the moment it is
+         two: an opener that is `final` beside a nightcap that is `live` would
+         have taken one tint between them — the picked game's — and the `Final`
+         under the opener would have read green. */
+      className={`research-opp-game research-opp-${game.gameState}`}
+      title={half === null ? undefined : `Game ${half} of a doubleheader`}
+    >
       <span className="research-opp-main">
         {matchup}
         {score && <span className="research-opp-score">{score}</span>}
@@ -525,7 +565,7 @@ function OpponentCell({
         </span>
       )}
       {detail && <span className="research-opp-detail">{detail}</span>}
-    </>
+    </span>
   );
 }
 

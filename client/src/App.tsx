@@ -50,6 +50,7 @@ import {
   isStartingOn,
   LEAGUE_POLL_MS,
   LIVE_POLL_MS,
+  RELOAD_AFTER_MS,
   projectStarters,
   rangeDatesOf,
   seatKinds,
@@ -8029,7 +8030,35 @@ export default function App() {
    * becoming visible (`LEAGUE_POLL_MS`). Two refreshes of one board would be
    * two requests for one answer.
    */
-  const refreshOnResume = useCallback(() => {
+  const refreshOnResume = useCallback(
+    (awayMs: number) => {
+    /**
+     * **Past `RELOAD_AFTER_MS` the page is not refreshed, it is replaced.**
+     *
+     * Everything below this is the right answer to a short absence and the
+     * wrong one to a long one, for two reasons that are both rules this app
+     * already has. *Never over data* holds the last answer on screen while the
+     * next is in flight — worth doing for a reader who stepped away for a
+     * minute, and after a night it holds up figures that are not stale but
+     * wrong, under a date bar that says `Today`. And the list below is what the
+     * *shell* owns: a page inside it — the MLB scoreboard, a player page's
+     * tabs, a game page — re-reads only when its own component next mounts, so
+     * nothing here reaches it. See `RELOAD_AFTER_MS` for the threshold and what
+     * a reload costs.
+     *
+     * **The write queue is drained first**, the same rule the league-onboarding
+     * reload follows and for a sharper reason here: an app backgrounded in the
+     * breath after a toggle was suspended with that `PUT` in flight, and the
+     * request resumes with the page. Enqueueing a no-op and awaiting it settles
+     * once everything already in the chain has, and costs nothing when the
+     * queue is empty — which, after half an hour away, is the ordinary case.
+     */
+    if (awayMs >= RELOAD_AFTER_MS) {
+      void queueUserWrite(async () => undefined).finally(() => {
+        window.location.reload();
+      });
+      return;
+    }
     const now = baseballToday();
     const rolled = now !== today;
     setToday(now);
@@ -8046,18 +8075,21 @@ export default function App() {
       refreshSchedule();
       refreshResearch();
     }
-  }, [
-    today,
-    reloadReport,
-    loadRosterProjection,
-    usingFantasy,
-    loadFantasyRoster,
-    view,
-    detailsKey,
-    loadRecentNews,
-    refreshSchedule,
-    refreshResearch,
-  ]);
+    },
+    [
+      today,
+      reloadReport,
+      loadRosterProjection,
+      usingFantasy,
+      loadFantasyRoster,
+      view,
+      detailsKey,
+      loadRecentNews,
+      refreshSchedule,
+      refreshResearch,
+      queueUserWrite,
+    ],
+  );
   useResumed(refreshOnResume);
 
   // Show a "back to top" button once the user has scrolled down a screenful.

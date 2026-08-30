@@ -2001,3 +2001,58 @@ export const LIVE_POLL_MS = 20_000;
  * ones. `PlayerDetails`, `TeamDetails` and `GamePage`'s Plays tab read it.
  */
 export const SEASON_STALE_MS = 5 * 60_000;
+
+/**
+ * **How long away is long enough that coming back is a fresh visit** — the
+ * threshold `App.tsx::refreshOnResume` reloads the page at, rather than
+ * quietly re-reading the handful of things a short absence can have moved.
+ *
+ * The case, in the words it was reported in: *"is there any way you can refresh
+ * the whole page when it's been a long time since you last visited the site? It
+ * takes a bit for the live polling to update so you see stale data for a bit in
+ * this scenario which is kinda confusing."*
+ *
+ * **The quiet resume is right for a short absence and wrong for a long one, and
+ * both halves of that are rules this app already has.** *Never over data* keeps
+ * the last answer standing while the next is in flight, because a reader who
+ * stepped away for a minute has numbers on screen worth protecting. After a
+ * night they are not stale, they are **wrong**, and holding them up under a date
+ * bar that says `Today` is the curtain rule protecting something that should not
+ * be protected. The other half is coverage: `refreshOnResume` re-reads what the
+ * shell owns — the report, the projection, the fantasy roster, the news, and on
+ * a rollover the schedule and the boards — and nothing that belongs to a page
+ * *inside* it. The MLB scoreboard, a player page's eight tabs, a game page: each
+ * re-reads only when its own component next mounts, so on a resume they draw
+ * yesterday until something makes them remount. A reload is the only thing that
+ * answers for all of them, and it is the answer a reader would have reached for
+ * anyway.
+ *
+ * **Thirty minutes, and the number is argued from what the app itself treats as
+ * current.** The longest staleness window in the app is `SEASON_STALE_MS`
+ * above, five minutes; the poll is twenty seconds. So half an hour is six times
+ * the longest window anything here is believed for — an absence past which no
+ * answer on screen has any claim to be current — while being long enough that
+ * crossing to another tab, another app or another window never costs a reader
+ * their place. It is deliberately **not** the day rollover alone: the reported
+ * case is a return to a live afternoon as much as a return the next morning.
+ *
+ * **What a reload costs, stated rather than waved at.** The view, the range,
+ * the open detail page and every other reading are in the query string by this
+ * app's own rule, so the page comes back to itself. What does not survive is
+ * the scroll position, an open dialog that is deliberately not in the URL (the
+ * Columns picker, the filter builder, `InfoKey`), and the bundle's parse — the
+ * files themselves are cached. Measured at 1200×900 against the live league on
+ * 2026-08-29: the Overview is on screen with its matchup card and its
+ * performers **766ms** after the reload on the first one and **198ms** on a
+ * second, the difference being the server's own caches — and the frame is held
+ * behind the boot `Splash`, which names what it is reading, where the quiet
+ * resume holds the previous day's figures up for as long as the reads take and
+ * says nothing about it.
+ *
+ * **Driven with the threshold temporarily at 4s and then at its real value**,
+ * which is the only way to exercise both halves in one sitting: a stamp written
+ * onto `window` survives a 25-second absence at 30 minutes and is gone at 4s,
+ * and the URL that comes back is the one that went away
+ * (`?preset=Today&view=overview&roster=fantasy`).
+ */
+export const RELOAD_AFTER_MS = 30 * 60_000;
