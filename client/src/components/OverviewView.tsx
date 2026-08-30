@@ -62,7 +62,6 @@ import {
   combinePitchingLines,
   formatIp,
   headshotUrl,
-  lineSummary,
   possessive,
   prettyDate,
   prettyGameDate,
@@ -113,11 +112,6 @@ const DAY_WORD: Record<DayKey, string> = {
   today: 'Today',
   tomorrow: 'Tomorrow',
 };
-
-/** An empty batting line, for a pitcher's row reaching the batter's summary —
- *  which cannot happen and is what the fallback is for. Its own constant rather
- *  than a `combineLines([])` allocated on every render that takes the branch. */
-const NO_BATTING = combineLines([]);
 
 /* ---- One player's day ---------------------------------------------------- */
 
@@ -182,46 +176,84 @@ function anyPlay(line: DayLine): boolean {
 }
 
 /**
- * **A pitcher's day, in the order a pitching line is written**: `IP, H, R, ER,
- * K, BB`, then his decision.
+ * **A played day, in the league's own categories, behind the line that produced
+ * them.**
  *
- * It was `IP, K, ER, H, BB` — the categories first and the line's own order
- * nowhere — which is the same mistake the row above it makes on purpose and
- * this one has no reason to. A **played** day is a result, and a result has a
- * form every reader of a box score already knows; a manager reading
- * `6.0 IP, 3 H, 0 R, 0 ER, 2 BB, 7 K` is not decoding it. The *projected* row
- * is where the categories belong, and it has them (below).
+ * Reported as *"for batters/pitchers on the matchup leaders section of the
+ * overview page, it should show the fantasy categories (R, HR, RBI, SB, OPS)
+ * and (K, W, ERA, WHIP, SVHD). For batters it should show H/AB first, and for
+ * pitchers it should show IP, H, BB first."*
  *
- * **Every term, including the noughts**, which reverses the note this function
- * used to carry about dropping a term at zero. That rule is right for a
- * *phrase* and wrong for a *line*: `0 R, 0 ER` is the whole story of a
- * shutout, and a line that silently omitted them would leave the reader
- * counting commas to work out which figure was missing. The decision is the one
- * thing still conditional, there being no such thing as a nought decision.
+ * **It settles an argument this file had already had once, on the other row.**
+ * `projSummary` below was a fixed phrase until the same objection was made of
+ * it — *plate appearances are not a category* — and it became
+ * `categoryGroups`' own set in `categoryGroups`' own order, so the eye carries
+ * from `HR 1.7` on the block's header line to the `0.2 HR` that is this man's
+ * share of it. The **measured** row kept a box-score line and so kept the
+ * mismatch: a card headed `R HR RBI SB OPS` printing `6.0 IP, 3 H, 0 R, 0 ER,
+ * 2 BB, 7 K` under it answers a question the block is not asking. The two
+ * readings of one row now differ in the *numbers* and not in *which* numbers,
+ * which is the split a `Summary`/`Projected` switch is supposed to be.
  *
- * **`R` as well as `ER`**, which the old phrase had no room for and a line must
- * have: they differ exactly where an error has come into it, and that is a
- * difference a manager is entitled to see rather than a rounding of it.
+ * **The line still leads, because a result is a result.** The old note here was
+ * right that a played day has a form every reader of a box score knows, and
+ * wrong that the form is the whole row. So the terms that are *not* categories
+ * and are still what a manager reads first survive in front: `H-AB` for a
+ * batter, `IP, H, BB` for a pitcher — the three a pitching line is identified
+ * by and the two that WHIP is made of, which is what lets a `1.000 WHIP`
+ * further along the row be checked rather than taken.
  *
- * A **loss** is the one decision that cannot be drawn: `PitchingLine` carries
- * `wins`, `saves` and `holds` and no losses — the boxscore credit this app
- * stores has never included them. Nothing is invented in its place.
+ * **`R` and `ER` are gone from the front and that is the point.** ER is what
+ * ERA is made of and ERA is the category; R differs from it only where an error
+ * has come into it, which is a fact for a box score rather than for a row whose
+ * job is to say why this man is first today.
+ *
+ * **A lead term the league happens to score is not printed twice.** A league
+ * scoring hits allowed or walks gets them once, in the category run, where they
+ * are what is being scored — the dedupe is on `statId`, so it is right for a
+ * league this file has never seen.
+ *
+ * **Only a decision he earned is printed.** `0 W, 0 SVHD` spends two terms
+ * saying nothing happened, and unlike a nought in `R` it is not a nought a
+ * reader is comparing against anything — a decision is a thing that either
+ * occurred or did not. Every other category prints at nought, including
+ * `0 R`: those *are* being compared down the list, and a line that silently
+ * omitted them would leave the reader counting commas. The two decision sets
+ * are `projSummary`'s own, so a league scoring `SV` and `HD` separately is
+ * covered without a test on `SVHD`.
+ *
+ * A **loss** is the one decision that cannot be drawn whatever the league
+ * scores: `PitchingLine` carries `wins`, `saves` and `holds` and no losses —
+ * the boxscore credit this app stores has never included them — so a league
+ * scoring `L` gets `0 L` from `categoryTotal` and it is dropped as a decision
+ * nobody earned. Nothing is invented in its place.
  */
-function pitchSummary(line: DayLine): string {
-  const p = line.pitching;
-  if (!p) return '—';
-  const parts = [
-    `${formatIp(p.outs)} IP`,
-    `${p.hits} H`,
-    `${p.runs} R`,
-    `${p.earnedRuns} ER`,
-    `${p.strikeouts} K`,
-    `${p.walks} BB`,
-  ];
-  if (p.wins) parts.push('W');
-  if (p.saves) parts.push('SV');
-  if (p.holds) parts.push('HD');
-  return parts.join(', ');
+function playedSummary(
+  kind: 'batter' | 'pitcher',
+  line: DayLine,
+  categories: EspnCategory[],
+): string {
+  const side = kind === 'pitcher' ? 'pitching' : 'batting';
+  const group = categoryGroups(categories).find((g) => g.side === side);
+  const scored = new Set((group?.categories ?? []).map((c) => c.statId));
+  const lead: string[] = [];
+  if (kind === 'pitcher') {
+    const p = line.pitching;
+    if (!p) return '—';
+    if (!scored.has(34)) lead.push(`${formatIp(p.outs)} IP`);
+    if (!scored.has(37)) lead.push(`${p.hits} H`);
+    if (!scored.has(39)) lead.push(`${p.walks} BB`);
+  } else {
+    const b = line.batting;
+    if (!b) return '—';
+    lead.push(`${b.hits}-${b.ab}`);
+  }
+  const cats = (group?.categories ?? [])
+    .map((c) => ({ c, v: categoryTotal(c, line) }))
+    .filter(({ c, v }) => !(DECISIONS.has(c.statId) && !v))
+    .map(({ c, v }) => `${fmtValue(v ?? undefined, c)} ${c.label}`);
+  const parts = [...lead, ...cats];
+  return parts.length > 0 ? parts.join(', ') : '—';
 }
 
 /**
@@ -284,6 +316,10 @@ function projectedRole(line: DayLine): 'starter' | 'reliever' {
  *  sets of ids rather than a test on `SVHD`. */
 const STARTER_DECISIONS = new Set([53, 54]); // W, L
 const RELIEF_DECISIONS = new Set([56, 57, 58, 59, 60, 83]); // SVO, SV, BS, SV%, HD, SVHD
+/** Both of them, for the played row — which drops a decision on whether it was
+ *  *earned* rather than on which role could have earned it. See
+ *  `playedSummary`. */
+const DECISIONS = new Set([...STARTER_DECISIONS, ...RELIEF_DECISIONS]);
 
 function projSummary(
   kind: 'batter' | 'pitcher',
@@ -402,14 +438,18 @@ function PerformerRow({
    */
   fill?: CSSProperties;
 }) {
+  /* **Two readings of one row, differing in the numbers and not in which
+     numbers.** Both are the league's own categories in `categoryGroups`' order;
+     `projSummary` prints an expectation to a tenth and drops the decision the
+     man's projected role cannot earn, `playedSummary` prints what happened
+     behind the line that produced it and drops the decision he did not get.
+     `lib.ts::lineSummary` is not called from here any more, and its
+     `strikeouts: false` option went with this its last reader — the note on
+     *why* it existed is kept there, the feed and the player card going on with
+     the default it always had. */
   const summary = projected
     ? projSummary(p.kind, p.line, categories)
-    : p.kind === 'pitcher'
-      ? pitchSummary(p.line)
-      : // **No strikeouts on a ranking row** — see `lib.ts::lineSummary`, where the
-        // option is argued: the line under the name is here to say why this man
-        // is first today, and a strikeout is never why.
-        lineSummary(p.line.batting ?? NO_BATTING, { strikeouts: false });
+    : playedSummary(p.kind, p.line, categories);
   return (
     <button
       type="button"
