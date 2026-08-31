@@ -45,6 +45,7 @@ import {
 } from './types.js';
 import type {
   PlayerKind,
+  PlayerReport,
   ResearchControlsPref,
   ResearchIncludeKey,
   ResearchWindow,
@@ -141,6 +142,7 @@ import {
   getProjection,
   getRosterProjection,
 } from './projection.js';
+import type { RosterProjection } from './projection.js';
 import type { WatchPlayer } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -893,6 +895,299 @@ app.get(
       // describe, and an absent field is what every older tab already reads.
       ...(lineups ? { lineups } : {}),
     });
+  }),
+);
+
+/**
+ * **The Overview's ten reads, as one.**
+ *
+ * The page is a composition rather than a data source — every read behind it
+ * already existed, which is what `client-overview.md` records and is still
+ * true. What changed is the *shape* of asking: ten parallel requests for one
+ * page, measured over 7 days of the API function, is ten Lambda containers,
+ * and on a low-traffic app most of them are new. Cold containers cost 1,368ms
+ * at p50 against 239ms warm for the same work (`@duration` excludes init, so
+ * those compare like with like) — because each has its own empty copy of the
+ * ~30 module-scoped caches and answers every read from S3. Peak
+ * `ConcurrentExecutions` of 22–44 is that fan-out, and 92 requests a week
+ * reached the 29s wall with 64 of them cold.
+ *
+ * One request is **one** container, and the ten reads inside it share one warm
+ * set of those caches — `fantasyWatchlist` in particular is asked five times
+ * per side here and answers from memory after the first.
+ *
+ * **It also deletes the client's second wave.** `overviewOppId` was derived on
+ * the client from the scoreboard, so the opponent's six reads could not be
+ * issued until a round trip had returned — a waterfall whose every boundary is
+ * another chance at a cold container. The board is read here instead, and the
+ * opponent falls out of it before anything is fetched.
+ *
+ * **Each half fails on its own**, which is this app's standing rule that a
+ * failure costs its own column and never the request, and is the behavior the
+ * page already had: a dead projection leaves Today and Yesterday standing and
+ * the card draws the empty state it has always had. So every one of the ten is
+ * in its own `try` and answers `null`, and the route itself 200s with holes in
+ * it rather than 502ing the page.
+ *
+ * **The one thing it deliberately does not carry is the live tick.** The
+ * Overview re-reads *today* and the opponent's today every `LIVE_POLL_MS`,
+ * quietly. Serving that off this route would re-read two span reports and four
+ * projections every 20 seconds to refresh two day cards; the poll stays on
+ * `/api/report`, which is two requests that were never the problem. The
+ * measured fault is the burst, not the tick.
+ */
+interface OverviewDayRead {
+  players: PlayerReport[];
+  /** Player keys in the lineup that day, or null where the team has no lineup
+   *  (a saved watchlist) or the per-day read failed. See `espn.ts::startedKeys`
+   *  for why these are keys and not MLB ids. */
+  lineup: string[] | null;
+}
+
+interface OverviewSpanRead {
+  players: PlayerReport[];
+  lineups: Record<string, string[]> | null;
+}
+
+/** One manager's half of the page. Every field independently nullable, because
+ *  every field is independently fetched. */
+interface OverviewSide {
+  today: OverviewDayRead | null;
+  yesterday: OverviewDayRead | null;
+  /** Tomorrow is always a projection; today is one too, for the hours before
+   *  his first game starts, and the client decides which it draws. */
+  tomorrow: RosterProjection | null;
+  todayProjection: RosterProjection | null;
+  /** The matchup span, which the `Matchup leaders` block is built from. Null
+   *  where there is no span to read. */
+  span: OverviewSpanRead | null;
+}
+
+/**
+ * The roster one side of the page is about, resolved once and reused by all
+ * five of that side's reads.
+ *
+ * **`end` names the day the lineup is read at**, which is the rule
+ * `/api/report` and `/api/projection/roster` already keep and the reason they
+ * keep it: the report's player order *is* the lineup order, so a report
+ * ordered by today's lineup under chips drawn from tomorrow's would be one
+ * roster described two ways. Each read here passes its own range and so gets
+ * its own answer, and `fantasyWatchlist`'s per-container cache is what makes
+ * that cheap rather than five upstream reads.
+ */
+async function overviewRoster(
+  user: string,
+  fantasy: boolean,
+  teamId: number | null,
+  start: string,
+  end: string,
+): Promise<{ watched: WatchPlayer[]; held?: HeldDays; lineups: Record<string, string[]> | null }> {
+  if (!fantasy) {
+    const { players, heldDays } = await getRosterForRange(user, start, end);
+    return { watched: players, held: heldDays, lineups: null };
+  }
+  const fan = await fantasyWatchlist(user, false, end, { start, end }, teamId);
+  return { watched: fan.players, held: fan.held ?? undefined, lineups: fan.lineups };
+}
+
+/** One day, as the page draws it: the report plus that day's lineup. */
+async function overviewDay(
+  user: string,
+  fantasy: boolean,
+  teamId: number | null,
+  date: string,
+): Promise<OverviewDayRead> {
+  const { watched, held, lineups } = await overviewRoster(user, fantasy, teamId, date, date);
+  const players = await getReport(date, date, watched, held);
+  return { players, lineup: lineups?.[date] ?? null };
+}
+
+/** One projection over one day, seated the way `/api/projection/roster` seats
+ *  it — the roster it just read, and the categories off the board's own cached
+ *  minute. A board that cannot be read leaves the categories empty, which is
+ *  `seatValues` falling back to seating by playing time. */
+async function overviewProjection(
+  user: string,
+  fantasy: boolean,
+  teamId: number | null,
+  date: string,
+): Promise<RosterProjection> {
+  if (!fantasy) {
+    const { players } = await getRosterForRange(user, date, date);
+    return getRosterProjection(players, date, date, null);
+  }
+  const read = await fantasyWatchlist(user, false, date, { start: date, end: date }, teamId);
+  const creds = await getEspnCreds(user);
+  let seat: Parameters<typeof getRosterProjection>[3] = null;
+  if (creds) {
+    const board = await getScoreboard(creds).catch(() => null);
+    seat = {
+      roster: read.endRoster ?? read.roster,
+      leagueId: creds.leagueId,
+      categories: board?.categories ?? [],
+    };
+  }
+  return getRosterProjection(read.players, date, date, seat);
+}
+
+/** The span both managers' `Matchup leaders` are scored over. */
+async function overviewSpan(
+  user: string,
+  fantasy: boolean,
+  teamId: number | null,
+  start: string,
+  end: string,
+): Promise<OverviewSpanRead> {
+  const { watched, held, lineups } = await overviewRoster(user, fantasy, teamId, start, end);
+  const players = await getReport(start, end, watched, held);
+  return { players, lineups };
+}
+
+/**
+ * All five reads for one manager, each failing to `null` on its own.
+ *
+ * `Promise.all` over five `catch`-to-null promises rather than
+ * `Promise.allSettled`: the settled shape would have to be unwrapped five
+ * times to say the same thing, and the failure is being *recorded* here — the
+ * console line is the only place a reader of the logs learns which half of
+ * whose page went missing.
+ */
+async function readOverviewSide(
+  user: string,
+  fantasy: boolean,
+  teamId: number | null,
+  dates: { yesterday: string; today: string; tomorrow: string },
+  span: { start: string; end: string } | null,
+  whose: string,
+): Promise<OverviewSide> {
+  const quiet = <T>(what: string, p: Promise<T>): Promise<T | null> =>
+    p.catch((err: unknown) => {
+      console.error(`overview ${whose} ${what} failed:`, err);
+      return null;
+    });
+  const [today, yesterday, tomorrow, todayProjection, spanRead] = await Promise.all([
+    quiet('today', overviewDay(user, fantasy, teamId, dates.today)),
+    quiet('yesterday', overviewDay(user, fantasy, teamId, dates.yesterday)),
+    quiet('tomorrow', overviewProjection(user, fantasy, teamId, dates.tomorrow)),
+    quiet('todayProjection', overviewProjection(user, fantasy, teamId, dates.today)),
+    span
+      ? quiet('span', overviewSpan(user, fantasy, teamId, span.start, span.end))
+      : Promise.resolve(null),
+  ]);
+  return { today, yesterday, tomorrow, todayProjection, span: spanRead };
+}
+
+app.get(
+  '/api/overview',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    // The clock is the client's, not this process's: `today` moves on resume
+    // and a page built on the server's own idea of the baseball day would
+    // disagree with the date bar that asked for it. It still *defaults* to the
+    // server's, so a bare request is answerable.
+    //
+    // **Not `resolveDate`**, which is the report's helper and defaults to the
+    // *previous* day — the right default for a route whose range is "the last
+    // completed day" and the wrong one for a page whose middle card is called
+    // `TODAY`. Caught by asking for `/api/overview` with no parameters and
+    // reading the dates back: the whole page came out a day late, `today`
+    // 2026-08-30 on 2026-08-31, and every card with it.
+    const todayParam = req.query.today ?? req.query.date;
+    const today =
+      typeof todayParam === 'string' && DATE_RE.test(todayParam)
+        ? todayParam
+        : baseballToday();
+    const dates = {
+      yesterday: addDays(today, -1),
+      today,
+      tomorrow: addDays(today, 1),
+    };
+    const fantasy = req.query.source === 'fantasy';
+
+    let period: number | null = null;
+    const periodParam = req.query.period;
+    if (typeof periodParam === 'string' && /^\d{1,3}$/.test(periodParam)) {
+      period = Number(periodParam);
+    }
+
+    // ---- The board, and the opponent that falls out of it ----------------
+    //
+    // Read before anything is fetched, because it decides *who* the second
+    // half of the page is about. A league that cannot be read costs the
+    // opponent and the matchup card and nothing else — the reader's own three
+    // days stand, which is what the page already did with a dead board.
+    let opponent: { teamId: number; name: string } | null = null;
+    let myTeamId: number | null = null;
+    let span: { start: string; end: string } | null = null;
+    if (fantasy) {
+      try {
+        const creds = await getEspnCreds(userId(req));
+        if (creds) {
+          const board = await getScoreboard(creds, period).catch(() => null);
+          myTeamId = board?.myTeamId ?? null;
+          if (board && myTeamId != null) {
+            const mine = board.matchups.find(
+              (m) => m.home.teamId === myTeamId || m.away?.teamId === myTeamId,
+            );
+            // A bye has no `away` side, and is one of the three ways this page
+            // has no opponent — the other two being no league and no matchup
+            // this period. All three answer null here and the client draws no
+            // `Their days` section rather than an empty one.
+            if (mine?.away) {
+              const otherId =
+                mine.home.teamId === myTeamId ? mine.away.teamId : mine.home.teamId;
+              const team = board.teams.find((t) => t.id === otherId);
+              opponent = { teamId: otherId, name: team?.name ?? `Team ${otherId}` };
+            }
+          }
+          // The same clamp `App.tsx::matchupDays` applies: the window runs to
+          // the end of the period and a report cannot be asked for days that
+          // have not happened, so it stops at today. A window wholly in the
+          // future is no span at all.
+          const w = await getMatchupWindow(creds).catch(() => null);
+          if (w) {
+            const end = w.end < today ? w.end : today;
+            if (w.start <= end) span = { start: w.start, end };
+          }
+        }
+      } catch (err) {
+        // A rejected cookie is the reader's to fix and the client offers the
+        // way to, so it keeps its own 409 rather than becoming a 502 — but
+        // only where it is the *whole* answer. Here the reader's own days do
+        // not need ESPN at all when the source is saved, so this branch is
+        // reached only with `source=fantasy`, where a dead league genuinely is
+        // the page.
+        if (espnError(err, res)) return;
+        throw err;
+      }
+    }
+
+    // **A tighter cap than `MAX_RANGE_DAYS`, because batching concentrates ten
+    // responses into one.** Measured on a real league at an 8-day period: the
+    // whole payload is 3.98 MB raw and 0.58 MB gzipped (6.8x), and **3.26 MB of
+    // that 3.98 is the two span reports** — 82%, for two managers' rosters over
+    // every day of the period. Lambda caps a response at 6 MB and the cap
+    // applies to what `compression()` produces, base64-encoded by `lambda.ts`
+    // (~4/3), so 0.58 MB lands at roughly 0.78 MB and there is real headroom.
+    //
+    // At `MAX_RANGE_DAYS` (62) there would not be: the same arithmetic scales
+    // to roughly 25 MB raw and ~4.9 MB encoded, which is close enough to the
+    // cap to be a 502 nobody could reproduce. 21 days is past any matchup
+    // period ESPN actually runs (a week or two) while bounding the payload to
+    // about a third of the cap. A period longer than that answers `null` and
+    // costs the `Matchup leaders` block alone — its own column, not the page.
+    const OVERVIEW_SPAN_MAX_DAYS = 21;
+    if (span && dayCount(span.start, span.end) > OVERVIEW_SPAN_MAX_DAYS) span = null;
+
+    // ---- Both halves, in one flight --------------------------------------
+    const [mine, theirs] = await Promise.all([
+      readOverviewSide(userId(req), fantasy, null, dates, span, 'mine'),
+      opponent
+        ? readOverviewSide(userId(req), fantasy, opponent.teamId, dates, span, 'theirs')
+        : Promise.resolve(null),
+    ]);
+
+    res.json({ dates, source: fantasy ? 'fantasy' : 'watchlist', myTeamId, opponent, span, mine, theirs });
   }),
 );
 
