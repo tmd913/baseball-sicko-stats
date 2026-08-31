@@ -3226,3 +3226,63 @@ export interface MlbStandings {
   fetchedAt: number;
 }
 
+
+/**
+ * **The Overview's whole page, as one answer** — `GET /api/overview`.
+ *
+ * Mirrors the shapes `server/src/index.ts` declares beside that route, by hand
+ * like every other type in this file: the two workspaces cannot import from
+ * each other, so a field added on one side and not the other fails at runtime
+ * rather than at build time.
+ *
+ * The page was ten parallel requests, which on Lambda is ten containers, most
+ * of them cold on a low-traffic app and each holding its own empty copy of the
+ * server's caches — measured at 1,368ms p50 cold against 239ms warm for the
+ * same work. One request is one container and one warm set of those caches.
+ *
+ * **Every field of a side is independently nullable** because every field is
+ * independently fetched, and the route answers 200 with holes in it rather than
+ * failing the page — which is the app's own rule that a failure costs its own
+ * column and never the request, and is exactly what the page did when these
+ * were ten reads.
+ */
+export interface OverviewDayRead {
+  players: PlayerReport[];
+  /** Player keys in that day's lineup — an **array** on the wire, which
+   *  `App.tsx` turns into the `Set` its `OverviewDay` holds. Null in
+   *  saved-roster mode and on a day whose per-day lineup read could not
+   *  answer. */
+  lineup: string[] | null;
+}
+
+export interface OverviewSpanRead {
+  players: PlayerReport[];
+  lineups: Record<string, string[]> | null;
+}
+
+/** One manager's half of the page. */
+export interface OverviewSide {
+  today: OverviewDayRead | null;
+  yesterday: OverviewDayRead | null;
+  tomorrow: RosterProjection | null;
+  todayProjection: RosterProjection | null;
+  span: OverviewSpanRead | null;
+}
+
+export interface OverviewPayload {
+  dates: { yesterday: string; today: string; tomorrow: string };
+  /** `'watchlist'` is what the saved roster has always been called on the wire,
+   *  the same spelling `/api/report` answers with. */
+  source: 'fantasy' | 'watchlist';
+  myTeamId: number | null;
+  /** **Derived on the server**, which is what removes the client's second wave:
+   *  the opponent's half of the page used to wait on a scoreboard round trip
+   *  before it could be asked for. Null on all three of the ways this page has
+   *  no second half — no league, no matchup this period, and a bye. */
+  opponent: { teamId: number; name: string } | null;
+  /** The matchup period clamped to today, or null where there is none to read
+   *  or it is longer than the route will answer for in one payload. */
+  span: { start: string; end: string } | null;
+  mine: OverviewSide;
+  theirs: OverviewSide | null;
+}
