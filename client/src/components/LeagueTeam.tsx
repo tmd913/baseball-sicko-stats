@@ -233,18 +233,20 @@ export default function LeagueTeam({
    * the fault it left is worth keeping the record of: the reads ran on
    * `[teamId, start, end]` and nothing else, so a team page opened at seven
    * o'clock was still drawing seven o'clock's lines at ten — while the
-   * matchup card directly above it moved every minute (`LEAGUE_POLL_MS`)
-   * and the app's own Roster view, which is *the same component over the
-   * same shape of report*, moved every twenty seconds. Reported as the
+   * matchup card directly above it moved on the league's own clock
+   * (`LEAGUE_POLL_MS`) and the app's own Roster view, which is *the same
+   * component over the same shape of report*, moved every twenty seconds. Reported as the
    * matchup page being out of sync with everything else, and that is
    * exactly what it was: one page drawing two clocks, one of which had
    * stopped.
    *
    * **The roster's clock, not the league's**, because these rows are the
    * roster's rows: `SummaryTable` over a `PlayerReport`, whose
-   * fastest-moving fact is a plate appearance. `LEAGUE_POLL_MS` is a minute
-   * because it tracks a *week's* totals off ESPN's own board; nothing about
-   * that number applies to a table of H/AB.
+   * fastest-moving fact is a plate appearance. `LEAGUE_POLL_MS` is its own
+   * number because it tracks a *week's* totals off ESPN's own board — it has
+   * been a minute, then thirty seconds, and is twenty now; nothing about which
+   * it is applies to a table of H/AB, which is the point of reading the
+   * roster's clock here rather than the league's.
    *
    * **Gated on a real live game**, which is `App.tsx`'s own test for the
    * same poll (`hasRealLiveGame`) read off this page's own report: a team

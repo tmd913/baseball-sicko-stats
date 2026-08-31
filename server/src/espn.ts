@@ -84,7 +84,18 @@ const OWNERSHIP_TTL_MS = 10 * 60 * 1000;
  * somebody has the page open (`App.tsx::LEAGUE_POLL_MS`, which skips a tick
  * while the tab is hidden).
  */
-const LIVE_TTL_MS = 30 * 1000;
+/**
+ * **How long the server holds its own copy of a live league read**, and it is
+ * matched to `lib.ts::LEAGUE_POLL_MS` on the client by design — the two are one
+ * decision written in two workspaces that cannot import from each other.
+ *
+ * 20s since 2026-08-31, halved from 30 along with the client's poll. A client
+ * polling faster than this TTL spends a request to be handed the answer it
+ * already had, so moving one without the other is either waste or no change at
+ * all; `LEAGUE_POLL_MS` carries the measurement of ESPN's own ~60s movement
+ * quantum and the reasoning for sitting where we do against it.
+ */
+const LIVE_TTL_MS = 20 * 1000;
 
 /** The MLB name index changes only as players are added to the season roster. */
 const INDEX_TTL_MS = 60 * 60 * 1000;
@@ -3755,7 +3766,7 @@ async function leagueMeta(creds: EspnCreds, force = false): Promise<LeagueMeta> 
  * no freshness test — the rule `getTeamRoster` already follows for a finished
  * day's lineup, and for the same reason: you cannot retroactively score a run
  * in a week that is over. The period being played is memory-only on
- * `LIVE_TTL_MS`, a minute, which is what the League page's own poll reads
+ * `LIVE_TTL_MS`, which is matched to what the League page's own poll reads
  * through, and `force` — the header's `Refresh from ESPN`
  * — reaches it and leaves the frozen ones alone, since re-reading a settled
  * week spends an ESPN request to be told what the blob already says.
