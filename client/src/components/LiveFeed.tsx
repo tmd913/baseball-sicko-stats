@@ -897,6 +897,40 @@ function byStartTime(
  * that a genuinely undeclared starter shows up when his club names him rather
  * than before, which is also the moment anyone could have known.
  */
+/**
+ * **His game has not been played yet** — which is not the same question as
+ * `state === 'scheduled'`, and the difference is a half-hour hole this section
+ * used to fall through.
+ *
+ * MLB flips `abstractGameState` to `Live` at **Warmup**, about thirty minutes
+ * before anybody throws anything, and `schedule.ts::stateOf` follows it —
+ * deliberately, because `state` is what the client's poll cadence reads and
+ * going quiet in the half-hour before first pitch would be quiet through the
+ * one read that matters. `mlbStats.ts::hasStarted` carries the whole of that
+ * measurement, including MLB's own `/api/v1/gameStatus` reference: **`PW`/Warmup
+ * is the only row pairing `abstractGameState: Live` with a game nobody has
+ * started**, and every other pre-game row (`Pre-Game`, the fifteen
+ * `Delayed Start:` flavors) is a `Preview` that `stateOf` already files as
+ * `scheduled`.
+ *
+ * So this section tested `scheduled` and dropped every rostered player the
+ * moment his club began warming up — while the stream below had nothing to show
+ * for him either, no plate appearance having happened. He vanished from the
+ * Feed entirely and came back at first pitch. Reported exactly that way, on a
+ * batter added that morning: *he's there now that the game started*.
+ *
+ * **Warmup by name rather than a `started` flag off the wire**, which was the
+ * alternative: `codedGameState` is not in either `types.ts` and putting it there
+ * is a paired-type change plus a day-snapshot version to bump, for a test the
+ * measurement above already makes exact from the client's side. If MLB ever
+ * pairs `Live` with a second not-started status, the flag becomes worth the
+ * bump — and `hasStarted` is where that rule already lives.
+ */
+function notStartedYet(game: PlayerGame): boolean {
+  if (game.status.state === 'scheduled') return true;
+  return game.status.state === 'live' && game.status.detailedState === 'Warmup';
+}
+
 function isUpcomingFor(report: PlayerReport, game: PlayerGame): boolean {
   if (!isOnActiveRoster(report.rosterStatus)) return false;
   if (report.kind !== 'pitcher' || !isRotationStarter(report)) return true;
@@ -1514,7 +1548,7 @@ export function playerDayEntries(report: PlayerReport): PlayerDayEntries {
   const entries = all.filter((e) => !isMidAtBat(e)).sort(byRecency);
   const liveEvents = all.filter(isMidAtBat).sort(byPlayOrder);
   const upcoming = report.games
-    .filter((game) => game.status.state === 'scheduled' && isUpcomingFor(report, game))
+    .filter((game) => notStartedYet(game) && isUpcomingFor(report, game))
     .map((game) => ({ report, game }));
   return { live, entries, liveEvents, upcoming };
 }
