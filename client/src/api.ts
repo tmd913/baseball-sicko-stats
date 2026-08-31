@@ -33,6 +33,7 @@ import type {
   SavedSearch,
   SharedItem,
   ResearchRow,
+  OverviewPayload,
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
@@ -1191,5 +1192,23 @@ export const api = {
       `/api/video/clips?games=${gamePks.join(',')}`,
     );
     return r.games;
+  },
+
+  /**
+   * **The Overview's ten reads as one** — both managers' three days, their two
+   * projections apiece and the matchup span, in a single request.
+   *
+   * `period` names which scoreboard week the opponent is taken from, so
+   * stepping it re-reads the page for the right manager. Absent means the
+   * league's current one, which is what `getScoreboard` already defaults to.
+   */
+  async overview(
+    today: string,
+    source: RosterSource,
+    period?: number | null,
+  ): Promise<OverviewPayload> {
+    const src = source === 'fantasy' ? '&source=fantasy' : '';
+    const p = period != null ? `&period=${period}` : '';
+    return request(`/api/overview?today=${today}${src}${p}`);
   },
 };

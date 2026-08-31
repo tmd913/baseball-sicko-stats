@@ -26,6 +26,8 @@ import type {
   MlbScoreboard,
   MlbStandings,
   PlayerKind,
+  OverviewDayRead,
+  OverviewSpanRead,
   PlayerReport,
   ResearchRow,
   ResearchWindow,
@@ -6408,19 +6410,6 @@ export default function App() {
    */
   const [ovSpanMine, setOvSpanMine] = useState<OverviewSpan | null>(null);
   const [ovSpanOpp, setOvSpanOpp] = useState<OverviewSpan | null>(null);
-  const [ovSpanMineLoading, setOvSpanMineLoading] = useState(false);
-  const [ovSpanOppLoading, setOvSpanOppLoading] = useState(false);
-  /** The same latch `ovFired` and `ovOppFired` are, and for their reason: *not
-   *  asked for yet* and *finished* are indistinguishable from outside. */
-  const [ovSpanFired, setOvSpanFired] = useState(false);
-  const [ovOppTodayLoading, setOvOppTodayLoading] = useState(false);
-  const [ovOppYesterdayLoading, setOvOppYesterdayLoading] = useState(false);
-  const [ovOppTomorrowLoading, setOvOppTomorrowLoading] = useState(false);
-  const [ovOppTodayProjLoading, setOvOppTodayProjLoading] = useState(false);
-  const [ovTodayLoading, setOvTodayLoading] = useState(false);
-  const [ovYesterdayLoading, setOvYesterdayLoading] = useState(false);
-  const [ovTomorrowLoading, setOvTomorrowLoading] = useState(false);
-  const [ovTodayProjLoading, setOvTodayProjLoading] = useState(false);
   /**
    * **Have the two effects below actually fired?** — which is the one thing
    * eight `loading` flags cannot say, and the whole difference between *this
@@ -6443,40 +6432,42 @@ export default function App() {
    * the foot of the page.
    */
   const [ovFired, setOvFired] = useState(false);
-  const [ovOppFired, setOvOppFired] = useState(false);
-  /** One sequence number per block, not one for the view: the three reads land
-   *  independently and a slow projection must not discard a fresh Today. Only
-   *  the newest of each may write, which is the app's own rule for any read
-   *  that can be superseded — and these can, the clock moving on resume. */
-  const ovRead = useRef({
-    today: 0,
-    yesterday: 0,
-    tomorrow: 0,
-    todayProj: 0,
-    oppToday: 0,
-    oppYesterday: 0,
-    oppTomorrow: 0,
-    oppTodayProj: 0,
-    spanMine: 0,
-    spanOpp: 0,
-  });
+  /**
+   * **Two sequence numbers, for the two days the live tick re-reads.** It was
+   * ten, one per block, while the page was ten reads; the other eight went
+   * with them to `/api/overview`, which is superseded as a whole by
+   * `ovBatch` instead.
+   *
+   * These two remain because the tick and the batch write the *same* two
+   * values from different requests on different clocks — so the batch bumps
+   * them when it lands, and a tick that started first is discarded rather than
+   * putting an older Today on screen after a newer one. Only the newest of
+   * each may write, which is the app's own rule for any read that can be
+   * superseded.
+   */
+  const ovRead = useRef({ today: 0, oppToday: 0 });
 
+  /**
+   * **The live tick's read, and now nothing else** — one day for one team.
+   *
+   * It carried a `setLoading` and a `quiet` flag while the page's entry reads
+   * went through it too. They have gone to `/api/overview`, which answers the
+   * whole page in one request, and the only caller left is the poll below —
+   * which was always the `quiet` one. **A poll leaves no mark** (rule 1: a
+   * re-read of a card that already has figures on it must not put a wait over
+   * them), so there is no longer a case where this raises one, and the two
+   * parameters that existed to say so are gone with it.
+   */
   const loadOverviewDay = useCallback(
     (
       date: string,
-      which: 'today' | 'yesterday' | 'oppToday' | 'oppYesterday',
+      which: 'today' | 'oppToday',
       set: (d: OverviewDay | null) => void,
-      setLoading: (on: boolean) => void,
       /** Whose team — absent means the reader's own, which is what `/api/report`
        *  already means by an absent `teamId`. */
       teamId?: number,
-      /** **A poll leaves no mark.** Rule 1: a re-read of a card that already
-       *  has figures on it must not put a wait over them, so the live tick
-       *  passes this and the entry read does not. */
-      quiet = false,
     ) => {
       const seq = ++ovRead.current[which];
-      if (!quiet) setLoading(true);
       return api
         .report(date, date, usingFantasy ? 'fantasy' : 'saved', false, teamId)
         .then((r) => {
@@ -6489,14 +6480,44 @@ export default function App() {
           // two other days on it and neither is any less true for this one
           // having failed.
           if (seq === ovRead.current[which]) console.error(`reading ${which} failed:`, e.message);
-        })
-        .finally(() => {
-          if (seq === ovRead.current[which] && !quiet) setLoading(false);
         });
     },
     [usingFantasy],
   );
 
+  /**
+   * **The whole page, in one request.**
+   *
+   * This was three effects and ten reads: the reader's four days, the
+   * opponent's four, and the two span reports. Each was correct and each was
+   * its own container on Lambda — measured over 7 days of the API function,
+   * the same work costs **1,368ms at p50 on a cold container against 239ms
+   * warm** (`@duration` excludes init, so those compare like with like),
+   * because each holds its own empty copy of the server's ~30 caches and
+   * answers every read from S3. Peak concurrency of 22–44 was this page's
+   * fan-out, and 92 requests a week reached the 29s wall with 64 of them cold.
+   *
+   * **The opponent's half no longer waits on the board.** `overviewOppId` is
+   * derived from a scoreboard the client fetches, so the opponent's six reads
+   * could not be *issued* until that round trip returned — a second wave whose
+   * every boundary was another chance at a cold container. `/api/overview`
+   * reads the board itself and the opponent falls out of it before anything is
+   * fetched, so this effect waits on the same two things the reader's own four
+   * always did and nothing else.
+   *
+   * `overviewOppId` still decides whether the foot of the page is *drawn* —
+   * that needs the board anyway, for the matchup card above it — but it no
+   * longer gates the read. The data is usually already here when it resolves.
+   *
+   * **One hand-rolled read where there were ten**, rather than a `resource.ts`
+   * key. The rule that says to add a key is about *adding* a fetch, and this
+   * removes nine; the reason not to take one here is the live tick below, which
+   * writes `ovToday` and `ovOppToday` from a different request on its own
+   * clock. Two writers into one resource entry is the thing that layer is least
+   * able to express, and the tick is deliberately not folded in (see below).
+   */
+  const ovBatch = useRef(0);
+  const [ovBatchLoading, setOvBatchLoading] = useState(false);
   useEffect(() => {
     if (view !== 'overview') return;
     // The same two waits every other roster read makes, and for the same
@@ -6506,50 +6527,57 @@ export default function App() {
     if (!prefsSettled && !rosterSourceFromUrl) return;
     if (rosterSource === 'fantasy' && !espnStatusSettled) return;
     setOvFired(true);
-    void loadOverviewDay(overviewDates.today, 'today', setOvToday, setOvTodayLoading);
-    void loadOverviewDay(
-      overviewDates.yesterday,
-      'yesterday',
-      setOvYesterday,
-      setOvYesterdayLoading,
-    );
-    /** The two projected days, which are the same read over two dates — one
-     *  request each, the engine having no per-day breakdown to hand back over a
-     *  span. Sequence-numbered per day for the reason the reports are: they
-     *  land independently and only the newest of each may write. */
-    const loadProjection = (
-      date: string,
-      which: 'tomorrow' | 'todayProj' | 'oppTomorrow' | 'oppTodayProj',
-      set: (p: RosterProjection) => void,
-      setLoading: (on: boolean) => void,
-      teamId: number | null = fantasyTeamId,
-    ) => {
-      const seq = ++ovRead.current[which];
-      setLoading(true);
-      api
-        .rosterProjection(date, date, usingFantasy ? 'fantasy' : 'watchlist', teamId)
-        .then((p) => {
-          if (seq === ovRead.current[which]) set(p);
-        })
-        .catch((e: Error) => {
-          // The block's own failure and the block's own fallback: `TODAY` goes
-          // back to its measured reading and `TOMORROW` says it has nothing.
-          if (seq === ovRead.current[which]) {
-            console.error(`reading the ${which} projection failed:`, e.message);
-          }
-        })
-        .finally(() => {
-          if (seq === ovRead.current[which]) setLoading(false);
-        });
-    };
-    loadProjection(overviewDates.tomorrow, 'tomorrow', setOvTomorrow, setOvTomorrowLoading);
-    loadProjection(overviewDates.today, 'todayProj', setOvTodayProjection, setOvTodayProjLoading);
+    const seq = ++ovBatch.current;
+    setOvBatchLoading(true);
+    /** The wire carries lineup keys as an array; the blocks want the `Set` they
+     *  have always had. */
+    const day = (d: OverviewDayRead | null): OverviewDay | null =>
+      d ? { players: d.players, lineup: d.lineup ? new Set(d.lineup) : null } : null;
+    const span = (s: OverviewSpanRead | null): OverviewSpan | null =>
+      s ? { players: s.players, lineups: s.lineups } : null;
+    void api
+      .overview(overviewDates.today, usingFantasy ? 'fantasy' : 'saved', matchupPeriod)
+      .then((r) => {
+        if (seq !== ovBatch.current) return;
+        // **Supersede any live tick already in flight.** The tick reads today
+        // through `loadOverviewDay` on its own sequence numbers, so a poll that
+        // started before this answer could otherwise land after it and put an
+        // older Today on screen. Bumping the two counters it uses discards it,
+        // which is the same mechanism the tick uses against itself.
+        ovRead.current.today += 1;
+        ovRead.current.oppToday += 1;
+        setOvToday(day(r.mine.today));
+        setOvYesterday(day(r.mine.yesterday));
+        setOvTomorrow(r.mine.tomorrow);
+        setOvTodayProjection(r.mine.todayProjection);
+        setOvSpanMine(span(r.mine.span));
+        // **A side that is absent clears the other half rather than leaving
+        // it**, which is the period-step case: last week's opponent must not
+        // stay on screen under this week's heading. `null` here is the same
+        // three-way absence the section is already drawn on — no league, no
+        // matchup, a bye.
+        setOvOppToday(day(r.theirs?.today ?? null));
+        setOvOppYesterday(day(r.theirs?.yesterday ?? null));
+        setOvOppTomorrow(r.theirs?.tomorrow ?? null);
+        setOvOppTodayProjection(r.theirs?.todayProjection ?? null);
+        setOvSpanOpp(span(r.theirs?.span ?? null));
+      })
+      .catch((e: Error) => {
+        // The page's own failure and the page's own empty states: every block
+        // draws the `no roster is being read` it already had, which is
+        // finishing rather than failing to finish. The route itself answers 200
+        // with holes for a *partial* failure, so reaching here means the whole
+        // request did not land.
+        if (seq === ovBatch.current) console.error('reading the overview failed:', e.message);
+      })
+      .finally(() => {
+        if (seq === ovBatch.current) setOvBatchLoading(false);
+      });
   }, [
     view,
     overviewDates,
-    loadOverviewDay,
     usingFantasy,
-    fantasyTeamId,
+    matchupPeriod,
     roster,
     prefsSettled,
     rosterSourceFromUrl,
@@ -6557,116 +6585,11 @@ export default function App() {
     espnStatusSettled,
   ]);
 
-  /**
-   * **The opponent's four reads, and they are their own effect** — because they
-   * depend on something the reader's own four do not: a board that has landed
-   * and has a matchup with two sides in it. Folding them into the effect above
-   * would make that effect wait on the scoreboard, which would put the *whole*
-   * page behind a read that only its foot needs.
-   *
-   * **The team id is in the deps, so a period step re-reads them.** Stepping the
-   * scoreboard's week changes who the opponent is, and four cards about last
-   * week's opponent would be four cards about the wrong manager.
-   *
-   * Each fails on its own and each is sequence-numbered like the four above:
-   * eight reads can be in flight at once here and only the newest of each may
-   * write.
-   */
+  /** Whose matchup this is, still read off the board — it decides whether the
+   *  foot of the page is *drawn*, and the matchup card above it needs the board
+   *  regardless. It no longer decides when the opponent's half is *read*. */
   const overviewOppId = myOpponent?.teamId ?? null;
-  useEffect(() => {
-    if (view !== 'overview' || overviewOppId == null || !usingFantasy) return;
-    setOvOppFired(true);
-    void loadOverviewDay(
-      overviewDates.today,
-      'oppToday',
-      setOvOppToday,
-      setOvOppTodayLoading,
-      overviewOppId,
-    );
-    void loadOverviewDay(
-      overviewDates.yesterday,
-      'oppYesterday',
-      setOvOppYesterday,
-      setOvOppYesterdayLoading,
-      overviewOppId,
-    );
-    const proj = (
-      date: string,
-      which: 'oppTomorrow' | 'oppTodayProj',
-      set: (p: RosterProjection) => void,
-      setLoading: (on: boolean) => void,
-    ) => {
-      const seq = ++ovRead.current[which];
-      setLoading(true);
-      api
-        .rosterProjection(date, date, 'fantasy', overviewOppId)
-        .then((p) => {
-          if (seq === ovRead.current[which]) set(p);
-        })
-        .catch((e: Error) => {
-          if (seq === ovRead.current[which]) {
-            console.error(`reading the opponent's ${which} projection failed:`, e.message);
-          }
-        })
-        .finally(() => {
-          if (seq === ovRead.current[which]) setLoading(false);
-        });
-    };
-    proj(overviewDates.tomorrow, 'oppTomorrow', setOvOppTomorrow, setOvOppTomorrowLoading);
-    proj(overviewDates.today, 'oppTodayProj', setOvOppTodayProjection, setOvOppTodayProjLoading);
-  }, [view, overviewOppId, usingFantasy, overviewDates, loadOverviewDay]);
 
-  /**
-   * **The matchup so far, for both managers** — the Overview's third block.
-   *
-   * **Its own effect, and the deps are why.** The opponent's four days depend on
-   * a board that has landed with a two-sided matchup on it; these depend on that
-   * *and* on `matchupSpan`, which comes off a different read again
-   * (`/api/espn/matchup-window`). Folded into the effect above, a window that
-   * landed second would have re-fired the opponent's four days for nothing.
-   *
-   * **`matchupSpan` is the period clamped to today**, which is what *so far*
-   * means and is the same span the roster's `Matchup` preset takes — so the
-   * block and that table cannot come to disagree about which days the week has
-   * had.
-   *
-   * **The latch goes up even where the span does not**, which is the term that
-   * keeps a dead window read from spinning this page for ever: no span is an
-   * answer, and the answer is that the block is not drawn.
-   */
-  useEffect(() => {
-    if (view !== 'overview' || overviewOppId == null || !usingFantasy) return;
-    setOvSpanFired(true);
-    if (!matchupSpan) return;
-    const read = (
-      which: 'spanMine' | 'spanOpp',
-      set: (s: OverviewSpan) => void,
-      setLoading: (on: boolean) => void,
-      teamId?: number,
-    ) => {
-      const seq = ++ovRead.current[which];
-      setLoading(true);
-      api
-        .report(matchupSpan.start, matchupSpan.end, 'fantasy', false, teamId)
-        .then((r) => {
-          if (seq === ovRead.current[which]) {
-            set({ players: r.players, lineups: r.lineups ?? null });
-          }
-        })
-        .catch((e: Error) => {
-          // Its own failure and its own column: the block is absent and the two
-          // carousels above it are no less true for it.
-          if (seq === ovRead.current[which]) {
-            console.error(`reading the ${which} matchup span failed:`, e.message);
-          }
-        })
-        .finally(() => {
-          if (seq === ovRead.current[which]) setLoading(false);
-        });
-    };
-    read('spanMine', setOvSpanMine, setOvSpanMineLoading);
-    read('spanOpp', setOvSpanOpp, setOvSpanOppLoading, overviewOppId);
-  }, [view, overviewOppId, usingFantasy, matchupSpan]);
 
   /** The days of the matchup so far, as dates — what the leaders block scores
    *  one at a time. Derived here rather than in the view because `addDays` and
@@ -6728,29 +6651,9 @@ export default function App() {
    */
   const overviewSettled =
     ovFired &&
-    !ovTodayLoading &&
-    !ovYesterdayLoading &&
-    !ovTomorrowLoading &&
-    !ovTodayProjLoading &&
+    !ovBatchLoading &&
     espnStatusSettled &&
-    (!needsScoreboard || scoreboard !== null || scoreboardError !== null) &&
-    (overviewOppId == null ||
-      !usingFantasy ||
-      (ovOppFired &&
-        !ovOppTodayLoading &&
-        !ovOppYesterdayLoading &&
-        !ovOppTomorrowLoading &&
-        !ovOppTodayProjLoading &&
-        /* **And the two span reads the leaders block is built from**, which are
-           a fifth and sixth term on the same clause and for the same reason the
-           other four are on it: the block is a heading and a card, and a
-           heading that appears a beat after the page it belongs to is exactly
-           the reflow this gate exists to prevent. `ovSpanFired` goes up even
-           where there is no span to read, so a dead matchup-window read settles
-           rather than spinning. */
-        ovSpanFired &&
-        !ovSpanMineLoading &&
-        !ovSpanOppLoading));
+    (!needsScoreboard || scoreboard !== null || scoreboardError !== null);
 
   /**
    * **And once it has been drawn, it is never curtained again** — rule 1, which
@@ -6805,23 +6708,9 @@ export default function App() {
   useEffect(() => {
     if (!overviewLive) return;
     const t = setInterval(() => {
-      void loadOverviewDay(
-        overviewDates.today,
-        'today',
-        setOvToday,
-        setOvTodayLoading,
-        undefined,
-        true,
-      );
+      void loadOverviewDay(overviewDates.today, 'today', setOvToday);
       if (overviewOppId != null) {
-        void loadOverviewDay(
-          overviewDates.today,
-          'oppToday',
-          setOvOppToday,
-          setOvOppTodayLoading,
-          overviewOppId,
-          true,
-        );
+        void loadOverviewDay(overviewDates.today, 'oppToday', setOvOppToday, overviewOppId);
       }
     }, LIVE_POLL_MS);
     return () => clearInterval(t);
@@ -11095,17 +10984,17 @@ export default function App() {
           oppTodayProjection={ovOppTodayProjection}
           oppTodayLineup={ovOppToday?.lineup ?? null}
           oppYesterdayLineup={ovOppYesterday?.lineup ?? null}
-          oppLoadingToday={ovOppTodayLoading}
-          oppLoadingYesterday={ovOppYesterdayLoading}
-          oppLoadingTomorrow={ovOppTomorrowLoading}
-          oppLoadingTodayProjection={ovOppTodayProjLoading}
+          oppLoadingToday={ovBatchLoading}
+          oppLoadingYesterday={ovBatchLoading}
+          oppLoadingTomorrow={ovBatchLoading}
+          oppLoadingTodayProjection={ovBatchLoading}
           opponentName={usingFantasy ? myOpponent?.name ?? null : null}
           todayLineup={ovToday?.lineup ?? null}
           yesterdayLineup={ovYesterday?.lineup ?? null}
-          loadingToday={ovTodayLoading}
-          loadingYesterday={ovYesterdayLoading}
-          loadingTomorrow={ovTomorrowLoading}
-          loadingTodayProjection={ovTodayProjLoading}
+          loadingToday={ovBatchLoading}
+          loadingYesterday={ovBatchLoading}
+          loadingTomorrow={ovBatchLoading}
+          loadingTodayProjection={ovBatchLoading}
           /* The projected block's names: a projected line carries a key, an id
              and a kind and no name at all. */
           knownPlayers={knownPlayers}
