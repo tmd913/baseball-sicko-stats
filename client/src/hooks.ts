@@ -1550,6 +1550,62 @@ export function answersEscape(e: KeyboardEvent, box: HTMLElement | null) {
 export const WAIT_DELAY = 250;
 
 /**
+ * **A floor on how long a mark stays up once a press has put it there.**
+ *
+ * Lived in `App.tsx` as a private constant while the block wait was the only
+ * thing that took it. It is here now because `useBusyMark` below is the app's
+ * general answer to *a press is working on it*, and one arithmetic wants one
+ * implementation rather than a second 450 somewhere else that agrees today.
+ */
+export const MIN_SPIN = 450;
+
+/**
+ * **Is a press-triggered read worth drawing a mark for, right now?**
+ *
+ * `WAIT_DELAY` on the way up and `MIN_SPIN` on the way down, which are the two
+ * numbers this app already keeps and the two questions it already separates: do
+ * not flash a mark for an answer that arrives in one frame, and do not blink one
+ * out so fast that the press it acknowledges reads as a dead button.
+ *
+ * **The gap between them is the point.** A read that finishes inside 250ms
+ * draws nothing at all — the mark never went up, so there is no floor to
+ * honour and no flicker to sit through. A read that outlives 250ms has raised
+ * a mark, and that mark is then owed its 450ms however soon the answer lands.
+ *
+ * Written for the fault this was reported as: pressing a percentile cut, or a
+ * split on the Stats tab, put a request on the wire and left the previous cut's
+ * figures on screen under the new cut's heading with nothing to say a read was
+ * in flight. Measured in production, that read is p50 811ms, p90 4,616ms and
+ * **max 12,175ms** — twelve seconds of a page that looks finished and is not.
+ */
+export function useBusyMark(on: boolean, delay = WAIT_DELAY, hold = MIN_SPIN): boolean {
+  const [shown, setShown] = useState(false);
+  const upAt = useRef(0);
+  useEffect(() => {
+    if (on) {
+      // Already up: a second read starting while one is drawn re-uses the mark
+      // rather than restarting its clock, so a burst of presses is one
+      // continuous mark instead of a stutter.
+      if (shown) return;
+      const t = setTimeout(() => {
+        upAt.current = Date.now();
+        setShown(true);
+      }, delay);
+      return () => clearTimeout(t);
+    }
+    if (!shown) return;
+    const left = hold - (Date.now() - upAt.current);
+    if (left <= 0) {
+      setShown(false);
+      return;
+    }
+    const t = setTimeout(() => setShown(false), left);
+    return () => clearTimeout(t);
+  }, [on, shown, delay, hold]);
+  return shown;
+}
+
+/**
  * `on`, but only once it has been true for `delay` — the guard that keeps a
  * fast answer from flashing a wait.
  *

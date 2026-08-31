@@ -1448,6 +1448,91 @@ body {
 .loading-what {
   margin: 0;
 }
+
+/* **The mark for a read somebody pressed, over a pane that still has rows.**
+
+   `.loading-block` above replaces content that is not there yet; this covers
+   content that is, because the content is still the last true answer and rule 1
+   forbids taking it away. What it adds is the statement the app was missing —
+   the figures under this are being replaced.
+
+   Reported as the fault it fixes: pressing a percentile cut or a Stats split
+   left the previous cut's figures under the new cut's heading with nothing to
+   say a read was out, and that read measures p50 811ms, p90 4,616ms and max
+   12,175ms in production.
+
+   **The card, not the scrim, is what makes it obvious.** A scrim alone over a
+   dark theme is a slightly darker dark; the readable thing is a raised panel in
+   the middle carrying the ball and a sentence, which is the same device the
+   boot splash and every block wait already use. So the scrim is only deep
+   enough to push the table back (the figures must stay legible — they are still
+   the answer until the new one lands), and the card does the talking.
+
+   **`pointer-events: none`** so a reader who pressed the wrong cut can press
+   the right one without waiting for the wrong one to land. Covering the pointer
+   is what a dialog does and this is not one; `.pane-busy` is a statement, not a
+   modal.
+
+   The host pane needs `position: relative`, which is declared beside each one
+   rather than here — there is no single ancestor these all share. */
+.pane-busy {
+  /* **Anchored to the viewport, not to the pane.** `.details-view` is itself
+     `position: fixed; inset: 0` *and* the scroller, so an absolutely-positioned
+     child resolves against its scrolled content box — the card would sit 22vh
+     from the top of a 3000px column and scroll away with it. Fixed keeps it
+     where the reader is looking however far down the table they are.
+
+     `.details-view` sets no `transform`, `filter` or `contain`, so it does not
+     become a containing block for this — checked, because layout containment
+     doing exactly that is a fault this codebase has already recorded once. */
+  position: fixed;
+  /* Below the pinned head and tab strip, whose height the shell measures at
+     runtime — the chrome is a statement of who is being read, and it stays
+     legible and pressable while the figures under it are replaced. */
+  top: var(--details-chrome-h, 0px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: clamp(24px, 14vh, 140px);
+  pointer-events: none;
+  /* **Deep, deliberately.** This was 62% for a while on the argument that the
+     figures underneath are still the true answer and should stay legible. Shot
+     at 1200x900 and looked at, that reads as the page having dimmed slightly —
+     which is the thing being complained about, not the fix for it. The figures
+     do not need to be *read* while they are being replaced; they need to be
+     visibly suspended. 84% leaves the shape of the table and takes its detail.
+     Its scrim comes off `--bg` rather than black so it is the pane's own ground
+     thickened in every theme, not a gray sheet that reads as a bug in the light
+     ones. */
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+}
+/* The card is what carries the statement, so it is sized to be read across the
+   room rather than to be tucked into a corner: the app's `lg` ball, the same
+   one the boot splash takes, and a sentence at the body size rather than the
+   caption size the inline `Updating` slots use. */
+.pane-busy-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 26px 38px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-2);
+  /* Two shadows: a tight one to seat the card on the scrim and a wide soft one
+     to lift it off the table behind. */
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.4),
+    0 18px 48px rgb(0 0 0 / 0.5);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
 /* The one block wait that sits *directly under the pinned bar* — the report's
    first read, which is a child of `.app` itself on the Roster and Feed views —
    needs the bar's own breathing room as well as its own, and on both of those

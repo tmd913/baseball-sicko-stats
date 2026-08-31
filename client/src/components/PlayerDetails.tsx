@@ -50,9 +50,10 @@ import { GameLog } from './GameLog';
 import { PlayerWindowTable } from './PlayerWindowTable';
 import { NewsTab } from './PlayerNews';
 import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
-import { LoadingBlock, SpinningBaseball } from './Loading';
+import { LoadingBlock, PaneBusy, SpinningBaseball } from './Loading';
 import {
   TAP_SLOP,
+  useBusyMark,
   useDelayedFlag,
   usePlayerStatus,
   useHandedness,
@@ -905,6 +906,19 @@ export function PlayerDetails({
   const data = pctRes.value ?? null;
   const error = pctRes.error?.message ?? null;
   const loading = pctRes.loading;
+  /**
+   * **A cut change is `updating`, never `loading`** — and wiring the mark to
+   * the wrong one is why pressing a cut looked like pressing nothing.
+   *
+   * `resource.ts` computes them as a pair: `loading` is `loud > 0 && value ===
+   * undefined`, `updating` is `loud > 0 && value !== undefined`. The percentile
+   * card is `family: who`, so a cut change **carries** the previous card — which
+   * is deliberate and is rule 1 — and therefore `value` is defined and
+   * `loading` is **false for the whole of the read the badge existed to
+   * announce**. The `pct-updating` slot below was gated on `loading && data`, a
+   * conjunction that cannot be true on this key, so it never once appeared.
+   */
+  const pctBusy = pctRes.updating;
 
   /* The season line and platoon splits are fetched here (not passed in) so the
      details view works for any player, whether or not they're on the watchlist.
@@ -939,6 +953,11 @@ export function PlayerDetails({
   const windows = windowsRes.value ?? null;
   const windowsError = windowsRes.error?.message ?? null;
   const windowsLoading = windowsRes.loading;
+  /** The Stats table's cut change, on the same reasoning as `pctBusy` above and
+   *  with the same fault behind it: `windowsRes` is familied on the man, so a
+   *  split press carries the previous split's rows and `loading` stays false
+   *  while they sit under the new split's heading. */
+  const windowsBusy = windowsRes.updating;
 
   /** His news — the News tab's items and the Overview's preview of the top
    *  three. One read for both, which is what stops the preview and the tab ever
@@ -1040,6 +1059,11 @@ export function PlayerDetails({
   const gameLogWait = useDelayedFlag(gameLogLoading);
   const arsenalWait = useDelayedFlag(arsenalLoading);
   const dayWait = useDelayedFlag(dayLoading);
+  /** The two press-triggered reads that carry their previous answer, marked
+   *  with the app's own pair of numbers: nothing for an answer inside
+   *  `WAIT_DELAY`, and `MIN_SPIN` of trace once a press has raised one. */
+  const pctBusyMark = useBusyMark(pctBusy);
+  const windowsBusyMark = useBusyMark(windowsBusy);
 
   /**
    * **The card at the density this reader asked for**, and the other one beside
@@ -1698,8 +1722,11 @@ export function PlayerDetails({
              answer takes a round trip. */
           cut={statsCut}
           onCutChange={onStatsCutChange}
-          updating={windowsLoading}
+          updating={windowsBusy}
         />
+      )}
+      {tab === 'stats' && windows && (
+        <PaneBusy busy={windowsBusyMark}>Reading the window table</PaneBusy>
       )}
 
       {/* **The Splits tab: the two halves of the platoon, against each other.**
@@ -1834,9 +1861,9 @@ export function PlayerDetails({
             </select>
           </label>
           <span
-            className={`pct-updating${loading && data ? '' : ' is-idle'}`}
+            className={`pct-updating${pctBusy ? '' : ' is-idle'}`}
             role="status"
-            aria-label={loading && data ? 'Updating' : undefined}
+            aria-label={pctBusy ? 'Updating' : undefined}
           >
             <SpinningBaseball size="sm" />
           </span>
@@ -1881,6 +1908,15 @@ export function PlayerDetails({
             ? `Couldn’t read the ${pctCut ? CUT_LABEL[pctCut][kind] : 'season'} card: ${error}. The card below is the last one that answered — press a split again to retry.`
             : `Couldn’t read the percentile card: ${error}. That is this read failing rather than anything about ${name} — leave the tab and come back to try it again.`}
         </div>
+      )}
+      {/* **And the unmissable half of the same statement.** The badge above is a
+          20px slot beside a heading — a mark for somebody already looking for
+          one — and this read is p50 811ms, p90 4,616ms and max 12,175ms in
+          production. `useBusyMark` is what keeps it honest at the other end: a
+          card the server already has comes back inside `WAIT_DELAY` and draws
+          nothing at all. */}
+      {tab === 'percentiles' && data && (
+        <PaneBusy busy={pctBusyMark}>Reading the percentile card</PaneBusy>
       )}
       {tab === 'percentiles' && data && shownSections.length > 0 && (
         <div className="pct-card" ref={cardRef}>
