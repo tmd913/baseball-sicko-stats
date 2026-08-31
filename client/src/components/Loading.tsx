@@ -171,3 +171,51 @@ export function LoadingBlock({
     </div>
   );
 }
+
+/**
+ * **A press is working on it** — the mark for a read somebody started over a
+ * pane that already has something on it.
+ *
+ * This is the other half of `LoadingBlock`. That one is for a pane with
+ * *nothing* to show, and it replaces the content; this one sits *over* content
+ * that is still on screen, because the content is still the last true answer
+ * and rule 1 forbids taking it away. What it adds is the thing the app was
+ * missing: an unmissable statement that the figures under it are being
+ * replaced.
+ *
+ * **Reported as the fault it fixes.** Pressing a percentile cut, or a split on
+ * the Stats tab, left the previous cut's figures under the new cut's heading
+ * with nothing on screen to say a read was in flight — and that read is p50
+ * 811ms, p90 4,616ms and **max 12,175ms** in production. The `Updating` marks
+ * that already existed are 20px inline slots (`.pct-updating`,
+ * `.stats-updating`) beside a heading, which is a mark for somebody who already
+ * knows to look for one.
+ *
+ * **It does not block the pointer.** The overlay is `pointer-events: none`, so
+ * a reader who pressed the wrong cut can press the right one without waiting
+ * for the wrong one to land. Covering the keyboard and the pointer is what a
+ * *dialog* does, and this is not one.
+ *
+ * **Gate it on `useBusyMark`, never on the raw flag** — `WAIT_DELAY` up and
+ * `MIN_SPIN` down, so a warm answer draws nothing and a press always leaves a
+ * trace. The caller passes the already-marked boolean rather than the hook
+ * being called in here, because a pane usually has more than one read behind it
+ * and the OR of them is the caller's to write.
+ */
+export function PaneBusy({
+  busy,
+  children = 'Reading',
+}: {
+  busy: boolean;
+  children?: ReactNode;
+}) {
+  if (!busy) return null;
+  return (
+    <div className="pane-busy" role="status" aria-live="polite">
+      <div className="pane-busy-card">
+        <SpinningBaseball size="lg" />
+        <p className="loading-what">{children}</p>
+      </div>
+    </div>
+  );
+}
