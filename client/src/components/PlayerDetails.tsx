@@ -832,7 +832,22 @@ export function PlayerDetails({
    *  boards are already filling. No date is sent — the server's own baseball
    *  day is the one definition of "today" the app should have, and a tab left
    *  open past the 3am rollover would otherwise keep asking for yesterday. */
-  const dayKey = tab === 'overview' || tab === 'schedule' ? `playerDay:${who}` : null;
+  /**
+   * **Unconditional, because the head is.** This was gated to the two tabs that
+   * draw a day block — and the *head* is drawn on all nine, with `TeamDoor`
+   * reading its club off this very report. On the other seven the key was null,
+   * so `day` was null, so the door fell back to its `aria-hidden` ghost and the
+   * reader watched his club vanish on every tab but two. Driven before the fix:
+   * `NYY →` present on Overview and Schedule, absent from Percentile Rankings,
+   * Splits, News, Stats, Game Log and Charts.
+   *
+   * It costs a request only for a reader who opens straight onto one of those
+   * seven, and the comment above already says why that is affordable: one day
+   * of one player, every layer under it a cache something else is filling. For
+   * the ordinary path — open on Overview, cross the strip — the key does not
+   * change, so nothing is re-read and the club never blinks.
+   */
+  const dayKey = `playerDay:${who}`;
   const dayRes = useResource(
     dayKey,
     () => api.playerDay(playerId, kind).then((d) => d.player),
