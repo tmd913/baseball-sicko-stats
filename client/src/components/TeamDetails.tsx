@@ -11,7 +11,7 @@ import {
   teamColor,
   teamLogoUrl,
 } from '../lib';
-import { useBusyMark, useDelayedFlag, useGameDoor } from '../hooks';
+import { useDelayedFlag, useGameDoor } from '../hooks';
 import type { GameDoor, TeamPageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine, PaneBusy } from './Loading';
@@ -273,7 +273,6 @@ export function TeamDetails({
    *  switch is familied, so it carries the previous side's rows and reports
    *  `updating` rather than `loading` while the next ones are read. */
   const windowsBusy = windowsRes.updating;
-  const windowsBusyMark = useBusyMark(windowsBusy);
 
   /** The season row, which is what the head's record and the Overview's strip
    *  read. `null` until the read lands, and on a club that a board is missing. */
@@ -591,7 +590,7 @@ export function TeamDetails({
           `updating` half of the pair — the same statement the player page's
           Stats tab makes, from the same component. */}
       {tab === 'stats' && windows && (
-        <PaneBusy busy={windowsBusyMark}>Reading {team.name}&rsquo;s board</PaneBusy>
+        <PaneBusy busy={windowsBusy}>Reading {team.name}&rsquo;s board</PaneBusy>
       )}
       {tab === 'stats' && !windows && windowsLoading && (
         <LoadingBlock>Reading {team.name}&rsquo;s board</LoadingBlock>

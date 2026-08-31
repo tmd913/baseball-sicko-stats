@@ -8,7 +8,7 @@ import { MAX_TINT } from './ParkFactors';
 import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
-import { LoadingBlock, LoadingLine } from './Loading';
+import { LoadingBlock, LoadingLine, PaneBusy } from './Loading';
 import { PageMore, usePagedRows } from './paging';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -975,6 +975,14 @@ interface Props {
   teams: boolean;
   onTeamsChange: (on: boolean) => void;
   loading: boolean;
+  /** **A re-read over rows that are still on screen**, which is the other half
+   *  of `loading` and the half this board had no mark for at all. `loading` is
+   *  gated on the cache being empty (see the caption note below), so it says
+   *  *nothing to show yet*; this says *what you are looking at is being
+   *  replaced*. Pressing a window, a position, a kind or a sort on a board the
+   *  app has already cached raised neither, and the reader had nothing to tell
+   *  a slow answer from a dead control. */
+  busy: boolean;
   error: string | null;
   /** The selected position pill. Lifted to App because changing it can change
    *  the board, and the board is what this component is keyed on — held here it
@@ -1594,6 +1602,7 @@ export function ResearchTable({
   teams,
   onTeamsChange,
   loading,
+  busy,
   error,
   pos,
   onPosChange,
@@ -5940,6 +5949,10 @@ export function ResearchTable({
             it says the count is on its way. App keeps the rows it already has
             while a re-read is in flight (`loading` is gated on the cache being
             empty), so this can only ever be a board with nothing on it yet. */}
+        {/* Over the rows, not instead of them: the board a reader is looking at
+            is still the true answer until the next one lands, which is why this
+            is `PaneBusy` and not the `LoadingBlock` above. */}
+        <PaneBusy busy={busy}>Reading the board</PaneBusy>
         <div className={`research-head${stuck ? ' is-stuck' : ''}`} ref={headRef}>
 
           {/* **The settings first, the count last.** They were one wrapping run

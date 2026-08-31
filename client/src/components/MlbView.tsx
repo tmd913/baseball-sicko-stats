@@ -1,3 +1,4 @@
+import { PaneBusy } from './Loading';
 import type { MlbScoreboard, MlbStandings } from '../types';
 import type { DatePreset } from './DateControls';
 import MlbScoreboardTab from './MlbScoreboard';
@@ -69,6 +70,7 @@ export default function MlbView({
   onToggleCalendar,
   onCloseCalendar,
   boardLoading,
+  boardBusy,
   boardError,
   onOpenGame,
   standings,
@@ -89,6 +91,11 @@ export default function MlbView({
   onToggleCalendar: () => void;
   onCloseCalendar: () => void;
   boardLoading: boolean;
+  /** The same read over a board that is already drawn — stepping the date bar
+   *  on a day the app has not cached. `boardLoading` is press-triggered by
+   *  construction (the poll passes `refresh` and deliberately raises nothing),
+   *  so this can carry a mark without the poll strobing it. */
+  boardBusy: boolean;
   boardError: string | null;
   onOpenGame: (gamePk: number) => void;
   standings: MlbStandings | null;
@@ -125,6 +132,9 @@ export default function MlbView({
           onOpenGame={onOpenGame}
         />
       )}
+      {/* Over the games already on screen: yesterday's slate is still the true
+          answer until today's lands. */}
+      <PaneBusy busy={boardBusy}>Reading the day&rsquo;s games</PaneBusy>
     </div>
   );
 }
