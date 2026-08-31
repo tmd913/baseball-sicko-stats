@@ -1947,6 +1947,26 @@ export function wideRange(start: string, end: string): string {
  * Below 30 the returns go with it: a 15s pair would double the upstream traffic
  * to be told the same numbers, the board having not moved.
  *
+ * **It is 20s now, on the same clock as `LIVE_POLL_MS`** — the user's call,
+ * 2026-08-31, and the paragraph above is left as written because its
+ * measurement still holds and is the thing to re-read before moving this again.
+ * What changed is which side of that measurement to sit on. ESPN's board moves
+ * on a ~60s quantum, so a faster poll cannot make the *board* newer; what it
+ * makes newer is **our copy of it**, and that is the number a reader actually
+ * experiences. Worst case is the poll plus the TTL in front of it, so this goes
+ * **60s → 40s**.
+ *
+ * The cost is honest and worth stating: three reads where there were two, for a
+ * board that will not have moved on one of them. The measurement above prices a
+ * 15s pair as "double the traffic to be told the same numbers"; 20s is half
+ * that step, and the app is asked for fantasy figures that are stale far more
+ * often than it is asked for cheaper polling.
+ *
+ * **Both halves move or neither does.** The server holds its own copy for
+ * `espn.ts::LIVE_TTL_MS`, so a client polling faster than that TTL spends a
+ * request to be handed the answer it already had — a third of the ticks, at 20s
+ * against a 30s TTL, would have been pure waste. They are matched at 20s.
+ *
  * **A tick is skipped while the tab is hidden**, which is where this parts from
  * the report poll deliberately: a league read is 10–120KB upstream against a
  * league that has no idea we are doing it, and a forgotten background tab
@@ -1954,7 +1974,7 @@ export function wideRange(start: string, end: string): string {
  * immediately rather than waiting out the interval, so what a reader returns to
  * is current — which is also what keeps the Transactions dot honest.
  */
-export const LEAGUE_POLL_MS = 30_000;
+export const LEAGUE_POLL_MS = 20_000;
 
 /**
  * **How often the roster re-reads itself while a game is being played** — the
