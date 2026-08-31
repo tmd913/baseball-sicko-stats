@@ -9,6 +9,7 @@ S3 + CloudFront for the client, Lambda behind an API Gateway HTTP API for the se
 - **Two-pass first deploy — only without a custom domain.** Cognito's callback URL needs the CloudFront domain → distribution → API → authorizer → user pool client is a cycle, so `siteUrl` comes from CDK **context** instead. Deploy, read the `NextStep` output, deploy again with `-c siteUrl=…`.
 - **Custom domain** (`domainName` in `cdk.json` context, `statcastsicko.com`). Supplying it collapses that to one pass: the origin is known before anything is created, so `app.ts` derives `siteUrl` from it and the `NextStep` output disappears. The stack then imports the **existing** hosted zone (`HostedZone.fromLookup` — Route 53 creates one when the domain is registered; a second zone for the same name would serve records the registrar never delegates to), issues an ACM cert for apex + `www` validated against it, adds both as distribution aliases, and writes A **and AAAA** alias records for each. The lookup happens at *synth* time, so **the zone must exist before `cdk deploy`** — with no zone, synth fails with `Found zones: []` rather than deploying anything. The cert has to be in **us-east-1**, which is where this stack already lives. Cognito keeps the `*.cloudfront.net` callback alongside the custom one, since both still resolve to the same distribution. **`www` 301s to the apex** via a CloudFront Function (`infra/lib/redirect-to-apex.js`, viewer-request on the *default* behavior only — a 301 on a non-idempotent `/api/*` call is a footgun, and the document request redirects first so nothing the client issues is ever aimed at `www`). The redirect is an **auth** fix as much as a canonical-URL one: the two hosts are separate browser origins with separate localStorage, which is where the OIDC session lives, so serving both meant signing in once per host with nothing on screen to explain why. It **rebuilds the query string by hand** — `App.tsx` keeps the whole view in it, and CloudFront hands the params over decoded and splits a repeated key (`expanded`) into `multiValue`, so a naive pass-through would drop every repeat and mangle any encoded value. `www` still needs its alias records, cert SAN and distribution alias: without all three the redirect can't be reached over HTTPS and the visitor gets a cert warning instead. Its Cognito callback URL is kept too, unreachable but ready if the redirect is ever removed.
 - Two EventBridge rules run `warmer.ts`: `live` every 5 min (today + yesterday) and `backfill` nightly (last 7 days + per-player season data + the season roster).
+- **Per-route timing lives in two log groups**, the stage's access log and the server's own request line, for reasons that are the whole of the last section in this file. Neither alone can name the route in a request that times out.
 
 ### Cognito's own pages can move to `auth.statcastsicko.com`
 
@@ -43,3 +44,101 @@ S3 + CloudFront for the client, Lambda behind an API Gateway HTTP API for the se
 **Rolling back does not need the file edited.** CLI context beats `cdk.json`, so `-c authDomainLive=false` is enough to put sign-in back on the prefix domain on the next deploy (checked: the synthesized `config.json` reads `baseball-sicko.auth.us-east-1.amazoncognito.com` again). Follow it with a CloudFront invalidation, since `config.json` is served from the edge and is the file that carries the change. Editing the flag to `false` in `cdk.json` is the same thing made durable; removing `authDomainName` as well tears down the certificate, the domain and its DNS records, which is only worth doing if the remedy is being abandoned rather than paused.
 
 **What is still unproven is whether any of it fixes the bug.** The iOS-only Google failure was diagnosed from three CloudTrail occurrences and a pattern (all iOS, all recovering on retry), not reproduced, and the ESSENTIALS tier publishes no detail for the failing leg. The hop is same-site now, which removes the suspected cause; only real traffic will say whether it was the cause. **A recurrence after this change is itself worth having** — it would be strong evidence the cookie theory was wrong, and the query that found it is `OAuth2Response_GET` events under `cognito-idp.amazonaws.com` with a non-success result.
+
+### Per-route timing, in two log groups because one of them can't see the failures
+
+**Nothing in this stack could say which route was slow.** Until 2026-08-31 the
+Lambda logged no request line, the HTTP API's `$default` stage carried
+`AccessLogSettings: null` and `DetailedMetricsEnabled: false`, and CloudFront
+logging was `Enabled: false`. Three places a request's identity could have been
+recorded, and none of them was recording it.
+
+**What that hid, measured over the 7 days before the change** — 31,133
+invocations of `ApiFunction`:
+
+| | count | p50 | p90 | p99 |
+| --- | --- | --- | --- | --- |
+| `@initDuration` (cold only) | 2,248 (**7.2%**) | 519 ms | 556 ms | 619 ms |
+| `@duration`, **warm** | 28,872 | 239 ms | 857 ms | 4,637 ms |
+| `@duration`, **cold** | 2,259 | **1,368 ms** | 5,419 ms | 28,995 ms |
+
+`@duration` **excludes** init, so the last two rows compare like with like: the
+same work costs **5.7× more on a cold container**, because its ~30 module-scoped
+`Map`s are empty and `storage.ts` has no memory layer, so every read a warm
+container answers from process memory becomes an S3 round trip. **Part of that
+5.7× is composition rather than cold-cache cost** — cold invocations cluster in
+page-load bursts, which include the heavy routes, while warm ones include every
+light 20 s poll; separating the two is the first thing the per-route lines are
+for. Init at 519 ms is real either way but is **not** where the seconds go —
+which is the opposite of what the untuned bundle settings suggest, and worth
+knowing before optimizing them.
+
+And **92 requests a week reach the 29 s wall** (Lambda `Errors` = 92,
+`Throttles` = 0), **64 of them on cold containers** — 70% of the failures out of
+7.2% of the traffic, so a cold container is ~28× likelier to time out. Peak
+`ConcurrentExecutions` runs 22–44, which is one page load's fan-out: the client
+fires ~25 parallel requests, Lambda answers with ~25 containers, and on a
+low-traffic app most of them are new.
+
+**Two log groups, because neither half can see what the other sees.**
+
+- **The stage's access log** (`ApiAccessLog`, 30-day retention) is the half that
+  **survives a timeout**. A request killed at the integration limit never
+  reaches `res.on('finish')`, so the server's own line is missing for exactly
+  the requests that matter most, and this is the only record they leave. It also
+  sees what the Lambda never does: a request the JWT authorizer rejects logs
+  `s=401` with **no `int` field at all**, because it was turned away before the
+  integration ran.
+- **The server's line** carries the **route pattern**, which the gateway cannot
+  know — every request but `/api/health` and `/api/config` arrives at the same
+  `ANY /{proxy+}` route, so `$context.routeKey` says `ANY /{proxy+}` for all
+  ~79 of the others and only `$context.path` varies, which fragments
+  `/api/players/12345/splits` from every other player.
+
+**The format is JSON with the numeric fields written bare.** Quoting `status`
+and the two latencies would land them as strings, and `pct()`/`sort` would then
+be sorting text. The keys are declared once as an object and the three numeric
+ones unquoted by `.replace()` on the serialized form, so the field names stay a
+single source rather than being spelled twice.
+
+**`integrationLatency` beside `responseLatency` is what separates a slow Lambda
+from a slow gateway.** Measured on the first request after the deploy:
+`ms: 766, int: 764` — a cold start, and the gateway's own share of it was 2 ms.
+
+**`n` is an ordinal, not a cold/warm boolean.** It counts the request's position
+on its container, and the boolean was rejected because it would collapse the
+gradient worth seeing: those ~30 in-process `Map`s fill over the *first several*
+requests, not the first one, so `n=1` and `n=8` are different amounts of S3 and
+a flag cannot tell them apart.
+
+**A breadcrumb fires at `SLOW_MS` (5 s) before the request finishes**, so a
+request that never finishes still names its route. 5 s sits well past the
+measured warm p90 of 857 ms, so it fires for the tail rather than for traffic.
+
+#### Two things that would otherwise cost an afternoon
+
+**HTTP APIs need no account-level CloudWatch role.** Almost everything written
+about API Gateway access logging describes the REST/WebSocket requirement — an
+IAM role trusted by `apigateway.amazonaws.com` set as `cloudWatchRoleArn` on
+`AWS::ApiGateway::Account`. That does **not** apply here, and this account
+proves it: `aws apigateway get-account` returns no `cloudwatchRoleArn` at all,
+`AWSServiceRoleForAPIGateway` exists (trusted by `ops.apigateway.amazonaws.com`,
+created 2023-01-28), and logs flowed on the first deploy.
+
+**Logs Insights parses these lines with no `parse` step**, even though Lambda
+prefixes each one with a timestamp, a request id and `INFO`. Auto-discovery
+finds the JSON fields anyway, so `filter t="req" | stats … by r` works
+directly. Writing the regex that *looks* necessary is the trap — a
+`parse @message /(?<json>\{.*\})/` chain returns **no rows**.
+
+```
+filter t="req" | stats count(*) as n, pct(ms,50) as p50, pct(ms,99) as p99 by r | sort p99 desc
+filter t="req" and n=1 | stats pct(ms,50) as coldP50 by r | sort coldP50 desc
+filter t="slow" | stats count(*) as n by r | sort n desc
+```
+
+**`ApiFunction`'s own log group is deliberately left alone.** It has
+`retentionInDays: null` — never expire, 18 MB today, and the request lines add
+roughly 4 MB a week, which is pennies. Adopting an implicitly-created log group
+into CDK risks replacing it, and it holds the baseline above; the measurement is
+worth more than the retention policy.
