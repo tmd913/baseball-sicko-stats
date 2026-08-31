@@ -155,6 +155,80 @@ app.use(express.json());
 /** True when running as a Lambda rather than a long-lived local server. */
 const IS_LAMBDA = process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 
+/**
+ * One JSON line per request, so a route can be named as the slow one.
+ *
+ * Measured 2026-08-31 over 7 days of the API function: 31,133 invocations,
+ * p50 239ms **warm** against p50 1,368ms **cold** for the same work
+ * (`@duration` excludes init, so those compare like with like), and 92
+ * requests reaching the 29s wall. None of it could be attributed to an
+ * endpoint, because nothing logged one. This is that missing line.
+ *
+ * The fields are short because they are paid for on every request, and JSON
+ * because Logs Insights parses it with no regex — `stats pct(ms, 99) by r`.
+ *
+ * `n` is the ordinal of this request **on this container**, which is the field
+ * that makes the cold-container penalty visible per route: `n=1` served every
+ * cache read from S3 with all ~30 in-process Maps empty, `n=40` served them
+ * from memory. A boolean would have collapsed exactly the gradient worth
+ * seeing, since the maps fill over the first several requests rather than the
+ * first one.
+ */
+let containerRequests = 0;
+const CONTAINER_START = Date.now();
+
+/** Past this, a request is logged *before* it finishes. A container killed at
+ *  the integration timeout never reaches `finish`, so without a breadcrumb the
+ *  slowest requests are the only ones leaving no server-side trace at all. The
+ *  gateway's access log records that the request happened; this records which
+ *  route it was in. 5s is well past the measured p90 (857ms warm), so it fires
+ *  for the tail rather than for normal traffic. */
+const SLOW_MS = Number(process.env.SLOW_MS ?? 5_000);
+
+const LOG_REQUESTS = IS_LAMBDA || process.env.LOG_REQUESTS === '1';
+
+if (LOG_REQUESTS) {
+  app.use((req, res, next) => {
+    const started = Date.now();
+    const n = ++containerRequests;
+    // `req.route` is only set once the router has matched, so the pattern is
+    // read at the end rather than here. The raw path is kept beside it: the
+    // pattern groups (`/api/players/:playerId/splits`), the path is what you
+    // replay when one of them is slow.
+    const slow = setTimeout(() => {
+      console.log(
+        JSON.stringify({
+          t: 'slow',
+          m: req.method,
+          p: req.path,
+          r: req.route?.path,
+          ms: SLOW_MS,
+          n,
+        }),
+      );
+    }, SLOW_MS);
+    // Unref so a pending breadcrumb can never be the reason a local server
+    // stays alive. (On Lambda the container outlives it either way.)
+    slow.unref?.();
+    res.on('finish', () => {
+      clearTimeout(slow);
+      console.log(
+        JSON.stringify({
+          t: 'req',
+          m: req.method,
+          p: req.path,
+          r: req.route?.path,
+          s: res.statusCode,
+          ms: Date.now() - started,
+          n,
+          up: started - CONTAINER_START,
+        }),
+      );
+    });
+    next();
+  });
+}
+
 const PORT = Number(process.env.PORT ?? 4000);
 
 /** The day before today's baseball day (see etDate.ts), as YYYY-MM-DD. The
