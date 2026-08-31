@@ -20,6 +20,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as r53targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -559,6 +560,45 @@ export class SickoStack extends Stack {
         authorizer: new apigw.HttpNoneAuthorizer(),
       });
     }
+
+    // Access logging on the default stage. Measured 2026-08-31: nothing in this
+    // stack could say *which* route was slow — the Lambda logs no request line,
+    // this stage had `AccessLogSettings: null` and `DetailedMetricsEnabled:
+    // false`, and CloudFront logging is off. What that hid: 92 requests a week
+    // reaching the 29s wall (Lambda `Errors` = 92, `Throttles` = 0) with no way
+    // to name the endpoint burning them.
+    //
+    // The gateway's log is the half that survives a timeout. When a request
+    // runs past the integration limit the container is killed mid-flight, so
+    // the server's own `res.on('finish')` line never fires and the only record
+    // of the request that failed is this one. `integrationLatency` beside
+    // `responseLatency` is what separates a slow Lambda from a slow gateway.
+    const apiAccessLog = new logs.LogGroup(this, 'ApiAccessLog', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    // JSON rather than CLF so Logs Insights parses the fields without a regex.
+    // `status` and the two latencies are unquoted so they arrive as numbers and
+    // `pct()`/`sort` work on them; everything else is quoted because an absent
+    // value renders empty and would be invalid JSON bare.
+    (httpApi.defaultStage!.node.defaultChild as apigw.CfnStage).accessLogSettings = {
+      destinationArn: apiAccessLog.logGroupArn,
+      format: JSON.stringify({
+        rid: '$context.requestId',
+        m: '$context.httpMethod',
+        p: '$context.path',
+        s: '$context.status',
+        ms: '$context.responseLatency',
+        int: '$context.integrationLatency',
+        err: '$context.integrationErrorMessage',
+      })
+        // The numeric fields, unquoted. Done as a replace on the serialized
+        // form so the key names above stay the single source of truth.
+        .replace(/"s":"([^"]+)"/, '"s":$1')
+        .replace(/"ms":"([^"]+)"/, '"ms":$1')
+        .replace(/"int":"([^"]+)"/, '"int":$1'),
+    };
 
     const apiDomain = `${httpApi.apiId}.execute-api.${this.region}.${this.urlSuffix}`;
 
