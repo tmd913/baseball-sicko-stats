@@ -2,6 +2,7 @@ import type { NewsItem, PlayerNews } from './types.js';
 import { addDays, baseballToday } from './etDate.js';
 import { getRotowireNews } from './rotowire.js';
 import { getCbsBodies, newsKey, type CbsNote } from './cbs.js';
+import { readJsonBlob, writeJsonBlob } from './storage.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
 
@@ -75,14 +76,41 @@ const TTL = 30 * 60 * 1000;
 /**
  * Items the section will draw, newest first, per player.
  *
- * **Memory only, and deliberately no `storage.ts` blob**, which is
- * `nextGame.ts`'s rule: a window onto something unfinished, belonging to one
- * player, whose freshness test would only ever be the TTL beside it. The one
- * thing here that *is* shared by every player and every user — RotoWire's
- * name-to-slug index — takes a blob of its own in `rotowire.ts`, which is the
- * other class entirely and the one `getPlayerPool` is in.
+ * **Memory *and* a `storage.ts` blob, on the same TTL.** This said memory only
+ * and cited `nextGame.ts`'s rule — a window onto something unfinished, whose
+ * freshness test would only ever be the TTL beside it. That reasoning is left
+ * below because it was not wrong about what this *is*; it was wrong about what
+ * it costs.
+ *
+ * **Measured, once the per-route timing existed to measure it with:** 30
+ * requests over two days, and the distribution is two humps — **3 under 500ms
+ * (min 1ms)** where the container had it in memory, and **17 between 2.0s and
+ * 2.6s** where it did not. p50 **2,051ms**, the slowest median of any route on
+ * the board. A miss is three upstreams in parallel (MLB transactions, a
+ * RotoWire scrape, CBS bodies) and the slowest of them sets the time, so every
+ * cold container pays two seconds for a page's News tab.
+ *
+ * The blob does not change *when* an answer goes stale — `readJsonBlob` is
+ * handed the same 30-minute test the memory map used, so a note filed at noon
+ * reaches a reader on exactly the schedule it did before. It changes only what
+ * a miss costs: one S3 read instead of three scrapes.
+ *
+ * That is the migration `storage.ts` already records for `xwoba.ts` and
+ * `pitcherArsenal.ts` — both were memory-only, both re-fetched on every cold
+ * container, and `readJsonBlob` exists to carry exactly this caller-supplied
+ * freshness test. `nextGame.ts`'s rule still holds for `nextGame.ts`, whose
+ * miss is one cheap schedule read rather than three scrapes.
+ *
+ * The one thing here that *is* shared by every player and every user —
+ * RotoWire's name-to-slug index — takes a blob of its own in `rotowire.ts`,
+ * which is the other class entirely and the one `getPlayerPool` is in.
  */
 const playerCache = new Map<string, { news: PlayerNews; at: number }>();
+
+/** Versioned from the first write: a stored blob deserializes with anything
+ *  added since it missing, so a `NewsItem` gaining a field wants `-v2` rather
+ *  than a season of stored nulls. */
+const storeKey = (playerId: number) => `player-news-${playerId}-v1.json`;
 
 // ---- MLB transactions -------------------------------------------------
 
@@ -267,6 +295,19 @@ export async function getPlayerNews(playerId: number): Promise<PlayerNews> {
   const hit = playerCache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.news;
 
+  // The storage tier behind the memory one, on the same TTL — a cold container
+  // reads one blob rather than making three upstream requests. It fills the
+  // memory map on the way through so the second read in this container is the
+  // 1ms one again.
+  const stored = await readJsonBlob<PlayerNews>(
+    storeKey(playerId),
+    (_v, cachedAt) => Date.now() - cachedAt < TTL,
+  );
+  if (stored) {
+    playerCache.set(key, { news: stored, at: Date.now() });
+    return stored;
+  }
+
   const [transactions, reports, bodies] = await Promise.all([
     fetchTransactions(playerId).catch((err) => {
       console.error('player transactions fetch failed:', err);
@@ -320,6 +361,10 @@ export async function getPlayerNews(playerId: number): Promise<PlayerNews> {
   );
   const news: PlayerNews = { items };
   playerCache.set(key, { news, at: Date.now() });
+  // Not awaited: the answer is already built, and `storage.ts` logs and
+  // swallows a failed write for exactly this reason — a full disk or a
+  // transient S3 error must never fail a request that has its answer.
+  void writeJsonBlob(storeKey(playerId), news);
   return news;
 }
 
