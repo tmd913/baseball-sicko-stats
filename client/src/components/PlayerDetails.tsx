@@ -53,7 +53,6 @@ import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
 import { LoadingBlock, PaneBusy, SpinningBaseball } from './Loading';
 import {
   TAP_SLOP,
-  useBusyMark,
   useDelayedFlag,
   usePlayerStatus,
   useHandedness,
@@ -1059,11 +1058,6 @@ export function PlayerDetails({
   const gameLogWait = useDelayedFlag(gameLogLoading);
   const arsenalWait = useDelayedFlag(arsenalLoading);
   const dayWait = useDelayedFlag(dayLoading);
-  /** The two press-triggered reads that carry their previous answer, marked
-   *  with the app's own pair of numbers: nothing for an answer inside
-   *  `WAIT_DELAY`, and `MIN_SPIN` of trace once a press has raised one. */
-  const pctBusyMark = useBusyMark(pctBusy);
-  const windowsBusyMark = useBusyMark(windowsBusy);
 
   /**
    * **The card at the density this reader asked for**, and the other one beside
@@ -1726,7 +1720,7 @@ export function PlayerDetails({
         />
       )}
       {tab === 'stats' && windows && (
-        <PaneBusy busy={windowsBusyMark}>Reading the window table</PaneBusy>
+        <PaneBusy busy={windowsBusy}>Reading the window table</PaneBusy>
       )}
 
       {/* **The Splits tab: the two halves of the platoon, against each other.**
@@ -1916,7 +1910,7 @@ export function PlayerDetails({
           card the server already has comes back inside `WAIT_DELAY` and draws
           nothing at all. */}
       {tab === 'percentiles' && data && (
-        <PaneBusy busy={pctBusyMark}>Reading the percentile card</PaneBusy>
+        <PaneBusy busy={pctBusy}>Reading the percentile card</PaneBusy>
       )}
       {tab === 'percentiles' && data && shownSections.length > 0 && (
         <div className="pct-card" ref={cardRef}>

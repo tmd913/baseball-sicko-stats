@@ -1486,18 +1486,35 @@ body {
      become a containing block for this — checked, because layout containment
      doing exactly that is a fault this codebase has already recorded once. */
   position: fixed;
-  /* Below the pinned head and tab strip, whose height the shell measures at
-     runtime — the chrome is a statement of who is being read, and it stays
-     legible and pressable while the figures under it are replaced. */
-  top: var(--details-chrome-h, 0px);
+  /* **Below whatever chrome this surface pins**, which is a different measured
+     token on the two of them — `--details-chrome-h` inside a details overlay,
+     `--chrome-h` under the app's own bar — so the overlay reads one name and
+     each host says what it means by it.
+
+     **Where the app's own bar is not pinned the token is 0 and this covers the
+     whole viewport, deliberately.** Measured on the Roster view at 1200x900:
+     that bar is `position: static` there, `--chrome-h` is `0px`, and the scrim
+     runs [0, 0, 1200x900]. That is the honest reading of what is happening —
+     the *whole page's* rows are being replaced, not one pane's — and every
+     control stays usable because the scrim takes no pointer events. Against an
+     already-dark header an 84% mix of the same ground is close to
+     imperceptible; what it visibly suspends are the rows, which are the part
+     about to change. Inside a details overlay, where the chrome *is* pinned and
+     names the man being read, the token is real and the head stays clear. */
+  top: var(--busy-top, 0px);
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 2;
   display: flex;
-  align-items: flex-start;
+  /* **Centered in what is left of the viewport**, which is where the reader is
+     looking and is the one place the card cannot collide with a control. It sat
+     near the top for a revision (`flex-start` and a 14vh pad) and was measured
+     at [126, 458, 283x130] on the Roster view — straight across the date row
+     and the table's own header. Fixed positioning means centered stays centered
+     however far down a long table the reader has scrolled. */
+  align-items: center;
   justify-content: center;
-  padding-top: clamp(24px, 14vh, 140px);
   pointer-events: none;
   /* **Deep, deliberately.** This was 62% for a while on the argument that the
      figures underneath are still the true answer and should stay legible. Shot
@@ -1514,6 +1531,17 @@ body {
    room rather than to be tucked into a corner: the app's `lg` ball, the same
    one the boot splash takes, and a sentence at the body size rather than the
    caption size the inline `Updating` slots use. */
+/* The two hosts, each naming its own pinned chrome. A surface that pins nothing
+   leaves the fallback at 0 and the overlay covers its whole viewport, which is
+   the right answer for one. */
+.details-view,
+.mup-view,
+.outing-view {
+  --busy-top: var(--details-chrome-h, 0px);
+}
+.app {
+  --busy-top: var(--chrome-h, 0px);
+}
 .pane-busy-card {
   display: flex;
   flex-direction: column;

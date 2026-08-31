@@ -174,7 +174,7 @@ type PageStep =
  * `.details-view` there can be, taken exactly when it matters.
  */
 type PageRef = PageStep & { scroll?: number };
-import { LoadingBlock, LoadingLine, SpinningBaseball } from './components/Loading';
+import { LoadingBlock, LoadingLine, PaneBusy, SpinningBaseball } from './components/Loading';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
@@ -10892,6 +10892,28 @@ export default function App() {
         <LoadingLine className="refreshing float-badge">Updating</LoadingLine>
       )}
 
+      {/* **And the same statement where the reader is looking.** The badge above
+          is a fixed pill in the bottom-left corner, put there for a measured
+          reason that still holds — it is out of the flow, so a re-read cannot
+          move the page under the finger that started it. What it is not is
+          *noticed*: stepping the date bar re-reads the whole roster, and on a
+          cold day that is seconds of a table that looks finished and is the
+          previous day's.
+
+          Both, rather than one: the pill is the peripheral trace and this is
+          the statement. Neither moves the page.
+
+          **`reportLoading` is press-triggered by construction**, which is what
+          makes putting an overlay on it safe: it is `loading || updating` off
+          the resource store, and the twenty-second live poll is a *quiet* read
+          that raises neither. So this appears when somebody stepped a date,
+          changed the roster source or crossed a kind tab — and never on its own
+          every twenty seconds, which would be the strobe rule 1 exists to
+          forbid. */}
+      {reportLoading && reports.length > 0 && isRosterView(view) && (
+        <PaneBusy busy>Reading your roster&rsquo;s games</PaneBusy>
+      )}
+
       {/* Everyone the active view would show is on the IL and the toggle is
           hiding them. Without this the summary is a header over a Total row of
           zeros, and the players view an expanse of nothing, with no hint on
@@ -11119,7 +11141,8 @@ export default function App() {
             setMlbCalOpen((v) => !v);
           }}
           onCloseCalendar={() => setMlbCalOpen(false)}
-          boardLoading={showMlbBoardWait}
+          boardLoading={showMlbBoardWait && !mlbBoard}
+          boardBusy={mlbBoardLoading && !!mlbBoard}
           boardError={mlbBoardError}
           /* A card is a door into the game's own page — the same page the
              roster's opponent cell and a club's fixture rows open, through the
@@ -11162,6 +11185,10 @@ export default function App() {
           maxDate={maxDate}
           onTeamsChange={setResearchTeams}
           loading={researchLoading && !research[researchCacheKey]}
+          /* The other half of the same read: rows are up and being replaced.
+             The two are exclusive by construction — one tests the cache empty
+             and the other tests it full — so exactly one can be true. */
+          busy={researchLoading && !!research[researchCacheKey]}
           error={researchError}
           pos={researchPos}
           onPosChange={setResearchPos}

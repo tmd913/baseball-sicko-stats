@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { useBusyMark } from '../hooks';
 import type { ReactNode } from 'react';
 
 /**
@@ -196,11 +197,16 @@ export function LoadingBlock({
  * for the wrong one to land. Covering the keyboard and the pointer is what a
  * *dialog* does, and this is not one.
  *
- * **Gate it on `useBusyMark`, never on the raw flag** — `WAIT_DELAY` up and
- * `MIN_SPIN` down, so a warm answer draws nothing and a press always leaves a
- * trace. The caller passes the already-marked boolean rather than the hook
- * being called in here, because a pane usually has more than one read behind it
- * and the OR of them is the caller's to write.
+ * **It marks itself** — `useBusyMark` is applied in here, on `WAIT_DELAY` up
+ * and `MIN_SPIN` down, so a warm answer draws nothing and a press always leaves
+ * a trace. Callers pass the raw in-flight boolean and a pane with more than one
+ * read behind it passes the OR of them.
+ *
+ * The mark was the caller's job for one revision, and putting it back here is
+ * the direct lesson of what this component was written to fix: three `Updating`
+ * marks in this app were gated on a flag that could never be true, and nobody
+ * noticed because a mark that never appears looks exactly like a fast answer.
+ * A rule every call site has to remember is a rule some call site will forget.
  */
 export function PaneBusy({
   busy,
@@ -209,7 +215,8 @@ export function PaneBusy({
   busy: boolean;
   children?: ReactNode;
 }) {
-  if (!busy) return null;
+  const shown = useBusyMark(busy);
+  if (!shown) return null;
   return (
     <div className="pane-busy" role="status" aria-live="polite">
       <div className="pane-busy-card">
