@@ -873,7 +873,12 @@ body {
 .mup-select {
   display: none;
 }
-.research-pick-select {
+.research-pick-select,
+/* The game page's inning picker is the second member drawn at every width, so
+   it takes this block rather than the `display: none` above it — which is the
+   split that block already names: *when* a select is drawn is separate from
+   what it looks like. */
+.game-inning-select {
   display: block;
   /* In a wrapping run, only as wide as its own widest option — the same pair
      the narrow-screen block below gives its selects, and for the same reason:
@@ -886,6 +891,11 @@ body {
 .research-window-select,
 .schedule-span-select,
 .mup-select,
+/* **And the game page's inning picker**, folded on rather than restyled: it is
+   a dropdown at every width, exactly as `.research-pick-select` is, and a second
+   select shape in this app is a second thing to keep in step with the chevron.
+   See `.game-inning-select` below for the one thing that is its own. */
+.game-inning-select,
 .research-pick-select {
   /* Custom chevron (native arrow can't be inset from the edge): draw it as a
      background image positioned 14px in, and reserve room for it on the right. */
@@ -911,6 +921,7 @@ body {
 .research-window-select:hover,
 .schedule-span-select:hover,
 .mup-select:hover,
+.game-inning-select:hover,
 .research-pick-select:hover {
   border-color: var(--accent);
 }
@@ -918,12 +929,17 @@ body {
    it has to be one of them rather than a form field that wandered in. The two
    are the run's own numbers; the padding is the shared block's, less the two
    pixels a `.research-toggle` does not spend. */
-.research-pick-select {
+/* The board's bar and this page's tools row are both runs of 36px controls at
+   13px, and a select standing in either has to be one of them rather than a form
+   field that wandered in. */
+.research-pick-select,
+.game-inning-select {
   padding: 0 30px 0 12px;
   font-size: 13px;
   font-weight: 600;
 }
-.research-pick-select:focus-visible {
+.research-pick-select:focus-visible,
+.game-inning-select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -3424,7 +3440,12 @@ body {
    carries is the width of the thing in it. */
 .pa-matchup {
   display: grid;
-  grid-template-columns: auto auto auto;
+  /* **Flowing by column rather than a template of three**, because the head
+     holds two, three or four items depending on the caller: the inning dialog
+     draws a batter, `vs` and a pitcher, and the plate-appearance dialog puts the
+     situation ahead of them. A template counts the items; auto-flow does not,
+     and a fourth child under `auto auto auto` wrapped to a second row. */
+  grid-auto-flow: column;
   justify-content: center;
   align-items: center;
   gap: 10px;
@@ -3516,6 +3537,21 @@ body {
   font-size: 11px;
   font-weight: 700;
   color: var(--faint);
+}
+/* **The situation, ahead of the two faces**, where the dialog's title used to
+   say `· Top 7` in words. `PlaySituation` is two siblings — the half-inning
+   glyph and the base diamond with its outs — so the slot is the box that holds
+   them together, and it takes the 6px the summary row gives the same pair.
+
+   A little further off the batter than the pair's own gap, because it is a
+   different *kind* of thing from the two men beside it: 10px is what the grid
+   already gives between items and the extra 4 is what says the graphic is not a
+   third participant in the matchup. */
+.pa-mu-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
 }
 /* The circle itself is **folded onto `.feed-photo`**, further down this file
    rather than written again here: a 40px round headshot that is a button into a
@@ -4781,6 +4817,23 @@ body {
    name: the crests are `TeamPhoto` at a size this box sets through
    `--row-photo` rather than by cutting a second circle, and each is a door to
    that club's page. */
+/* **The game page's head stands further off the Back button than the other two
+   do**, and the reason is what is next to the button.
+
+   `.details-head` gives every page a 20px column gap, which is right where the
+   thing after the button is a *portrait* — a player's headshot and a club's
+   crest both carry their own ring of empty pixels, so 20 reads as more than 20.
+   A game's head begins with a crest and then immediately with the **score**,
+   `NYY 1 – 7 LAA` set large and bold, and at 20 the `Back` chip and the away
+   club's abbreviation were two runs of text a thumb apart with nothing between
+   them. 32 is the gap the other two *look* like they have.
+
+   `column-gap` alone, and scoped with `:has`: on a phone the head wraps to its
+   own line under the button, where the horizontal gap is not spent at all and
+   the row gap is `.details-head`'s own 16. */
+.details-head:has(> .game-head) {
+  column-gap: 32px;
+}
 .game-head {
   display: flex;
   flex-direction: column;
@@ -5075,6 +5128,31 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* **The inning being played**, marked on the header and both cells of its
+   column.
+
+   This is the one thing on this table that *is* a state, which is what the
+   app's colour rule reserves colour for — a live inning is named in it
+   explicitly, beside a postponement and a lineup pip. So it takes `--accent`,
+   the same ink the head's own live chip takes, as a wash on the column rather
+   than as ink on the digits: the digits in that column are the same runs as the
+   digits beside them and colouring them would say the *numbers* are different.
+
+   **The head's is the loud half.** The column heading is a number a reader is
+   not otherwise looking at, so it takes the accent outright; the two cells take
+   a wash a tenth as strong, which is enough to draw the column together and not
+   enough to compete with the runs in it.
+
+   `color-mix` into `--bg` rather than an alpha layer, for the reason the rank
+   chip gives: a discrete mark reads as one ink, and these cells sit over a
+   table that paints its own ground. */
+.game-ls-cell.game-ls-now {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+}
+.game-ls-table thead .game-ls-cell.game-ls-now {
+  color: var(--accent);
+  font-weight: 800;
+}
 /* R, H and E, which are the reading — the innings are how it got there. Set
    off by a rule down the left rather than by a color, `color` being spent on
    state in this app and a total not being one. */
@@ -5295,10 +5373,23 @@ body {
    Measured on the rendered page: two half-inning blocks are **24px** apart, and
    this row is now the same distance from the first of them. */
 .game-box-tools,
+/* **Two controls now** — the `All`/`Scoring` cut and the inning picker — so the
+   row is a wrapping flex line with a gap rather than a single item pinned left.
+   It keeps `flex-start`: both are *narrowing* controls over the list under them,
+   and a run of those belongs at the edge the list is read from. */
 .game-plays-tools {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   justify-content: flex-start;
   margin-bottom: 24px;
+}
+/* The label is a wrapper round the select (its own text is `sr-only`), so it
+   must not stretch the row or claim a width of its own. */
+.game-inning-pick {
+  display: inline-flex;
+  min-width: 0;
 }
 /* **The play stream is the feed's own items**, so there is nothing here to
    style: `.feed-item` and its rails, `.feed-item-head`, the plate-appearance

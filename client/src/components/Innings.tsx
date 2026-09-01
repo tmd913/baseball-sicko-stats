@@ -133,24 +133,43 @@ function InningBaseEvent({ ev, gamePk }: { ev: BaseEvent; gamePk: number }) {
   );
 }
 
-/** The pitcher's line for one inning: batters faced, hits, R, ER, K, BB, pitches. */
+/**
+ * The pitcher's line for one inning: batters faced, hits, R, ER, K, BB, HBP,
+ * pitches.
+ *
+ * **`BB` counts walks and a hit batsman is not one.** It used to be
+ * `outcomeKind(event) === 'walk'`, which is the right test for the thing that
+ * function answers — *how did this man reach*, where a walk, an intentional walk
+ * and a hit-by-pitch are one outcome and take one tone — and the wrong test for
+ * a **statistic**. A box score has never put a hit batsman in the walk column,
+ * and an inning where a pitcher plunked somebody read `1 BB` with no walk in it.
+ * So the count reads the event itself, and `outcomeKind` keeps the job it is
+ * for: the row's color, one component up.
+ *
+ * **And the fact is not dropped, it moves to its own figure.** Counting the
+ * hit batsman nowhere would trade a wrong chip for a missing one — a free base
+ * is the whole reason this line carries `BB` at all. `HBP` is drawn on the same
+ * terms as every other figure here: only where there is one.
+ */
 function inningStats(batters: FacedBatter[]) {
   let h = 0;
   let r = 0;
   let er = 0;
   let k = 0;
   let bb = 0;
+  let hbp = 0;
   let pitches = 0;
   for (const fb of batters) {
     const kind = outcomeKind(fb.event);
     if (kind === 'hit' || kind === 'hr') h++;
     else if (kind === 'strikeout') k++;
-    else if (kind === 'walk') bb++;
+    else if (fb.event === 'walk' || fb.event === 'intent_walk') bb++;
+    else if (fb.event === 'hit_by_pitch') hbp++;
     r += fb.runs;
     er += fb.earnedRuns;
     pitches += fb.pitches.length;
   }
-  return { bf: batters.length, h, r, er, k, bb, pitches };
+  return { bf: batters.length, h, r, er, k, bb, hbp, pitches };
 }
 
 /**
@@ -286,6 +305,11 @@ function InningLine({ s, active }: { s: ReturnType<typeof inningStats>; active?:
       )}
       {s.k > 0 && <span className="inning-stat is-k">{s.k} K</span>}
       {s.bb > 0 && <span className="inning-stat is-bb">{s.bb} BB</span>}
+      {/* A free base and not a walk — see `inningStats`. It takes `is-bb`'s tone
+          because it is the same *kind* of thing to the reader scanning the line
+          (a man on for nothing), which is the distinction `outcomeKind` draws
+          and the one this figure does not. */}
+      {s.hbp > 0 && <span className="inning-stat is-bb">{s.hbp} HBP</span>}
       <span className="inning-stat is-p">{s.pitches} P</span>
     </span>
   );

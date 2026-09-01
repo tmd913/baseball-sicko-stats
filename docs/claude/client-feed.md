@@ -2234,6 +2234,34 @@ loanDepot park. Batter, from a Schedule row: the same order with *Ethan Pecko ·
 RHP · starting for HOU · projected*. Pitcher, from a Schedule row: *Aaron Nola ·
 RHP · PHI's starter, his counterpart* over T-Mobile Park and the PHI lineup.
 
+### The situation moved into the head, and the title stopped saying the inning
+
+**The dialog's title read `Aaron Judge — SINGLE · Top 7`.** It said the inning in
+*words* at the top of a box whose head already had room for it in the vocabulary
+this app draws a half-inning in everywhere else — the glyph and the base diamond
+the summary row that opened it carries. Two statements of one fact in two
+vocabularies, a title bar apart.
+
+So `PlaySituation` — the half-inning glyph, the diamond and the outs, the very
+component that row draws — sits **ahead of the two faces** in the matchup head,
+and the title says what the trip to the plate came to and who took it. The glyph
+a reader pressed is the glyph at the head of what it opened.
+
+**It is a slot on `PlayMatchup` (`lead`) rather than the situation itself**,
+because that head has two callers and the inning dialog's (`Innings.tsx`) is
+*already inside* a half-inning: a graphic saying which one would be the box
+repeating its own heading. And it is a **child of the grid** rather than a
+wrapper round it, so it takes the head's own row, its centering and its bleeding
+rule for nothing — which is what turned `grid-template-columns: auto auto auto`
+into `grid-auto-flow: column`: a template counts the items, and a fourth child
+under three tracks wrapped to a second row.
+
+`outsWhenUp` is the outs **this man came to the plate with**, which is what the
+summary row says and the only reading that is a fact about the at-bat rather
+than about what it did. Measured on a game's Plays tab at 1200: the head's four
+children all on one row (tops 350–364 against a 53px head), the lead 48.6px
+wide, and the dialog overflows by 0.
+
 ### The at-bat dialog names both men, and both are doors
 
 **A plate appearance is one man against another, and its dialog said so in nine
