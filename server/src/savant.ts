@@ -1273,7 +1273,42 @@ const TEAM_CONCURRENCY = 6;
  * required for wide ranges, since the unfiltered model is far larger than any
  * one watchlist needs.
  */
-export async function getDay(date: string, filter?: DayFilter): Promise<ParsedDay> {
+/**
+ * **One read in flight per question, and the question includes the filter.**
+ *
+ * `getDay` memoizes its answer, but only once the answer exists — so *N*
+ * concurrent calls for the same day all miss, all gunzip the same snapshot and
+ * all parse it. The Overview is where that bites: it issues ten reads at once
+ * over an overlapping set of dates, and a day snapshot is 350–860 KB gzipped
+ * and 5–8 MB open. Measured with two managers' rosters over eight dates:
+ * **sixteen calls, sixteen snapshot reads, eight distinct days**.
+ *
+ * The map is keyed the same way `projectedCache` is, because two callers may
+ * legitimately want different projections of one day and must not be handed
+ * each other's — and the unfiltered call is its own key rather than sharing the
+ * filtered one, a full day being a different object from a projection of it.
+ *
+ * **Concurrent callers already share the objects inside**, which is why this is
+ * not a new hazard: `projectDay` copies the Map and not the `PlayerReport`s in
+ * it, so two reads of one day have always handed back the same report objects —
+ * and `getReport` mutates them (`attachArsenalBaselines`). This extends the
+ * sharing to the window before the memo is populated, which is the window that
+ * was costing the reads.
+ */
+const dayInFlight = new Map<string, Promise<ParsedDay>>();
+
+export function getDay(date: string, filter?: DayFilter): Promise<ParsedDay> {
+  const key = `${date}|${filter ? filterKey(filter) : ''}`;
+  const running = dayInFlight.get(key);
+  if (running) return running;
+  const job = buildDayRead(date, filter).finally(() => {
+    dayInFlight.delete(key);
+  });
+  dayInFlight.set(key, job);
+  return job;
+}
+
+async function buildDayRead(date: string, filter?: DayFilter): Promise<ParsedDay> {
   // Today and future dates are still mutable (scores accrue, lineups/rosters get
   // posted closer to first pitch), so they honor the TTL. Past dates are frozen.
   // A day stays mutable until the *baseball* day has moved past it (3am ET, see
@@ -1575,19 +1610,36 @@ export type HeldDays = Map<string, Set<string>>;
  * the reader was never entitled to and then throwing them away — a wire full of
  * somebody else's at-bats, and a second definition of "held" living in `App.tsx`
  * beside the first.
+ *
+ * **`parseWith` widens the day parse without widening the answer**, and it
+ * exists for one caller. `/api/overview` makes up to ten of these at once over
+ * an overlapping set of dates, and each one narrowed its day parse to *its own*
+ * roster — so the same snapshot was gunzipped and parsed once per manager per
+ * range, four ways over eight dates. A day parsed to a **superset** is correct
+ * here by construction: the loop below is `players.map`, looking each man up in
+ * the day, so a day holding men nobody asked about simply never has them read.
+ * What it buys is that the four reads become one question, which `getDay`'s
+ * in-flight map then answers once. Measured: **16 snapshot reads → 8** over two
+ * managers and eight dates.
+ *
+ * It changes the *parse*, never the *answer* — `players` still decides which
+ * rows come back and `held` still decides which of a row's days count. Leave it
+ * out and the filter is `players`, which is what every other caller wants.
  */
 export async function getReport(
   startDate: string,
   endDate: string,
   players: WatchPlayer[],
   held?: HeldDays,
+  parseWith?: WatchPlayer[],
 ): Promise<PlayerReport[]> {
   const ids = players.map((p) => p.id);
   const batterIds = players.filter((p) => p.kind === 'batter').map((p) => p.id);
   const pitcherIds = players.filter((p) => p.kind === 'pitcher').map((p) => p.id);
   // Each day is narrowed to just these players as it's parsed — without that a
   // wide range holds every player who appeared on every date in memory at once.
-  const filter = dayFilterFor(players);
+  // `parseWith` widens that set without widening the answer; see above.
+  const filter = dayFilterFor(parseWith ?? players);
   const rangeDates = enumerateDates(startDate, endDate);
   const [days, playerStats, pitcherStats, rosterInfo] = await Promise.all([
     mapLimit(rangeDates, DAY_CONCURRENCY, (d) => getDay(d, filter)),
