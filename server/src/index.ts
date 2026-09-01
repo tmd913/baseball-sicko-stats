@@ -174,6 +174,10 @@ const IS_LAMBDA = process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
  * The fields are short because they are paid for on every request, and JSON
  * because Logs Insights parses it with no regex — `stats pct(ms, 99) by r`.
  *
+ * `qs` is the query string and is the field that says *which* read this was;
+ * see `queryOf` for why it is not folded into `p`, and for the one parameter
+ * that is redacted.
+ *
  * `n` is the ordinal of this request **on this container**, which is the field
  * that makes the cold-container penalty visible per route: `n=1` served every
  * cache read from S3 with all ~30 in-process Maps empty, `n=40` served them
@@ -194,6 +198,50 @@ const SLOW_MS = Number(process.env.SLOW_MS ?? 5_000);
 
 const LOG_REQUESTS = IS_LAMBDA || process.env.LOG_REQUESTS === '1';
 
+/**
+ * The query string, which is what tells two reads of one route apart.
+ *
+ * **`p` is `req.path` and drops it, and that cost a browser session.** The
+ * Overview was found firing `/api/overview` three times on one boot — 16:35:51
+ * on 2026-09-01, at +404ms, +894 and +967, each on a container of its own and
+ * each taking 21 seconds — and the logs could not say whether those were three
+ * different questions or the same one asked three times, because all three
+ * lines read `"p":"/api/overview"`. Answering it meant reproducing the boot in
+ * a headless browser with the reads artificially staggered. One field would
+ * have answered it from the logs.
+ *
+ * **Its own field rather than folded into `p`**, because the two are read
+ * differently: `p` and `r` are grouped by (`stats count(*) by r`) and want low
+ * cardinality, where this is looked at one line at a time and would ruin a
+ * `by p` the moment it carried a date. Absent when there is no query at all, so
+ * the ordinary line does not grow a `"qs":""`.
+ *
+ * **`q=` is redacted to its length.** It is the one parameter in the whole API
+ * that carries free text a person typed — the header search — and the rest are
+ * dates, ids and enum values the app itself chose. Nothing here is a
+ * credential (checked: no route takes a token, a code or a cookie in the query
+ * string), so this is not a security measure; it is that a log of what somebody
+ * typed is a different kind of record from a log of what the app asked for, and
+ * the length is all the diagnosis needs. It is the length **as sent** — the
+ * value is still percent-encoded at this point, so `walker jenkins` logs as
+ * `q=<16 chars>` rather than 14, which is the honest figure for a line whose
+ * job is to say how big the request was.
+ *
+ * **Capped**, because `ids=` and `teams=` take lists and a 25-player roster is
+ * about 150 characters. 200 keeps every real query whole and bounds the line.
+ */
+const MAX_QS = 200;
+
+function queryOf(url: string): string | undefined {
+  const at = url.indexOf('?');
+  if (at === -1) return undefined;
+  const raw = url
+    .slice(at + 1)
+    .replace(/(^|&)q=([^&]*)/g, (_m, sep: string, v: string) => `${sep}q=<${v.length} chars>`);
+  if (!raw) return undefined;
+  return raw.length > MAX_QS ? `${raw.slice(0, MAX_QS)}…` : raw;
+}
+
 if (LOG_REQUESTS) {
   app.use((req, res, next) => {
     const started = Date.now();
@@ -202,12 +250,17 @@ if (LOG_REQUESTS) {
     // read at the end rather than here. The raw path is kept beside it: the
     // pattern groups (`/api/players/:playerId/splits`), the path is what you
     // replay when one of them is slow.
+    // Read once, up front: `originalUrl` is what arrived, and a route that
+    // rewrites or a router that mounts must not be able to change what the two
+    // lines below say the request was.
+    const qs = queryOf(req.originalUrl);
     const slow = setTimeout(() => {
       console.log(
         JSON.stringify({
           t: 'slow',
           m: req.method,
           p: req.path,
+          ...(qs === undefined ? null : { qs }),
           r: req.route?.path,
           ms: SLOW_MS,
           n,
@@ -224,6 +277,7 @@ if (LOG_REQUESTS) {
           t: 'req',
           m: req.method,
           p: req.path,
+          ...(qs === undefined ? null : { qs }),
           r: req.route?.path,
           s: res.statusCode,
           ms: Date.now() - started,
