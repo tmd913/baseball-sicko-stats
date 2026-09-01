@@ -8,7 +8,6 @@ import {
 import { api } from '../api';
 import { useResource, useResourcePoll } from '../resource';
 import type {
-  PlayerCut,
   PercentileMetric,
   PlayerKind,
   PlayerPagePayload,
@@ -17,10 +16,7 @@ import type {
   ScheduleWindow,
   SeasonArsenal,
 } from '../types';
-import { PLAYER_CUTS } from '../types';
 import {
-  CUT_LABEL,
-  cutOf,
   handCell,
   headshotUrl,
   isRotationStarter,
@@ -118,29 +114,6 @@ export const DEFAULT_DENSITY: PercentileDensity = 'summary';
 export function toDensity(v: string | undefined): PercentileDensity {
   return PERCENTILE_DENSITIES.find((d) => d === v) ?? DEFAULT_DENSITY;
 }
-
-/**
- * **The cuts: one run of three, which is which part of the season.**
- *
- * It was six across three groups — two spans, the two hands, the two parks —
- * and five of those six have gone to the **Splits** tab, where each is drawn as
- * a comparison with both halves on screen at once and the gap between them
- * measured. A cut card can only ever show one side of a split, so asking *is he
- * a different hitter against left-handers* here meant flipping between two
- * cards and subtracting them in your head; the Splits tab answers it in a row.
- *
- * What is left is the one cut that is a **span** rather than a split — which
- * part of the season — and a span reads honestly on a one-sided card, there
- * being nothing on screen it needs to be held against. Three pills, one
- * `.split-switch`, no groups to explain and (see the stylesheet) no dropdown to
- * fall back to at a phone's width: three pills fit on one line where six did
- * not, which is the whole of why that control existed.
- */
-const CUTS: (PlayerCut | null)[] = [null, ...PLAYER_CUTS];
-
-/** The unit `cutSample` is counted in, for the sentence under a cut card. */
-const sampleUnit = (isPitcher: boolean, n: number): string =>
-  isPitcher ? (n === 1 ? 'batter faced' : 'batters faced') : n === 1 ? 'plate appearance' : 'plate appearances';
 
 /** One metric row: label · bar with percentile bubble · raw value. */
 function MetricRow({ metric }: { metric: PercentileMetric }) {
@@ -578,8 +551,6 @@ export function PlayerDetails({
   onStatsColumnsChange,
   showRanks,
   onShowRanksChange,
-  pctCut,
-  onPctCutChange,
   pctDensity,
   onPctDensityChange,
   rankPopulations,
@@ -664,20 +635,11 @@ export function PlayerDetails({
    *  vocabulary. Held by App for the reason `statsColumns` is. */
   showRanks: boolean;
   onShowRanksChange: (on: boolean) => void;
-  /** **Which part of the season the Percentile Rankings card is drawn over**, or
-   *  null for the whole of it — `pcut=` in the URL, since it is which data the
-   *  card shows rather than how it is read. Held by App rather than here for the
-   *  reason `statsColumns` is: this component is unmounted the moment the
-   *  overlay closes and a URL param has to outlive it.
+  /** **How many bars the Percentile Rankings card draws** — Savant's fifteen or
+   *  all thirty-odd. It is that card's one control now: `pctCut` stood beside it
+   *  (`pcut=` in the URL) and went with the cut pills, every comparison it
+   *  offered being a Splits-tab card.
    *
-   *  It kept its own key when the Stats tab had a `cut=` of its own and the two
-   *  had to be able to disagree; that control is gone and this one is the only
-   *  cut left on the page, but the key stays `pcut=` — a param in a shared link
-   *  means what it meant when the link was made, and renaming it would break
-   *  every card anybody has sent. */
-  pctCut: PlayerCut | null;
-  onPctCutChange: (cut: PlayerCut | null) => void;
-  /** **How many bars that card draws** — Savant's fifteen or all thirty-odd.
    *  A saved preference rather than a URL param, the line `showRanks` is on: it
    *  is a habit of reading rather than which numbers are on screen. Both
    *  arrangements ride in one response, so this is a render and never a
@@ -913,28 +875,30 @@ export function PlayerDetails({
   const wantStarts = day !== null && isPitcher && isRotationStarter(day);
 
   /** The percentile card — the most expensive read the page makes, and the one
-   *  the lazy rule was written for. The cut is part of the question and so part
-   *  of the key; the man is the family, so a cut change keeps the card up and a
-   *  new man blanks it. */
+   *  the lazy rule was written for. Keyed on the man alone now: the cut used to
+   *  be part of the question and so part of the key, and there is one question.
+   *  `family` is kept for the same reason it was set — a different man is a
+   *  different subject and his card must not carry over. */
   const pctRes = useResource(
-    tab === 'percentiles' ? `percentiles:${who}:${pctCut ?? 'all'}` : null,
-    () => api.percentiles(playerId, kind, pctCut),
+    tab === 'percentiles' ? `percentiles:${who}` : null,
+    () => api.percentiles(playerId, kind),
     { family: who, staleMs: SEASON_STALE_MS },
   );
   const data = pctRes.value ?? null;
   const error = pctRes.error?.message ?? null;
   const loading = pctRes.loading;
   /**
-   * **A cut change is `updating`, never `loading`** — and wiring the mark to
-   * the wrong one is why pressing a cut looked like pressing nothing.
+   * **A re-read over a card already drawn is `updating`, never `loading`** — and
+   * wiring the mark to the wrong one is why pressing a cut used to look like
+   * pressing nothing.
    *
    * `resource.ts` computes them as a pair: `loading` is `loud > 0 && value ===
-   * undefined`, `updating` is `loud > 0 && value !== undefined`. The percentile
-   * card is `family: who`, so a cut change **carries** the previous card — which
-   * is deliberate and is rule 1 — and therefore `value` is defined and
-   * `loading` is **false for the whole of the read the badge existed to
-   * announce**. The `pct-updating` slot below was gated on `loading && data`, a
-   * conjunction that cannot be true on this key, so it never once appeared.
+   * undefined`, `updating` is `loud > 0 && value !== undefined`. This card
+   * carries its previous answer across a re-read — which is rule 1 — so `value`
+   * is defined and `loading` is **false for the whole of the read the badge
+   * exists to announce**. The `pct-updating` slot below was gated on `loading &&
+   * data`, a conjunction that cannot be true on this key, so it never once
+   * appeared.
    */
   const pctBusy = pctRes.updating;
 
@@ -1785,37 +1749,35 @@ export function PlayerDetails({
         </>
       )}
 
-      {/* **The card's own controls, and they sit outside it on purpose.**
+      {/* **The card's one control, and it sits outside the card on purpose.**
 
-          Two questions, and they are deliberately different kinds of control.
-          The **cut** is which numbers the card is about, so it goes in the URL
-          (`pcut=`) and re-reads; the **density** is how much of the same card
-          this reader likes to see, so it is a saved preference and a render.
-          The rules file draws that line and this is it applied: a link that
-          leaves the cut out describes a different card, where one that leaves
-          the density out describes the same card seen by somebody else.
+          **There was a cut control beside this and there is not.** It offered
+          `Season · First Half · Second Half` — and, before that, the two hands
+          and the two parks and a hundred at-bats — and every one of those is a
+          *comparison* that the **Splits** tab now draws whole, both columns and
+          the measured gap between them. What was left after the splits moved
+          was the two halves, which a one-sided card can state honestly and
+          which nobody was asking a percentile card for: this card's question is
+          *how good is he*, and the answer to that is his season. So the card is
+          the season's, always, and every bar on it is Savant's own rank rather
+          than one of ours drawn broken.
 
-          They are drawn above the card rather than inside its head because a
-          cut can come back **empty** — a man with no plate appearance against
-          left-handers has no rows to hang a control off — and an empty state
-          has to name the control that caused it *and* leave that control
-          reachable. Inside the head they would vanish with the card, and the
-          only way back to the season would be the browser's Back button.
+          The density stays, and stays **outside the card**: this box is also
+          where the `Updating` badge is reserved, and a card that comes back
+          empty has to leave the control that could change it reachable — inside
+          the head it would vanish with the card.
 
-          Hidden entirely for a player Savant has no card for at all, which is
-          `data.cut == null && sections.length === 0`: the season read came back
-          empty, so there is nothing for a cut to be a cut of. That test is why
-          `cut` rides on the response — the two empties are indistinguishable
-          from the rows alone. */}
-      {tab === 'percentiles' && data && !(data.cut == null && data.sections.length === 0) && (
+          Drawn whenever there is a card at all. The test used to be
+          `data.cut == null && sections.length === 0` — an empty *season* read,
+          which is the one state where a cut control would be a control over
+          nothing — and with the cuts gone the density is still worth offering
+          on a card whose `Summary` half is empty and whose `Detailed` half is
+          not, which is a real player (see the empty state below). */}
+      {tab === 'percentiles' && data && (
         <div className="pct-controls">
-          {/* **The density reads first, and it is a row of its own.**
-
-              It sat beside the cuts, which put the reader's *second* question
-              ahead of nothing and left a six-pill run and a two-pill run
-              competing for one line. How much of the card you want is the
-              coarser choice — it is true of every cut — so it leads, and the
-              cuts sit under it as a set of what that card can be about. */}
+          {/* **How much of the card**, and it is the whole of this row now. It
+              read first when there were cuts under it, on the argument that it
+              is the coarser question — true of every cut. There is one row. */}
           <div className="split-switch pct-density" role="tablist" aria-label="Density">
             {PERCENTILE_DENSITIES.map((d) => (
               <button
@@ -1836,38 +1798,6 @@ export function PlayerDetails({
             ))}
           </div>
 
-          {/* **Which part of the season, in one run of three.** The six pills
-              this control used to carry were three questions wearing one
-              selection — which span, which arm, which park — and the two that
-              were splits have moved to the Splits tab, which draws both halves
-              of each at once. Three alternatives of one question is a single
-              `.split-switch`, the app's plainest control, and it fits one line
-              at every width this page is drawn at.
-
-              **No `select` under it any more.** The dropdown existed because
-              three boxes of pills took three lines of a phone's screen; one box
-              of three takes one, so the swap has nothing left to buy. */}
-          <div className="pct-cuts" role="tablist" aria-label="Which part of the season">
-            <div className="split-switch">
-              {CUTS.map((c) => (
-                <button
-                  key={c ?? 'all'}
-                  type="button"
-                  role="tab"
-                  aria-selected={pctCut === c}
-                  className={`split-tab${pctCut === c ? ' active' : ''}`}
-                  onClick={() => onPctCutChange(c)}
-                  title={
-                    c === null
-                      ? 'His whole season — the only card whose bars are Savant’s own'
-                      : `What he did ${cutOf(c, kind)}, placed among every qualified player’s full season`
-                  }
-                >
-                  {c === null ? 'Season' : CUT_LABEL[c][kind]}
-                </button>
-              ))}
-            </div>
-          </div>
           <span
             className={`pct-updating${pctBusy ? '' : ' is-idle'}`}
             role="status"
@@ -1879,12 +1809,13 @@ export function PlayerDetails({
       )}
 
       {/* **A block wait only when there is nothing to show yet.** Gated on
-          `!data`, which is what makes changing the cut quiet: the card that is
-          up stays up while the next one is in flight and the `Updating` badge
-          in its head carries the tense. Without that gate, every press of a cut
-          pill blanked a full-height card for the length of a request — a
-          re-read painting over an answer, which is the one thing the loading
-          rules forbid outright. */}
+          `!data`, so a re-read — the poll, the resume — leaves the card that is
+          up standing while the next one is in flight and the `Updating` badge
+          carries the tense. Without that gate a re-read blanked a full-height
+          card for the length of a request, which is the one thing the loading
+          rules forbid outright. (It was written for the cut control, where
+          every press of a pill hit it; that control is gone and the rule is
+          not.) */}
       {tab === 'percentiles' && pctWait && !data && (
         <LoadingBlock>Reading the percentile card</LoadingBlock>
       )}
@@ -1906,15 +1837,13 @@ export function PlayerDetails({
           (`pctReq.current = null` in the effect above), and an empty state
           names the control that answers it.
 
-          **A failed *cut* leaves the card that was on screen standing** and
+          **A failed re-read leaves the card that was on screen standing** and
           says so beside it rather than replacing it, which is the same rule the
-          wait above follows: the reader has an answer worth keeping, and the
-          one that failed is a question they asked on top of it. */}
+          wait above follows: the reader has an answer worth keeping. */}
       {tab === 'percentiles' && error && !loading && (
         <div className="details-status details-error">
-          {data
-            ? `Couldn’t read the ${pctCut ? CUT_LABEL[pctCut][kind] : 'season'} card: ${error}. The card below is the last one that answered — press a split again to retry.`
-            : `Couldn’t read the percentile card: ${error}. That is this read failing rather than anything about ${name} — leave the tab and come back to try it again.`}
+          Couldn’t read the percentile card: {error}. That is this read failing rather than
+          anything about {name} — leave the tab and come back to try it again.
         </div>
       )}
       {/* **And the unmissable half of the same statement.** The badge above is a
@@ -1929,40 +1858,8 @@ export function PlayerDetails({
       {tab === 'percentiles' && data && shownSections.length > 0 && (
         <div className="pct-card" ref={cardRef}>
           <div className="pct-card-head">
-            <span className="pct-card-title">
-              {data.year} MLB Percentile Rankings
-              {/* **The cut is one unbreakable phrase.** On a phone the title
-                  wraps, and left as plain text it broke *inside* the cut —
-                  `— vs` on one line and `LHP` on the next, which reads as two
-                  half-thoughts. Nowrap moves the break to the space before the
-                  dash, where a title should break. */}
-              {data.cut && (
-                <span className="pct-card-cut"> — {CUT_LABEL[data.cut][kind]}</span>
-              )}
-            </span>
+            <span className="pct-card-title">{data.year} MLB Percentile Rankings</span>
           </div>
-          {/* **What a cut card is, said once, above the bars.** Three things a
-              reader cannot get from the bars themselves and would otherwise
-              have to assume: that the population is the *whole season* (which
-              is what makes a split comparable to anything), that these ranks
-              are ours rather than Savant's (which is what the broken bubbles
-              mean), and how much of a season the line rests on — the last being
-              the only guard against reading a hundredth percentile off
-              thirty-four plate appearances. */}
-          {data.cut && (
-            <p className="pct-cut-note">
-              {data.cutSample != null && (
-                <>
-                  <span className="pct-cut-sample">
-                    {data.cutSample} {sampleUnit(isPitcher, data.cutSample)}
-                  </span>
-                  {', '}
-                </>
-              )}
-              placed among every qualified player’s <strong>full season</strong> — so these ranks
-              are ours rather than Savant’s, and every bubble is drawn broken.
-            </p>
-          )}
           {shownSections.map((sec) => (
             <div className="pct-section" key={sec.title}>
               <h2 className="pct-section-title">{sec.title}</h2>
@@ -1972,11 +1869,10 @@ export function PlayerDetails({
         </div>
       )}
       {/* **A card that came back empty, which is a real answer**, and there are
-          now three ways to reach one — so the sentence names which.
-
-          The **cut** is empty: he has no plate appearance in it. Common and
-          unremarkable (a left-handed platoon bat against left-handers), and the
-          control that caused it is the row of pills above, still on screen.
+          two ways to reach one — so the sentence names which. (There were
+          three: a *cut* could be empty, which was the common one — a
+          left-handed platoon bat against left-handers — and it went with the
+          cut control.)
 
           The **density** is empty and the other one is not: he has a line but
           nothing in the fifteen bars Savant draws — a handful of plate
@@ -1996,13 +1892,11 @@ export function PlayerDetails({
           over a card with no rankings in it. */}
       {tab === 'percentiles' && data && !loading && shownSections.length === 0 && (
         <div className="details-status">
-          {data.cut
-            ? `${name} has no ${CUT_LABEL[data.cut][kind]} line this season — nothing to rank. Pick another part of the season above.`
-            : otherSections.length > 0
-              ? `Nothing of ${name}’s season lands in Savant’s own fifteen bars — switch to Detailed above for the rows he does have.`
-              : isPitcher
-                ? `${name} has not pitched in a major-league game this season, so there is nothing to rank him against.`
-                : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
+          {otherSections.length > 0
+            ? `Nothing of ${name}’s season lands in Savant’s own fifteen bars — switch to Detailed above for the rows he does have.`
+            : isPitcher
+              ? `${name} has not pitched in a major-league game this season, so there is nothing to rank him against.`
+              : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
         </div>
       )}
     </DetailsShell>

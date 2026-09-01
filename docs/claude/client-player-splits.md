@@ -1,9 +1,13 @@
 ### The Splits tab: four comparisons, each drawn whole
 
-**It was one card and it is four.** The platoon comparison, `Home and away`,
-`Against the league` and `First half and second` — in that order, stacked down
-one tab, every one of them the same card with its own labels and its own
-measured scale (`SplitCard`, which the whole of this file is about).
+**It was one card and it is four.** `Platoon`, `Home vs Away`, `Player vs
+League` and `1st Half vs 2nd Half` — in that order, stacked down one tab, every
+one of them the same card with its own labels and its own measured scale
+(`SplitCard`, which the whole of this file is about). The titles name **both
+sides** rather than the subject (they read `Platoon splits`, `Home and away`,
+`Against the league`, `First half and second`): three of the four are `X vs Y`,
+which is what the card draws, and a reader scanning four heads down a tab is
+reading them as a set.
 
 **Three of them arrived from the percentile card's cut control**, which offered
 `vs RHP · vs LHP · Home · Away · Last 100 AB` and now offers the two halves of
@@ -129,10 +133,17 @@ hitting one has `hitByPitch` and `sacFlies` (OBP's denominator). League FIP come
 to **4.23** against a league ERA of **4.16**, which is exactly what
 `FIP_CONSTANT`'s own comment says an approximated constant costs.
 
-**The head prints the league's sample and it is 156,399 PA**, grouped —
-`sample.toLocaleString()` on `SplitHead`, a change no player's card can see (every
-sample on a split of one man is three figures at most) and one the league's
-cannot do without.
+**The league head says `AVG` where every other head says a sample.** Its count is
+**156,399 plate appearances** — a figure no reader acts on, three times the width
+of every other head on the tab, and one that reads as a *sample* when what it is
+is the whole league. `rightSampleText` on `SplitCard` replaces the printed count
+for that column alone; the **number is untouched underneath**, which is the point
+of it being a label rather than a smaller `rightSample`: the two sample gates
+take `Math.min(left, right)`, so a league column of 156,399 is what makes the
+thin-sample rules on this card answer for *his* line alone, which is the only
+side of it that can be thin. Everything else still prints its count, grouped
+(`sample.toLocaleString()`), which no player's card can see — every sample on a
+split of one man is three figures at most.
 
 ### The platoon comparison, and the geometry the whole tab inherits
 

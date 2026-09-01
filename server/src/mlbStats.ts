@@ -829,11 +829,14 @@ export async function getPitcherStats(
  * caller splitting *regular-season* games on it (`gameType=R`) is therefore
  * splitting on a date no game it is splitting falls on.
  *
- * **It lives here because it has two callers now** and they must not come to
- * disagree: the standings board's `firstHalf`/`secondHalf` columns
- * (`mlbStandings.ts`) and the percentile card's two half cuts
- * (`playerSplits.ts`, which splits a season of pitch rows on it). One arithmetic
- * gets one implementation, and a half of the season is an arithmetic.
+ * **It lives here because this is where MLB Stats API reads live.** It was
+ * moved out of `mlbStandings.ts` when it grew a second caller — the percentile
+ * card's two half cuts, which split a season of pitch rows on the same boundary
+ * — and one arithmetic getting one implementation was the argument. That caller
+ * has since gone with the cut control; the standings board's
+ * `firstHalf`/`secondHalf` columns are the one reader again, and the read stays
+ * here because a schedule lookup is not a standings concern and the next module
+ * that needs the break should find it before writing a second one.
  *
  * The season is the caller's, for the reason every other read in this file takes
  * one: this module pins no year of its own.

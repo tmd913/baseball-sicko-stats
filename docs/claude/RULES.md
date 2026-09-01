@@ -79,11 +79,12 @@ not the other fails at runtime rather than at build time.
 is in `CLAUDE.md`; **check the count against the code rather than trusting the
 prose** — `grep -rln "hfSea\|CURRENT_SEASON = \|SEASON = " server/src/` is what
 it is derived from, and it has been one behind **twice** (`teamResearch.ts`, and
-then `parkFactors.ts`). That grep answers **thirteen** against a count of eleven,
-and always will — `playerSplits.ts` answers it by *using* an imported `SEASON`
-rather than declaring one, and `percentileCuts.ts` answers it from a **comment**
-containing the word `hfSea`, left there deliberately so a reader auditing the
-roll-over meets the file (`CLAUDE.md` has both). Count the declarations, not the
+then `parkFactors.ts`). That grep answered **thirteen** against a count of eleven
+while `playerSplits.ts` and `percentileCuts.ts` existed — one *using* an imported
+`SEASON` and one answering from a **comment** containing the word `hfSea` — and
+both went with the percentile card's cut control, so it answers eleven today.
+Expect it to diverge again the moment a file *uses* the number
+(`CLAUDE.md` has the whole of it). Count the declarations, not the
 filenames — and note
 the declaration grep is itself one short, `savant.ts` spelling its pin
 `hfSea: '2026|'` where the pattern looks for `hfSea=`. Ten from that grep plus
@@ -304,11 +305,14 @@ paint over the box covering it.
 - **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`,
   `hideil`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
   `win`, `board`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `lwk`, `proj`,
-  `rproj`, `rsum`, `rankproj`, `pcut`, `mlb`, `mday`, `mgrp`. A link
+  `rproj`, `rsum`, `rankproj`, `mlb`, `mday`, `mgrp`. A link
   that leaves one out describes a
-  different page. (`cut` — the player page's Stats tab — is gone with the
-  control that wrote it; every split it offered is a Splits-tab card now, and
-  `pcut` is the page's one cut.)
+  different page. (The player page carried two cut params, `cut` for the Stats
+  tab's spans and `pcut` for the percentile card's, and **both are gone with
+  their controls**: every comparison they offered is a card on the Splits tab,
+  where both halves are drawn at once. A link carrying either still opens the
+  page — an unrecognized param falls back rather than emptying the view, which
+  here means being ignored.)
 
 - **A fact about the person → a saved preference** on the user's own record
   (`UserPrefs`). Absence means the default, so a default can change without
@@ -319,11 +323,12 @@ paint over the box covering it.
   link re-derives the dates on the recipient's own today.
 - **Two params must never mean two things.** `proj=1` is a matchup's and
   `rproj=1` is the roster's, deliberately, because a link is read before
-  anything on screen can say which view wrote it. **A param keeps its name once
-  it is in the wild**, which is the other half of the rule: `pcut=` was named
-  apart from the Stats tab's `cut=` so the two could differ, and it keeps that
-  name now `cut=` is gone — renaming it would break every card link anybody has
-  shared, to save one letter.
+  anything on screen can say which view wrote it. **A param outlives the control
+  that wrote it**, which is the other half of the rule: `cut=` and `pcut=` were
+  two names for two cuts of one page precisely so a link could not be
+  misread, and when both controls went the params were **dropped rather than
+  repurposed** — a name that meant something to a link somebody sent must never
+  come to mean something else.
 - **A lens is put away when its page leaves the screen.** A press is about the
   page it was made on, so a projected reading (`rproj=1`, `proj=1`,
   `rankproj=1`, a team page's own) goes off when the reader crosses the view

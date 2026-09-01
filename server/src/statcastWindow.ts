@@ -96,11 +96,14 @@ export interface StatcastCounts {
   swingBins: Record<string, number>;
 }
 
-/** Exported for `playerSplits.ts`, which tallies one player's own season export
+/** **Module-local again.** These three (`empty`, `tally`, `toStatcast`) were
+ *  exported for `playerSplits.ts`, which tallied one player's own season export
  *  into the same counts a day export is reduced to — so a cut of a span and the
- *  span itself are the same arithmetic over the same pitch rows, rather than
- *  two definitions of a barrel that happen to agree today. */
-export function empty(): StatcastCounts {
+ *  span itself were the same arithmetic over the same pitch rows rather than two
+ *  definitions of a barrel that happened to agree today. That file is gone with
+ *  the cut controls it fed, and an export nobody imports is an invitation to a
+ *  second caller that has not read this file. */
+function empty(): StatcastCounts {
   return {
     bip: 0, evSum: 0, evN: 0, laSum: 0, laN: 0, barrels: 0, hardHit: 0,
     sweetSpot: 0, gb: 0, ld: 0, fb: 0, pu: 0, swings: 0, whiffs: 0,
@@ -170,7 +173,7 @@ const num = (v: string | undefined): number | null => {
 };
 
 /** Exported with `empty` above, and for the same reason — see there. */
-export function tally(into: StatcastCounts, r: Record<string, string>): void {
+function tally(into: StatcastCounts, r: Record<string, string>): void {
   const desc = r.description ?? '';
 
   // Discipline. `zone` is 1-9 inside and 11-14 outside — Savant's own grid.
@@ -503,7 +506,7 @@ const mean = (sum: number, n: number): number | null => (n > 0 ? sum / n : null)
 const r3 = (v: number | null): number | null => (v === null ? null : Math.round(v * 1000) / 1000);
 const r1 = (v: number | null): number | null => (v === null ? null : Math.round(v * 10) / 10);
 
-export function toStatcast(c: StatcastCounts): WindowStatcast {
+function toStatcast(c: StatcastCounts): WindowStatcast {
   return {
     xba: r3(mean(c.xbaSum, c.paDen)),
     xslg: r3(mean(c.xslgSum, c.paDen)),

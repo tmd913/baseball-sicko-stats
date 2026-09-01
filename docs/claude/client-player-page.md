@@ -753,6 +753,11 @@ by "the Savant card"**.
 So there are two controls above the card, and they are deliberately different
 kinds of control.
 
+*(The `pcut=` half of what follows is gone with the control. The line it draws
+— which data a view shows goes in the URL, a fact about the person goes on their
+record — is the reason the density is *still* a saved preference, so it is kept
+as written.)*
+
 **The cut is `pcut=` in the URL; the density is a saved preference.** That is
 the rules file's own line applied: which data a view shows goes in the URL, a
 fact about the person goes on their record. A link that leaves the cut out
@@ -764,12 +769,11 @@ uncut *table*. It is put away when the page leaves the screen, the standing rule
 for a lens, by the same effect that puts `statsCut` away and for the same
 reason.
 
-*(**Superseded**: the control offers three cuts — `Season · First Half · Second
-Half` — and the five below are Splits-tab cards. See *The Splits tab is four
-cards now, and the percentile card gave three of them up*, further down, which
-carries the argument and the measurements; what follows is kept as the record of
-why those five were on a cut control in the first place, and the `pcut=`
-reasoning above it is unchanged.)*
+*(**Superseded twice**: the control went to three cuts and then to none, and
+`pcut=` went with it. See *The percentile card has no cut control at all*,
+further down, which carries the argument and the measurements; what follows is
+kept as the record of why these cuts were on a card in the first place, and the
+`pcut=` reasoning above it is now historical.)*
 
 **Six cuts, and the sixth is not a split.** `Season · vs RHP · vs LHP · Home ·
 Away · Last 100 AB`, reading `vs RHB` / `vs LHB` / `Last 100 BF` on a pitcher —
@@ -2256,11 +2260,53 @@ every tab reachable, and the page and overlay overflow **0**. Nothing else about
 the tab moved — same key (`news`), same read (it rides on the page's own
 `/api/players/:id/page` burst), same component.
 
+### The percentile card has no cut control at all, and the card is his season
+
+**It went in two steps and the second is the one to read.** The control offered
+six cuts (`Season · vs RHP · vs LHP · Home · Away · Last 100 AB`), then three
+(`Season · First Half · Second Half`), and now none.
+
+**The first step is the argument**, and it is below: five of those six ask
+whether a man is different *against* something or *somewhere*, a cut card draws
+one side of that at a time, and the **Splits** tab draws a comparison whole. So
+they became cards there.
+
+**The second step is the one the first made obvious.** What was left was the two
+halves — a *span*, which a one-sided card can state honestly — and nobody opens a
+percentile card to ask *when*. The card answers one question, *how good is he*,
+and the answer to that is his season; the halves are a comparison too (*this half
+against that one*), and the Splits tab draws them as one. So the control is gone,
+and with it a good deal more than a row of pills:
+
+- **`pcut=` in the URL**, and `PlayerCut` / `PLAYER_CUTS` on both sides of the
+  wire, and `CUT_LABEL` / `cutOf` in `lib.ts` (whose last reader this was).
+- **`cut` and `cutSample` off `PlayerPercentiles`**, and the card's title suffix,
+  the caption under its head and the empty state that named a cut.
+- **`percentileCuts.ts` and `playerSplits.ts`**, both deleted with their last
+  reader — which took `getPlayerSeasonCut`, `CUT_SOURCE`, `distributionsFor` and
+  the per-player season-of-pitches fetch with them, and let `statcastWindow.ts`
+  un-export `empty`, `tally` and `toStatcast` (module-local again, their one
+  outside caller having been that file).
+- **The `cut=` parameter on `/api/percentiles/:playerId`.**
+
+**What is bought is a card whose every bar is Savant's own.** A cut card ranked a
+cut value inside the *season's* qualified distribution, so every metric on one
+arrived `estimated` and was drawn broken — an honest drawing of an honest
+approximation, and one this page no longer has to make. Solid means measured
+again, everywhere on this tab.
+
+**Measured after, on Ohtani at 1200×900**: the controls row is `Summary ·
+Detailed` alone at `x: 260, w: 680, **h: 30**` (it was 90 with the cut pills
+under it), the card is `x: 260, w: 680` and titled `2026 MLB Percentile
+Rankings` with no suffix, there is no `.pct-cuts`, no `.pct-cut-note` and no
+`.pct-cut-select` in the DOM at any width, and the URL carries no cut param.
+
 ### The Splits tab is four cards now, and the percentile card gave three of them up
 
-**The percentile card's cut control offered six cuts and offers three.** It was
-`Season · vs RHP · vs LHP · Home · Away · Last 100 AB`; it is `Season · First
-Half · Second Half`. What changed is not the card but where a *comparison*
+**The percentile card's cut control offered six cuts and offered three.** It was
+`Season · vs RHP · vs LHP · Home · Away · Last 100 AB`; it became `Season · First
+Half · Second Half`, and has since gone entirely — see the section above, which
+is the end of this argument rather than a reversal of it. What changed is not the card but where a *comparison*
 belongs: five of those six ask whether a man is different **against** something
 or **somewhere**, and a cut card can only ever draw one side of that at a time —
 so a reader asking *is he a different hitter against left-handers* was holding
