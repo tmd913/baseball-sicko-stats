@@ -218,10 +218,71 @@ local disk) at a 9-day span: **1.98s and 4.43 MB of payload**, the second call
 than a local disk, on ~1.2 vCPU — plausible rather than demonstrated, and the
 honest statement is that the *shape* is understood and the constant is not.
 
-It is left as it is. The p50 is 3.5s and the p90 7.1s because the span is one
-day at the start of a period and fourteen at the end, and the ways out — reading
-the span separately from the three day cards, or shortening what it covers — are
-changes to what the app's front page *is*, not to how it caches.
+That paragraph ended *it is left as it is*, on the grounds that the ways out —
+reading the span separately from the three day cards, or shortening what it
+covers — were changes to what the front page **is** rather than to how it
+caches. **There was a third way, and it is below.**
+
+#### The long-span Overview: one parse, not four
+
+**The 14.7-second boot with no cold container in it was this route's own work**,
+and the paragraph above had the cause half right. What sizes it is not the span
+reaching a cap — it never does; see the correction there — but that
+**`getDay`'s memo is keyed by `date|filterKey(filter)` and the page asked four
+different questions of every date**.
+
+`/api/overview` makes up to eight day-reads: a span and two single days for each
+of two managers. Each one narrowed its parse to *its own* roster, so the same
+snapshot was gunzipped and parsed once per manager per range — and a day
+snapshot is **350–860 KB gzipped, 5–8 MB open**, which on Lambda is an S3 GET
+apiece.
+
+**Two changes, and neither works without the other.**
+
+**`getDay` dedups in flight.** The memo only helps once the answer exists, so
+*N* concurrent calls for one day all miss, all read the blob and all parse it.
+Measured with two rosters over eight dates: **sixteen calls, sixteen reads,
+eight distinct days**. A `dayInFlight` map keyed exactly as `projectedCache` is
+collapses the concurrent window. On its own it changes nothing here — the four
+questions are four keys.
+
+**And the page asks one question.** `overviewParseSet` reads both managers'
+rosters over the widest range the page covers *before* any report is built, and
+every read narrows its day parse to that union. `getReport`'s new `parseWith`
+is what carries it: it changes the **parse** and never the **answer** —
+`players` still decides which rows come back and `held` still decides which of a
+row's days count — and it is safe by construction, the report loop being
+`players.map` looking each man up in the day, so a day holding men nobody asked
+about simply never has them read.
+
+**Measured, driving the page's own eight reads:**
+
+| | snapshot reads | distinct keys | peak heap |
+| --- | --- | --- | --- |
+| per-side filters | **16** | 16 | 47 MB |
+| one shared set | **8** | 8 | 35 MB |
+
+**Wall time locally does not move** — 577ms against 559 — and that is the honest
+number rather than a disappointing one: a warm OS page cache makes a local read
+nearly free, so halving the reads buys nothing on a laptop. The first run of the
+comparison read 2,395ms against 182 purely because the files were cold, which is
+worth writing down as the trap it is. What the change buys is on Lambda, where
+each of those eight avoided reads is an S3 GET of ~700 KB followed by a gunzip
+and a parse of 5–8 MB, and where this route was measured at **14.7s with no cold
+container in it**.
+
+**The answer is byte-identical, which was checked at 87× the width.** A parse
+set of **347 players** — everybody who appeared on a day, against a 4-player
+roster — produces the same reports as narrowing to the roster itself, over an
+8-day span and over a single day, compared as JSON including pitching lines,
+roster status and club. And end to end, the rendered page fingerprints the same
+on both sides of the change: 6 day cards, 24 performers, two leader sides, heat
+tallies `11/15/4` and `10/13/3`, top performer `Bradley +1.9`.
+
+**`overviewParseSet` answers `undefined` rather than throwing.** Without it every
+read falls back to narrowing by its own roster, which is exactly what this route
+did before — it is an optimization and it is written to degrade like one.
+
 
 ### `/api/players` is a list; the other two are a search and a lookup
 

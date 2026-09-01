@@ -1055,9 +1055,12 @@ async function overviewDay(
   fantasy: boolean,
   teamId: number | null,
   date: string,
+  /** The set the day parse is narrowed to — see `overviewParseSet`. Wider than
+   *  this read's own roster on purpose, so the page's reads share one parse. */
+  parseWith?: WatchPlayer[],
 ): Promise<OverviewDayRead> {
   const { watched, held, lineups } = await overviewRoster(user, fantasy, teamId, date, date);
-  const players = await getReport(date, date, watched, held);
+  const players = await getReport(date, date, watched, held, parseWith);
   return { players, lineup: lineups?.[date] ?? null };
 }
 
@@ -1096,9 +1099,12 @@ async function overviewSpan(
   teamId: number | null,
   start: string,
   end: string,
+  /** See `overviewParseSet`. This is the read the shared set was written for —
+   *  it is the one that runs over every date in the window. */
+  parseWith?: WatchPlayer[],
 ): Promise<OverviewSpanRead> {
   const { watched, held, lineups } = await overviewRoster(user, fantasy, teamId, start, end);
-  const players = await getReport(start, end, watched, held);
+  const players = await getReport(start, end, watched, held, parseWith);
   return { players, lineups };
 }
 
@@ -1118,6 +1124,7 @@ async function readOverviewSide(
   dates: { yesterday: string; today: string; tomorrow: string },
   span: { start: string; end: string } | null,
   whose: string,
+  parseWith: WatchPlayer[] | undefined,
 ): Promise<OverviewSide> {
   const quiet = <T>(what: string, p: Promise<T>): Promise<T | null> =>
     p.catch((err: unknown) => {
@@ -1125,15 +1132,62 @@ async function readOverviewSide(
       return null;
     });
   const [today, yesterday, tomorrow, todayProjection, spanRead] = await Promise.all([
-    quiet('today', overviewDay(user, fantasy, teamId, dates.today)),
-    quiet('yesterday', overviewDay(user, fantasy, teamId, dates.yesterday)),
+    quiet('today', overviewDay(user, fantasy, teamId, dates.today, parseWith)),
+    quiet('yesterday', overviewDay(user, fantasy, teamId, dates.yesterday, parseWith)),
     quiet('tomorrow', overviewProjection(user, fantasy, teamId, dates.tomorrow)),
     quiet('todayProjection', overviewProjection(user, fantasy, teamId, dates.today)),
     span
-      ? quiet('span', overviewSpan(user, fantasy, teamId, span.start, span.end))
+      ? quiet('span', overviewSpan(user, fantasy, teamId, span.start, span.end, parseWith))
       : Promise.resolve(null),
   ]);
   return { today, yesterday, tomorrow, todayProjection, span: spanRead };
+}
+
+/**
+ * **Every player either manager's page could be about, as one set.**
+ *
+ * The page makes up to eight day-reads across two managers and an overlapping
+ * set of dates, and each one used to narrow its day parse to *its own* roster —
+ * so the same snapshot was gunzipped and parsed once per manager per range.
+ * Measured, that is the cost of this route: 350–860 KB gzipped and 5–8 MB open,
+ * per date, per distinct roster, and on Lambda every one of those is an S3 GET.
+ *
+ * One set makes all of them the same question, which `getDay`'s in-flight map
+ * then answers once. **16 snapshot reads → 8** over two managers and eight
+ * dates, measured; and the peak heap halves with them, one parsed copy of a day
+ * standing where two used to.
+ *
+ * **It is read over the widest range the page covers**, so it is a superset of
+ * what any single read wants — which is the whole point and is why `parseWith`
+ * is safe: it changes what a *day parse* keeps, never what a *report* answers.
+ * `players` still decides the rows and `held` still decides the days.
+ *
+ * **A failure here costs the page nothing**, which is why it answers
+ * `undefined` rather than throwing: without it every read falls back to
+ * narrowing by its own roster, which is exactly what this route did before. It
+ * is an optimization and it is written to degrade like one.
+ */
+async function overviewParseSet(
+  user: string,
+  fantasy: boolean,
+  teamIds: (number | null)[],
+  start: string,
+  end: string,
+): Promise<WatchPlayer[] | undefined> {
+  try {
+    const sides = await Promise.all(
+      teamIds.map((id) => overviewRoster(user, fantasy, id, start, end).then((r) => r.watched)),
+    );
+    // Keyed the way the app keys a player everywhere else, so a man on both
+    // rosters is one entry — which he will be on the two halves of a matchup
+    // more often than not.
+    const byKey = new Map<string, WatchPlayer>();
+    for (const side of sides) for (const p of side) byKey.set(`${p.kind}-${p.id}`, p);
+    return byKey.size > 0 ? [...byKey.values()] : undefined;
+  } catch (err) {
+    console.error('overview parse set failed:', err);
+    return undefined;
+  }
 }
 
 app.get(
@@ -1238,11 +1292,29 @@ app.get(
     const OVERVIEW_SPAN_MAX_DAYS = 21;
     if (span && dayCount(span.start, span.end) > OVERVIEW_SPAN_MAX_DAYS) span = null;
 
+    // ---- One parse set for the whole page --------------------------------
+    //
+    // Read before the halves rather than inside them, which is the whole of
+    // what it is for: the eight day-reads below have to be asking the *same*
+    // question of a day before `getDay` can answer it once. The range is the
+    // widest the page covers — the span where there is one, and yesterday
+    // through today where there is not, tomorrow being a projection and never a
+    // day parse. Costs no upstream read of its own: `overviewRoster` is the
+    // same call each half makes, behind `fantasyWatchlist`'s per-container
+    // cache.
+    const parseWith = await overviewParseSet(
+      userId(req),
+      fantasy,
+      opponent ? [null, opponent.teamId] : [null],
+      span?.start ?? dates.yesterday,
+      dates.today,
+    );
+
     // ---- Both halves, in one flight --------------------------------------
     const [mine, theirs] = await Promise.all([
-      readOverviewSide(userId(req), fantasy, null, dates, span, 'mine'),
+      readOverviewSide(userId(req), fantasy, null, dates, span, 'mine', parseWith),
       opponent
-        ? readOverviewSide(userId(req), fantasy, opponent.teamId, dates, span, 'theirs')
+        ? readOverviewSide(userId(req), fantasy, opponent.teamId, dates, span, 'theirs', parseWith)
         : Promise.resolve(null),
     ]);
 
