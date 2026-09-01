@@ -760,12 +760,17 @@ function SplitHead({
   label,
   sample,
   unit,
+  sampleText,
   marked,
   title,
 }: {
   label: string;
   sample: number;
   unit: string;
+  /** **What to print under the label instead of the count**, where the count is
+   *  not a thing a reader acts on. One caller: the league column of `Player vs
+   *  League`, which reads `AVG`. See `SplitCard`'s `rightSampleText`. */
+  sampleText?: string;
   marked: boolean;
   title?: string;
 }) {
@@ -773,12 +778,10 @@ function SplitHead({
     <span className={`spl-head-side${marked ? ' spl-head-side--on' : ''}`} title={title}>
       {label}
       <small>
-        {/* **Grouped**, which is a change no player's card can see and the
-            league's cannot do without: every sample on a split of one man is
-            three figures at most, and the league's is 156,337 plate
-            appearances. `1,247 PA` on a five-year-old's card would be the same
-            number; `156337 PA` is a string nobody reads as a quantity. */}
-        {sample.toLocaleString()} {unit}
+        {/* **Grouped**, for the samples that are printed: every sample on a
+            split of one man is three figures at most, so `1,247 PA` on a
+            five-year-old's card is the same string it always was. */}
+        {sampleText ?? `${sample.toLocaleString()} ${unit}`}
       </small>
     </span>
   );
@@ -808,6 +811,7 @@ function SplitCard<T, K extends string>({
   rightPhrase,
   leftSample,
   rightSample,
+  rightSampleText,
   sampleUnit,
   sampleNoun,
   comparisonNoun,
@@ -831,6 +835,23 @@ function SplitCard<T, K extends string>({
   rightPhrase?: string;
   leftSample: number;
   rightSample: number;
+  /**
+   * **What the right-hand head prints in place of its sample**, for the one
+   * column whose sample is not a fact about a player.
+   *
+   * `Player vs League`'s right column is everybody, and its count is **156,399
+   * plate appearances** — a figure no reader acts on, three times the width of
+   * every other head on the tab, and one that reads as a *sample* when what it
+   * is is the whole league. So the head says `AVG`: that column is an average
+   * and saying so is the useful half.
+   *
+   * **The number is still what the card is drawn against**, which is why this is
+   * a label and not a smaller `rightSample`: the two sample gates take
+   * `Math.min(left, right)`, so a league column of 156,399 is what makes the
+   * thin-sample rules on this card answer for *his* line alone, which is the
+   * only side of it that can be thin.
+   */
+  rightSampleText?: string;
   /** "PA" / "BF" — what the sample is counted in. */
   sampleUnit: string;
   /** How that unit reads in a sentence. */
@@ -890,6 +911,7 @@ function SplitCard<T, K extends string>({
             label={rightLabel}
             sample={rightSample}
             unit={sampleUnit}
+            sampleText={rightSampleText}
             marked={highlight === 'right'}
             title={highlight === 'right' ? highlightTitle : undefined}
           />
@@ -972,7 +994,7 @@ export function BatterSplitsTab({
   if (lp === 0 && rp === 0) return <NoSplits what="plate appearances" />;
   return (
     <SplitCard
-      title="Platoon splits"
+      title="Platoon"
       left={vsLeft}
       right={vsRight}
       leftLabel="vs LHP"
@@ -1003,7 +1025,7 @@ export function PitcherSplitsTab({
   if (lb === 0 && rb === 0) return <NoSplits what="batters faced" />;
   return (
     <SplitCard
-      title="Platoon splits"
+      title="Platoon"
       left={vsLeft}
       right={vsRight}
       leftLabel="vs LHB"
@@ -1068,7 +1090,7 @@ export function BatterComparisonCards({
     <>
       {(home || away) && (
         <SplitCard
-          title="Home and away"
+          title="Home vs Away"
           left={home}
           right={away}
           leftLabel="Home"
@@ -1086,7 +1108,7 @@ export function BatterComparisonCards({
       )}
       {season && league && (
         <SplitCard
-          title="Against the league"
+          title="Player vs League"
           left={season}
           right={league}
           leftLabel="Season"
@@ -1095,6 +1117,7 @@ export function BatterComparisonCards({
           rightPhrase="for the league"
           leftSample={pa(season)}
           rightSample={pa(league)}
+          rightSampleText="AVG"
           sampleUnit="PA"
           sampleNoun="plate appearances"
           comparisonNoun="season worth comparing"
@@ -1104,7 +1127,7 @@ export function BatterComparisonCards({
       )}
       {(firstHalf || secondHalf) && (
         <SplitCard
-          title="First half and second"
+          title="1st Half vs 2nd Half"
           left={firstHalf}
           right={secondHalf}
           leftLabel="First"
@@ -1145,7 +1168,7 @@ export function PitcherComparisonCards({
     <>
       {(home || away) && (
         <SplitCard
-          title="Home and away"
+          title="Home vs Away"
           left={home}
           right={away}
           leftLabel="Home"
@@ -1163,7 +1186,7 @@ export function PitcherComparisonCards({
       )}
       {season && league && (
         <SplitCard
-          title="Against the league"
+          title="Player vs League"
           left={season}
           right={league}
           leftLabel="Season"
@@ -1172,6 +1195,7 @@ export function PitcherComparisonCards({
           rightPhrase="for the league"
           leftSample={bf(season)}
           rightSample={bf(league)}
+          rightSampleText="AVG"
           sampleUnit="BF"
           sampleNoun="batters faced"
           comparisonNoun="season worth comparing"
@@ -1181,7 +1205,7 @@ export function PitcherComparisonCards({
       )}
       {(firstHalf || secondHalf) && (
         <SplitCard
-          title="First half and second"
+          title="1st Half vs 2nd Half"
           left={firstHalf}
           right={secondHalf}
           leftLabel="First"

@@ -14,7 +14,6 @@ import {
 } from './savant.js';
 import type { HeldDays } from './savant.js';
 import { getPercentiles } from './percentiles.js';
-import { getCutPercentiles } from './percentileCuts.js';
 import { getXwobaSeries } from './xwoba.js';
 import { getBatterLog, getPitcherGameLog } from './gameLog.js';
 import { getNextGame } from './nextGame.js';
@@ -36,7 +35,6 @@ import { getTeamGames } from './teamGames.js';
 import type { Arsenal } from './pitcherArsenal.js';
 import { getLeaguePitchAverage, getLeaguePitchSpread } from './pitchLeague.js';
 import {
-  PLAYER_CUTS,
   RESEARCH_INCLUDE_KEYS,
   RESEARCH_WINDOWS,
   TEAM_HITTING_WINDOWS,
@@ -2825,25 +2823,17 @@ app.get(
     const yearQ = Number(req.query.year);
     const year = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
-    // **A cut of the season, on the same route because it is the same card** —
-    // same sections, same keys, same two densities, fewer rows. A second route
-    // would be a second shape for the client to hold and a second place for the
-    // two to drift, which is the argument the windows route below already makes
-    // for its own cut.
-    //
-    // An unrecognized `cut` falls back to the full season rather than 400ing,
-    // the client's own rule for a parameter it does not know arriving in a
-    // link: fall back rather than empty the view.
-    // A cut is the **current** season's or nothing — see `getCutPercentiles`,
-    // which has no year to take because both halves of the card it builds are
-    // pinned to this one. Asked for a cut of 2023, the honest answer is that
-    // season's uncut card rather than this season's numbers under its heading.
-    const cut = year === undefined ? PLAYER_CUTS.find((c) => c === req.query.cut) : undefined;
-    res.json(
-      cut
-        ? await getCutPercentiles(playerId, kind, cut)
-        : await getPercentiles(playerId, year, kind),
-    );
+    // **No `cut=`.** This route took one and answered with the same card built
+    // over a cut of the season — a value placed in the *season's* qualified
+    // distribution, so every bar on one was ours and drawn broken. Every
+    // comparison that control offered is a card on the **Splits** tab now,
+    // where both columns are drawn at once with the measured gap between them,
+    // which is the reading a comparison wants and the one a one-sided card
+    // could never give. So this card is the season's and its bars are Savant's
+    // own. An old link carrying `cut=` still opens the card — an unknown
+    // parameter falls back rather than emptying the view, which it now does by
+    // being ignored.
+    res.json(await getPercentiles(playerId, year, kind));
   }),
 );
 
@@ -2867,11 +2857,12 @@ app.get(
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
     // **No `cut=` any more.** This route used to take one and answer with the
     // same five rows cut by hand or by ballpark, built out of a season of the
-    // man's own pitch rows (`playerSplits.ts`); the Stats tab's control that
-    // set it is gone, every split it offered being a card on the Splits tab
-    // where both halves are drawn at once. An old link still opens the board —
-    // an unknown parameter falls back rather than emptying the view, which it
-    // now does by being ignored.
+    // man's own pitch rows; the Stats tab's control that set it is gone, every
+    // split it offered being a card on the Splits tab where both halves are
+    // drawn at once, and the module behind it (`playerSplits.ts`) went with its
+    // last reader. An old link still opens the board — an unknown parameter
+    // falls back rather than emptying the view, which it now does by being
+    // ignored.
     res.json(await getPlayerWindows(playerId, kind));
   }),
 );

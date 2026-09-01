@@ -8,7 +8,6 @@ import type {
   PlateAppearance,
   GameStatus,
   PlayerGame,
-  PlayerCut,
   PlayerKind,
   PlayerReport,
   PlayerStatus,
@@ -220,38 +219,6 @@ export function positionCell(
       : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
   return { text: ordered.join('/'), title };
 }
-
-/**
- * **What a cut of a season is called on this man's page.**
- *
- * Here rather than inside the one component that reads it because it had two
- * readers when it was written — the player page's **Stats** tab, whose spans
- * were cut four ways, and its **Percentile Rankings** card — and two tables of
- * the same words is precisely the duplication that ends with one surface saying
- * `vs LHP` where the other says `vs L`. The Stats tab's control has since gone
- * (see `PlayerWindowTable`) and the card is the only reader left; it stays here
- * rather than moving in, because the labels and the sentence form of them are a
- * *vocabulary* and the component drawing them is not where a vocabulary lives.
- *
- * **It is down to the two halves**, the four handedness and ballpark cuts having
- * left both surfaces at once — the Stats tab's control is gone entirely and the
- * percentile card's offers the two halves, because every one of those four is a
- * *comparison* and the Splits tab draws a comparison whole. The table keeps its
- * per-kind shape though both entries read the same on both sides of the ball: a
- * half of the season is a half of the season, and that being true is a fact
- * about these cuts rather than a reason to change the shape the callers index.
- */
-export const CUT_LABEL: Record<PlayerCut, Record<PlayerKind, string>> = {
-  firstHalf: { batter: 'First Half', pitcher: 'First Half' },
-  secondHalf: { batter: 'Second Half', pitcher: 'Second Half' },
-};
-
-/** The same cut as an adverbial, for a sentence that already has its noun —
- *  *placed among everybody's full season, what he did **before the All-Star
- *  break***. The pills say `First Half` because a pill is a label; a sentence
- *  wants the preposition. */
-export const cutOf = (cut: PlayerCut, _kind: PlayerKind): string =>
-  cut === 'firstHalf' ? 'before the All-Star break' : 'since the All-Star break';
 
 /**
  * Which side of the plate he stands on, or which arm he throws with — the one

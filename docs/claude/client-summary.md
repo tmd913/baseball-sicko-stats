@@ -2654,14 +2654,17 @@ a list that does not answer to it is a control claiming a power it has not got.
 The stat table's own range is untouched underneath (`DateScope`), so crossing
 there and back finds the days where they were left.
 
-**Thirty rows a page, and the count is why.** Measured on a real fifteen-man
-roster the whole stream is **232 rows and 19,622px of page** — six weeks of two
-upstreams, an archive rather than a reading. Thirty is about a screen and a half
-of this row; the button under it is the feed's own `.feed-more` with the same
-count badge (`Load more · 202`), so nothing is filtered away, only not drawn yet.
-Measured after: 30 rows, page **2,900px**, one press → 60, dates strictly
-descending, the column **800px centered at 1200** and **346px at 390** with the
-meta line one line tall and no document overflow at either.
+**Ten rows a page, and the count is why.** Measured on a real fifteen-man roster
+the whole stream is **232 rows and 19,622px of page** — six weeks of two
+upstreams, an archive rather than a reading. Thirty was the first answer and was
+still too much of it: what this is opened for is *what has happened lately*, and
+ten dated lines is that question answered. The button under them is the feed's
+own `.feed-more` with the same count badge (`Load more · 222`), so nothing is
+filtered away, only not drawn yet — and it is the feed's number without being the
+feed's constant, the two lists being different shapes. Measured at 30 rows a page
+before the change: page **2,900px**, one press → 60, dates strictly descending,
+the column **800px centered at 1200** and **346px at 390**, meta line one line
+tall, no document overflow at either.
 
 **The name is a label and not a door.** The row is already a `<button>` wherever
 the note has more of itself to read (`item.full`, the analysis paragraph CBS

@@ -1528,33 +1528,6 @@ export interface PlayerPercentiles {
   // Shape of the card when it was scraped; a stored card built by an older
   // version is re-scraped rather than served (see CARD_VERSION).
   version?: number;
-  /**
-   * **Which cut of the season this card ranks**, or absent for the whole of it.
-   *
-   * On the wire for the reason `PlayerWindows.cut` is: the card is re-read when
-   * the reader picks a cut, and a stale reply landing on a fresh one would
-   * otherwise be a card of the wrong split with nothing on it to say so.
-   *
-   * Absent means the full season, which is the **only** card whose bars are
-   * Savant's own. Every cut card is built here — see `percentileCuts.ts` — so
-   * every row on one is marked `estimated` and drawn broken, which is this
-   * app's standing rule that an estimate never wears the same clothes as a
-   * measurement.
-   */
-  cut?: PlayerCut | null;
-  /**
-   * **How much of a season the cut rests on** — plate appearances for a batter,
-   * batters faced for a pitcher — and absent on the full-season card, where
-   * Savant's own qualifier already answers the question.
-   *
-   * A cut card is the one place in this app where the population and the
-   * sample come apart on purpose: the bars rank a **cut** value inside the
-   * **whole season's** qualified distribution, which is what was asked for and
-   * is the only reading that makes `vs LHP` comparable with anything. That
-   * makes the sample size the reader's only guard against a 34-PA card of
-   * noise, so it is carried rather than left to be inferred from a bar.
-   */
-  cutSample?: number | null;
 }
 
 /** One plate appearance in a season xwOBA series (Savant estimated wOBA). */
@@ -1626,32 +1599,6 @@ export interface PlayerWindows {
   kind: PlayerKind;
   windows: PlayerWindowRow[];
 }
-
-/**
- * **The two halves of the season — the only cuts the percentile card offers.**
- *
- * The card used to take four splits and a fifth cut of its own (`last100`,
- * his most recent hundred at-bats), and every one of them asked *the same*
- * question the Splits tab asks better: the tab draws both halves of a
- * comparison side by side with the gap between them measured, where a cut card
- * could only ever show one half at a time and left the reader subtracting two
- * cards they could not see at once. So the splits moved there whole — see
- * `client-player-splits.md` — and what is left here is the one cut that is a
- * **span** rather than a split, and so genuinely belongs on a control labeled
- * *which part of the season*.
- *
- * **The break is the All-Star game's own date**, asked for rather than
- * approximated — `mlbStats.ts::getAllStarDate`, the very read the standings
- * board's two half columns are split on, so the two surfaces cannot come to
- * disagree about which side of July a game fell on. A season with no All-Star
- * date read yet has no halves at all, and the card says so rather than guessing
- * at a mid-July constant.
- */
-export type PlayerCut = 'firstHalf' | 'secondHalf';
-
-/** In the order the percentile card's control offers them, which is the order
- *  they happened in. `Season` is the absence of a cut and so is not in here. */
-export const PLAYER_CUTS: PlayerCut[] = ['firstHalf', 'secondHalf'];
 
 export interface ResearchRow {
   id: number;

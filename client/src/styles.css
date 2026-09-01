@@ -6983,33 +6983,12 @@ button.start-line:focus-visible {
   max-width: 680px;
   margin: 0 auto 12px;
 }
-/* Both switches are `.split-switch` — the pitcher card's own segmented row,
-   folded rather than restyled. The one thing that is theirs here is that the
-   9px the class carries below itself is this row's `gap`'s business. (It used
-   to say the cut row was the app's only six-pill switch and so the only one
-   allowed to wrap inside itself; it holds three now and wraps like any other.) */
+/* The switch is `.split-switch` — the pitcher card's own segmented row, folded
+   rather than restyled. The one thing that is this row's here is that the 9px
+   the class carries below itself is the row's `gap`'s business. (It said
+   *switches*, plural, when a run of cut pills sat under the density one; that
+   run is gone with the cuts and this row holds one switch and a reserved badge.) */
 .pct-controls .split-switch {
-  margin-bottom: 0;
-}
-/* **One run of three: which part of the season.** This was six pills in three
-   groups — which span, which hand, which park — with a `select` under it that
-   took over below 560, because three boxes of pills are three lines of a phone's
-   screen. Five of those six are Splits-tab cards now (a cut card shows one side
-   of a comparison; that tab draws both), so it is `Season · First Half · Second
-   Half` in a single `.split-switch`, which fits one line at every width this
-   page is drawn at — and the dropdown, and the breakpoint it swapped at, are
-   gone with the thing they were for. The flex row and its centering stay: the
-   box still centers under a centered card, and still wraps rather than
-   overflowing if a label ever grows. */
-.pct-cuts {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: 100%;
-}
-.pct-cuts .split-switch {
   margin-bottom: 0;
 }
 /* A 20px slot at the end of the run, reserved whether or not it is showing.
@@ -7026,36 +7005,6 @@ button.start-line:focus-visible {
 .pct-updating.is-idle {
   visibility: hidden;
 }
-/* The sentence a cut card carries above its bars: what the population is, whose
-   ranks these are, and how much of a season the line rests on. Muted and set
-   small because it is a caveat rather than a heading — it has to be read once
-   and then stop competing with thirty bars. */
-.pct-cut-note {
-  margin: 2px auto 10px;
-  /* Narrower than the card, so the sentence breaks where a caption should
-     rather than running the full width of the bars underneath it — two lines of
-     ~62 characters against one of ~110, which is the difference between a
-     caption and a paragraph. */
-  max-width: 46ch;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--faint);
-  text-align: center;
-  text-wrap: balance;
-}
-.pct-cut-note strong {
-  color: var(--muted);
-  font-weight: 700;
-}
-/* The sample size is the one figure in that sentence a reader acts on — it is
-   the only guard against reading a hundredth percentile off thirty-four plate
-   appearances — so it is the one part set in the text color. */
-.pct-cut-note .pct-cut-sample {
-  color: var(--text);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 /* The percentile card: a fixed label column, a flexible plot, a value column. */
 .pct-card {
   --pct-label-w: 152px;
@@ -7302,9 +7251,6 @@ button.start-line:focus-visible {
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-.pct-card-cut {
-  white-space: nowrap;
 }
 .pct-card-title {
   font-size: 18px;

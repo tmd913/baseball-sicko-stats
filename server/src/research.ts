@@ -8,9 +8,11 @@ import type { PlayerKind, ResearchRow, ResearchWindow } from './types.js';
 
 // Keep in sync with hfSea in savant.ts, CURRENT_SEASON in percentiles.ts, and
 // SEASON in xwoba.ts / pitcherArsenal.ts / teamHitting.ts / expectedStats.ts.
-/** Exported for `playerSplits.ts`, which cuts these same spans four ways and
- *  must be reading the same year — a tenth copy of the number would be a tenth
- *  thing to update, and this one is already in the list `CLAUDE.md` keeps. */
+/** Exported so the modules that read these same boards are reading the same
+ *  year — `percentileCuts.ts` and `playerSplits.ts` were two of them and are
+ *  gone; `teamGames.ts`, `mlbStandings.ts` and `leagueAverage.ts`'s callers
+ *  still are. A second copy of the number would be a second thing to update on
+ *  the roll-over, and this one is already in the list `CLAUDE.md` keeps. */
 export const SEASON = 2026;
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };

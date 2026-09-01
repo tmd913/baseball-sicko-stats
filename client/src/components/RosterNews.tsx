@@ -7,17 +7,21 @@ import { LoadingBlock } from './Loading';
 import { NewsList } from './PlayerNews';
 
 /**
- * **How many rows a page of this list is.**
+ * **How many rows a page of this list is — the feed's own ten.**
  *
- * Bigger than the feed's ten, because a news row is one dated line and a feed
- * item is a plate appearance with a diamond and a clip in it, and smaller than
- * everything: measured on a real fifteen-man roster, the whole stream is **232
- * rows and 19,622px of page** — six weeks of two upstreams, which is an archive
- * rather than a reading. Thirty is about a screen and a half of *this* row,
- * which is what a first page should be, and the button under it says how many
- * are behind it, so nothing is hidden — only unrendered.
+ * The whole stream is an archive rather than a reading: measured on a real
+ * fifteen-man roster it is **232 rows and 19,622px of page**, six weeks of two
+ * upstreams. A page of thirty was the first answer to that and is still too
+ * much of it — what a reader opens this for is *what has happened lately*, and
+ * ten dated lines is that question answered, with the button under them saying
+ * how many are behind it. Nothing is hidden, only unrendered.
+ *
+ * It is `FEED_PAGE_SIZE`'s number and deliberately not that constant: the two
+ * lists are different shapes (a feed item is a plate appearance with a diamond
+ * and a clip in it; this is one line and a standfirst) and agreeing today is not
+ * a reason to be one number tomorrow.
  */
-const NEWS_PAGE_SIZE = 30;
+const NEWS_PAGE_SIZE = 10;
 
 /**
  * **The Roster view's News reading: one dated stream across the whole roster.**

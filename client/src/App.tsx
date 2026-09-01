@@ -5,7 +5,6 @@ import { SignOutButton, Splash } from './auth';
 import {
   MAX_LISTS,
   MAX_SEARCHES,
-  PLAYER_CUTS,
   playerKey,
   RESEARCH_WINDOWS,
 } from './types';
@@ -35,7 +34,6 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
-  PlayerCut,
   SavedList,
   SavedSearch,
   SharedItem,
@@ -1921,41 +1919,6 @@ export default function App() {
    * two tables reading one param; the open player-page tab is in no URL either.
    */
   const [statsCols, setStatsCols] = useState<Partial<Record<PlayerKind, string[]>>>({});
-
-  /**
-   * **Which cut the player page's Percentile Rankings card is drawn over**, or
-   * null for his whole season.
-   *
-   * **`pcut=` rather than `cut=`, and it keeps that name now it is the only cut
-   * on the page.** It was named apart from the Stats tab's `cut=` under the
-   * app's rule that two params must never mean two things — a reader could want
-   * the left-handed *card* and the uncut *table*, and a link is read before
-   * anything on screen can say which tab wrote it. That tab's control has gone
-   * (its splits are the Splits tab's cards now), so the collision it guarded
-   * against cannot happen; renaming it to `cut=` would break every card link
-   * anybody has shared, which is a worse thing than a name that is one letter
-   * longer than it has to be.
-   *
-   * **Its vocabulary is the two halves of the season** — `PLAYER_CUTS` — the
-   * splits having left this control for a surface that draws both sides of one
-   * at once.
-   *
-   * Held here rather than in `PlayerDetails` because that component is unmounted
-   * the moment the overlay closes, and a param the URL carries has to outlive
-   * it. And put away when the page leaves the screen by the effect below, the
-   * app's standing rule for a lens — a cut is a question about *this* man, so
-   * the next page opens on his whole season unless a link says otherwise.
-   * Opening another player **over** this one is not a leaving (`player=` is the
-   * precedent), and the effect watches `detailsKey`, which is navigation seeded
-   * from the URL and never fetched data, so an inbound `?player=…&pcut=firstHalf`
-   * is already on its own surface before it runs.
-   */
-  const [pctCut, setPctCut] = useState<PlayerCut | null>(
-    () => PLAYER_CUTS.find((c) => c === initialParams.get('pcut')) ?? null,
-  );
-  useEffect(() => {
-    if (!detailsKey) setPctCut(null);
-  }, [detailsKey]);
 
   /**
    * **How many bars the percentile card shows** — `'summary'`, Savant's own
@@ -4951,12 +4914,14 @@ export default function App() {
        rather than merely the fact that one is up, so a link describes exactly
        the page it opens. */
     if (compareKeys.length > 0) p.set('cmp', compareKeys.join(','));
-    // Scoped to `player=`, which is the page that draws it — a cut with no
-    // player to be a cut *of* would name a lens that is not in force, which is
-    // the rule `proj=` and `mt=` already follow. (`cut=`, the Stats tab's own,
-    // went with that tab's control; `pcut=` keeps its name so links already
-    // sent still open the card they describe.)
-    if (detailsKey && pctCut) p.set('pcut', pctCut);
+    /* **The player page carries no cut param at all now.** It had two —
+       `cut=` for the Stats tab's spans and `pcut=` for the percentile card's —
+       and both went with their controls: every comparison they offered is a
+       card on the **Splits** tab, where both halves are drawn at once. An old
+       link carrying either still opens the page; an unrecognized parameter
+       falls back rather than emptying the view, which here means being
+       ignored and dropped on the first sync — the courtesy `group=player`
+       gets. */
     /**
      * **Written on every view, `summary` included** — where it used to be
      * omitted as the default.
@@ -5195,7 +5160,6 @@ export default function App() {
     teamSide,
     gamePagePk,
     compareKeys,
-    pctCut,
     sharedLink,
     view,
     researchPos,
@@ -11631,13 +11595,10 @@ export default function App() {
           onRemove={() => onRemove(detailsPlayer)}
           statsColumns={statsCols[detailsPlayer.kind] ?? null}
           onStatsColumnsChange={(keys) => setStatsColumns(detailsPlayer.kind, keys)}
-          /* Which part of the season the Percentile Rankings card is on, out
-             of `pcut=`. The page's one cut now: the Stats tab's `cut=` went
-             with its control, and every split it offered is a Splits-tab card.
-             The key stays `pcut=` so links already sent keep working. */
-          pctCut={pctCut}
-          onPctCutChange={setPctCut}
-          /* How many bars that card draws — a saved preference, not a param. */
+          /* How many bars the Percentile Rankings card draws — a saved
+             preference, not a param, and that card's one control now: `pcut=`
+             went with the cut pills, every comparison they offered being a
+             Splits-tab card. */
           pctDensity={pctDensity}
           onPctDensityChange={setPctDensity}
           showRanks={showRanks}

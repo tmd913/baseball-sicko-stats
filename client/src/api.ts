@@ -21,7 +21,6 @@ import type {
   PlayerKind,
   PitcherSeasonStats,
   NewsItem,
-  PlayerCut,
   PlayerPercentiles,
   PlayerReport,
   PlayerWindows,
@@ -937,20 +936,19 @@ export const api = {
     return players;
   },
   /**
-   * The percentile card — the whole season, or one cut of it.
+   * The percentile card — his season, and only ever his season.
    *
-   * **One route for both**, because it is one card: same sections, same keys,
-   * same two densities, fewer rows under a cut. The `cut` is left off entirely
-   * rather than sent as an empty string, so the full-season card's URL is the
-   * one it always was and anything cached against it stays cached.
+   * It took a `cut` for a while and the route took a `cut=` with it. Every
+   * comparison that control offered is a card on the **Splits** tab now, where
+   * both halves are drawn at once with the measured gap between them, so the
+   * card is back to the one question a percentile card answers — *how good is
+   * he* — and every bar on it is Savant's own rank rather than one of ours.
    */
   async percentiles(
     playerId: number,
     kind: 'batter' | 'pitcher' = 'batter',
-    cut: PlayerCut | null = null,
   ): Promise<PlayerPercentiles> {
-    const q = cut ? `&cut=${cut}` : '';
-    return request(`/api/percentiles/${playerId}?type=${kind}${q}`);
+    return request(`/api/percentiles/${playerId}?type=${kind}`);
   },
   /**
    * One player's row on each of the research board's five windows — the player

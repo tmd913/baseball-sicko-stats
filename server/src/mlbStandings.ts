@@ -357,13 +357,11 @@ async function getSeasonGames(): Promise<SeasonGame[]> {
  * **The All-Star game's date**, which is what the two half columns are split
  * on — and it is `mlbStats.ts`'s now rather than this file's.
  *
- * It moved there when it grew a second caller: the player page's percentile
- * card cuts a man's season into halves on the same boundary
- * (`playerSplits.ts`), and two implementations of "which side of the break did
- * this fall on" is exactly the kind of pair this codebase spends its length
- * preventing — a standings row and a player card disagreeing about a July game
- * would be a fault nothing on either screen could explain. The reasoning for
- * asking rather than approximating is unchanged and now lives beside it.
+ * It moved there when it grew a second caller — the percentile card's half cuts
+ * — and it stays there now that caller is gone: `mlbStats.ts` is where this
+ * server's MLB Stats API reads live, this file already imports from it, and a
+ * schedule lookup is not a standings concern. The reasoning for asking rather
+ * than approximating is unchanged and now lives beside it.
  */
 const allStarDate = () => getAllStarDate(SEASON);
 

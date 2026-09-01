@@ -29,10 +29,10 @@ const UA = { 'User-Agent': 'statcast-sicko/1.0' };
  *
  * ## The season is a **use** and not a pin
  *
- * `SEASON` is imported from `research.ts` rather than declared here, which is
- * exactly what `playerSplits.ts` does and for the same reason: this file has
- * nothing to update when the year rolls over, so a constant of its own would be
- * a twelfth place for `CLAUDE.md`'s list to be one behind.
+ * `SEASON` is imported from `research.ts` rather than declared here, for the
+ * reason every *use* of it in this server is: this file has nothing to update
+ * when the year rolls over, so a constant of its own would be one more place
+ * for `CLAUDE.md`'s list to be one behind.
  */
 
 /** One club's season barely moves; the scores in it move only while a game is

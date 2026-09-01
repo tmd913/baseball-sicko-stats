@@ -1356,17 +1356,6 @@ export interface PlayerPercentiles {
   summary: PercentileSection[];
   updatedAt: string;
   version?: number;
-  /** Which cut of the season this card ranks, or absent for the whole of it.
-   *  On the wire so a stale reply cannot land on a fresh one unnoticed — the
-   *  rule `PlayerWindows.cut` already follows. A cut card's bars are all ours,
-   *  so every metric on one arrives `estimated`. */
-  cut?: PlayerCut | null;
-  /** Plate appearances (batters faced, on a pitcher) behind the cut, and absent
-   *  on the full-season card. A cut card ranks a **cut** value inside the
-   *  **season's** qualified distribution, which is the reading that was asked
-   *  for and the one that makes the sample size the reader's only guard against
-   *  a card of noise — so the card prints it. */
-  cutSample?: number | null;
 }
 
 /** One plate appearance in a season xwOBA series (Savant estimated wOBA). */
@@ -1438,29 +1427,6 @@ export interface PlayerWindows {
   kind: PlayerKind;
   windows: PlayerWindowRow[];
 }
-
-/**
- * **The two halves of the season — the only cuts the percentile card offers.**
- *
- * It used to take four splits and a recent-form cut of its own, and every
- * one of those asked the same question the **Splits** tab asks better: that tab
- * draws both halves of a comparison side by side with the gap between them
- * measured, where a cut card shows one side at a time and leaves the reader
- * subtracting two cards they cannot see at once. So the splits moved there
- * whole, and what is left on this control is the cut that is a **span** rather
- * than a split — *which part of the season*, which one card answers honestly.
- *
- * The break is the All-Star game's own date, read off MLB rather than
- * approximated, and it is the same boundary the standings board's two half
- * columns are split on.
- *
- * Mirrors `server/src/types.ts` by hand, like everything else in this file.
- */
-export type PlayerCut = 'firstHalf' | 'secondHalf';
-
-/** In the order the percentile card's control offers them, which is the order
- *  they happened in. `Season` is the absence of a cut and so is not in here. */
-export const PLAYER_CUTS: PlayerCut[] = ['firstHalf', 'secondHalf'];
 
 /**
  * **A named list of players followed on the research board**, of which there
