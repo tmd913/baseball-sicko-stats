@@ -192,19 +192,36 @@ not the same as free.
 **One 14.7-second boot had no cold container in it at all** (01:51:02,
 `/api/overview` on a container 926 seconds old that had already served 36
 requests; every other route on that boot answered in 10–830ms). That one is not
-a cache miss and not a timeout — it is the route's own work. `/api/overview`
-fans out ten range reports (two managers × today, yesterday, two projections and
-the **matchup span**), and the span grows with the scoring period to the
-`OVERVIEW_SPAN_MAX_DAYS` cap of 21. `getDay`'s memo is keyed by
-`date|filterKey(filter)` and the two managers have different filters, so the
-first long-span overview on any container parses up to **42 day snapshots** that
-nothing else on the page shares — a cold *filter* rather than a cold container,
-which is why fifteen minutes of uptime did not help. Peak memory on that
-invocation was **709MB** against 419 before it. It is left as it is: the p50 is
-3.5s and the p90 7.1s because the span is short early in a period and long at
-the end, and the ways out (reading the span separately from the three day cards,
-or lowering the 21-day cap) are changes to what the app's front page *is*, not
-to how it caches.
+a cache miss and not a timeout — it is the route's own work.
+
+**`OVERVIEW_SPAN_MAX_DAYS` is not what sizes it, and saying so was an error
+worth recording.** 21 is a **kill switch, not a target**: a period longer than
+that answers `null` and costs the `Matchup leaders` block alone, because the
+payload is what the number bounds (the route's own note measures 3.98 MB raw at
+an 8-day period against a 6 MB Lambda cap, and ~25 MB at `MAX_RANGE_DAYS`). It
+was deliberately set *past* any period ESPN actually runs. Measured on the live
+league: periods are **14 days** — 2026-08-24 to 09-06, then 09-07 to 09-20 — and
+the span is clamped to today, so it runs **1 → 14 days across a period and never
+approaches 21**. On the 14.7s boot it was **8 days**.
+
+What does size it is that `getDay`'s memo is keyed by `date|filterKey(filter)`
+and the two managers have different filters, so **neither side's parse helps the
+other**. At an 8-day span that is about ten `getDay` parses per side and twenty
+in all, and a day snapshot is **350–860 KB gzipped** — 5 to 8 MB of JSON each
+once it is open. Hence the **709 MB** peak on that invocation, against 419
+before it, and hence a cold *filter* rather than a cold container: fifteen
+minutes of uptime cannot help with a filter this page is the only reader of.
+
+**Measured against a cold local process** (fresh server, empty memo, blobs on
+local disk) at a 9-day span: **1.98s and 4.43 MB of payload**, the second call
+18ms. The gap to Lambda's 14.7 is twenty snapshot reads coming off S3 rather
+than a local disk, on ~1.2 vCPU — plausible rather than demonstrated, and the
+honest statement is that the *shape* is understood and the constant is not.
+
+It is left as it is. The p50 is 3.5s and the p90 7.1s because the span is one
+day at the start of a period and fourteen at the end, and the ways out — reading
+the span separately from the three day cards, or shortening what it covers — are
+changes to what the app's front page *is*, not to how it caches.
 
 ### `/api/players` is a list; the other two are a search and a lookup
 
