@@ -8,7 +8,6 @@ import {
   PLAYER_CUTS,
   playerKey,
   RESEARCH_WINDOWS,
-  SPLIT_CUTS,
 } from './types';
 import { projectedRowValue, projectedRowValuePerGame, STANDARD_5X5 } from './categoryValue';
 import type {
@@ -40,7 +39,6 @@ import type {
   SavedList,
   SavedSearch,
   SharedItem,
-  SplitCut,
   TeamInfo,
   TrendWindow,
   WatchPlayer,
@@ -179,11 +177,13 @@ import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
   FeedToggle,
+  NewsToggle,
   playFilterParam,
   toPlayFilter,
   type FeedLens,
   type PlayFilterKey,
 } from './components/FeedFilters';
+import { RosterNews } from './components/RosterNews';
 import { Tutorial } from './components/Tutorial';
 import { BackToTop } from './components/FloatControls';
 import { EspnSettings } from './components/EspnSettings';
@@ -255,17 +255,25 @@ const MIN_SPIN = 450;
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
  */
-type View = 'overview' | 'summary' | 'feed' | 'research' | 'league' | 'mlb';
+type View = 'overview' | 'summary' | 'feed' | 'news' | 'research' | 'league' | 'mlb';
 
-/** The two *readings* of the Roster page — the stat table and the stream. They
- *  are one tab now (`Roster`) and were two, and the pair survives as the value
- *  of `view` for the reason `view=feed` survives in the wild: the reading is
- *  still a page's worth of difference to everything downstream — its own date
- *  range, its own scroll memory, its own URL — and only the *chrome* changed.
- *  Research and League are each about something else (the whole league's
- *  season, the fantasy league), and neither has a date range of its own. */
+/** The three *readings* of the Roster page that are a page's worth apart — the
+ *  stat table, the stream and the news. They are one tab (`Roster`) and the
+ *  three survive as values of `view` for the reason `view=feed` survives in the
+ *  wild: a reading is still a page's worth of difference to everything
+ *  downstream — its own scroll memory, its own URL, and (for two of the three)
+ *  its own date range — and only the *chrome* changed. Research and League are
+ *  each about something else (the whole league's season, the fantasy league),
+ *  and neither has a date range of its own.
+ *
+ *  **`news` is the one with no days at all**, which is why the bar is not drawn
+ *  over it: both news upstreams publish to the day and reach back a few weeks,
+ *  so there is nothing for a range to narrow and a bar over it would be a
+ *  control claiming the list answers to it. It still belongs in here — it is a
+ *  reading of the same roster, the Roster tab must stay lit under it, and its
+ *  own scroll memory is as much its own as the stream's. */
 function isRosterView(v: View): boolean {
-  return v === 'summary' || v === 'feed';
+  return v === 'summary' || v === 'feed' || v === 'news';
 }
 
 /** The tabs, and which `view` values each of them owns. The Roster tab covers
@@ -285,7 +293,7 @@ function isRosterView(v: View): boolean {
  *  fantasy league, and then the league everybody is in. It is also the only one
  *  of the five that needs nothing of him, which is why it is never hidden. */
 function mainTab(v: View): 'overview' | 'roster' | 'research' | 'league' | 'mlb' {
-  return v === 'summary' || v === 'feed' ? 'roster' : v;
+  return v === 'summary' || v === 'feed' || v === 'news' ? 'roster' : v;
 }
 
 /**
@@ -949,6 +957,10 @@ export default function App() {
     // exist anywhere. That is the same courtesy `readKeys` extends to
     // pre-two-way player ids, and the safe direction for an old link to fail in.
     if (v === 'feed' || v === 'games' || v === 'players') return 'feed';
+    // The roster's third reading — everything said about these players, newest
+    // first. A page's worth of difference from the table and so a `view=` of its
+    // own, on the same terms as the stream beside it.
+    if (v === 'news') return 'news';
     // Summary is the default; the rest are opted into explicitly.
     return 'summary';
   });
@@ -1911,64 +1923,32 @@ export default function App() {
   const [statsCols, setStatsCols] = useState<Partial<Record<PlayerKind, string[]>>>({});
 
   /**
-   * **Which cut of his spans the Stats tab is showing** — `cut=vsr|vsl|home|away`,
-   * absent for all of them.
-   *
-   * In the URL where `cols=` is deliberately not, and the difference is the one
-   * the rule actually draws: `cols=` is *how* a table is read, and this is
-   * **which data it shows** — five rows of one man against left-handers are not
-   * the same five rows. It is its own param name and means one thing: the
-   * Splits tab beside it is a different reading with no parameter at all, and
-   * `mup`/`mt`/`proj` are the precedent for keeping two lenses from sharing a
-   * key.
-   *
-   * Held here rather than in `PlayerDetails` for the reason `statsCols` is: that
-   * component is unmounted the moment the overlay closes, and a param the URL
-   * carries has to outlive it — a link with `cut=vsl` seeds this, and the page
-   * opens on the cut it names when the reader reaches the Stats tab.
-   *
-   * An unrecognized value falls back to the uncut table rather than emptying it,
-   * on the client and on the server both.
-   */
-  const [statsCut, setStatsCut] = useState<SplitCut | null>(
-    () => SPLIT_CUTS.find((c) => c === initialParams.get('cut')) ?? null,
-  );
-  /**
-   * **And it is put away when the page it was made on leaves the screen**, which
-   * is the app's standing rule for a lens: a cut is a question about *this* man,
-   * so the next page opens on his whole season unless a link says otherwise.
-   *
-   * Closing the player page is a leaving; opening another player **over** it is
-   * not (`player=` is the precedent this rule states outright), so a reader who
-   * walks from one man's left-handed line to the next keeps the question they
-   * are asking. It watches `detailsKey`, which is navigation seeded from the
-   * URL and never fetched data, so an inbound `?player=…&cut=vsl` is already on
-   * its own surface before this runs.
-   */
-  useEffect(() => {
-    if (!detailsKey) setStatsCut(null);
-  }, [detailsKey]);
-
-  /**
    * **Which cut the player page's Percentile Rankings card is drawn over**, or
    * null for his whole season.
    *
-   * `pcut=` and not `cut=`, which is the app's own rule that two params must
-   * never mean two things: `cut=` is the Stats tab's, this is the percentile
-   * card's, and a link is read before anything on screen can say which tab
-   * wrote it. The two are genuinely separate questions — a reader can want the
-   * left-handed *card* and the uncut *table* — and sharing a key would have
-   * silently coupled them.
+   * **`pcut=` rather than `cut=`, and it keeps that name now it is the only cut
+   * on the page.** It was named apart from the Stats tab's `cut=` under the
+   * app's rule that two params must never mean two things — a reader could want
+   * the left-handed *card* and the uncut *table*, and a link is read before
+   * anything on screen can say which tab wrote it. That tab's control has gone
+   * (its splits are the Splits tab's cards now), so the collision it guarded
+   * against cannot happen; renaming it to `cut=` would break every card link
+   * anybody has shared, which is a worse thing than a name that is one letter
+   * longer than it has to be.
    *
-   * Its vocabulary is one entry wider than the Stats tab's: `PLAYER_CUTS` adds
-   * `last100`, recent form, which is a count of at-bats rather than a split and
-   * has no meaning on a table whose rows are already spans (see `RecentCut`).
+   * **Its vocabulary is the two halves of the season** — `PLAYER_CUTS` — the
+   * splits having left this control for a surface that draws both sides of one
+   * at once.
    *
-   * Held here rather than in `PlayerDetails` for the reason `statsCut` is: that
-   * component is unmounted the moment the overlay closes, and a param the URL
-   * carries has to outlive it. And put away when the page leaves the screen by
-   * the same effect below, for the same reason — a cut is a question about
-   * *this* man.
+   * Held here rather than in `PlayerDetails` because that component is unmounted
+   * the moment the overlay closes, and a param the URL carries has to outlive
+   * it. And put away when the page leaves the screen by the effect below, the
+   * app's standing rule for a lens — a cut is a question about *this* man, so
+   * the next page opens on his whole season unless a link says otherwise.
+   * Opening another player **over** this one is not a leaving (`player=` is the
+   * precedent), and the effect watches `detailsKey`, which is navigation seeded
+   * from the URL and never fetched data, so an inbound `?player=…&pcut=firstHalf`
+   * is already on its own surface before it runs.
    */
   const [pctCut, setPctCut] = useState<PlayerCut | null>(
     () => PLAYER_CUTS.find((c) => c === initialParams.get('pcut')) ?? null,
@@ -4973,10 +4953,9 @@ export default function App() {
     if (compareKeys.length > 0) p.set('cmp', compareKeys.join(','));
     // Scoped to `player=`, which is the page that draws it — a cut with no
     // player to be a cut *of* would name a lens that is not in force, which is
-    // the rule `proj=` and `mt=` already follow.
-    if (detailsKey && statsCut) p.set('cut', statsCut);
-    // The percentile card's own cut, under its own key — see `pctCut`, and the
-    // app's rule that two params must never mean two things.
+    // the rule `proj=` and `mt=` already follow. (`cut=`, the Stats tab's own,
+    // went with that tab's control; `pcut=` keeps its name so links already
+    // sent still open the card they describe.)
     if (detailsKey && pctCut) p.set('pcut', pctCut);
     /**
      * **Written on every view, `summary` included** — where it used to be
@@ -5216,7 +5195,6 @@ export default function App() {
     teamSide,
     gamePagePk,
     compareKeys,
-    statsCut,
     pctCut,
     sharedLink,
     view,
@@ -9060,6 +9038,41 @@ export default function App() {
       />
     ) : null;
 
+  /**
+   * **The roster's news, all of it, newest first** — the reading that answers
+   * *what has happened to my team since I last looked*, which is the question a
+   * manager opens the app with and which the player page could only answer one
+   * man at a time.
+   *
+   * It clears the other three readings on the way in exactly as the stream does
+   * and for the identical reason: they are readings of a table that is not on
+   * screen, and a lit `Projected` over a news list is a control pointing at
+   * nothing. What it does *not* touch is the days — this reading has none (see
+   * `isRosterView`), so the bar is not drawn over it and the table's own range
+   * is waiting where it was left.
+   */
+  const newsToggle =
+    isRosterView(view) && showRosterViews ? (
+      <NewsToggle
+        on={view === 'news'}
+        onToggle={() => {
+          if (view === 'news') {
+            setView('summary');
+            return;
+          }
+          setScheduleSpan(null);
+          setRosterProjected(false);
+          setRosterSummary(false);
+          setView('news');
+        }}
+        title={
+          view === 'news'
+            ? 'Back to the stat table'
+            : 'Everything MLB and RotoWire have said about these players, newest first'
+        }
+      />
+    ) : null;
+
   const scheduleControl = (
       <ScheduleToggle
         on={scheduleSpan !== null}
@@ -9440,9 +9453,12 @@ export default function App() {
               {/* And what those days are worth — see `projectedToggle`. */}
               {projectedToggle}
               {/* And the same table over the league's own week — see
-                  `summaryToggle`. Last, being the one reading whose days are
-                  not the reader's. */}
+                  `summaryToggle`. Last of the readings whose days are the
+                  reader's — this one's are the league's. */}
               {summaryToggle}
+              {/* And the one reading with no days at all, at the end of the run
+                  for exactly that reason — see `newsToggle`. */}
+              {newsToggle}
             </>
           )}
         </ScrollRow>
@@ -10770,8 +10786,15 @@ export default function App() {
           nothing here to step, so the bar's place is taken by a row that states
           it — see `matchupFace`. One or the other, never both: two rows naming
           two spans over one card is the state this must not be in. */}
+      {/* **Not over the News reading**, which is the one roster reading with no
+          days: both news upstreams publish to the day and ship a few weeks of
+          it, so there is nothing for a range to narrow — and a bar over a list
+          that does not answer to it is a control claiming a power it has not
+          got. The table's own range is untouched underneath (`DateScope`), so
+          crossing there and back finds the days where they were left. */}
       {!tableTakesChrome &&
         isRosterView(view) &&
+        view !== 'news' &&
         showRosterViews &&
         (matchupCardOn ? matchupFace : dateBar)}
 
@@ -11345,22 +11368,45 @@ export default function App() {
                invisible elements. */
             chrome={
               <>
-                {/* Expanded, the research board reduces its control set to a
-                    row of read-only badges; this view keeps its live controls
-                    instead. The mode and its span most of all: a table of dates
-                    with nothing on screen saying how far they run is the state
-                    this must never be in, and the control is also the way back
-                    to the stats without leaving the page.
+                {/* **Every reading this view offers, not the two that keep the
+                    table.**
 
-                    **The Feed toggle is deliberately not here.** The other two
-                    are readings of *this table* and the way back out of them is
-                    this row; the stream is a different page's worth of content
-                    and there is no table for the full-page box to be around
-                    once it is on — pressing it would empty the very box the
-                    control sits in. It is a press away, up in the tools row,
-                    once the box is closed. */}
-                {scheduleControl}
-                {projectedToggle}
+                    Expanded, the research board reduces its control set to a
+                    row of read-only badges; this view keeps its live controls
+                    instead. It kept **two** of them for a while — `Schedule`
+                    and `Projected`, the pair that are readings of *this table* —
+                    on the stated argument that the other four replace the table
+                    with something else and would empty the very box the control
+                    sits in.
+
+                    That argument was about the box and the reader's is about
+                    the page: a control that exists on this view and not in its
+                    full-page mode is a mode you have to leave the page to
+                    reach, and the way out is a button in the table's own corner
+                    that a reader in the middle of a wide table is not looking
+                    at. So the whole run comes along, and **the two that carry
+                    no table simply end the mode**: `Matchup` and `Feed` (and
+                    `Opponent`, which draws his page rather than this table)
+                    unmount `SummaryTable` and the full-page flag is its own
+                    state, so pressing one lands on that reading at ordinary
+                    size. Nothing is left over — `useFullPage` holds a `useState`
+                    and an inert-background mark on its own ref, both of which
+                    go with the component.
+
+                    In the same order and the same `ScrollRow` as the tools row
+                    up in the view bar (`viewTools`), because it is the same run
+                    of controls: six of them do not fit a phone, and the row
+                    keeps its words and gives up what is off the end, which is
+                    the whole reason that component exists. */}
+                <ScrollRow label="the view controls" className="view-tools-scroll">
+                  {matchupButton}
+                  {opponentToggle}
+                  {feedToggle}
+                  {scheduleControl}
+                  {projectedToggle}
+                  {summaryToggle}
+                  {newsToggle}
+                </ScrollRow>
                 {/* The bar comes with them, and takes a line of its own here
                     the way it does in the chrome (`flex: 1 1 100%`). Its bleed
                     is this box's rather than the app's: it reads
@@ -11378,8 +11424,22 @@ export default function App() {
            pills itself, at the head of the feed and inside the same guard as it
            — which is why `feedFilterPills` is not rendered beside this: a row of
            pills over an empty page would be a control over nothing, and that
-           component's two empty states already name their own cause. */
+           component's two empty states already name their own cause.
+
+           It stands ahead of the News reading below for the reason it stands
+           ahead of the stream: `Opponent` is *whose page this is*, which is a
+           coarser question than which reading of it, and `viewCards` is your own
+           rows whichever is lit — so a news list drawn here would be yours under
+           his name. */
         opponentPage
+      ) : view === 'news' ? (
+        /* **Everything said about these players, newest first** — the roster's
+           third reading, and the one that is not about the days. It takes the
+           rows the page is showing rather than the saved roster, so the fantasy
+           switch and the hide-injured filter reach it exactly as they reach the
+           table; see `RosterNews`, which holds the read, the sort and the empty
+           state. */
+        <RosterNews reports={viewCards} />
       ) : (
         viewCards.length > 0 && (
           <>
@@ -11571,12 +11631,10 @@ export default function App() {
           onRemove={() => onRemove(detailsPlayer)}
           statsColumns={statsCols[detailsPlayer.kind] ?? null}
           onStatsColumnsChange={(keys) => setStatsColumns(detailsPlayer.kind, keys)}
-          /* Which cut of the spans the Stats tab is on, out of the URL. */
-          statsCut={statsCut}
-          onStatsCutChange={setStatsCut}
-          /* …and which cut the Percentile Rankings card is on, out of `pcut=`.
-             A separate key from the Stats tab's, deliberately: a reader can
-             want the left-handed card and the uncut table. */
+          /* Which part of the season the Percentile Rankings card is on, out
+             of `pcut=`. The page's one cut now: the Stats tab's `cut=` went
+             with its control, and every split it offered is a Splits-tab card.
+             The key stays `pcut=` so links already sent keep working. */
           pctCut={pctCut}
           onPctCutChange={setPctCut}
           /* How many bars that card draws — a saved preference, not a param. */

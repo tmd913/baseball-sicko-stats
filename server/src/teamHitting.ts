@@ -517,10 +517,10 @@ async function buildBoard(window: TeamHittingWindow, side: TeamSplitSide): Promi
     const [abbr, hand, leafVenue] = key.split('|');
     // `vsLeft` is the left-handed *other man* on both sides — the hand on the
     // mound when this club is batting, the hand at the plate when it is
-    // pitching. One field, two readings, which is the same economy `SplitCut`
-    // makes for a player's page (`vsr` reads as *vs RHP* on a batter's and *vs
-    // RHB* on a pitcher's) and the reason the client labels the rows off the
-    // side rather than reading a second field.
+    // pitching. One field, two readings, which is the same economy a player
+    // page's platoon card makes (`vs LHP` on a batter's, `vs LHB` on a
+    // pitcher's, off one pair of fields) and the reason the client labels the
+    // rows off the side rather than reading a second field.
     const row: keyof TeamHittingSplit = hand === 'L' ? 'vsLeft' : 'vsRight';
     const venue: TeamHittingVenue = leafVenue === 'H' ? 'home' : 'away';
     const forTeam = cuts.get(abbr) ?? new Map<string, HitCounts>();

@@ -1,26 +1,36 @@
 import { parse } from 'csv-parse/sync';
 import { readJsonBlob, writeJsonBlob } from './storage.js';
-import { empty, tally, toStatcast, windowDates } from './statcastWindow.js';
+import { empty, tally, toStatcast } from './statcastWindow.js';
 import type { StatcastCounts } from './statcastWindow.js';
+import { getAllStarDate } from './mlbStats.js';
 import { getResearch, SEASON } from './research.js';
-import { RECENT_CUT_SIZE, RESEARCH_WINDOWS, SPLIT_CUTS } from './types.js';
-import type { PlayerCut, PlayerKind, ResearchRow, ResearchWindow, SplitCut } from './types.js';
+import type { PlayerCut, PlayerKind, ResearchRow } from './types.js';
 
 /**
- * **One player's five spans, cut four ways** — vs right, vs left, home, away.
+ * **One player's season, in its two halves** — everything before the All-Star
+ * game and everything after it, each reduced to a research-board row.
  *
- * The player page's Stats tab is the research board transposed: five spans down
- * the side under the board's own columns. This is that table asked a second
- * question — *is he a different player against left-handers, or on the road* —
- * which is a cut along an axis the board has not got.
+ * It is what the percentile card's cut control asks for (`percentileCuts.ts`):
+ * *has he been a different player since the break*, answered on the same scale
+ * every other number on that page is drawn to. The break is the All-Star game's
+ * own date — `mlbStats.ts::getAllStarDate`, the same read the standings board's
+ * two half columns are split on, so a July game cannot fall on one side of the
+ * line here and the other side there.
  *
- * **And a fifth cut that is none of those**, added with the percentile card's
- * own cut control: `last100`, his most recent hundred at-bats (batters faced on
- * a pitcher). It is not a split and not a span — see `RecentCut` in `types.ts`
- * for why a count of at-bats is the right unit for recent form and a count of
- * days is not — so it hangs off `PlayerCuts` beside the four rather than
- * inside them, and it costs this module no second request: it is one more pass
- * over the season of pitches the four cuts have already downloaded.
+ * **This module was four splits over five spans and is two halves**, which is
+ * worth stating rather than quietly being: it built the Stats tab's `vs RHP · vs
+ * LHP · Home · Away` cut of each of the board's five windows, and it built
+ * `last100`, the card's recent-form cut. The Stats tab's control is gone and the
+ * card's offers the halves alone, because every one of those is a *comparison*
+ * and a cut card shows one side of a comparison at a time — the **Splits tab**
+ * draws all of them whole, both columns and the measured gap between them, off
+ * MLB's own published splits. What is left here is the cut MLB does **not**
+ * publish for a Statcast row and the tab therefore cannot draw: a half of a
+ * season with barrels, bat speed and chase rate on it.
+ *
+ * The arithmetic below is the one those twenty rows were built by, unchanged;
+ * only what is asked of it narrowed. The dead ends it records are kept for the
+ * same reason every dead end in this repo is.
  *
  * ### Why none of the cheap routes work
  *
@@ -34,6 +44,12 @@ import type { PlayerCut, PlayerKind, ResearchRow, ResearchWindow, SplitCut } fro
  * line once per code with an empty `split` object. Recorded so nobody probes
  * them again; this is the `pull_air_rate` failure wearing a date.
  *
+ * (MLB's `preas`/`posas` codes *do* answer for the two halves, exactly, and the
+ * Splits tab reads them — see `mlbStats.ts::getPlayerSplitCuts`. What they
+ * carry is MLB's line and not Statcast's, which is why this file still exists:
+ * a percentile card ranks barrels and bat speed, and no `sitCode` has ever
+ * carried either.)
+ *
  * **Savant publishes no windowed leaderboard at all**, which
  * `statcastWindow.ts` already records, and its per-day exports carry no
  * counting stats — they are pitches, and the board's `H`, `AB` and `AVG` come
@@ -44,7 +60,7 @@ import type { PlayerCut, PlayerKind, ResearchRow, ResearchWindow, SplitCut } fro
  * `statcast_search/csv` filtered to **one player** takes the whole season in a
  * single request (`batters_lookup[]` / `pitchers_lookup[]`), and every row of
  * it carries `game_date`, `p_throws`, `stand`, `inning_topbot` and `events` —
- * so all four cuts and all five spans fall out of one fetch by filtering. It is
+ * so any cut of his season falls out of one fetch by filtering. It is
  * the same export `statcastWindow.ts` reads a day at a time, so **the Statcast
  * half is the same arithmetic**: `tally` and `toStatcast`, imported rather than
  * rewritten.
@@ -67,6 +83,11 @@ import type { PlayerCut, PlayerKind, ResearchRow, ResearchWindow, SplitCut } fro
  *   `truncated_pa` is excluded** (see `NON_PA_EVENTS`), which was the one
  *   discrepancy: a plate appearance cut short by the third out on the bases,
  *   which Statcast files as an event and MLB does not count as a batter faced.
+ *
+ * Those four cuts are the ones this file no longer draws, and the check is kept
+ * as written: it is a check on `addPitch`, `toRow` and `NON_PA_EVENTS`, every
+ * one of which the two halves are still built by. A filter that reproduced
+ * MLB's `vl` line byte for byte is a filter that reproduces its `preas` line.
  *
  * ### What a cut cannot carry, and why it dashes rather than lying
  *
@@ -119,9 +140,15 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
  * with **both** fields undefined — every cut of every span reading as "he has
  * nothing here", which is the shape of answer this file is at pains to
  * distinguish from a real one. The rename is the bump.
+ *
+ * `-v3`: `last100` became `firstHalf` and `secondHalf`. Same fault as the
+ * rename above and the same fix — a v2 blob has neither field, so a stored one
+ * would answer every half card with "he has no line in this half", which is a
+ * sentence this file draws for a real absence and must not draw for a stale
+ * blob.
  */
 const cutKey = (kind: PlayerKind, playerId: number) =>
-  `player-cuts-${kind}-${playerId}-${SEASON}-v2.json`;
+  `player-cuts-${kind}-${playerId}-${SEASON}-v3.json`;
 
 /**
  * One player's whole season of pitches.
@@ -278,34 +305,6 @@ function addPitch(into: CutCounts, r: Record<string, string>): void {
 const r3 = (v: number | null): number | null =>
   v === null ? null : Math.round(v * 1000) / 1000;
 
-/**
- * Which rows a cut keeps.
- *
- * The handedness cut is **the other man's hand** on both boards, which is what
- * the app already means by a platoon split: a batter's is the pitcher's
- * (`p_throws`) and a pitcher's is the batter's (`stand`). One value, `vsr` or
- * `vsl`, therefore reads as *vs RHP* on a batter's page and *vs RHB* on a
- * pitcher's, and the label is the client's business.
- *
- * Home and away are `inning_topbot`, not the club abbreviations: the top of an
- * inning is the visiting side batting, so a **batter** is at home in the bottom
- * and a **pitcher** is at home in the top. Reading it off `home_team` would need
- * the player's own club, which changes at a trade deadline and is exactly the
- * join this does not have to make.
- */
-function keeps(cut: SplitCut, kind: PlayerKind, r: Record<string, string>): boolean {
-  switch (cut) {
-    case 'vsr':
-      return (kind === 'pitcher' ? r.stand : r.p_throws) === 'R';
-    case 'vsl':
-      return (kind === 'pitcher' ? r.stand : r.p_throws) === 'L';
-    case 'home':
-      return r.inning_topbot === (kind === 'pitcher' ? 'Top' : 'Bot');
-    case 'away':
-      return r.inning_topbot === (kind === 'pitcher' ? 'Bot' : 'Top');
-  }
-}
-
 /** The identity half of a row, which a cut has no opinion about — read off the
  *  season board, whose row for this player is already cached. A failure here
  *  costs the names and not the numbers, which is the standing rule. */
@@ -433,99 +432,24 @@ function toRow(
   };
 }
 
-type CutWindows = Record<SplitCut, { window: ResearchWindow; row: ResearchRow | null }[]>;
-
 /**
  * Everything one season of one player's pitches reduces to.
  *
- * **`last100` is a sibling of `windows` rather than a fifth key inside it**, and
- * the shape is the argument: a `CutWindows` entry is that cut measured over each
- * of five spans, and recent form has no spans to be measured over — see
- * `RecentCut`, which sets out why "his last 100 at-bats within the last 7 days"
- * is not a narrower question. Folding it in would have meant four honest rows
- * and one row of noughts on every cut of every window, which is exactly the
- * "did not go 0-for-0" fault `toRow` returns null to avoid.
+ * **Two rows, where this was twenty.** The blob used to carry the four splits
+ * over each of five spans — the Stats tab's own cut control — and that control
+ * is gone: every split it offered is a Splits-tab card now, where both sides
+ * are drawn at once with the gap between them measured. What is left is the cut
+ * that is a **span** rather than a split, which is the one a one-sided card
+ * answers honestly.
  */
 interface PlayerCuts {
-  windows: CutWindows;
-  /** The most recent 100 at-bats (batters faced for a pitcher), or null where
-   *  he has not had a plate appearance all season. Fewer than 100 where he has
-   *  not had that many — the row is what he *has* done, and `pa` on it says how
-   *  much that is. */
-  last100: ResearchRow | null;
-}
-
-/**
- * A total order over one season of pitches.
- *
- * `at_bat_number` restarts each game and `pitch_number` each plate appearance,
- * so neither orders a season alone; `game_pk` breaks the one tie `game_date`
- * leaves, which is a doubleheader — two games on one date whose at-bat numbers
- * both start at 1. Measured on a real export: Judge's season arrives in
- * **neither** order (not ascending, not descending), so it has to be sorted
- * rather than read off the end.
- */
-function pitchOrder(r: Record<string, string>): [string, number, number, number] {
-  return [
-    r.game_date ?? '',
-    Number(r.game_pk) || 0,
-    Number(r.at_bat_number) || 0,
-    Number(r.pitch_number) || 0,
-  ];
-}
-
-function comparePitches(a: Record<string, string>, b: Record<string, string>): number {
-  const x = pitchOrder(a);
-  const y = pitchOrder(b);
-  for (let i = 0; i < x.length; i++) {
-    if (x[i] < y[i]) return -1;
-    if (x[i] > y[i]) return 1;
-  }
-  return 0;
-}
-
-/**
- * The rows making up his most recent `RECENT_CUT_SIZE` at-bats — or batters
- * faced, on a pitcher, where every plate appearance is one.
- *
- * Walked **backwards through plate appearances**, not through pitches or
- * through days: the cut is a count of at-bats and its edge therefore falls on a
- * plate-appearance boundary, never in the middle of one. Every pitch of a kept
- * plate appearance is kept with it, because the discipline half of the card
- * (chase, whiff, first-pitch strikes) is counted off pitches and would
- * otherwise be measured over a fragment of the very appearances the batting
- * half is measured over.
- *
- * The plate appearances *between* those at-bats come along too — a walk sitting
- * between two of them is inside the span and is counted, which is what makes
- * the BB% on this card mean anything. So the row rests on rather more than 100
- * plate appearances, and that number is what `pa` on it reports.
- */
-function recentRows(
-  rows: Record<string, string>[],
-  kind: PlayerKind,
-): Record<string, string>[] {
-  const sorted = [...rows].sort(comparePitches);
-  let atBats = 0;
-  // **The whole season, until proved otherwise.** A player with fewer than
-  // `RECENT_CUT_SIZE` at-bats never trips the test below, and keeping every row
-  // is the right answer for him: his last 100 at-bats are all of them.
-  let cutAt = 0;
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    const e = sorted[i].events;
-    if (!e || NON_PA_EVENTS.has(e)) continue;
-    // A pitcher's unit is the batter faced, which every plate appearance is; a
-    // batter's is the at-bat, which the walks and sacrifices among them are not.
-    if (kind === 'pitcher' || !NON_AB_EVENTS.has(e)) atBats++;
-    if (atBats > RECENT_CUT_SIZE) {
-      // One too many. `events` sits on the **last** pitch of a plate
-      // appearance, so index `i` is where the appearance outside the span ends
-      // and `i + 1` is the first pitch of the oldest one inside it.
-      cutAt = i + 1;
-      break;
-    }
-  }
-  return sorted.slice(cutAt);
+  /** Everything he did before the All-Star game, and everything after it —
+   *  null where he has no plate appearance in that half, and **both** null
+   *  where the All-Star date could not be read, which is the honest answer to
+   *  "we do not know where the break is" and not the same thing as "he did
+   *  nothing". */
+  firstHalf: ResearchRow | null;
+  secondHalf: ResearchRow | null;
 }
 
 async function buildAll(playerId: number, kind: PlayerKind): Promise<PlayerCuts> {
@@ -543,54 +467,46 @@ async function buildAll(playerId: number, kind: PlayerKind): Promise<PlayerCuts>
   }) as Record<string, string>[];
 
   const id = await identity(playerId, kind);
+  // **The break, or nothing.** A failed All-Star read leaves both halves null
+  // and the percentile card says he has no line in the half asked for, which is
+  // the honest shape of "we do not know where the break is". Inventing a
+  // mid-July boundary is the alternative, and it would file a fortnight of games
+  // under the wrong half in a season where the break moved — the join-to-null
+  // rule, applied to a date.
+  const allStar = await getAllStarDate(SEASON).catch((err: unknown) => {
+    console.error('Player cuts: All-Star date unavailable, halves dropped:', err);
+    return null;
+  });
 
-  // One pass per cut per span, over rows already in memory. The spans are
-  // date bounds off `windowDates`, which is the very function the board's own
-  // windows are cut with — so "the last 30 days" means the same thirty days on
-  // both halves of this tab.
-  const bounds = new Map<ResearchWindow, [string, string] | null>();
-  for (const w of RESEARCH_WINDOWS) {
-    if (w === 'season') bounds.set(w, null);
-    else {
-      const d = windowDates(w);
-      bounds.set(w, [d[0], d[d.length - 1]]);
+  // The two halves, off the rows already in memory: two passes over a list the
+  // fetch above has already paid for. **Strictly either side of the All-Star
+  // game's own date**, which no regular-season game falls on — `gameType=A` is
+  // its own game type, and the export this reads is `hfGT=R|`.
+  const half = (keep: (date: string, breakDay: string) => boolean): ResearchRow | null => {
+    if (allStar === null) return null;
+    const counts = emptyCut();
+    for (const r of rows) {
+      if (r.game_date && keep(r.game_date, allStar)) addPitch(counts, r);
     }
-  }
+    return toRow(counts, playerId, kind, id);
+  };
 
-  const out = {} as CutWindows;
-  for (const cut of SPLIT_CUTS) {
-    const kept = rows.filter((r) => keeps(cut, kind, r));
-    out[cut] = RESEARCH_WINDOWS.map((window) => {
-      const span = bounds.get(window) ?? null;
-      const counts = emptyCut();
-      for (const r of kept) {
-        const d = r.game_date;
-        if (span && (!d || d < span[0] || d > span[1])) continue;
-        addPitch(counts, r);
-      }
-      return { window, row: toRow(counts, playerId, kind, id) };
-    });
-  }
-
-  // Recent form, off the same rows already in memory: a sixth pass over a list
-  // the fetch above has already paid for, which is the same economy the four
-  // cuts make between themselves.
-  const recent = emptyCut();
-  for (const r of recentRows(rows, kind)) addPitch(recent, r);
-
-  return { windows: out, last100: toRow(recent, playerId, kind, id) };
+  return {
+    firstHalf: half((d, brk) => d < brk),
+    secondHalf: half((d, brk) => d > brk),
+  };
 }
 
 const mem = new Map<string, { data: PlayerCuts; fetchedAt: number }>();
 const inFlight = new Map<string, Promise<PlayerCuts>>();
 
 /**
- * All four cuts of all five spans, from one request and one cache entry.
+ * Both halves, from one request and one cache entry.
  *
  * Keyed by player rather than by cut because **the fetch is the cost and the
- * cut is a filter over it**: a reader who presses `vs LHP` and then `Home` has
- * already paid for both, and storing them apart would be the same megabyte
- * downloaded four times. The blob is the twenty rows, not the megabyte.
+ * cut is a filter over it**: a reader who presses `First Half` and then `Second
+ * Half` has already paid for both, and storing them apart would be the same
+ * megabyte downloaded twice. The blob is the two rows, not the megabyte.
  */
 async function allCuts(playerId: number, kind: PlayerKind): Promise<PlayerCuts> {
   const key = `${kind}-${playerId}`;
@@ -621,23 +537,6 @@ async function allCuts(playerId: number, kind: PlayerKind): Promise<PlayerCuts> 
   }
 }
 
-/** The Stats tab's table under one cut, in exactly the shape the uncut table
- *  arrives in — same route, same five rows, same `row: null` for a span he has
- *  nothing in. The client's table is therefore one table and not two. */
-export async function getPlayerCutWindows(
-  playerId: number,
-  kind: PlayerKind,
-  cut: SplitCut,
-): Promise<{
-  season: number;
-  kind: PlayerKind;
-  cut: SplitCut;
-  windows: { window: ResearchWindow; row: ResearchRow | null }[];
-}> {
-  const all = await allCuts(playerId, kind);
-  return { season: SEASON, kind, cut, windows: all.windows[cut] };
-}
-
 /**
  * **One cut of the whole season, as a single board row** — what the percentile
  * card's cut ranks (see `percentileCuts.ts`).
@@ -647,12 +546,16 @@ export async function getPlayerCutWindows(
  * distribution, so a cut measured over anything narrower than the season would
  * be the one half of that comparison drawn to a different scale.
  *
- * `last100` is the exception that proves it — a count of at-bats rather than a
- * span, and the reason it is a sibling field here rather than a fifth key on
- * `windows` is set out on `PlayerCuts`.
+ * **A half is not narrower than the season in the sense that matters**, which
+ * is why it is the one cut left: it is a *span* rather than a filter on who was
+ * on the mound, so `First Half` is his real line over a real stretch of the
+ * year, placed among the season's qualified values exactly as `Season` is. The
+ * control offers `Season · First Half · Second Half` and nothing else — the
+ * splits moved to the Splits tab, where both halves of each are drawn at once
+ * (see `PlayerCut` in `types.ts`).
  *
- * Costs nothing the Stats tab has not already paid: same fetch, same blob, same
- * six hours, so a reader who has looked at either surface has bought both.
+ * One fetch and one six-hour blob serve both halves, so a reader who has pressed
+ * either has bought the other.
  */
 export async function getPlayerSeasonCut(
   playerId: number,
@@ -660,8 +563,5 @@ export async function getPlayerSeasonCut(
   cut: PlayerCut,
 ): Promise<ResearchRow | null> {
   const all = await allCuts(playerId, kind);
-  if (cut === 'last100') return all.last100 ?? null;
-  const windows = all.windows[cut];
-  if (!windows) return null;
-  return windows.find((w) => w.window === 'season')?.row ?? null;
+  return all[cut] ?? null;
 }

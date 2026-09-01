@@ -571,7 +571,10 @@ async function getDistribution(
   name: string,
   year: number,
   url: string,
-  column: string,
+  /** How one leaderboard row becomes one value, or null to leave it out. A
+   *  column name for the ordinary case; a function where the value is a rate
+   *  over two of them and the board publishes only the counts (`PA/HR`). */
+  read: string | ((r: Record<string, string>) => number | null),
   transform: (v: number) => number = (v) => v,
 ): Promise<number[]> {
   const key = `${name}-${year}`;
@@ -604,8 +607,8 @@ async function getDistribution(
   });
   const values: number[] = [];
   for (const r of records) {
-    const v = toNum(r[column]);
-    if (v !== null) values.push(transform(v));
+    const v = typeof read === 'string' ? toNum(r[read]) : read(r);
+    if (v !== null && Number.isFinite(v)) values.push(transform(v));
   }
   values.sort((a, b) => a - b);
 
@@ -634,6 +637,18 @@ function hrLeaderboardUrl(year: number): string {
   return `https://baseballsavant.mlb.com/leaderboard/custom?${params.toString()}`;
 }
 
+/** The same board with the denominator on it. Checked populated before it was
+ *  built on, which is this repo's first rule about an upstream: `pa,home_run`
+ *  returns both columns filled for every qualified batter (`"Tatis Jr.,
+ *  Fernando",665487,2026,595,17`). */
+function paPerHrLeaderboardUrl(year: number): string {
+  const params = new URLSearchParams({
+    year: String(year), type: 'batter', filter: '', min: 'q',
+    selections: 'pa,home_run,', sort: '1', sortDir: 'desc', csv: 'true',
+  });
+  return `https://baseballsavant.mlb.com/leaderboard/custom?${params.toString()}`;
+}
+
 /** `hard_swing_rate` on the leaderboard is a proportion; scale it to the percent
  * the player page's `fast_swing_rate` uses. */
 const getFastSwingDist = (year: number) =>
@@ -642,6 +657,25 @@ const getFastSwingDist = (year: number) =>
 /** Actual home-run counts among qualified batters, to rank `home_run` against. */
 const getHrDist = (year: number) =>
   getDistribution('hr-dist', year, hrLeaderboardUrl(year), 'home_run');
+
+/**
+ * **Plate appearances per home run among qualified batters.**
+ *
+ * A rate the board does not publish and cannot be asked for: it is computed per
+ * row from the two counts, which is the standing rule about aggregating — the
+ * counts add and the rate is taken once at the end. A qualified batter with
+ * **no** home runs is left out rather than given an infinite ratio; there are a
+ * handful every season (Steven Kwan's 530 PA and 2 HR is near the bottom of the
+ * board, and men with 0 exist), and a player with no home runs has no
+ * plate-appearances-per-home-run, which is a different statement from "his is a
+ * very large number".
+ */
+const getPaPerHrDist = (year: number) =>
+  getDistribution('pa-per-hr-dist', year, paPerHrLeaderboardUrl(year), (r) => {
+    const pa = toNum(r.pa);
+    const hr = toNum(r.home_run);
+    return pa === null || hr === null || hr <= 0 ? null : pa / hr;
+  });
 
 /** League percentile of `value` within a distribution: the share of the league
  * it beat, matching Savant's percent-rank convention. `lowerBetter` flips which
@@ -987,6 +1021,38 @@ function fastSwingMetric(row: StatcastRow, sortedRates: number[]): PercentileMet
   };
 }
 
+/**
+ * **Plate appearances per home run**, under xHR on the detailed card.
+ *
+ * The three power rows above it — HR, xHR and ISO — are all *totals or rates
+ * per at-bat*, and a total is a fact about playing time as much as about power:
+ * 30 home runs in 700 plate appearances and 30 in 450 are not the same season.
+ * This is the same question divided by the opportunities, and it is the number
+ * fantasy managers argue about a bench bat in.
+ *
+ * **Lower is better**, which is the row's whole reading: fewer trips per home
+ * run is more power, so the percentile is flipped. That makes it the one row in
+ * `Batting` where the bar and the raw number move in opposite directions, and
+ * it is exactly the case `leaguePercentile`'s `lowerBetter` exists for.
+ *
+ * **Null on a man with no home runs**, rather than a very long bar or a very
+ * short one. His ratio is undefined, not enormous, and the section's own rule
+ * for a value the player does not have is to drop the row (see `buildSections`,
+ * which drops a full-time DH's fielding value the same way).
+ */
+function paPerHrMetric(row: StatcastRow, dist: number[]): PercentileMetric | null {
+  const pa = toNum(row.pa);
+  const hr = toNum(row.home_run);
+  if (pa === null || hr === null || hr <= 0) return null;
+  const raw = pa / hr;
+  return {
+    key: 'pa_hr',
+    label: 'PA/HR',
+    percentile: leaguePercentile(raw, dist, true),
+    value: formatValue(raw, 'dec1'),
+  };
+}
+
 /** The computed actual-HR row, or null if the player has no HR data. Pairs with
  * the scraped xHR row into a dumbbell on the client. */
 function hrMetric(row: StatcastRow, hrCounts: number[]): PercentileMetric | null {
@@ -1015,6 +1081,11 @@ interface BatterComputedDef {
 
 const BATTER_COMPUTED: BatterComputedDef[] = [
   { section: 'Batting', before: 'xhr', build: (row, c) => hrMetric(row, c.hrCounts) },
+  // Directly under xHR, which is where the power block ends: HR, xHR, then the
+  // same power measured per trip to the plate. It is spliced `after` the
+  // *scraped* row rather than after the HR one above it, so it lands below the
+  // dumbbell those two are paired into rather than inside it.
+  { section: 'Batting', after: 'xhr', build: (row, c) => paPerHrMetric(row, c.paPerHr) },
   { section: 'Swing', after: 'bat_speed', build: (row, c) => fastSwingMetric(row, c.fastSwingRates) },
 ];
 
@@ -1023,6 +1094,7 @@ const BATTER_COMPUTED: BatterComputedDef[] = [
 interface Computed {
   fastSwingRates: number[]; // batter
   hrCounts: number[]; // batter
+  paPerHr: number[]; // batter
   pitcherDists: Record<string, number[]>; // pitcher, keyed by leaderboard column
   // The fallback distributions behind the scraped rows Savant ranks but doesn't
   // summarize, keyed by the metric's raw field (see RANK_FALLBACK). Empty for a
@@ -1133,8 +1205,13 @@ function cacheFile(playerId: number, year: number, kind: 'batter' | 'pitcher'): 
  * blob and *read straight back out of it* (the client's density switch renders
  * it), which is both halves of the test `RULES.md` sets for a bump: a v5 card
  * deserializes with `summary` missing, and the switch would find nothing under
- * `Summary` for the six hours until that card aged out. */
-const CARD_VERSION = 6;
+ * `Summary` for the six hours until that card aged out.
+ *
+ * **v7 is `PA/HR`**, a row added under xHR on the detailed card. A stored v6
+ * card is a list of rows and would go on being served without it — for six
+ * hours on this season's card and *forever* on a past season's, which is the
+ * case this counter exists for. */
+const CARD_VERSION = 7;
 
 /** A cached card is fresh if it was built by this version of the card and is
  * either a past season (immutable) or, for the current season, younger than the
@@ -1233,7 +1310,13 @@ async function scrape(
   // ranked against a leaderboard rather than read off the page. A failed fetch
   // leaves those distributions empty, which costs their bars a percentile and
   // nothing else.
-  const computed: Computed = { fastSwingRates: [], hrCounts: [], pitcherDists: {}, rankDists: {} };
+  const computed: Computed = {
+    fastSwingRates: [],
+    hrCounts: [],
+    paPerHr: [],
+    pitcherDists: {},
+    rankDists: {},
+  };
   // The rows Savant ranks but publishes no distribution for, which is the one
   // way a bar could go missing from an unqualified card entirely. Only fetched
   // when such a row is actually un-ranked on *this* page, so a qualified
@@ -1261,6 +1344,14 @@ async function scrape(
       computed.hrCounts = await getHrDist(year);
     } catch (err) {
       console.error(`HR leaderboard unavailable for ${year}:`, err);
+    }
+    // Its own board and its own `try`, beside the HR one rather than folded
+    // into it: they select different columns, cache under different names, and
+    // a failure of either must cost one bar rather than two.
+    try {
+      computed.paPerHr = await getPaPerHrDist(year);
+    } catch (err) {
+      console.error(`PA/HR leaderboard unavailable for ${year}:`, err);
     }
   } else {
     // Savant publishes the size of its ranking population beside every metric —

@@ -4,10 +4,7 @@ import type {
   PlayerWindowRow,
   ResearchRow,
   ResearchWindow,
-  SplitCut,
 } from '../types';
-import { SPLIT_CUTS } from '../types';
-import { CUT_LABEL, cutOf } from '../lib';
 import { LoadingLine } from './Loading';
 import {
   allColumns,
@@ -185,36 +182,20 @@ interface Sort {
 }
 
 /**
- * **The cut, and why it is named from the other man's hand.**
+ * **There is no cut control on this table any more, and the table is the
+ * uncut one.**
  *
- * One axis, two labels: `vsr` is *vs RHP* on a batter's page and *vs RHB* on a
- * pitcher's, because a platoon split has always meant the hand of whoever is on
- * the other side of it — which is what `PlatoonSplits` next door already draws
- * and what MLB's own `vr`/`vl` sit codes mean. Four values rather than eight
- * keeps one `cut=` in the URL that reads the same on either kind of page.
- *
- * `All` is not a value: it is the absence of one, which is what makes the
- * uncut table the thing a link with no `cut=` opens on.
+ * It carried a five-pill run — `All · vs RHP · vs LHP · Home · Away` — which
+ * asked the same question the **Splits** tab now answers whole: that tab draws
+ * both halves of each of those comparisons side by side with the gap between
+ * them measured, where this table showed one half at a time and left the reader
+ * flipping pills and subtracting. What went with it is `cut=` in the URL, the
+ * server's per-cut window build, the sample column the cut forced into the
+ * columns, and the `No percentiles under a cut` disablement on the ranks toggle
+ * — the badges are always drawable now, which is the state this table is
+ * usually read in anyway.
  */
-// (moved to `lib.ts` — the percentile card draws the same cuts, and two
-// tables of the same words is how two surfaces come to disagree about them.)
 
-/**
- * How the empty row names the cut it is empty *of*.
- *
- * A span with no games in it is common on this table and **a cut makes it much
- * commoner** — a week cut by hand is a handful of plate appearances at best, and
- * a hitter who faced nobody left-handed in seven days has a genuinely empty row.
- * The app's rule is that an empty state names its own cause and the control that
- * caused it, so the sentence carries the cut as well as the span: `No games vs
- * LHP in this span`, with the lit pill directly above it saying which control
- * put it there. Without the cut in the words it would read as a claim about the
- * week, which is exactly the fault that rule exists for.
- */
-const cutPhrase = (cut: SplitCut, kind: PlayerKind): string =>
-  cut === 'home' || cut === 'away'
-    ? `${cut === 'home' ? 'home' : 'away'} ${kind === 'pitcher' ? 'outings' : 'games'}`
-    : `${kind === 'pitcher' ? 'outings' : 'games'} ${CUT_LABEL[cut][kind]}`;
 
 
 /**
@@ -270,8 +251,6 @@ export function PlayerWindowTable({
   onShowRanksChange,
   populations,
   onNeedPopulations,
-  cut,
-  onCutChange,
   updating,
 }: {
   kind: PlayerKind;
@@ -279,12 +258,13 @@ export function PlayerWindowTable({
    * **Whether these five rows are a club's rather than a player's** — the team
    * page's Stats tab, which is this table over the board's *team* reading.
    *
-   * It changes two things and deliberately nothing else, because everything
-   * else is already right: the column vocabulary, the span column, the sort,
-   * the picker and the badges all work on a `ResearchRow` and a club's row is
-   * one. What it changes is the **population** the badges rank within (thirty
-   * clubs, not six hundred players) and the **cut** control, which a club has
-   * no boards for. See `teamResearch.ts` for both.
+   * It changes one thing and deliberately nothing else, because everything else
+   * is already right: the column vocabulary, the span column, the sort, the
+   * picker and the badges all work on a `ResearchRow` and a club's row is one.
+   * What it changes is the **population** the badges rank within — thirty clubs,
+   * not six hundred players. See `teamResearch.ts`. (It used to hide the cut
+   * control too, a club having no boards to cut; that control is gone from both
+   * readings now.)
    */
   teams?: boolean;
   windows: PlayerWindowRow[];
@@ -304,11 +284,6 @@ export function PlayerWindowTable({
    *  toggle is on and this tab is mounted, which is the whole of the laziness:
    *  a reader on the Overview tab, or one with ranks off, pays nothing. */
   onNeedPopulations: () => void;
-  /** Which cut of the spans is **asked for** — not necessarily the one the rows
-   *  on screen are, which is the whole reason `updating` is a prop: the pressed
-   *  pill lights in the same frame and the table catches up. */
-  cut: SplitCut | null;
-  onCutChange: (cut: SplitCut | null) => void;
   /** A read is in flight over rows that are already drawn. Never a wait over
    *  data — this is the `Updating` badge and nothing else. */
   updating: boolean;
@@ -320,36 +295,15 @@ export function PlayerWindowTable({
   );
   const columns = useMemo(() => {
     const byKey = new Map(vocabulary.map((c) => [c.key, c]));
-    const chosen = orderedKeys
+    // **The reader's columns, and only the reader's.** The table used to force
+    // a sample column in under a cut — a span cut by hand is a fraction of a
+    // span and the fraction had to be visible before a `.381` could be believed
+    // — and with the cut gone, so is the one case where this table drew a
+    // column nobody chose.
+    return orderedKeys
       .map((k) => byKey.get(k))
       .filter((c): c is Column => c !== undefined);
-    if (!cut) return chosen;
-    /**
-     * **A cut row always carries the count it was cut from**, whatever the
-     * reader's saved columns say.
-     *
-     * This is the one place the table adds a column of its own, and it is the
-     * sample size that makes it necessary: a span cut by hand is a fraction of
-     * a span, and the fraction is the first thing a reader has to see before
-     * believing a `.381`. On a **batter** `PA` is in the defaults and this
-     * almost never fires. On a **pitcher** it always does, because the column
-     * that normally says how much of a season a row is — `IP` — is one a cut
-     * cannot carry at all (a pitch row does not know who was caught stealing;
-     * see `playerSplits.ts`), so without this the 7-day vs-LHB row would read
-     * `1 G · 2 H · 1 K` with nothing anywhere to say it is three batters.
-     *
-     * It goes in **after `G`**, where a count belongs and where `PA` and `IP`
-     * already sit on the two boards, and it goes away with the cut. The saved
-     * selection is untouched — this is what the table *draws*, not what the
-     * reader chose, which is why the picker below still reads `orderedKeys`.
-     */
-    const sizeKey = kind === 'pitcher' ? 'battersFaced' : 'pa';
-    if (chosen.some((c) => c.key === sizeKey)) return chosen;
-    const size = byKey.get(sizeKey);
-    if (!size) return chosen;
-    const at = chosen.findIndex((c) => c.key === 'games');
-    return at < 0 ? [size, ...chosen] : [...chosen.slice(0, at + 1), size, ...chosen.slice(at + 1)];
-  }, [vocabulary, orderedKeys, cut, kind]);
+  }, [vocabulary, orderedKeys]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sort, setSort] = useState<Sort>({ key: SPAN_KEY, asc: true });
@@ -358,30 +312,9 @@ export function PlayerWindowTable({
   // this component is mounted by the Stats tab alone, so a reader who never
   // opens it never sends the request. App dedupes and caches — see
   // `loadRankPopulations` there.
-  /**
-   * **A cut has no population, so it has no percentiles**, and the boards are
-   * not asked for either.
-   *
-   * The badges here are the *board's* — `rankScales` over the qualified players
-   * on the board for that span, which is what makes the number on this tab and
-   * the number on the research board the same number. There is no board of
-   * everybody's line against left-handers, and there could not cheaply be one
-   * (it is a league-wide season of pitch rows per cut per span). The three ways
-   * out were all worse than saying so: ranking a cut against the **uncut**
-   * board is a wrong answer wearing a right one's clothes — a .380 against
-   * lefties would read as a 96th percentile it was never measured for; ranking
-   * it against a population of one is not a rank; and drawing the badges the
-   * uncut table last had would be four rows of yesterday's answer.
-   *
-   * So under a cut the toggle is off and inert, its own `title` names the
-   * reason, and the saved preference is untouched — the badges come back with
-   * the table the moment `All` is pressed. `qualified` on a cut row is `false`
-   * for the same reason and nothing reads it (see `playerSplits.ts`).
-   */
-  const rankable = cut === null;
   useEffect(() => {
-    if (showRanks && rankable) onNeedPopulations();
-  }, [showRanks, rankable, onNeedPopulations]);
+    if (showRanks) onNeedPopulations();
+  }, [showRanks, onNeedPopulations]);
 
   /** One set of yardsticks per window, from whichever boards have landed.
    *  Keyed by window because each row is ranked within *its own* span: a
@@ -389,7 +322,7 @@ export function PlayerWindowTable({
    *  that means anything (a week's PA against a season's would rank every
    *  player last). */
   const ranks = useMemo(() => {
-    if (!showRanks || !rankable) return null;
+    if (!showRanks) return null;
     const out = new Map<string, ReturnType<typeof rankScales>>();
     for (const w of windows) {
       const rows = populations[String(w.window)];
@@ -408,7 +341,7 @@ export function PlayerWindowTable({
       }
     }
     return out;
-  }, [showRanks, rankable, populations, columns, kind, teams, windows]);
+  }, [showRanks, populations, columns, kind, teams, windows]);
 
   // A hidden column must not leave the table ordered by it — the same trap the
   // board's `activeSortKey` exists for, and here there is no header left to
@@ -463,54 +396,6 @@ export function PlayerWindowTable({
           it scrolls with the tab rather than adding a second pinned band inside
           an overlay that already has one. */}
       <div className="stats-tools">
-        {/* **The cut, at the head of the row the two disclosures end.** It is
-            the one control here that changes *which numbers* are in the table
-            rather than how they are read, so it leads and they follow — the
-            order the board reads its own run of controls in.
-
-            `.split-switch` / `.split-tab` are the pitcher card's own pills,
-            folded on rather than restyled: a segmented row picking one cut of
-            one player's line is the same object here as it is there, and two
-            rules that agree today are two rules that will one day differ. What
-            this row adds under its own name is the `auto` margin that pushes
-            the pair to the far end. */}
-        {/* **Not drawn on a club's reading at all**, rather than drawn and
-            declined. Savant publishes no team cut of the boards these rows are
-            summed from, so the four buttons could only ever be four requests
-            for the same table — which is the failure `RULES.md` names first:
-            an upstream that accepts a selection and answers something else. A
-            control that cannot change what it points at is worse than no
-            control, because nothing on screen would say why nothing happened.
-            The club's platoon reading has a home, and it is the nine cuts of
-            the Hitting tab. */}
-        {/* **Not rendered at all on a club's reading**, where it was first
-            written as a `hidden` attribute on the box — which does nothing:
-            `[hidden]`'s `display: none` comes from the UA stylesheet at the
-            lowest specificity and `.split-switch { display: flex }` beats it,
-            so the empty row was still laid out and still took its slot. Seen as
-            a 5px artifact at the left end of the tools row. A conditional is
-            what an absent control is. */}
-        {!teams && (
-        <div className="split-switch stats-cuts" role="tablist" aria-label="Split">
-          {([null, ...SPLIT_CUTS] as (SplitCut | null)[]).map((c) => (
-            <button
-              key={c ?? 'all'}
-              type="button"
-              role="tab"
-              aria-selected={cut === c}
-              className={`split-tab${cut === c ? ' active' : ''}`}
-              onClick={() => onCutChange(c)}
-              title={
-                c === null
-                  ? 'Every plate appearance in the span'
-                  : `The span cut to what he did ${cutOf(c, kind)}`
-              }
-            >
-              {c === null ? 'All' : CUT_LABEL[c][kind]}
-            </button>
-          ))}
-        </div>
-        )}
         {/* **Laid out whether or not it is showing**, which is the app's own
             "reserve the box, don't move the page": this row wraps on a phone,
             so a badge that arrived with the read would re-flow the two buttons
@@ -530,25 +415,19 @@ export function PlayerWindowTable({
         />
         {/* The same control the board carries, in this table's own caption
             slot, and reading the same saved preference: one reading habit, not
-            a setting per table. */}
-        {/* The reason rides on the wrapper because a disabled button shows no
-            `title` of its own — and the reason is the point: a control that
-            simply went quiet under a cut would be the app declining to explain
-            itself, which is what the empty-state rule forbids one row down. */}
-        <span
-          title={
-            rankable
-              ? undefined
-              : `No percentiles under a cut — the badges are the research board's own, and there is no board of everybody's line ${cutOf(cut as SplitCut, kind)}. Press All to bring them back.`
-          }
-        >
-          <RanksButton
-            on={showRanks}
-            onToggle={() => onShowRanksChange(!showRanks)}
-            disabled={!rankable}
-            population={`the qualified players on the research board for that span (Savant's bar of ${QUALIFIER_WORDS[kind]})`}
-          />
-        </span>
+            a setting per table.
+
+            **It is never disabled now.** It used to go inert under a cut, with
+            the reason on a wrapper (a disabled button shows no `title` of its
+            own) — there being no board of everybody's line against left-handers
+            to rank a cut row inside. With the cut control gone every row on this
+            table is a board row again, so the badges are always drawable and the
+            wrapper that carried the excuse is gone with them. */}
+        <RanksButton
+          on={showRanks}
+          onToggle={() => onShowRanksChange(!showRanks)}
+          population={`the qualified players on the research board for that span (Savant's bar of ${QUALIFIER_WORDS[kind]})`}
+        />
       </div>
       {pickerOpen && (
         <ColumnPicker
@@ -657,7 +536,7 @@ export function PlayerWindowTable({
                   // sentence does — while a row of noughts would say the opposite
                   // of the truth, claiming he played and did nothing.
                   <td className="stats-none" colSpan={columns.length}>
-                    No {cut ? cutPhrase(cut, kind) : noun} in this span
+                    No {noun} in this span
                   </td>
                 )}
               </tr>

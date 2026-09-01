@@ -108,9 +108,19 @@ import type { PitcherSeasonStats, SeasonStats } from '../types';
  * ERA-scale row is FIP, which *is* computable from a split's own counts.
  */
 
-/** One comparable stat, in whichever kind's line it lives on. */
-interface SplitStat<T> {
-  key: string;
+/**
+ * One comparable stat, in whichever kind's line it lives on.
+ *
+ * **It carries no `full` any more, and that is what lets one row definition
+ * serve four cards.** The scale a gap is drawn against is a property of the
+ * *comparison*, not of the stat: a .100 OPS gap is an ordinary platoon split, a
+ * large home-road one and a huge gap between a man and the league. Those three
+ * distributions were each measured off the 2026 league (see the scale tables
+ * below), so the row says what the number is and the card says what a full bar
+ * of it means.
+ */
+interface SplitStat<T, K extends string = string> {
+  key: K;
   label: string;
   /** What the stat is — the first half of the row's tooltip. */
   title: string;
@@ -123,10 +133,17 @@ interface SplitStat<T> {
    *  gap between two percentages is a number of points and must not print a `%`
    *  after it, which would read as a percentage of a percentage. */
   gapText: (v: number) => string;
-  /** The gap that fills the rail end to end. See the tables below. */
-  full: number;
   lowerBetter?: boolean;
 }
+
+/** Which rows a batter's cards draw, and so which keys every batter scale has
+ *  to fill. A union rather than `string` so a scale that forgets a row is a
+ *  build error rather than a rail that silently never fills. */
+type BatterKey = 'ops' | 'avg' | 'obp' | 'slg' | 'iso' | 'hrRate' | 'kRate' | 'bbRate';
+type PitcherKey = 'ops' | 'avg' | 'fip' | 'whip' | 'kRate' | 'bbRate' | 'hrRate';
+
+/** The gap that fills the rail end to end, per row — one table per comparison. */
+type Scale<K extends string> = Record<K, number>;
 
 /** A rate in baseball's own leading-dot form — ".947". */
 const rate3 = (v: number): string => {
@@ -185,18 +202,11 @@ function railFraction(gap: number, full: number): number {
  * shows up in OPS. K% is also the batter side's one `lowerBetter` row, which is
  * the case the center anchor exists for.
  *
- * **The `full` figures were measured off the league rather than chosen.** Every
- * 2026 batter with at least 100 PA against each hand (167 of them) had his gap
- * in each of these eight stats computed, and `full` is the 90th percentile of
- * that distribution, rounded: OPS **.283 → .300**, AVG .087 → .090, OBP .091 →
- * .090, SLG .204 → .200, ISO .140, HR% 3.34 → 3.5, K% 8.51 → 8.5, BB% 6.61 →
- * 6.5. (The medians, for scale, are .101 of OPS and 3.3 points of K% — so the
- * ordinary platoon split fills about a third of the rail and the rail's end is
- * a real place rather than a decoration.) A gap past `full` clamps — about one
- * qualified hitter in ten does on any given row, by construction — and says so
- * in the row's own tooltip and nowhere else; see `over` in `SplitRow`.
+ * **The scale each gap is drawn against is the card's, not the row's** — see
+ * `SplitStat`, and the four `BATTER_*_FULL` tables below, each measured off its
+ * own comparison's own distribution.
  */
-const BATTER_STATS: SplitStat<SeasonStats>[] = [
+const BATTER_STATS: SplitStat<SeasonStats, BatterKey>[] = [
   {
     key: 'ops',
     label: 'OPS',
@@ -204,7 +214,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => num(s.ops),
     format: rate3,
     gapText: rate3,
-    full: 0.3,
   },
   {
     key: 'avg',
@@ -213,7 +222,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => num(s.avg),
     format: rate3,
     gapText: rate3,
-    full: 0.09,
   },
   {
     key: 'obp',
@@ -222,7 +230,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => num(s.obp),
     format: rate3,
     gapText: rate3,
-    full: 0.09,
   },
   {
     key: 'slg',
@@ -231,7 +238,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => num(s.slg),
     format: rate3,
     gapText: rate3,
-    full: 0.2,
   },
   {
     key: 'iso',
@@ -244,7 +250,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     },
     format: rate3,
     gapText: rate3,
-    full: 0.14,
   },
   {
     key: 'hrRate',
@@ -253,7 +258,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => share(s.hr, s.pa),
     format: pct1,
     gapText: pts1,
-    full: 3.5,
   },
   {
     key: 'kRate',
@@ -262,7 +266,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => share(s.strikeOuts, s.pa),
     format: pct1,
     gapText: pts1,
-    full: 8.5,
     lowerBetter: true,
   },
   {
@@ -272,7 +275,6 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
     value: (s) => share(s.baseOnBalls, s.pa),
     format: pct1,
     gapText: pts1,
-    full: 6.5,
   },
 ];
 
@@ -288,15 +290,12 @@ const BATTER_STATS: SplitStat<SeasonStats>[] = [
  * is a real ERA-scale reading of a platoon half — null under three innings,
  * where it dashes rather than reporting one afternoon as a season.
  *
- * The `full` figures are the same 90th-percentile measurement as the batter's,
- * taken over its own population — every 2026 pitcher who faced 100 batters of
- * each hand, 202 of them: OPS **.255 → .260**, AVG .080, FIP 2.38 → 2.40, WHIP
- * 0.61 → 0.60, K% 8.81 → 9, BB% 6.69 → 6.5, HR% 3.10 → 3. They are close to the
- * batter's and deliberately not shared with them: a platoon gap is measured
- * against the population it was drawn from, and a pitcher's OPS-against spreads
- * a little tighter than a hitter's OPS.
+ * The scales live below, one table per comparison, and are deliberately not
+ * shared with the batter's: a gap is measured against the population it was
+ * drawn from, and a pitcher's OPS-against spreads a little tighter than a
+ * hitter's OPS.
  */
-const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
+const PITCHER_STATS: SplitStat<PitcherSeasonStats, PitcherKey>[] = [
   {
     key: 'ops',
     label: 'OPS',
@@ -304,7 +303,6 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => num(s.opsAgainst),
     format: rate3,
     gapText: rate3,
-    full: 0.26,
     lowerBetter: true,
   },
   {
@@ -314,7 +312,6 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => num(s.avgAgainst),
     format: rate3,
     gapText: rate3,
-    full: 0.08,
     lowerBetter: true,
   },
   {
@@ -325,7 +322,6 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => num(s.fip),
     format: dec2,
     gapText: dec2,
-    full: 2.4,
     lowerBetter: true,
   },
   {
@@ -335,7 +331,6 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => num(s.whip),
     format: dec2,
     gapText: dec2,
-    full: 0.6,
     lowerBetter: true,
   },
   {
@@ -345,7 +340,6 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => share(s.strikeOuts, s.battersFaced),
     format: pct1,
     gapText: pts1,
-    full: 9,
   },
   {
     key: 'bbRate',
@@ -354,7 +348,6 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => share(s.baseOnBalls, s.battersFaced),
     format: pct1,
     gapText: pts1,
-    full: 6.5,
     lowerBetter: true,
   },
   {
@@ -364,10 +357,187 @@ const PITCHER_STATS: SplitStat<PitcherSeasonStats>[] = [
     value: (s) => share(s.homeRuns, s.battersFaced),
     format: pct1,
     gapText: pts1,
-    full: 3,
     lowerBetter: true,
   },
 ];
+
+/**
+ * **The four scales, and every one of them was measured rather than chosen.**
+ *
+ * `full` — the gap that fills the rail end to end — is the **90th percentile**
+ * of that comparison's own gap distribution across the 2026 league, rounded. So
+ * a bar that reaches the end of the rail means one thing on every row of every
+ * card: *one of the biggest gaps in the league for that stat*, in that
+ * comparison. And two rows of different stats are readable against each other,
+ * which is the whole reason the rail is not scaled to each player's own
+ * numbers.
+ *
+ * **Each population is the men for whom the comparison is a comparison** — 100
+ * PA (or 100 BF) on *each* side, which is the bar the platoon table was
+ * measured against and the same one applied to the parks and the halves. The
+ * league card is the exception and says why below.
+ *
+ * The medians are given beside the p90s because they are what an *ordinary* row
+ * looks like: an ordinary gap fills about a third of the rail, so the rail's end
+ * is a real place rather than a decoration. A gap past `full` clamps — about one
+ * player in ten on any given row, by construction — and says so in that row's
+ * own tooltip and nowhere else; see `over` in `SplitRow`.
+ *
+ * **Platoon** — 2026 batters with ≥100 PA against each hand, **167** of them:
+ * OPS .283 → **.300**, AVG .087 → .090, OBP .091 → .090, SLG .204 → .200, ISO
+ * .140, HR% 3.34 → 3.5, K% 8.51 → 8.5, BB% 6.61 → 6.5. Medians .101 of OPS and
+ * 3.3 points of K%.
+ */
+const BATTER_PLATOON_FULL: Scale<BatterKey> = {
+  ops: 0.3,
+  avg: 0.09,
+  obp: 0.09,
+  slg: 0.2,
+  iso: 0.14,
+  hrRate: 3.5,
+  kRate: 8.5,
+  bbRate: 6.5,
+};
+
+/**
+ * **Home and away** — 2026 batters with ≥100 PA at home *and* ≥100 away,
+ * **313** of them (a much larger population than the platoon one, every
+ * regular having both): OPS .2414 → **.240**, AVG .0748 → .075, OBP .0790 →
+ * .080, SLG .1718 → .170, ISO .1186 → .120, HR% 3.127 → 3.0, K% 8.206 → 8.0,
+ * BB% 5.135 → 5.0. Medians .103 of OPS and 3.2 points of K%.
+ *
+ * **It is a hair tighter than the platoon scale and that is a real finding
+ * rather than rounding**: the ordinary home-road gap is the same size as the
+ * ordinary platoon gap (.103 against .101 of OPS) but the *tail* is shorter —
+ * park effects are bounded where a genuine platoon weakness is not. A shared
+ * scale would have drawn every extreme home-road split a little short.
+ */
+const BATTER_PARK_FULL: Scale<BatterKey> = {
+  ops: 0.24,
+  avg: 0.075,
+  obp: 0.08,
+  slg: 0.17,
+  iso: 0.12,
+  hrRate: 3,
+  kRate: 8,
+  bbRate: 5,
+};
+
+/**
+ * **The two halves** — 2026 batters with ≥100 PA in each half, **213** of them:
+ * OPS .2308 → **.230**, AVG .0808 → .080, OBP .0858 → .085, SLG .1588 → .160,
+ * ISO .1126 → .110, HR% 2.834 → 2.8, K% 7.869 → 8.0, BB% 5.189 → 5.0. Medians
+ * .083 of OPS and 2.6 points of K% — the *smallest* ordinary gap of the four
+ * comparisons, which is what you would expect of one man against himself with
+ * nothing but time between the two lines.
+ */
+const BATTER_HALF_FULL: Scale<BatterKey> = {
+  ops: 0.23,
+  avg: 0.08,
+  obp: 0.085,
+  slg: 0.16,
+  iso: 0.11,
+  hrRate: 2.8,
+  kRate: 8,
+  bbRate: 5,
+};
+
+/**
+ * **Against the league** — the one comparison whose population is not a pair of
+ * halves, so its bar is **≥200 PA on the season**, which is the same amount of
+ * evidence the other three ask for (100 a side) asked of one line. **327**
+ * batters: OPS .1364 → **.135**, AVG .0444 → .045, OBP .0524 → .050, SLG .1020
+ * → .100, ISO .0840 → .085, HR% 2.172 → 2.2, K% 10.293 → 10, BB% 4.951 → 5.0.
+ *
+ * **It is much the tightest scale of the four, and that is the point of the
+ * card.** The ordinary gap between a regular and the league is .055 of OPS
+ * against .103 between his own two halves — a man differs from himself, half to
+ * half, twice as much as he differs from the average major-leaguer. Drawn on
+ * the platoon scale, every league bar would be a stub and the card would say
+ * that nobody is far from average, which is false and is exactly what a scale
+ * borrowed from another distribution buys.
+ *
+ * **K% is the row that breaks the pattern** and is worth naming: its league gap
+ * (p90 10.3 points) is *wider* than its platoon, park or half gap. Strikeout
+ * rate is the most spread-out thing a hitter has — the league runs from about
+ * 10% to 35% — so the distance from the average is genuinely larger than the
+ * distance between any two cuts of one man.
+ */
+const BATTER_LEAGUE_FULL: Scale<BatterKey> = {
+  ops: 0.135,
+  avg: 0.045,
+  obp: 0.05,
+  slg: 0.1,
+  iso: 0.085,
+  hrRate: 2.2,
+  kRate: 10,
+  bbRate: 5,
+};
+
+/**
+ * **Platoon, the pitcher's** — 2026 pitchers who faced ≥100 batters of each
+ * hand, **202** of them: OPS .255 → **.260**, AVG .080, FIP 2.38 → 2.40, WHIP
+ * 0.61 → 0.60, K% 8.81 → 9, BB% 6.69 → 6.5, HR% 3.10 → 3.
+ */
+const PITCHER_PLATOON_FULL: Scale<PitcherKey> = {
+  ops: 0.26,
+  avg: 0.08,
+  fip: 2.4,
+  whip: 0.6,
+  kRate: 9,
+  bbRate: 6.5,
+  hrRate: 3,
+};
+
+/**
+ * **Home and away, the pitcher's** — ≥100 BF at home and away, **269** of them:
+ * OPS .2494 → **.250**, AVG .0900 → .090, FIP 2.116 → 2.10, WHIP .5060 → .50,
+ * K% 8.423 → 8.5, BB% 4.958 → 5.0, HR% 3.035 → 3.0. Medians .108 of OPS and
+ * 0.80 of FIP.
+ */
+const PITCHER_PARK_FULL: Scale<PitcherKey> = {
+  ops: 0.25,
+  avg: 0.09,
+  fip: 2.1,
+  whip: 0.5,
+  kRate: 8.5,
+  bbRate: 5,
+  hrRate: 3,
+};
+
+/**
+ * **The two halves, the pitcher's** — ≥100 BF in each half, **134** of them:
+ * OPS .2012 → **.200**, AVG .0750 → .075, FIP 2.057 → 2.05, WHIP .4540 → .45,
+ * K% 8.198 → 8.0, BB% 4.215 → 4.2, HR% 2.560 → 2.6. The smallest population of
+ * the seven, a pitcher needing a hundred batters faced on each side of July to
+ * be in it, and the tightest pitching scale — the same "one man against
+ * himself" reading the batter's halves give.
+ */
+const PITCHER_HALF_FULL: Scale<PitcherKey> = {
+  ops: 0.2,
+  avg: 0.075,
+  fip: 2.05,
+  whip: 0.45,
+  kRate: 8,
+  bbRate: 4.2,
+  hrRate: 2.6,
+};
+
+/**
+ * **Against the league, the pitcher's** — ≥200 BF on the season, **301** of
+ * them: OPS .1493 → **.150**, AVG .0573 → .055, FIP 1.572 → 1.55, WHIP .3237 →
+ * .32, K% 7.825 → 8.0, BB% 3.911 → 4.0, HR% 1.828 → 1.8. Half the platoon
+ * scale on almost every row, for the reason the batter's league table gives.
+ */
+const PITCHER_LEAGUE_FULL: Scale<PitcherKey> = {
+  ops: 0.15,
+  avg: 0.055,
+  fip: 1.55,
+  whip: 0.32,
+  kRate: 8,
+  bbRate: 4,
+  hrRate: 1.8,
+};
 
 /**
  * **The two sample-size gates**, and they are two rather than one because the
@@ -452,21 +622,28 @@ const THIN_SAMPLE = 100;
 function SplitsKey() {
   return (
     <InfoKey className="spl-key" label="How to read these bars">
+      {/* **It says "column" rather than "the side he is stronger against"**,
+          which is what it read while this card only ever drew the two hands. It
+          draws four comparisons now — the hands, the parks, the two halves and
+          the league — and *against* is wrong on three of them: a hitter is not
+          stronger "against" home. The sentence lost one preposition and gained
+          nothing else. */}
       <p>
-        Each bar runs from the center toward the side he is <strong>stronger</strong> against — the
-        further it runs, the bigger the split.
+        Each bar runs from the center toward the <strong>stronger</strong> of the two columns — the
+        further it runs, the bigger the gap.
       </p>
       <p>
-        A full bar is one of the biggest splits in the league for that stat. Each stat has its own
-        scale, so a long OPS bar and a long K% bar mean the same thing.
+        A full bar is one of the biggest gaps in the league for that stat. Each stat, and each
+        comparison, has its own scale — so a long OPS bar and a long K% bar mean the same thing.
       </p>
     </InfoKey>
   );
 }
 
 /** One row: the label, the two figures, and the bar between them. */
-function SplitRow<T>({
+function SplitRow<T, K extends string>({
   stat,
+  full,
   left,
   right,
   leftLabel,
@@ -474,7 +651,10 @@ function SplitRow<T>({
   bars,
   thin,
 }: {
-  stat: SplitStat<T>;
+  stat: SplitStat<T, K>;
+  /** The gap that fills the rail, for this row *in this comparison* — see
+   *  `SplitStat`, which no longer carries one. */
+  full: number;
   left: T | null;
   right: T | null;
   leftLabel: string;
@@ -493,7 +673,7 @@ function SplitRow<T>({
   // OPS row.
   const leftStronger = both ? (stat.lowerBetter ? l < r : l > r) : false;
   const gap = both ? Math.abs(l - r) : 0;
-  const frac = railFraction(gap, stat.full);
+  const frac = railFraction(gap, full);
   // Clamped, and so said in the row's own tooltip — and nowhere else. Read off
   // `frac` rather than off `gap > stat.full` again, so the sentence and the
   // length can never disagree about whether the bar ran out of rail, and so an
@@ -509,7 +689,7 @@ function SplitRow<T>({
   // biggest splits in the league for that stat — so the two reading alike is
   // not a lie the reader has to be warned about. See
   // `docs/claude/client-player-page.md`, *The clamp is a sentence, not a mark*.
-  const over = frac === 1 && gap > stat.full;
+  const over = frac === 1 && gap > full;
   // The rail's half, less the inset the fill is nested by: a full bar then lands
   // inside the rail's cap rather than on its box, which is a different place.
   // One token for the two long sides and the outer end, which is only correct
@@ -593,38 +773,76 @@ function SplitHead({
     <span className={`spl-head-side${marked ? ' spl-head-side--on' : ''}`} title={title}>
       {label}
       <small>
-        {sample} {unit}
+        {/* **Grouped**, which is a change no player's card can see and the
+            league's cannot do without: every sample on a split of one man is
+            three figures at most, and the league's is 156,337 plate
+            appearances. `1,247 PA` on a five-year-old's card would be the same
+            number; `156337 PA` is a string nobody reads as a quantity. */}
+        {sample.toLocaleString()} {unit}
       </small>
     </span>
   );
 }
 
-/** The card: a head naming the two sides with their sample sizes, the rows, and
- *  whatever those samples oblige it to say underneath them. */
-function SplitCard<T>({
+/**
+ * The card: a head naming the two sides with their sample sizes, the rows, and
+ * whatever those samples oblige it to say underneath them.
+ *
+ * **One card, four comparisons.** It was the platoon card and is now the shape
+ * every comparison on the Splits tab takes — the two hands, the two parks, the
+ * two halves of the season, and his season against the league's. What differs
+ * between them is four strings and a scale, so they are props: the title, the
+ * two column labels, the two *phrases* those labels read as inside a sentence,
+ * the noun a thin sample is not enough of, and the `full` table the bars are
+ * drawn against. Nothing about the rail, the clamp, the two sample gates or the
+ * geometry differs at all, which is the whole reason to have made it one card
+ * rather than four that resemble each other.
+ */
+function SplitCard<T, K extends string>({
+  title,
   left,
   right,
   leftLabel,
   rightLabel,
+  leftPhrase,
+  rightPhrase,
   leftSample,
   rightSample,
   sampleUnit,
   sampleNoun,
+  comparisonNoun,
   stats,
+  full,
   highlight = null,
   highlightTitle,
 }: {
+  /** What this card compares, in the card's own head. */
+  title: string;
   left: T | null;
   right: T | null;
   leftLabel: string;
   rightLabel: string;
+  /** The same side inside a sentence — *`.163` better **at home***, *no plate
+   *  appearances **in the second half***. A pill is a label and wants to be
+   *  short; a sentence wants the preposition, which is the split `cutOf` makes
+   *  in `lib.ts` for the same words. Defaults to the label, which is right for
+   *  the platoon pair (`vs LHP` reads correctly in both). */
+  leftPhrase?: string;
+  rightPhrase?: string;
   leftSample: number;
   rightSample: number;
   /** "PA" / "BF" — what the sample is counted in. */
   sampleUnit: string;
   /** How that unit reads in a sentence. */
   sampleNoun: string;
-  stats: SplitStat<T>[];
+  /** What a thin side is not enough of — *a handful of plate appearances is not
+   *  a **platoon split***. */
+  comparisonNoun: string;
+  stats: SplitStat<T, K>[];
+  /** The 90th-percentile gap table for *this* comparison. See the scales above:
+   *  a .100 OPS gap is an ordinary platoon split and a large one against the
+   *  league, so the scale is the card's rather than the row's. */
+  full: Scale<K>;
   /** Which half the reader came here about, when a caller has one in mind — the
    *  feed's Upcoming row opens this card because a particular starter is
    *  announced, and the whole comparison is what makes his half mean anything
@@ -638,8 +856,10 @@ function SplitCard<T>({
    *  whole of the mark now; see `SplitHead`. */
   highlightTitle?: string;
 }) {
+  const lPhrase = leftPhrase ?? leftLabel;
+  const rPhrase = rightPhrase ?? rightLabel;
   const smaller = Math.min(leftSample, rightSample);
-  const thinSide = leftSample <= rightSample ? leftLabel : rightLabel;
+  const thinSide = leftSample <= rightSample ? lPhrase : rPhrase;
   const bars = smaller >= MIN_SAMPLE;
   const thin = bars && smaller < THIN_SAMPLE;
   const oneSided = smaller === 0;
@@ -652,7 +872,7 @@ function SplitCard<T>({
           negative margin, so the title still centers exactly where the
           percentile card's does. `.pct-card-head` is untouched for that card. */}
       <div className="pct-card-head spl-card-head">
-        <span className="pct-card-title">Platoon splits</span>
+        <span className="pct-card-title">{title}</span>
         <SplitsKey />
       </div>
       <div className="spl-table">
@@ -678,10 +898,11 @@ function SplitCard<T>({
           <SplitRow
             key={s.key}
             stat={s}
+            full={full[s.key]}
             left={left}
             right={right}
-            leftLabel={leftLabel}
-            rightLabel={rightLabel}
+            leftLabel={lPhrase}
+            rightLabel={rPhrase}
             bars={bars}
             thin={thin}
           />
@@ -697,13 +918,13 @@ function SplitCard<T>({
           see they could have asked for is a warning nobody reads. */}
       {oneSided ? (
         <p className="spl-note spl-note--warn">
-          No {sampleNoun} {leftSample === 0 ? leftLabel : rightLabel} this season, so there is
-          nothing to compare against.
+          No {sampleNoun} {leftSample === 0 ? lPhrase : rPhrase} this season, so there is nothing to
+          compare against.
         </p>
       ) : !bars ? (
         <p className="spl-note spl-note--warn">
-          Only {smaller} {sampleUnit} {thinSide} — a handful of {sampleNoun} is not a platoon split,
-          so the figures are here and the bars are not.
+          Only {smaller} {sampleUnit} {thinSide} — a handful of {sampleNoun} is not a{' '}
+          {comparisonNoun}, so the figures are here and the bars are not.
         </p>
       ) : thin ? (
         <p className="spl-note spl-note--warn">
@@ -751,6 +972,7 @@ export function BatterSplitsTab({
   if (lp === 0 && rp === 0) return <NoSplits what="plate appearances" />;
   return (
     <SplitCard
+      title="Platoon splits"
       left={vsLeft}
       right={vsRight}
       leftLabel="vs LHP"
@@ -759,7 +981,9 @@ export function BatterSplitsTab({
       rightSample={rp}
       sampleUnit="PA"
       sampleNoun="plate appearances"
+      comparisonNoun="platoon split"
       stats={BATTER_STATS}
+      full={BATTER_PLATOON_FULL}
       highlight={highlight}
       highlightTitle={highlightTitle}
     />
@@ -779,6 +1003,7 @@ export function PitcherSplitsTab({
   if (lb === 0 && rb === 0) return <NoSplits what="batters faced" />;
   return (
     <SplitCard
+      title="Platoon splits"
       left={vsLeft}
       right={vsRight}
       leftLabel="vs LHB"
@@ -787,7 +1012,191 @@ export function PitcherSplitsTab({
       rightSample={rb}
       sampleUnit="BF"
       sampleNoun="batters faced"
+      comparisonNoun="platoon split"
       stats={PITCHER_STATS}
+      full={PITCHER_PLATOON_FULL}
     />
+  );
+}
+
+/**
+ * **The other three comparisons, in the order the tab asks them.**
+ *
+ * Home against away, his season against the league's, and the first half
+ * against the second. Every one is the same card the platoon comparison is —
+ * see `SplitCard`, which is where the argument for that lives — and every one
+ * is drawn or not drawn on its own: the tab has four cards and a man missing a
+ * second half still gets the other three.
+ *
+ * **The league card is the odd one and is deliberately shaped like the rest.**
+ * Its right-hand column is not a cut of him at all, it is everybody, and what
+ * makes that legible is the head — `League · 156,399 PA` beside `Season · 582
+ * PA` says in one line both what it is and how much of it there is. (One word
+ * each, measured: `His season` and `League avg` both wrapped inside a column
+ * sized for `vs LHP`, and a card whose heads are two and three lines tall where
+ * the other three cards' are one reads as a different kind of card — it cost
+ * this one 25px of height and a ragged head row.) The
+ * percentile card one tab over asks the same question as a **rank**; this asks
+ * it as a **gap**, in the units the stat prints in. A reader wanting to know
+ * whether .280 is good gets *where he stands among the men who play* there and
+ * *how far above the average line he is* here, and the two are different
+ * questions.
+ *
+ * **Nothing is drawn where nothing was read.** Every field on the payload is
+ * independently nullable — the server fetches the platoon pair, the four cuts
+ * and the league line in three separate reads, each failing on its own — so a
+ * card whose two sides are both absent is absent, rather than a rail of dashes
+ * claiming he never played at home.
+ */
+export function BatterComparisonCards({
+  season,
+  home,
+  away,
+  firstHalf,
+  secondHalf,
+  league,
+}: {
+  season: SeasonStats | null;
+  home: SeasonStats | null;
+  away: SeasonStats | null;
+  firstHalf: SeasonStats | null;
+  secondHalf: SeasonStats | null;
+  league: SeasonStats | null;
+}) {
+  const pa = (s: SeasonStats | null) => s?.pa ?? 0;
+  return (
+    <>
+      {(home || away) && (
+        <SplitCard
+          title="Home and away"
+          left={home}
+          right={away}
+          leftLabel="Home"
+          rightLabel="Away"
+          leftPhrase="at home"
+          rightPhrase="on the road"
+          leftSample={pa(home)}
+          rightSample={pa(away)}
+          sampleUnit="PA"
+          sampleNoun="plate appearances"
+          comparisonNoun="home-road split"
+          stats={BATTER_STATS}
+          full={BATTER_PARK_FULL}
+        />
+      )}
+      {season && league && (
+        <SplitCard
+          title="Against the league"
+          left={season}
+          right={league}
+          leftLabel="Season"
+          rightLabel="League"
+          leftPhrase="for him"
+          rightPhrase="for the league"
+          leftSample={pa(season)}
+          rightSample={pa(league)}
+          sampleUnit="PA"
+          sampleNoun="plate appearances"
+          comparisonNoun="season worth comparing"
+          stats={BATTER_STATS}
+          full={BATTER_LEAGUE_FULL}
+        />
+      )}
+      {(firstHalf || secondHalf) && (
+        <SplitCard
+          title="First half and second"
+          left={firstHalf}
+          right={secondHalf}
+          leftLabel="First"
+          rightLabel="Second"
+          leftPhrase="in the first half"
+          rightPhrase="in the second half"
+          leftSample={pa(firstHalf)}
+          rightSample={pa(secondHalf)}
+          sampleUnit="PA"
+          sampleNoun="plate appearances"
+          comparisonNoun="half of a season"
+          stats={BATTER_STATS}
+          full={BATTER_HALF_FULL}
+        />
+      )}
+    </>
+  );
+}
+
+/** The pitcher's three, measured in batters faced. */
+export function PitcherComparisonCards({
+  season,
+  home,
+  away,
+  firstHalf,
+  secondHalf,
+  league,
+}: {
+  season: PitcherSeasonStats | null;
+  home: PitcherSeasonStats | null;
+  away: PitcherSeasonStats | null;
+  firstHalf: PitcherSeasonStats | null;
+  secondHalf: PitcherSeasonStats | null;
+  league: PitcherSeasonStats | null;
+}) {
+  const bf = (s: PitcherSeasonStats | null) => s?.battersFaced ?? 0;
+  return (
+    <>
+      {(home || away) && (
+        <SplitCard
+          title="Home and away"
+          left={home}
+          right={away}
+          leftLabel="Home"
+          rightLabel="Away"
+          leftPhrase="at home"
+          rightPhrase="on the road"
+          leftSample={bf(home)}
+          rightSample={bf(away)}
+          sampleUnit="BF"
+          sampleNoun="batters faced"
+          comparisonNoun="home-road split"
+          stats={PITCHER_STATS}
+          full={PITCHER_PARK_FULL}
+        />
+      )}
+      {season && league && (
+        <SplitCard
+          title="Against the league"
+          left={season}
+          right={league}
+          leftLabel="Season"
+          rightLabel="League"
+          leftPhrase="for him"
+          rightPhrase="for the league"
+          leftSample={bf(season)}
+          rightSample={bf(league)}
+          sampleUnit="BF"
+          sampleNoun="batters faced"
+          comparisonNoun="season worth comparing"
+          stats={PITCHER_STATS}
+          full={PITCHER_LEAGUE_FULL}
+        />
+      )}
+      {(firstHalf || secondHalf) && (
+        <SplitCard
+          title="First half and second"
+          left={firstHalf}
+          right={secondHalf}
+          leftLabel="First"
+          rightLabel="Second"
+          leftPhrase="in the first half"
+          rightPhrase="in the second half"
+          leftSample={bf(firstHalf)}
+          rightSample={bf(secondHalf)}
+          sampleUnit="BF"
+          sampleNoun="batters faced"
+          comparisonNoun="half of a season"
+          stats={PITCHER_STATS}
+          full={PITCHER_HALF_FULL}
+        />
+      )}
+    </>
   );
 }

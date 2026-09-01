@@ -26,7 +26,6 @@ import type {
   ScheduleGame,
   ScheduleWindow,
   SeasonPlayer,
-  SplitCut,
   TeamGameResult,
   TeamInfo,
 } from '../types';
@@ -578,11 +577,6 @@ export function TeamDetails({
           onShowRanksChange={onShowRanksChange}
           populations={rankPopulations}
           onNeedPopulations={needRanks}
-          /* **No cut control**, and the table hides it on this reading: the club
-             boards carry no split at all, so the four buttons would be four
-             requests for a table that cannot change. See `teamResearch.ts`. */
-          cut={null}
-          onCutChange={noCut}
           updating={windowsBusy}
         />
       )}
@@ -603,10 +597,6 @@ export function TeamDetails({
     </DetailsShell>
   );
 }
-
-/** The Stats table's cut handler where there are no cuts — see the call site.
- *  Declared once at module scope so it is not a new function every render. */
-const noCut = (_cut: SplitCut | null) => {};
 
 /**
  * The club's season line, as the one-row table the player page's own Season

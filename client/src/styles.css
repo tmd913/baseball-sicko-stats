@@ -6018,6 +6018,33 @@ button.start-line:focus-visible {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* **Whose note it is, first in the meta line and the only thing on it in the
+   text color.** It is drawn on the Roster view's News reading alone — fifteen
+   men's notes merged into one dated stream — and on that list it is what the
+   row is *about*, where the date and the kind are what it is. So it leads and
+   it is the one item there the eye is meant to land on, which is why it takes
+   `--text` against the two `--muted`/`--faint` ones beside it.
+
+   A name and not a door: the row is already a `<button>` wherever the note has
+   more to read, and a button inside a button is not a thing to ask a browser
+   for. See `PlayerNews.tsx`, where the rule that this list has one press is
+   written down. */
+.news-who {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+/* The reading column the stream sits in, on a page whose other readings are
+   tables as wide as the window. `.news-list` already caps at `--card-column`;
+   this centers that cap, which is what the player page's own tab gets from the
+   overlay it sits in and what this list would otherwise be missing on a
+   full-width page. */
+.roster-news {
+  max-width: var(--card-column);
+  margin: 0 auto;
+}
 /* What kind of thing the row is, in the upstream's own word. An outlined pill
    rather than a filled one and in `--faint` rather than a tone, because this is
    a *label* and not a state — the app's color is spent on what is happening to
@@ -6401,17 +6428,6 @@ button.start-line:focus-visible {
 .stats-tools {
   justify-content: flex-end;
   margin: 0 0 8px;
-}
-/* The cut pills, at the head of that row.
-   `.split-switch` is the pitcher card's own switch and is folded on rather than
-   copied — the same object, a segmented row picking one cut of one player's
-   line. Two things are this row's alone: the `auto` margin that pushes the two
-   disclosures to the far end (there the switch sits over its section and has
-   nothing to push against), and killing the 9px it carries below itself, which
-   is that section's rhythm and reads here as a switch sitting a pixel or two
-   above the buttons beside it in a row that centers its items. */
-.stats-cuts {
-  margin: 0 auto 0 0;
 }
 /* And the `Updating` badge, which is **laid out whether or not it is showing**.
    This row wraps on a phone, so a badge that arrived with the read would
@@ -6967,20 +6983,24 @@ button.start-line:focus-visible {
   max-width: 680px;
   margin: 0 auto 12px;
 }
-/* Both switches are `.split-switch` — the same object the Stats tab's cut
-   control is, folded rather than restyled. Two things are theirs alone here:
-   the 9px that class carries below itself is this row's `gap`'s business, and
-   the cut row is the one switch in the app with six pills in it, so it is the
-   one allowed to wrap inside itself on a narrow phone. */
+/* Both switches are `.split-switch` — the pitcher card's own segmented row,
+   folded rather than restyled. The one thing that is theirs here is that the
+   9px the class carries below itself is this row's `gap`'s business. (It used
+   to say the cut row was the app's only six-pill switch and so the only one
+   allowed to wrap inside itself; it holds three now and wraps like any other.) */
 .pct-controls .split-switch {
   margin-bottom: 0;
 }
-/* **Three groups on one line, and one selection across them.** The six cuts
-   were a single box that wrapped and stranded `Last 100 AB` on a line of its
-   own; grouped, each box is the width of the two pills in it and the run reads
-   as *which span · which hand · which park*. The gap between groups is what
-   says they are separate questions; only one pill lit across all three is what
-   says they are one answer. */
+/* **One run of three: which part of the season.** This was six pills in three
+   groups — which span, which hand, which park — with a `select` under it that
+   took over below 560, because three boxes of pills are three lines of a phone's
+   screen. Five of those six are Splits-tab cards now (a cut card shows one side
+   of a comparison; that tab draws both), so it is `Season · First Half · Second
+   Half` in a single `.split-switch`, which fits one line at every width this
+   page is drawn at — and the dropdown, and the breakpoint it swapped at, are
+   gone with the thing they were for. The flex row and its centering stay: the
+   box still centers under a centered card, and still wraps rather than
+   overflowing if a label ever grows. */
 .pct-cuts {
   display: flex;
   align-items: center;
@@ -6991,54 +7011,6 @@ button.start-line:focus-visible {
 }
 .pct-cuts .split-switch {
   margin-bottom: 0;
-}
-/* The mobile form of the same control — see the note beside it. Hidden above
-   the breakpoint, and the groups hidden below it, so exactly one of the two is
-   ever in the layout. */
-.pct-cut-select {
-  display: none;
-}
-.pct-cut-select select {
-  width: 100%;
-  height: var(--control-h);
-  padding: 0 30px 0 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
-  background:
-    /* The app's own caret, drawn rather than left to the UA's, so the control
-       reads as one of this bar's and not as a form field. */
-    linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 15px) calc(50% + 1px) /
-      5px 5px no-repeat,
-    linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 10px) calc(50% + 1px) /
-      5px 5px no-repeat,
-    var(--bg);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-}
-.pct-cut-select select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* **Below 560 the three groups are three lines**, on a card that is already the
-   whole screen — so they give way to the one dropdown holding the same six
-   choices. It is the swap the board's bar makes at 640 for its span and
-   position runs, at the width this control actually needs it. Placed after the
-   base rules it overrides, which a media query has to be: it adds no
-   specificity of its own. */
-@media (max-width: 560px) {
-  .pct-cuts {
-    display: none;
-  }
-  .pct-cut-select {
-    display: block;
-    width: 100%;
-    max-width: 320px;
-  }
 }
 /* A 20px slot at the end of the run, reserved whether or not it is showing.
    Twenty rather than the Stats tab's 106px `Updating` pill because that one
@@ -7098,6 +7070,17 @@ button.start-line:focus-visible {
 .pct-card-head {
   text-align: center;
   margin-bottom: 6px;
+}
+/* **A gap between stacked cards, and only between them.** The Splits tab draws
+   four of these in a column — the platoon comparison, the parks, the league and
+   the two halves — where every other caller draws exactly one. `+` is what says
+   that: the first card is flush against whatever is above it (the percentile
+   tab's controls set their own 12px, and a dialog's card has no sibling at
+   all), and each card after one takes 16px, the same step `.pct-card`'s own
+   `padding` reads at. Declared as a margin on the *later* card rather than on
+   every card, so nothing at the foot of a one-card view gains a trailing gap. */
+.pct-card + .pct-card {
+  margin-top: 16px;
 }
 
 /* ---- The Charts tab: the rolling-xwOBA chart, its key and its labels ---- */
@@ -7579,6 +7562,23 @@ button.start-line:focus-visible {
   letter-spacing: 0.04em;
   color: var(--muted);
   line-height: 1.2;
+  /* **A head is two phrases, and neither may break inside itself.** The column
+     is `--spl-val-w` (54px, 46 on a phone) because that is what a *figure*
+     needs, and a head is words over it: `1st half` broke as `1ST` / `HALF` and
+     the league card's `156,399 PA` as `156,399` / `PA` — a quantity parted from
+     its unit, which is the same fault the percentile card's `— vs LHP` title
+     took a `nowrap` for. It is the app's rule that a cut is one unbreakable
+     phrase.
+
+     Overhanging is the right failure here rather than wrapping: this row sits
+     above the rails rather than beside them, its middle cell is empty, and
+     there is a 10px column gap either side, so a line a pixel or two wider than
+     its column lands on nothing. Measured: with the labels shortened to
+     `Season` / `League` / `First` / `Second`, every head on every card is one
+     line of 25.2px and all four cards are the platoon card's own 389.2px at
+     1200 and 383.2 at 390 — where the league card was 401.2 / 395.2 with the
+     sample wrapped. */
+  white-space: nowrap;
 }
 .spl-head-side small {
   display: block;
@@ -9662,6 +9662,7 @@ button.start-line:focus-visible {
 .schedule-toggle svg,
 .projected-toggle svg,
 .feed-toggle svg,
+.news-toggle svg,
 .summary-toggle svg,
 .matchup-open svg,
 .opponent-toggle svg {
@@ -11536,6 +11537,12 @@ button.start-line:focus-visible {
    of one page and read identically by construction. It takes `.on` and never
    `.active`, being a plain switch with no panel. */
 .feed-toggle,
+/* The Roster's sixth, folded in for the same reason and on the same terms: the
+   whole roster's news as one dated stream, which is a reading of the same set of
+   players and must not be a button that looks like a different kind of thing.
+   It is last in the run because it is the one reading that is not about the
+   days the bar is showing — see `newsToggle` in `App.tsx`. */
+.news-toggle,
 .summary-toggle,
 /* **The two that are not readings of your own table, first in that same run**
    — the matchup's comparison card in place of it, and the whole page read for
@@ -11568,6 +11575,7 @@ button.start-line:focus-visible {
 .schedule-toggle:hover,
 .projected-toggle:hover,
 .feed-toggle:hover,
+.news-toggle:hover,
 .matchup-open:hover,
 .opponent-toggle:hover {
   color: var(--text);
@@ -11597,6 +11605,7 @@ button.start-line:focus-visible {
 .schedule-toggle,
 .projected-toggle,
 .feed-toggle,
+.news-toggle,
 .summary-toggle,
 .matchup-open,
 .opponent-toggle {
@@ -11607,6 +11616,7 @@ button.start-line:focus-visible {
 .schedule-toggle.on,
 .projected-toggle.on,
 .feed-toggle.on,
+.news-toggle.on,
 .summary-toggle.on,
 .matchup-open.on,
 .opponent-toggle.on {
@@ -11618,6 +11628,7 @@ button.start-line:focus-visible {
 .schedule-toggle:focus-visible,
 .projected-toggle:focus-visible,
 .feed-toggle:focus-visible,
+.news-toggle:focus-visible,
 .summary-toggle:focus-visible,
 .matchup-open:focus-visible,
 .opponent-toggle:focus-visible {

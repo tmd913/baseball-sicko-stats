@@ -341,3 +341,62 @@ export function FeedToggle({
   );
 }
 
+
+/** The newspaper the News reading takes — a folded sheet with a column of rules
+ *  down it, which is the one glyph a masthead reads as at 19px. Same stroke,
+ *  same box and same `flex: none` as `FeedGlyph` above it, the two being one
+ *  run of readings. */
+function NewsGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="19"
+      height="19"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flex: 'none' }}
+    >
+      <path d="M4 5h12v14H4z" />
+      <path d="M16 9h4v8a2 2 0 0 1-2 2h-2" />
+      <path d="M7 9h6M7 12h6M7 15h4" />
+    </svg>
+  );
+}
+
+/**
+ * **The roster's news, as a reading of the roster rather than a page beside
+ * it** — the same shape as `FeedToggle` above, and folded onto the same
+ * selector lists, because it is the same kind of statement: *what would you like
+ * this set of players to look like*.
+ *
+ * One caller today (the app's own Roster page), where the Feed toggle has two.
+ * It is written as a component anyway rather than inline, because the run it
+ * joins is a run of components and the one control in it that was a `<button>`
+ * written in `App.tsx` would be the one that drifted.
+ */
+export function NewsToggle({
+  on,
+  onToggle,
+  title,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`news-toggle${on ? ' on' : ''}`}
+      aria-pressed={on}
+      onClick={onToggle}
+      title={title}
+    >
+      <NewsGlyph />
+      <span className="feed-toggle-label">News</span>
+    </button>
+  );
+}

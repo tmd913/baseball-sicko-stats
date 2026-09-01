@@ -26,9 +26,8 @@ import { getMlbStandings } from './mlbStandings.js';
 import { getSeasonArsenal, SEASON as ARSENAL_SEASON } from './pitcherArsenal.js';
 import { getArmAngle } from './armAngle.js';
 import { getPitcherXera } from './expectedStats.js';
-import { getResearch, getPlayerWindows } from './research.js';
+import { getResearch, getPlayerWindows, SEASON } from './research.js';
 import { getTeamResearch, getTeamWindows } from './teamResearch.js';
-import { getPlayerCutWindows } from './playerSplits.js';
 import { getScheduleWindow } from './schedule.js';
 import { getTeamHitting } from './teamHitting.js';
 import { getParkFactors } from './parkFactors.js';
@@ -40,13 +39,13 @@ import {
   PLAYER_CUTS,
   RESEARCH_INCLUDE_KEYS,
   RESEARCH_WINDOWS,
-  SPLIT_CUTS,
   TEAM_HITTING_WINDOWS,
 } from './types.js';
 import type {
   PlayerKind,
   PlayerReport,
   ResearchControlsPref,
+  NewsItem,
   ResearchIncludeKey,
   ResearchWindow,
   SeasonArsenalPitch,
@@ -55,7 +54,9 @@ import type {
 } from './types.js';
 import {
   getGameClipPlayIds,
+  getPitcherSplitCuts,
   getPitcherStats,
+  getPlayerSplitCuts,
   getPlayerStats,
   getSeasonPlayers,
   getTeamList,
@@ -64,6 +65,8 @@ import {
   PLAYER_SEARCH_MIN,
   resolveVideoUrl,
 } from './mlbStats.js';
+import type { PitcherSplitCuts, PlayerSplitCuts } from './mlbStats.js';
+import { getLeagueAverage } from './leagueAverage.js';
 import {
   addRosterPlayer,
   attachEspnLeague,
@@ -2862,16 +2865,14 @@ app.get(
       return;
     }
     const kind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
-    // **And the same five spans cut four ways**, on the same route because it is
-    // the same table — five rows, the same columns, `row: null` for a span he
-    // has nothing in. A second route would be a second shape for the client to
-    // hold and a second place for the two to drift.
-    //
-    // An unrecognized `cut` falls back to the uncut board rather than 400ing,
-    // which is the client's own rule for a parameter it does not know arriving
-    // in a link: fall back rather than empty the view.
-    const cut = SPLIT_CUTS.find((c) => c === req.query.cut);
-    res.json(cut ? await getPlayerCutWindows(playerId, kind, cut) : await getPlayerWindows(playerId, kind));
+    // **No `cut=` any more.** This route used to take one and answer with the
+    // same five rows cut by hand or by ballpark, built out of a season of the
+    // man's own pitch rows (`playerSplits.ts`); the Stats tab's control that
+    // set it is gone, every split it offered being a card on the Splits tab
+    // where both halves are drawn at once. An old link still opens the board —
+    // an unknown parameter falls back rather than emptying the view, which it
+    // now does by being ignored.
+    res.json(await getPlayerWindows(playerId, kind));
   }),
 );
 
@@ -2929,9 +2930,15 @@ app.get(
     }
     // The shaping lives in `playerSplitsPayload`, which `/page` also calls —
     // one arithmetic, one implementation, and the estimator reasoning is
-    // recorded there.
+    // recorded there. **No comparisons**: this route's one caller is the
+    // research board's platoon dialog, which draws the two hands and nothing
+    // else; see the flag's note there.
     res.json(
-      await playerSplitsPayload(playerId, req.query.type === 'pitcher' ? 'pitcher' : 'batter'),
+      await playerSplitsPayload(
+        playerId,
+        req.query.type === 'pitcher' ? 'pitcher' : 'batter',
+        false,
+      ),
     );
   }),
 );
@@ -3062,6 +3069,62 @@ app.get(
   }),
 );
 
+/**
+ * **Everything said about a named set of players** — the Roster view's News
+ * reading, which is one dated list across a whole roster rather than one man's
+ * tab.
+ *
+ * **The client names the players and that is deliberate.** The server knows the
+ * reader's *saved* roster, and the page this answers may be showing his ESPN
+ * team instead (`roster=fantasy`), or his opponent's, or a filtered cut of
+ * either — so a route that read the roster here would answer for a list nobody
+ * is looking at. The view already holds the rows it is drawing; it asks about
+ * those, which is the same shape `/api/report` takes and for the same reason.
+ *
+ * **It is a fan-out over `getPlayerNews` and nothing more**, so the two surfaces
+ * cannot disagree about what a man's news is: the same three upstreams, the same
+ * thirty-minute memory cache and the same blob behind it, so a reader who has
+ * opened a player page has already paid for his row here. `mapLimit` at 6
+ * because a cold roster is fifteen players × three upstream reads and firing
+ * forty-five at MLB and RotoWire at once is how a fan-out becomes an outage.
+ *
+ * **A player who fails costs his own rows**, never the list — the standing rule,
+ * and here it is the difference between a news page and an error page for the
+ * sake of one man's feed.
+ *
+ * `MAX_NEWS_IDS` is a bound rather than a policy: the roster is fifteen and the
+ * research board is six hundred, and this route must never be handed the second
+ * of those. Extra ids are dropped rather than 400ing, the rule a parameter in a
+ * shareable URL follows.
+ */
+const MAX_NEWS_IDS = 60;
+
+app.get(
+  '/api/news/players',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const asked = typeof req.query.ids === 'string' ? req.query.ids : '';
+    const ids = [
+      ...new Set(
+        asked
+          .split(',')
+          .map((s) => Number(s))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ),
+    ].slice(0, MAX_NEWS_IDS);
+    const players: Record<string, NewsItem[]> = {};
+    await mapLimit(ids, 6, async (id) => {
+      try {
+        players[String(id)] = (await getPlayerNews(id)).items;
+      } catch (err) {
+        console.error(`roster news for ${id} failed:`, err);
+        players[String(id)] = [];
+      }
+    });
+    res.json({ players });
+  }),
+);
+
 /* ────────────────────────────────────────────────────────────────────────────
  * The MLB view's three routes
  *
@@ -3158,7 +3221,8 @@ app.get(
 );
 
 /**
- * **A player's season line and its two platoon halves**, shaped once.
+ * **A player's season line and every comparison the Splits tab draws it
+ * against**, shaped once.
  *
  * Extracted from `/api/players/:playerId/splits` so that route and
  * `/api/players/:playerId/page` below cannot come to disagree about what a
@@ -3167,27 +3231,79 @@ app.get(
  * both ERA-scale estimators are fetched alongside the line rather than after
  * it, and neither may take the line down with it, so the CSV's throw is caught
  * here and `getPitcherXera` swallows its own.
+ *
+ * **It carries four comparisons now, and each fails on its own.** The platoon
+ * pair rides on the season read (`sitCodes=[vr,vl]`, one request); home, away
+ * and the two halves are a second read of the same endpoint made for this
+ * surface alone (`getPlayerSplitCuts`, whose comment carries the 88KB
+ * measurement that keeps them off the roster's batch); the league's own line is
+ * a third (`leagueAverage.ts`). A dead cuts read costs the tab three of its four
+ * cards and leaves the platoon comparison standing, a dead league read costs one
+ * — the standing rule that a failure costs its own column and never the request.
+ *
+ * **`comparisons` is which of the two callers is asking**, and it is a flag
+ * rather than a second function because the platoon half must be the same
+ * object on both. The player page's Splits tab draws all four cards and passes
+ * `true`; the **research board's** platoon dialog reads `vsLeft`/`vsRight` and
+ * nothing else, and two upstream reads it would never draw, on a board where a
+ * reader opens one man after another, is exactly the cost the batch measurement
+ * above refuses on the roster. The fields are on the answer either way and are
+ * null when nobody asked, which is the shape every optional half of a payload in
+ * this server takes.
  */
-async function playerSplitsPayload(playerId: number, kind: PlayerKind) {
+async function playerSplitsPayload(playerId: number, kind: PlayerKind, comparisons: boolean) {
+  // The league line is the same fetch whichever kind is asked for — the league's
+  // batters and its pitchers are the same plate appearances read from the two
+  // ends — so it is fetched once here and the branch picks its half.
+  const leagueRead = comparisons
+    ? getLeagueAverage(SEASON).catch((err: unknown) => {
+        console.error(`player ${playerId} league average failed:`, err);
+        return null;
+      })
+    : Promise.resolve(null);
+  const cutsRead = comparisons
+    ? kind === 'pitcher'
+      ? getPitcherSplitCuts([playerId])
+      : getPlayerSplitCuts([playerId])
+    : null;
   if (kind === 'pitcher') {
-    const [pitcherStats, xera, arsenal] = await Promise.all([
+    const [pitcherStats, xera, arsenal, cuts, league] = await Promise.all([
       getPitcherStats([playerId]),
       getPitcherXera(),
       getSeasonArsenal(playerId).catch(() => null),
+      cutsRead as Promise<Map<number, PitcherSplitCuts>> | null,
+      leagueRead,
     ]);
     const stats = pitcherStats.get(playerId);
+    const cut = cuts?.get(playerId);
     return {
       season: withEstimators(stats?.season ?? null, arsenal?.battedBalls, xera.get(playerId)),
       vsLeft: stats?.vsLeft ?? null,
       vsRight: stats?.vsRight ?? null,
+      home: cut?.home ?? null,
+      away: cut?.away ?? null,
+      firstHalf: cut?.firstHalf ?? null,
+      secondHalf: cut?.secondHalf ?? null,
+      league: league?.pitching ?? null,
       kind: 'pitcher' as const,
     };
   }
-  const stats = (await getPlayerStats([playerId])).get(playerId);
+  const [playerStats, cuts, league] = await Promise.all([
+    getPlayerStats([playerId]),
+    cutsRead as Promise<Map<number, PlayerSplitCuts>> | null,
+    leagueRead,
+  ]);
+  const stats = playerStats.get(playerId);
+  const cut = cuts?.get(playerId);
   return {
     season: stats?.season ?? null,
     vsLeft: stats?.vsLeft ?? null,
     vsRight: stats?.vsRight ?? null,
+    home: cut?.home ?? null,
+    away: cut?.away ?? null,
+    firstHalf: cut?.firstHalf ?? null,
+    secondHalf: cut?.secondHalf ?? null,
+    league: league?.batting ?? null,
     kind: 'batter' as const,
   };
 }
@@ -3248,7 +3364,7 @@ app.get(
 
     const [day, splits, news, gameLog, nextGame] = await Promise.all([
       quiet('day', getPlayerDay(playerId, kind, date)),
-      quiet('splits', playerSplitsPayload(playerId, kind)),
+      quiet('splits', playerSplitsPayload(playerId, kind, true)),
       quiet('news', getPlayerNews(playerId)),
       quiet('gameLog', playerGameLogPayload(playerId, kind)),
       quiet('nextGame', getNextGame(playerId, false)),

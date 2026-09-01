@@ -1437,59 +1437,30 @@ export interface PlayerWindows {
   season: number;
   kind: PlayerKind;
   windows: PlayerWindowRow[];
-  /**
-   * Which cut of the spans these rows are, or null/absent for all of them.
-   *
-   * On the wire so the answer says what it is an answer to: the table is
-   * re-read when the reader picks a cut, and a stale reply landing on a fresh
-   * one would otherwise be five rows of the wrong split with nothing to say so.
-   * The read is sequence-numbered as well — this is the belt to those braces.
-   */
-  cut?: SplitCut | null;
 }
 
 /**
- * The four ways the Stats tab will cut a span.
+ * **The two halves of the season — the only cuts the percentile card offers.**
  *
- * **The handedness pair names the *other* man's hand**, which is what a platoon
- * split means on both boards: `vsr` reads as *vs RHP* on a batter's page and
- * *vs RHB* on a pitcher's. One value rather than four, because the axis is the
- * same one and the label is a fact about whose page it is — the same economy
- * `PlatoonSplits` already makes.
+ * It used to take four splits and a recent-form cut of its own, and every
+ * one of those asked the same question the **Splits** tab asks better: that tab
+ * draws both halves of a comparison side by side with the gap between them
+ * measured, where a cut card shows one side at a time and leaves the reader
+ * subtracting two cards they cannot see at once. So the splits moved there
+ * whole, and what is left on this control is the cut that is a **span** rather
+ * than a split — *which part of the season*, which one card answers honestly.
  *
- * Mirrors `server/src/types.ts` by hand, like everything else in this file.
- */
-export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
-
-/** In the order the control offers them: the hands, then the ballpark. */
-export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
-
-/**
- * **The recent-form cut, which is not a split and not a span either.**
- *
- * `last100` is the player's most recent 100 at-bats on a batter's card and his
- * most recent 100 batters faced on a pitcher's — one value whose label is a
- * fact about whose page it is, the economy `SplitCut` already makes.
- *
- * Deliberately not a `ResearchWindow`: the board's windows are days, and a
- * day-count is the wrong unit for recent form (thirty days of a platooned
- * hitter is eleven at-bats and thirty days of an everyday one is a hundred and
- * twenty). Which is also why it has no window axis to be crossed with — "his
- * last 100 at-bats within the last 7 days" is not a narrower question.
+ * The break is the All-Star game's own date, read off MLB rather than
+ * approximated, and it is the same boundary the standings board's two half
+ * columns are split on.
  *
  * Mirrors `server/src/types.ts` by hand, like everything else in this file.
  */
-export type RecentCut = 'last100';
+export type PlayerCut = 'firstHalf' | 'secondHalf';
 
-/** Every cut of a season the app can draw: the four splits, and recent form. */
-export type PlayerCut = SplitCut | RecentCut;
-
-/** In the order the percentile card's control offers them — the hands, the
- *  ballpark, then recent form, which is last because it is the odd one out. */
-export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'];
-
-/** How many at-bats (or batters faced) the `last100` cut looks back over. */
-export const RECENT_CUT_SIZE = 100;
+/** In the order the percentile card's control offers them, which is the order
+ *  they happened in. `Season` is the absence of a cut and so is not in here. */
+export const PLAYER_CUTS: PlayerCut[] = ['firstHalf', 'secondHalf'];
 
 /**
  * **A named list of players followed on the research board**, of which there
@@ -3312,11 +3283,29 @@ export interface OverviewPayload {
  * the checker something to defer on and the build returns to normal. If a
  * future field wants adding here, add it to the named arm.
  */
+/**
+ * **Everything the Splits tab compares his season against.**
+ *
+ * Four comparisons, and every field is independently nullable because each is
+ * fetched in its own `try` on the server: the platoon pair rides on the season
+ * read, home/away and the two halves are a second read of MLB's own splits, and
+ * `league` is the thirty clubs summed. A dead upstream costs its own card and
+ * leaves the rest of the tab standing.
+ *
+ * **`league` is the league's *line*, not an average of players** — the totals
+ * with the rates computed once at the end, which is the only way a rate
+ * aggregates. See `server/src/leagueAverage.ts`.
+ */
 export interface BatterSplitsPayload {
   kind: 'batter';
   season: SeasonStats | null;
   vsLeft: SeasonStats | null;
   vsRight: SeasonStats | null;
+  home: SeasonStats | null;
+  away: SeasonStats | null;
+  firstHalf: SeasonStats | null;
+  secondHalf: SeasonStats | null;
+  league: SeasonStats | null;
 }
 
 export interface PitcherSplitsPayload {
@@ -3324,6 +3313,11 @@ export interface PitcherSplitsPayload {
   season: PitcherSeasonStats | null;
   vsLeft: PitcherSeasonStats | null;
   vsRight: PitcherSeasonStats | null;
+  home: PitcherSeasonStats | null;
+  away: PitcherSeasonStats | null;
+  firstHalf: PitcherSeasonStats | null;
+  secondHalf: PitcherSeasonStats | null;
+  league: PitcherSeasonStats | null;
 }
 
 export interface BatterGameLogPayload {

@@ -1,5 +1,5 @@
 import type { MlbStandings, StandingsRecord, StandingsTeam } from './types.js';
-import { getTeamList } from './mlbStats.js';
+import { getAllStarDate, getTeamList } from './mlbStats.js';
 import { SEASON } from './research.js';
 
 const UA = { 'User-Agent': 'statcast-sicko/1.0' };
@@ -355,31 +355,17 @@ async function getSeasonGames(): Promise<SeasonGame[]> {
 
 /**
  * **The All-Star game's date**, which is what the two half columns are split
- * on.
+ * on — and it is `mlbStats.ts`'s now rather than this file's.
  *
- * Asked for rather than hardcoded or approximated: the break moves by a week or
- * more between seasons, and a mid-July constant would put a fortnight of games
- * on the wrong side of it in some years and be silently wrong in all of them.
- * `gameType=A` returns exactly one game — **276 bytes**, measured — and the
- * walk's own `gameType=R` means that game is never in the games being split.
- *
- * A whole season, because it is one: cached for a day, which is as often as it
- * could conceivably matter.
+ * It moved there when it grew a second caller: the player page's percentile
+ * card cuts a man's season into halves on the same boundary
+ * (`playerSplits.ts`), and two implementations of "which side of the break did
+ * this fall on" is exactly the kind of pair this codebase spends its length
+ * preventing — a standings row and a player card disagreeing about a July game
+ * would be a fault nothing on either screen could explain. The reasoning for
+ * asking rather than approximating is unchanged and now lives beside it.
  */
-let allStarCache: { date: string | null; at: number } | null = null;
-
-async function getAllStarDate(): Promise<string | null> {
-  if (allStarCache && Date.now() - allStarCache.at < DIVISIONS_TTL) return allStarCache.date;
-  const url =
-    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${SEASON}&gameType=A` +
-    `&fields=dates,games,officialDate`;
-  const res = await fetch(url, { headers: UA });
-  if (!res.ok) throw new Error(`MLB All-Star schedule returned ${res.status}`);
-  const data = (await res.json()) as ScheduleResponse;
-  const date = data.dates?.[0]?.games?.[0]?.officialDate ?? null;
-  allStarCache = { date, at: Date.now() };
-  return date;
-}
+const allStarDate = () => getAllStarDate(SEASON);
 
 /** A club's games in date order, final only — the one list all three splits are
  *  cut from, so they cannot come to disagree about which games a club played. */
@@ -473,7 +459,7 @@ async function buildBoard(): Promise<MlbStandings> {
       console.error('standings splits unavailable:', (err as Error).message);
       return [] as SeasonGame[];
     }),
-    getAllStarDate().catch((err: unknown) => {
+    allStarDate().catch((err: unknown) => {
       console.error('All-Star date unavailable:', (err as Error).message);
       return null;
     }),
