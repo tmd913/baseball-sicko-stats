@@ -152,8 +152,12 @@ export function LoadingLine({
  * a tab strip, a card head, a board's chrome — which is the scale `md` is set
  * against. The exception is a wait that owns the *whole view* with nothing
  * behind it to protect, where the same 28px ball reads as a pane still
- * arriving rather than as the page being read: the Overview's first draw takes
- * `lg`, the size the boot splash already uses for the same reason. Passed
+ * arriving rather than as the page being read: the Overview's first draw took
+ * `lg`, the size the boot splash already uses for the same reason. **That page
+ * draws a skeleton of itself now** rather than a ball — its read is 3.5s at p50
+ * and has been 21, and a ball says only *something is happening* — so the boot
+ * splash is the one caller left, and the size stays for it and for the next
+ * wait that owns a whole surface. Passed
  * rather than given its own component, which is this stylesheet's own rule —
  * two things that are the same object share a selector rather than being given
  * rules that agree today.

@@ -22818,8 +22818,135 @@ html[data-theme='light'] .league-table thead th {
    flex, so an auto cross-axis margin suppresses the stretch and the block
    shrinks to its content, which is the note under `.ov-matchup` below read the
    other way up — there the shrink is the fault, here it is the whole point. */
-.overview-wait {
-  padding-top: 0;
+/* ---- The wait, drawn as the page ------------------------------------------
+   **A bar where a figure will be, with a light travelling across it.**
+
+   The Overview's read is 3.5s at p50 and 7.1 at p90 and has been 21, and a
+   turning ball says only *something is happening* — right for a second, wrong
+   for seven. What the wait draws instead is the page with its values missing:
+   the headings, the day leads and dates and the category abbreviations are real
+   (the app has all of them before it asks anybody anything) and only what the
+   read answers with is one of these.
+
+   **There is no geometry in this block, and that is deliberate.** The skeleton
+   is built out of `.ov-day`, `.lg-cats`, `.ov-perfs` and `.ov-day-foot`
+   themselves, so the boxes are the page's own by construction — the app's rule
+   that a box is reserved by laying it out rather than by declaring a height,
+   whenever the worst case is a function of the width or of a font this app does
+   not choose. Both are true of a day card. All this block does is paint. */
+.sk-bar {
+  display: inline-block;
+  vertical-align: middle;
+  /* Enough to read as a line of type at the size it stands in for, and it
+     inherits the line box, so a bar inside `.ov-perf-name` is a name's height
+     and one inside `.ov-perf-line` is a line's. */
+  height: 0.72em;
+  min-height: 8px;
+  border-radius: 999px;
+  /* **Ink at a fixed alpha, not a token, and the reason is the card's
+     gradient.** A day card is painted `linear-gradient(180deg, --panel,
+     --bg-2)`, so a bar near the foot of it is over a different color from one
+     at the head, and any *flat* ground has to clear both. Measured across the
+     six schemes: `--panel-2` — the obvious choice, the app's own next surface
+     up — gives **1.10–1.14** against `--panel`, which is a bar you cannot see;
+     `--border` reaches 1.34–1.61 at the head and collapses to **1.03** at the
+     foot on Light and **1.15** on Powder Blue, because on a pale scheme the
+     border token and `--bg-2` are within a few points of each other. Mixing
+     `--text` *into* `--panel-2` has the same shape and passes straight through
+     `--bg-2` on the way.
+
+     A translucent ink has none of that: it moves the ground away from itself by
+     the same amount wherever it lands, so the contrast is flat down the card.
+     At 16% — dark **1.55/1.53**, midnight 1.59/1.57, lavender 1.59/1.59,
+     maroon 1.59/1.58, light 1.38/1.35, powder 1.40/1.37, each pair being the
+     two ends of the gradient. The light schemes sit lower because the same
+     alpha of a near-black ink over near-white moves less; both still read as a
+     bar, and one value for all six beats six blocks that will drift.
+
+     The light travelling across is the accent at a fifth, over the top of it. */
+  background-color: color-mix(in srgb, var(--text) 16%, transparent);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 20%, transparent) 45%,
+    color-mix(in srgb, var(--accent) 20%, transparent) 55%,
+    transparent 100%
+  );
+  /* 220% so the light is a sweep across the bar rather than a wash over it,
+     whatever the bar's width. */
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: sk-sweep 1.5s ease-in-out infinite;
+}
+/* **One clock for the whole page, not one per bar.** Sixty bars each starting
+   their own 1.5s at the moment they mount is sixty lights crossing at sixty
+   phases, which reads as static. Negative delays by column put the sweep on a
+   diagonal instead, so the page has one wave passing over it. */
+.ov-day:nth-child(2) .sk-bar {
+  animation-delay: -0.25s;
+}
+.ov-day:nth-child(3) .sk-bar {
+  animation-delay: -0.5s;
+}
+@keyframes sk-sweep {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+/* The headshot's circle, which is the one placeholder that is not a bar —
+   `.ov-perf-face` is 26px square with a 50% radius and the class is already on
+   the element, so this only has to stop the pill radius overriding it. */
+.ov-perf-face.sk-bar {
+  height: 26px;
+  border-radius: 50%;
+}
+/* A foot slot is reserved as the row of doors it is and drawn as neither: a
+   button that looks pressable and is not is worse than a bar, so it keeps
+   `.ov-day-more`'s box and gives up its border and its ground.
+
+   **Two classes deep, and it has to be.** `.sk-door` alone is the same
+   specificity as `.ov-day-more`, which is declared *later* in this file, so the
+   button's own `display` won and the bar sat against the left edge with 11px of
+   padding where a centered figure has 40 — measured, before this. That is the
+   file's standing trap (a rule of equal specificity later in the file wins), and
+   the compound selector is the fix that does not depend on where this block
+   happens to sit. */
+.ov-day-more.sk-door {
+  display: grid;
+  place-items: center;
+  border-color: transparent;
+  background: none;
+  cursor: default;
+}
+/* The value column's bar is a fixed 34px and would otherwise sit hard against
+   the row's right edge, where a figure has the column's own padding. */
+.ov-perf-val .sk-bar {
+  margin-left: auto;
+}
+
+/* **The sweep is motion, and motion is a preference.** A still bar is still a
+   bar — the shape it reserves is the whole of what it says — so the light goes
+   and a slow pulse takes its place, which is exactly what the spinning ball
+   does under the same query and for the reason stated there: a fade is not the
+   kind of motion this preference is asking to be spared. */
+@media (prefers-reduced-motion: reduce) {
+  .sk-bar {
+    background-image: none;
+    animation: sk-fade 2.2s ease-in-out infinite;
+  }
+  @keyframes sk-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
 }
 
 /* **`width: 100%` beside the auto margins, and it is load-bearing.** An auto

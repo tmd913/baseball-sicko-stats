@@ -463,6 +463,196 @@ copies are gone, and the one thing that is this label's alone and not the rail's
 `.date-row .date-presets` and the narrow-screen blocks already record, arrived at
 from a third direction.
 
+### The wait is the page with its values missing
+
+**A turning ball is the right thing to show for a second and the wrong thing to
+show for seven.** This page's read is **3.5s at p50 and 7.1 at p90** in
+production and it has been 21 (see *The server*, *The boot's fifteen seconds*),
+and all a ball says is that something is happening. The reader has nothing to
+read while it says it.
+
+So the wait draws the page and leaves the figures out: real headings, real span
+note, real day leads and dates, the league's own category abbreviations, and a
+bar wherever a value will be. A reader at 250ms already knows what page they are
+on, which three days it covers and which categories it is about; what they are
+waiting for is the numbers, and the bars are where the numbers go.
+
+**Everything the app already has is drawn for real, and that is most of the
+chrome.** The three dates come off `today`, which is App's own clock; the
+categories come off the board or `STANDARD_5X5`; `Top Performers` and `VALUE`
+are strings. None of them is waiting on anything, so none of them is a bar.
+
+#### It is the real cards, painted differently
+
+`SkeletonDay` is built out of `.ov-day`, `.ov-day-head`, `.lg-cats`,
+`.ov-perfs`, `.ov-perf` and `.ov-day-foot` — **the page's own classes, not a set
+of declared heights**. That is the app's standing rule about reserving a box
+(lay out the worst case rather than state it, whenever the worst case is a
+function of the width or of a font the app does not choose) and both are true of
+a day card. Three `.ov-perf` rows are three `.ov-perf` rows whatever is in them.
+
+`centerCard` came out of `DayCarousel` for the same reason. The wait's row has
+to **open on Today before paint**, exactly as the real row does, or the reader
+sees Yesterday and watches the page slide sideways when the answer lands — which
+is what the first version of this did, measured at 390. One arithmetic, one
+`OPENS_ON`, two callers.
+
+**It is not a `DayCarousel`.** That component owns a kept scroll position, an
+overflow observer, arrows and a row of dots, every one of which is about *moving
+between* cards — and there is nothing to move between when all three are the
+same three bars. What is borrowed is the two classes that give the cards their
+width and their peek.
+
+#### Measured: two states, and one shift of 19px
+
+Recorded at 1200×900 with `/api/overview` held for 9s, sampling every 200ms:
+
+| | `.overview-view` | `.ov-matchup` | `.ov-days` | `.ov-day` | heading top | carousel top |
+| --- | --- | --- | --- | --- | --- | --- |
+| +200ms | 10 | — | — | — | — | — |
+| **+400ms** (the wait) | 684 | **273** | 362 | 362 | **417** | **438** |
+| **+9400ms** (the page) | 2157 | **273** | 381 | 381 | **417** | **438** |
+
+**The matchup card, the `Your days` heading and the carousel do not move at
+all.** The only shift is the day card growing **19px** inside the carousel, and
+it is a real card being taller than a placeholder rather than an error in the
+placeholder: the real `ol.ov-perfs` is 128px on a day where a performer's line
+wraps and 115 where none does, so the cards themselves differ by 13px from day
+to day. The skeleton reserves the no-wrap floor. Reserving the *worst* case
+instead would over-reserve on most loads and make the page **shrink**, which is
+worse than growing.
+
+The view's own height goes 684 → 2157 because `Their days` and `Matchup
+leaders` arrive under it. **They are deliberately not in the skeleton**: whether
+either exists depends on the board — no league, no matchup this period, or a bye
+— so drawing them would be a claim the page might have to take back. What is
+drawn fills the first screen at every width checked.
+
+**The matchup card is drawn for real in the wait**, which is an application of
+the all-at-once rule rather than a hole in it: that card comes off
+`/api/espn/scoreboard`, which is not one of the reads `ready` waits for and lands
+well before them (549–768ms against 3.7s and 21s on the two slow boots measured).
+Where it has not, it arrives *during* the wait and pushes the skeleton down —
+the one reflow this keeps, and it is a block appearing above an unread
+placeholder rather than under a reader's finger. `matchupBlock` is bound to a
+name and drawn in both states so the two cannot differ.
+
+#### The two loading rules are unchanged, and were checked
+
+**`WAIT_DELAY` still gates it**, so a warm load shows no skeleton at all. Driven
+against a warm server, sampling every 60ms: `blank → page`. A quarter-second of
+bars before a page that was ready anyway is a flash, and the delay is exactly
+the app's own test of whether a wait is worth drawing.
+
+**And once drawn, never curtained again.** `ovDrawn` is unchanged and the
+skeleton obeys it: settle, press `Research`, press `Overview` — the state stays
+`page` throughout, 0 bars, because rule 1 forbids a wait standing in front of
+data the app still holds.
+
+**`aria-hidden` on the row, and the sentence moves to a live region.** A grid of
+empty boxes announced cell by cell is worse than nothing; the `role="status"`
+line under it says `Reading your days`, which is the same sentence the ball
+carried and keeps the rule that a wait names what is being read.
+
+#### The bar, and why it is a translucent ink
+
+A day card is painted `linear-gradient(180deg, --panel, --bg-2)`, so a bar at
+its foot sits over a different color from one at its head and any **flat**
+ground has to clear both. Measured across the six schemes, as
+bar-against-`--panel` / bar-against-`--bg-2`:
+
+| ground | dark | midnight | lavender | maroon | light | powder |
+| --- | --- | --- | --- | --- | --- | --- |
+| `--panel-2` | 1.14/1.23 | 1.11/1.21 | 1.11/1.21 | 1.11/1.18 | 1.07/1.34 | 1.10/1.28 |
+| `--border` | 1.47/1.59 | 1.34/1.46 | 1.49/1.62 | 1.45/1.54 | 1.48/**1.03** | 1.61/**1.15** |
+| **`--text` at 16%** | **1.55/1.53** | 1.59/1.57 | 1.59/1.59 | 1.59/1.58 | 1.38/1.35 | 1.40/1.37 |
+
+`--panel-2` is the obvious choice — the app's own next surface up from a card —
+and it is a bar you cannot see. `--border` fixes the head and **collapses at the
+foot on the two pale schemes**, where the border token and `--bg-2` are within a
+few points of each other. Mixing `--text` *into* `--panel-2` has the same shape,
+passing straight through `--bg-2` on the way.
+
+A translucent ink has none of that: it moves the ground away from itself by the
+same amount wherever it lands, so the contrast is flat down the card — which is
+what the third row shows. The light schemes sit lower because the same alpha of
+a near-black ink over near-white moves less; both still read as a bar, and one
+value for all six beats six blocks that will drift.
+
+**One clock for the page, not one per bar.** Sixty bars each starting their own
+1.5s sweep at the moment they mount is sixty lights crossing at sixty phases,
+which reads as static. Negative delays by card (`0`, `-0.25s`, `-0.5s`) put the
+sweep on a diagonal, so the page has one wave passing over it.
+
+**And the sweep is motion, so it answers `prefers-reduced-motion`.** A still bar
+is still a bar — the shape it reserves is the whole of what it says — so the
+light goes and a 2.2s fade takes its place, which is what the spinning ball does
+under the same query and for the reason stated there: a fade is not the kind of
+motion the preference is asking to be spared. Verified with the media feature
+emulated: `sk-sweep 1.5s` becomes `sk-fade 2.2s` with no `background-image`.
+
+**One specificity trap, and it bit.** `.sk-door` alone is the same specificity
+as `.ov-day-more`, which is declared *later* in the stylesheet, so the button's
+own `display` won and the foot's bar sat 11px from the left edge where a
+centered figure sits at 40 — measured, before the fix. `.ov-day-more.sk-door`
+does not depend on where the block happens to sit. This is the file's standing
+hazard and the sixth time it has been recorded.
+
+**Bundle**: JS **805.76 → 808.35 kB** raw (237.58 → 237.97 gzipped), CSS
+**212.01 → 212.97** (37.32 → 37.62) — 2.6kB and 1.0kB raw, 0.4kB and 0.3kB over
+the wire, for a skeleton of the page, a lifted `centerCard` and the paragraphs
+above restated where the rules are.
+
+### One read, and it took a staggered network to see that it was three
+
+**The Overview's batch read fired three times on a boot**, and the app had no
+way to notice. `App.tsx`'s `ovBatch` sequence number discards every answer but
+the newest, so the *page* was always right; what the extra reads cost was
+invisible from the client and enormous from the server.
+
+Measured on the live app on 2026-09-01, the 16:35:51 boot: `/api/overview` at
+**+404ms, +894 and +967**, each landing on a Lambda container of its own and
+each taking **21 seconds**. It is the most expensive route in the app — ten
+range reports behind one request — and every spare copy is another cold
+container asking every upstream from scratch.
+
+**The dependency array was the bug, in two ways, and both are rules `reportKey`
+one screen up already states.**
+
+- It depended on `roster`, which is a *new array* the moment the boot read
+  lands. The effect never reads one: `/api/overview` takes the roster off the
+  user's own record, so what the dependency is for is "the server's copy has
+  changed" — **content, not identity**, and a roster edited and put back is the
+  answer the app already has. It is `roster.map(playerKey).join(',')` now, and
+  **nothing at all under `fantasy`**, where the page is about ESPN's roster and
+  the saved list has no bearing on it — exactly as the report's fantasy key
+  leaves it out.
+- And it did not *wait* for the roster on the saved side, where the page is
+  about that list. So the first fire asked about an empty roster and the second
+  asked the real question.
+
+**The gate is one boolean, not three conditions in the array**, which is the
+mistake the first attempt made: `rosterLoaded` listed as its own dependency
+fires the effect the moment the roster lands **whether or not this page cares**,
+and under `fantasy` it does not. `ovReady` folds the three waits into a value
+that stops moving once it is true.
+
+**Local timing hides all of this**, which is why it survived: a warm local
+server answers the boot reads together and React batches them into a single
+render, so the effect fires once and the fault is invisible. Reproduced by
+staggering them the way a network does — `/api/espn` at 400ms, `/api/prefs` at
+900, `/api/watchlist` at 1500 — and driven at 1200×900:
+
+| | fantasy | saved roster |
+| --- | --- | --- |
+| before | **2** reads, +951ms and +1551 | **2** reads, +963ms and +1561 |
+| `rosterLoaded` in the array | **2** reads | — |
+| after | **1** read, +966ms | **1** read, +1545ms |
+
+**The wait costs nothing measurable.** On the saved roster the surviving read is
+issued at +1545 where the old *second* one went at +1561 — 16ms earlier, because
+the read that was dropped is the one whose answer was being discarded anyway.
+
 ### The page arrives all at once, or not at all
 
 **Nine reads answer over about a second, and the page used to draw each of them
@@ -531,12 +721,17 @@ would be needed for. Driven — settle, press `Research`, press `Overview` — t
 page comes back in **one** state at its full 1004px with six cards and no wait
 drawn at any point. The live tick never moves it at all, being quiet.
 
-**The wait is the ball at `lg`, and this is the second place in the app that
-takes 44px.** The other is the boot splash, and the reason is the same one that
-document gives: this wait owns the entire view with nothing behind it to
-protect, and at `md` a 28px ball with that much room around it reads as a pane
-still arriving rather than as the page being read. It says `Reading your days`,
-which is the app's empty-state rule applied to waits.
+**The wait was the ball at `lg`, the second place in the app that took 44px.**
+The other is the boot splash, and the reason was the same one that document
+gives: this wait owns the entire view with nothing behind it to protect, and at
+`md` a 28px ball with that much room around it reads as a pane still arriving
+rather than as the page being read. It said `Reading your days`, which is the
+app's empty-state rule applied to waits.
+
+**It is a skeleton of the page now** — see *The wait is the page with its values
+missing*, below. What that changes is only what the one wait *looks like*; the
+argument above, that the unit is the whole page and not nine panes, is what it
+is built on. The sentence survives as the live region.
 
 **`WAIT_DELAY` before the ball, and nothing before that.** It matters more here
 than anywhere else in the app, because a gate this wide is one that a warm load

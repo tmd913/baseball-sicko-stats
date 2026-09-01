@@ -1,4 +1,5 @@
 import { readBlob, writeBlob } from './storage.js';
+import { withDeadline } from './deadline.js';
 import { toSavantName } from './names.js';
 import { fipLike, ipToOuts } from './leagueRates.js';
 import type {
@@ -355,6 +356,41 @@ export interface SearchPerson {
 }
 
 /**
+ * **Three seconds, against the server-wide fifteen.**
+ *
+ * This is the read that made `upstream.ts` grow an export, and the measurement
+ * is worth keeping. On 2026-09-01 the API function's four slowest page boots
+ * were 14.9 / 20.2 / 21.7 / 22.6 seconds, and three of them were **this call
+ * not answering** — seven Lambda containers timing out on the identical
+ * 33-name URL within the same second at 16:36, four more at 18:29, eleven such
+ * timeouts in the day. Init over the same window was 437ms at p50, so none of
+ * that was a cold start; it was a 15-second deadline being spent in full, in
+ * parallel, on four boot routes at once.
+ *
+ * Fifteen is the right ceiling for a read a route needs and the wrong one for a
+ * read a route can do without. `extendIndex`'s own comment already says what
+ * this failure costs — "these names their rows, not the request" — so the
+ * question is how long a reader should wait for one row, and three seconds is
+ * already ten times the measured answer (34–276ms over 17 calls from outside
+ * AWS, 8-way concurrent in 36). What a cut-off costs is a prospect's row until
+ * the next read, which is the same thing a `404` from this endpoint has always
+ * cost.
+ *
+ * **It is the second line of defense, not the first.** The first is that the
+ * answers are cached in the storage tier now (`espn.ts::extendIndex`), so a
+ * cold container reads a blob instead of asking at all. This is what bounds the
+ * case where that misses.
+ *
+ * **And it is the *reader's* number, which is why it is a default and not a
+ * constant in the fetch.** The warmer refilling that blob out of band wants the
+ * opposite trade — it has ten minutes, nobody is waiting, and a batch it gives
+ * up on is a day the blob does not get re-stamped. `refreshProspects` passes
+ * null and inherits whatever the process it runs in does about deadlines, which
+ * in the warmer is what every other read there gets: none.
+ */
+const PEOPLE_SEARCH_TIMEOUT_MS = 3_000;
+
+/**
  * **MLB's search over every person it has ever listed**, which is the one
  * upstream in this app that can answer for a player no roster and no
  * leaderboard carries.
@@ -370,12 +406,20 @@ export interface SearchPerson {
  * prospects by exact name, and `searchPlayers` answers the header search's
  * typed query. One fetch, one field list, one place to fix.
  */
-export async function searchPeople(names: string[]): Promise<SearchPerson[]> {
+export async function searchPeople(
+  names: string[],
+  /** How long to wait. Null waits as long as the process's own rule says —
+   *  which is what the warmer wants; see the note above. */
+  deadlineMs: number | null = PEOPLE_SEARCH_TIMEOUT_MS,
+): Promise<SearchPerson[]> {
   const url =
     'https://statsapi.mlb.com/api/v1/people/search' +
     `?names=${encodeURIComponent(names.join(','))}` +
     `&hydrate=currentTeam&fields=${PEOPLE_FIELDS}`;
-  const res = await fetch(url, { headers: UA });
+  const res = await fetch(url, {
+    headers: UA,
+    ...(deadlineMs === null ? {} : { signal: withDeadline(deadlineMs) }),
+  });
   if (!res.ok) throw new Error(`MLB Stats API people/search returned ${res.status}`);
   const data = (await res.json()) as { people?: SearchPerson[] };
   return data.people ?? [];

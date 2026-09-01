@@ -391,15 +391,71 @@ export interface MlbIndex {
 let indexCache: { index: MlbIndex; fetchedAt: number } | null = null;
 
 /**
+ * **Both of this file's indexes are stored, and that is a fix rather than a
+ * tidy-up.**
+ *
+ * They were the last two caches in the server holding only in a container's
+ * memory; everything else has gone through `storage.ts` since the day a cold
+ * Lambda was measured re-downloading a season CSV. What that cost was invisible
+ * until the boot logs were read on 2026-09-01: a page boot fans out fifteen to
+ * eighteen concurrent requests, Lambda answers each with a **container of its
+ * own** (eleven brand-new ones at 16:35:51), and every one of them asked MLB
+ * the same two questions from scratch. Seven of them then timed out on the
+ * identical `people/search` URL inside the same second, and the boot took
+ * **22.6s**. Init over that day was 437ms at p50, so none of it was a cold
+ * start in the sense anybody means.
+ *
+ * A blob makes the fan-out free: the first container to ask writes the answer
+ * and the other ten read it. It also takes an upstream that can hang off the
+ * critical path entirely, which is worth more than the milliseconds — a stored
+ * answer cannot time out.
+ */
+const INDEX_KEY = `mlb-name-index-${SEASON}-v1.json`;
+
+/** `byName` flattened, since a `Map` does not survive `JSON.stringify`.
+ *  `beyond` is not stored: it is empty on the base index by construction and
+ *  filled only on the copy `extendIndex` returns. */
+type StoredIndex = { key: string; entries: IndexEntry[] }[];
+
+/**
  * Every player on the season's MLB roster, by normalized name. Its own fetch
  * rather than `getSeasonPlayers`, which resolves a player's club to its full
  * name — this needs the **team id**, since that is the currency the ESPN team
  * table above is written in and a name is one rename away from breaking.
+ *
+ * Memory, then the storage tier, then MLB — the read-through order every other
+ * cache in the server uses. Both tiers are governed by `INDEX_TTL_MS`, so the
+ * blob is not a longer-lived copy of the memory cache but the *same* hour
+ * shared between containers.
  */
 export async function getMlbIndex(): Promise<MlbIndex> {
   if (indexCache && Date.now() - indexCache.fetchedAt < INDEX_TTL_MS) {
     return indexCache.index;
   }
+  const stored = await readJsonBlob<StoredIndex>(
+    INDEX_KEY,
+    (_v, cachedAt) => Date.now() - cachedAt < INDEX_TTL_MS,
+  );
+  if (stored) {
+    const index = {
+      byName: new Map(stored.map((r) => [r.key, r.entries])),
+      beyond: new Map<number, SeasonPlayer[]>(),
+    };
+    indexCache = { index, fetchedAt: Date.now() };
+    return index;
+  }
+  return buildMlbIndex();
+}
+
+/**
+ * The index off MLB, written to both tiers.
+ *
+ * Separate from `getMlbIndex` so the warmer can insist on a rebuild. Going
+ * through the reader would answer from whichever tier happened to be warm and
+ * leave the blob to age out under a reader instead — which is the one thing
+ * warming it is for.
+ */
+export async function buildMlbIndex(): Promise<MlbIndex> {
   const url =
     `https://statsapi.mlb.com/api/v1/sports/1/players?season=${SEASON}` +
     '&fields=people,id,fullName,currentTeam,id,primaryPosition,code';
@@ -426,6 +482,10 @@ export async function getMlbIndex(): Promise<MlbIndex> {
   }
   const index = { byName, beyond: new Map<number, SeasonPlayer[]>() };
   indexCache = { index, fetchedAt: Date.now() };
+  await writeJsonBlob<StoredIndex>(
+    INDEX_KEY,
+    [...byName].map(([key, entries]) => ({ key, entries })),
+  );
   return index;
 }
 
@@ -472,16 +532,96 @@ const PROSPECT_BATCH = 40;
  *  once per league read. Cleared with the index it supplements. */
 let prospectCache = new Map<string, IndexEntry[]>();
 let prospectFetchedAt = 0;
+
+/**
+ * **The same answers on the storage tier, and this is the one that mattered.**
+ *
+ * `people/search` is the flakiest upstream in the app and the only one a page
+ * boot waits for that it does not actually need. Measured over 2026-09-01: the
+ * four slowest boots were 14.9 / 20.2 / 21.7 / 22.6 seconds and three of them
+ * were this call not answering — seven containers timing out on the identical
+ * 33-name URL within the same second at 16:36, four more at 18:29, eleven such
+ * timeouts in the day, against 34–276ms when it does answer. The memory cache
+ * above could not help, because every one of those containers was new.
+ *
+ * **A day, not an hour, and the difference is the whole point.** The memory
+ * cache's hour is about a *container*; this is about the gap between one
+ * reader's visit and the next, which is exactly the interval the complaint was
+ * about ("the first time in over 30 minutes"). A blob that expires in an hour
+ * would leave the boot after every idle evening paying MLB again — the fault,
+ * unfixed, wearing a cache.
+ *
+ * A day is honest for what is stored: a normalized name and the MLB id it
+ * means. What goes stale inside it is a **negative** — a name MLB's search knew
+ * nobody by — and what that costs is a newly-signed prospect's row until the
+ * blob turns over, which is the same thing his absence from
+ * `sports/1/players` already costs him.
+ */
+const PROSPECT_KEY = `mlb-prospects-${SEASON}-v1.json`;
+const PROSPECT_BLOB_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** The map flattened, `Map` not surviving `JSON.stringify`. An entry with an
+ *  empty list is a remembered *miss* and has to round-trip as one. */
+type StoredProspects = { key: string; entries: IndexEntry[] }[];
+
+/** One load per container per hour, shared by every caller in flight — the same
+ *  reason `prospectInFlight` exists one level down. */
+let prospectLoad: Promise<void> | null = null;
+
+/**
+ * Fold the stored answers into this container's map.
+ *
+ * **Blob first, memory wins.** A key this container resolved itself is newer
+ * than the blob's copy of it by construction, so it is not overwritten.
+ * A failed read degrades to a miss, which is `storage.ts`'s rule and here means
+ * the names get asked — slowly, but correctly.
+ */
+async function loadProspects(): Promise<void> {
+  const stored = await readJsonBlob<StoredProspects>(
+    PROSPECT_KEY,
+    (_v, cachedAt) => Date.now() - cachedAt < PROSPECT_BLOB_TTL_MS,
+  ).catch(() => null);
+  if (!stored) return;
+  for (const { key, entries } of stored) {
+    if (!prospectCache.has(key)) prospectCache.set(key, entries);
+  }
+}
+
+/**
+ * Publish what this container knows, so the next cold one does not ask.
+ *
+ * **Last writer wins, and losing is free.** Two containers resolving different
+ * names at once will each write their own merge and one will overwrite the
+ * other; what that costs is the losing container's new keys being asked again
+ * later, which is a cache miss and not a wrong answer. The alternative —
+ * read-modify-write under a lock — is a great deal of machinery for a blob
+ * whose worst failure is a repeat of the request that filled it.
+ */
+async function saveProspects(): Promise<void> {
+  await writeJsonBlob<StoredProspects>(
+    PROSPECT_KEY,
+    [...prospectCache].map(([key, entries]) => ({ key, entries })),
+  );
+}
 /** One batch in flight per set of names, on the same reasoning `inFlight` is
  *  there for the league read: the per-day fan-out runs six roster parses at
  *  once and six cold ones would ask MLB the same question six times. */
 const prospectInFlight = new Map<string, Promise<void>>();
 
-async function resolveProspects(keys: string[]): Promise<void> {
+async function resolveProspects(
+  keys: string[],
+  /** Null waits as long as the process allows — what `refreshProspects` passes,
+   *  since nobody is on the other end of a warm run. `searchPeople`'s default
+   *  is the reader's three seconds. */
+  deadlineMs?: number | null,
+): Promise<void> {
   // The thirty clubs by id, so a prospect's parent organization can be *named*
   // and not merely numbered — see `team` below. Already fetched and 24h cached
   // for every cap logo in the app, so this is a map lookup.
-  const [people, teamNames] = await Promise.all([searchPeople(keys), getTeamNames()]);
+  const [people, teamNames] = await Promise.all([
+    searchPeople(keys, deadlineMs),
+    getTeamNames(),
+  ]);
   const found = new Map<string, IndexEntry[]>();
   for (const p of people) {
     // **Only somebody currently playing.** The search reaches back through
@@ -539,6 +679,44 @@ async function resolveProspects(keys: string[]): Promise<void> {
 }
 
 /**
+ * Re-ask MLB about every name the blob already holds, and re-stamp it.
+ *
+ * **Without this the fix expires once a day.** The blob is good for 24 hours
+ * and is otherwise written only when a *new* name turns up; a day on which
+ * every name is already known writes nothing, the stamp ages out, and the next
+ * boot has all eleven of its containers miss at once — the original fault,
+ * arriving on a schedule instead of at random. So the warmer rebuilds it out of
+ * band, which is what the warmer is for.
+ *
+ * **The keys come from the blob**, because they are the only record of which
+ * names have ever needed asking — nothing else in the server knows, the names
+ * being whatever a fantasy roster happened to carry. One batch of forty covers
+ * the live league's thirty-three.
+ *
+ * **It writes only if every batch answered.** A batch that failed leaves its
+ * keys out of the map, and saving then would *delete* good answers to record a
+ * failed request — the opposite of what a refresh is for. A run that gives up
+ * leaves yesterday's blob exactly where it was, still readable, an hour or so
+ * nearer its expiry.
+ */
+export async function refreshProspects(): Promise<number> {
+  const stored = await readStampedBlob<StoredProspects>(PROSPECT_KEY);
+  const keys = (stored?.value ?? []).map((r) => r.key).sort();
+  if (keys.length === 0) return 0;
+  prospectCache = new Map();
+  prospectFetchedAt = Date.now();
+  // The blob being replaced must not be read back in over the top of the
+  // answers this is collecting; `extendIndex` would otherwise reinstate every
+  // stale entry the moment the warmer touched it.
+  prospectLoad = Promise.resolve();
+  for (let i = 0; i < keys.length; i += PROSPECT_BATCH) {
+    await resolveProspects(keys.slice(i, i + PROSPECT_BATCH), null);
+  }
+  await saveProspects();
+  return keys.length;
+}
+
+/**
  * The index, plus whatever MLB's own search can say about the names in `names`
  * that it could not answer. Returns the index **unchanged** when there is
  * nothing to add — including when the search fails, which costs a prospect his
@@ -548,7 +726,14 @@ export async function extendIndex(index: MlbIndex, names: string[]): Promise<Mlb
   if (Date.now() - prospectFetchedAt >= INDEX_TTL_MS) {
     prospectCache = new Map();
     prospectFetchedAt = Date.now();
+    prospectLoad = null;
   }
+  // Before deciding what is missing, not after: the whole value of the blob is
+  // that a name another container already resolved is never asked again, and a
+  // load that ran *behind* the miss test would arrive after the request it was
+  // meant to spare.
+  prospectLoad ??= loadProspects();
+  await prospectLoad;
   const asked = new Set<string>();
   const missing = new Set<string>();
   for (const raw of names) {
@@ -569,6 +754,11 @@ export async function extendIndex(index: MlbIndex, names: string[]): Promise<Mlb
       let job = prospectInFlight.get(flightKey);
       if (!job) {
         job = resolveProspects(batch)
+          // Publish on success only. A batch that failed has written nothing to
+          // the map worth sharing, and writing the map anyway would stamp a
+          // fresh `cachedAt` on a blob that had not learned anything — which is
+          // how a cache comes to look current while going quietly stale.
+          .then(saveProspects)
           .catch((err: Error) => {
             // A failure costs these names their rows, not the request: the
             // roster still reads, every major leaguer on it still matches, and

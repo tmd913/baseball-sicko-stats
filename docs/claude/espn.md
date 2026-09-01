@@ -184,6 +184,68 @@ different key entirely. The board still gains no row and the trend is still out;
 what was wrong was the assumption that the *name* join is the only way to a
 player, when ESPN has been naming him by his ESPN id on both payloads all along.
 
+### Both indexes are on the storage tier, and that is a latency fix
+
+**They were the last two caches in the server holding only in a container's
+memory.** Everything else has gone through `storage.ts` since a cold Lambda was
+measured re-downloading a season CSV; these two were left because each is a
+single cheap fetch. What that missed is that a page boot creates **one container
+per concurrent request** — eleven brand-new ones at 16:35:51 on 2026-09-01 — so
+each cheap fetch is paid eleven times, simultaneously, against an upstream that
+can hang. Seven of those containers then timed out on the identical
+`people/search` URL inside the same second and the boot took **22.6s**.
+
+`getMlbIndex` now reads memory, then `mlb-name-index-{SEASON}-v1.json`, then
+MLB, all on the same `INDEX_TTL_MS` hour — the blob is not a longer-lived copy
+of the memory cache but the same hour shared between containers. `beyond` is not
+stored: it is empty on the base index by construction and filled only on the
+copy `extendIndex` returns. `buildMlbIndex` is the same read with the memory and
+blob tiers skipped, which is what the warmer calls; going through the reader
+would answer from whichever tier happened to be warm and leave the blob to age
+out under a reader.
+
+**The prospect answers get a day rather than an hour**
+(`mlb-prospects-{SEASON}-v1.json`), and the difference is the whole point. The
+memory cache's hour is about a *container*; the blob is about the gap between
+one reader's visit and the next, which is precisely the interval the complaint
+was about — "the first time in over 30 minutes". An hour here would leave the
+boot after every idle evening paying MLB again. A day is honest for what is
+stored: a normalized name and the MLB id it means. What goes stale inside it is
+a **negative** — a name MLB's own search knew nobody by — and that costs a
+newly-signed prospect his row until the blob turns over, which is what his
+absence from `sports/1/players` already costs him.
+
+**Loaded before the miss test, not after.** The whole value of the blob is that
+a name another container already resolved is never asked again, and a load
+running *behind* the miss test would arrive after the request it was meant to
+spare. Blob first and memory wins on a collision: a key this container resolved
+itself is newer than the blob's copy by construction.
+
+**Written on success only, last writer wins.** A batch that failed has learned
+nothing worth sharing, and writing anyway would stamp a fresh `cachedAt` on a
+blob that had not moved — how a cache comes to look current while going quietly
+stale. Two containers resolving different names at once will each write their
+own merge and one will overwrite the other; what that costs is the loser's new
+keys being asked again later, which is a cache miss and not a wrong answer.
+Read-modify-write under a lock is a great deal of machinery for a blob whose
+worst failure is a repeat of the request that filled it.
+
+**`refreshProspects` exists because the fix otherwise expires once a day.** The
+blob is written only when a *new* name turns up, so a day on which every name is
+already known writes nothing, the 24-hour stamp ages out, and the next boot has
+all eleven containers miss at once — the original fault arriving on a schedule.
+The warmer calls it daily, after `getRosterTrend`, which is the read that
+discovers a name in the first place. It re-asks every key the blob already holds
+— the only record of which names have ever needed asking, nothing else in the
+server knowing, the names being whatever a fantasy roster happened to carry —
+and **writes only if every batch answered**, a partial run otherwise deleting
+good answers to record a failed request.
+
+Measured on a fresh process with both blobs warm: **0 upstream calls and 2ms**,
+against 146ms + 2,195ms and two calls without them. `searchPeople` also carries
+a **3-second** deadline now; the whole measurement is in *The server*, under
+*The boot's fifteen seconds*.
+
 ### Two ESPN rows, one MLB player — where Will Smith's roster % went
 
 **Reported as: "Will Smith has no roster percentage."** He had one. It read
