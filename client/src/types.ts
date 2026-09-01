@@ -3286,3 +3286,68 @@ export interface OverviewPayload {
   mine: OverviewSide;
   theirs: OverviewSide | null;
 }
+
+/**
+ * **The player page's open burst, as one answer** — `GET /api/players/:id/page`.
+ *
+ * Mirrors the shape `server/src/index.ts` declares beside that route, by hand
+ * like everything else in this file.
+ *
+ * **The page's nine tabs stay lazy.** That rule is why the percentile card's
+ * 1–2s Savant scrape and the Charts tab's 6s xwOBA query are not paid by a
+ * reader who never presses them, and batching all nine would throw it away.
+ * This is the *open* burst alone — the five reads measured firing together in
+ * one tick the moment the page appears.
+ *
+ * `projected-starts` is deliberately absent: it is pitcher-only and asked for
+ * only when the day just read says he is a rotation starter, so it is a
+ * genuinely dependent read that cannot share a round trip with what it depends
+ * on.
+ *
+ * **The two halves are named interfaces rather than inline unions, and that is
+ * load-bearing rather than tidiness.** Written inline, a union of two shapes
+ * over `SeasonStats`/`PitcherSeasonStats` — which are 40-odd fields each —
+ * made `tsc -b` hang rather than fail: four minutes with no output and no
+ * error, on a build that otherwise finishes in 150ms. Naming each arm gives
+ * the checker something to defer on and the build returns to normal. If a
+ * future field wants adding here, add it to the named arm.
+ */
+export interface BatterSplitsPayload {
+  kind: 'batter';
+  season: SeasonStats | null;
+  vsLeft: SeasonStats | null;
+  vsRight: SeasonStats | null;
+}
+
+export interface PitcherSplitsPayload {
+  kind: 'pitcher';
+  season: PitcherSeasonStats | null;
+  vsLeft: PitcherSeasonStats | null;
+  vsRight: PitcherSeasonStats | null;
+}
+
+export interface BatterGameLogPayload {
+  kind: 'batter';
+  games: BatterGameLog[];
+  gaps: GameLogGap[];
+}
+
+export interface PitcherGameLogPayload {
+  kind: 'pitcher';
+  games: PitcherGameLog[];
+}
+
+export interface PlayerPagePayload {
+  playerId: number;
+  kind: PlayerKind;
+  /** The server's own baseball day the `day` below is for. */
+  date: string;
+  day: PlayerReport | null;
+  /** Discriminated on `kind`, which is what lets one field carry both a
+   *  batter's line and a pitcher's — they are different shapes, and the page
+   *  reads whichever its subject is. */
+  splits: BatterSplitsPayload | PitcherSplitsPayload | null;
+  news: PlayerNews | null;
+  gameLog: BatterGameLogPayload | PitcherGameLogPayload | null;
+  nextGame: NextGameInfo | null;
+}
