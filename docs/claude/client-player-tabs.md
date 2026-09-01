@@ -856,7 +856,49 @@ no entry at all.
 0.1KB over the wire, for a sort, a saved preference, a route and a picker
 *extraction* that left the board with less code than it had.
 
-### The Stats tab cuts every span four ways
+### The Stats tab's cut control is gone, and the table is the uncut one
+
+**It carried `All · vs RHP · vs LHP · Home · Away` and carries nothing.** Every
+one of those four is a *comparison*, and this table could only ever draw one side
+of one at a time — press `vs LHP`, read five rows, press `Home`, read five more,
+and do the subtraction yourself. The **Splits** tab draws a comparison whole:
+both columns on one row with the measured gap between them and a bar scaled to
+the league's own distribution of that gap (see **Client — the player page's
+Splits tab**, which is where all four of these live now, with the parks among
+them).
+
+**What went with it**, since each piece was written for the cut and is dead
+without it:
+
+- **`cut=` in the URL**, and the `SplitCut` type and `SPLIT_CUTS` list on both
+  sides of the wire. An old link still opens the board — an unknown parameter
+  falls back rather than emptying the view, which it now does by being ignored.
+- **The `cut` parameter on `/api/players/:playerId/windows`**, and
+  `getPlayerCutWindows` behind it. `playerSplits.ts` no longer builds four cuts
+  over five spans at all; what is left of that module is the two halves of the
+  season, which the percentile card ranks and which MLB publishes no Statcast
+  equivalent of.
+- **The sample column the cut forced in.** Under a cut the table inserted `PA`
+  (or `BF`) after `G` whatever the reader's saved columns said, because a span
+  cut by hand is a fraction of a span and the fraction had to be visible before a
+  `.381` could be believed. With no cut there is no case left where this table
+  draws a column nobody chose.
+- **The `Ranks` toggle's disablement.** It went inert under a cut, with the
+  reason on a wrapper (a disabled button shows no `title` of its own), there
+  being no board of everybody's line against left-handers to rank a cut row
+  inside. Every row on this table is a board row again, so the badges are always
+  drawable and the wrapper that carried the excuse is gone. Measured on a
+  pitcher at 1200: the tools row is `Columns 27 · Ranks`, `Ranks` enabled, five
+  rows and 28 columns.
+
+**What is kept below is the record of the dead ends**, which are still dead and
+still worth not re-probing: the four MLB split codes are exact and refuse a date
+range, Savant publishes no windowed leaderboard, and a per-player season of pitch
+rows is the only thing that answers. `playerSplits.ts` still runs that fetch and
+that arithmetic — for the two halves rather than for twenty rows — so every
+reconciliation recorded here is a check on code that is still live.
+
+### The Stats tab cuts every span four ways *(superseded — see above)*
 
 **The five spans are one axis and this is the second.** The tab has always
 answered "how has he been going lately, against his season"; it now answers "and

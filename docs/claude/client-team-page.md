@@ -150,7 +150,8 @@ Brewers' pitching a different club.
 
 It rides in the URL as **`tside=pitching`**, written only off the default, and
 scoped to `team=` — a side with no club to be a side *of* would name a reading
-that is not in force, the rule `cut=` and `mt=` already follow. It is in the URL
+that is not in force, the rule `mt=` already follows (and `cut=` did, until the
+player page's Stats tab gave up its cut control). It is in the URL
 at all because it decides *which numbers* the Stats and Overview tabs are
 showing, which is the test that put `pos=` and `win=` there.
 
@@ -343,8 +344,8 @@ the mound, and there is no one man here.
   — one letter, appended rather than the label being written out twice, so the
   two rows cannot come to disagree about which hand they are. The *field* behind
   them is one field: `vsLeft` is the left-handed **other man** on both sides,
-  which is the economy `SplitCut` already makes on a player's page (`vsr` reads
-  as *vs RHP* on a batter's and *vs RHB* on a pitcher's).
+  which is the economy a player page's platoon card already makes (one pair of
+  fields reading as *vs LHP* on a batter's card and *vs LHB* on a pitcher's).
 - **The tooltips.** The ten column labels are the same ten on both sides and the
   titles are not: `AVG` on a pitching row is the average against, `R/G` is runs
   allowed. Relabelling the headers (`oAVG`, `RA/G`) would be a second vocabulary

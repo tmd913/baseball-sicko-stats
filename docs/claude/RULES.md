@@ -304,9 +304,11 @@ paint over the box covering it.
 - **Which data a view shows → the URL.** `preset`/`start`/`end`, `view`,
   `hideil`, `sched`, `plays`, `roster`, `pos`, `cols`, `inc`,
   `win`, `board`, `mp`, `mup`, `mt`, `mr`, `lt`, `lspan`, `lwk`, `proj`,
-  `rproj`, `rsum`, `rankproj`, `cut`, `mlb`, `mday`, `mgrp`. A link
+  `rproj`, `rsum`, `rankproj`, `pcut`, `mlb`, `mday`, `mgrp`. A link
   that leaves one out describes a
-  different page.
+  different page. (`cut` — the player page's Stats tab — is gone with the
+  control that wrote it; every split it offered is a Splits-tab card now, and
+  `pcut` is the page's one cut.)
 
 - **A fact about the person → a saved preference** on the user's own record
   (`UserPrefs`). Absence means the default, so a default can change without
@@ -317,7 +319,11 @@ paint over the box covering it.
   link re-derives the dates on the recipient's own today.
 - **Two params must never mean two things.** `proj=1` is a matchup's and
   `rproj=1` is the roster's, deliberately, because a link is read before
-  anything on screen can say which view wrote it.
+  anything on screen can say which view wrote it. **A param keeps its name once
+  it is in the wild**, which is the other half of the rule: `pcut=` was named
+  apart from the Stats tab's `cut=` so the two could differ, and it keeps that
+  name now `cut=` is gone — renaming it would break every card link anybody has
+  shared, to save one letter.
 - **A lens is put away when its page leaves the screen.** A press is about the
   page it was made on, so a projected reading (`rproj=1`, `proj=1`,
   `rankproj=1`, a team page's own) goes off when the reader crosses the view

@@ -65,7 +65,9 @@ A third source: `server/src/percentiles.ts` **scrapes the Savant player page** f
 
 **No cache of its own and it needs none**: both halves are already cached where they are built (the cut row in `playerSplits.ts`'s six-hour blob, one fetch serving all five cuts; the population in the season board the warmer keeps hot), so what is left is a filter and a sort over rows in memory.
 
-**The recent-form cut is `playerSplits.ts`'s, and it is not a span.** `last100` is the most recent 100 at-bats on a batter and 100 batters faced on a pitcher, walked **backwards through plate appearances** off the season of pitch rows that file already downloads — so it costs no second request, only a sixth pass. Every pitch of a kept plate appearance is kept with it, because the discipline half of the card is counted off pitches and would otherwise be measured over a fragment of the appearances the batting half is measured over; and the walks *between* those at-bats come along, which is what makes the BB% on the card mean anything. Verified against an independent recount of the raw CSV: Judge's span is **exactly 100 AB over 121 PA**, AVG .230 / OBP .350 / SLG .430 / ISO .200 / K% 28.1 / BB% 15.7 / BABIP .290 on both sides, and Skubal's is exactly 100 BF. **The ordering had to be built rather than read**: `at_bat_number` restarts each game and `pitch_number` each plate appearance, so the key is `game_date, game_pk, at_bat_number, pitch_number` — `game_pk` breaking the doubleheader tie — and the export arrives in **neither** order (measured on Judge: not ascending, not descending). The blob became `{ windows, last100 }` where it had been the bare four cuts, so it is **`-v2`**: a stored v1 deserializes into both fields undefined, which reads as "he has nothing anywhere" — the exact answer that file is at pains to distinguish from a real one.
+**The cuts a card can be drawn over are the two halves of the season, and were four splits and a recent-form cut.** `Season · First Half · Second Half` is the whole of the control now: every one of the five that left asks whether a man is different *against* something or *somewhere*, and a cut card draws one side of that at a time — the **Splits** tab draws both columns and the measured gap between them, so the comparisons went there (see **Client — the player page's Splits tab**). What is left is the cut that is a *span*, which reads honestly one-sided. **The break is the All-Star game's own date**, `mlbStats.ts::getAllStarDate` — moved there from `mlbStandings.ts` when it grew a second caller, so the standings board's two half columns and a player's two half cards cannot disagree about which side of July a game fell on. It is one 276-byte `gameType=A` request cached for a day, and `gameType=A` means the game it names is never among the `gameType=R` games being split. A season whose All-Star date could not be read has **both halves null**, which is the honest shape for "we do not know where the break is" and is not the same answer as "he has nothing in that half". Measured against MLB's own `preas`/`posas` for 2026: Ohtani **406 / 176** (and 406 + 176 = 582, his season), Judge **261 / none** (he has not played since the break), Abbott **457 / 192 BF**. The blob is **`-v3`** — a stored `-v2` has neither field, and would answer every half card with "he has no line in this half", which is a sentence this module draws for a real absence.
+
+*(Superseded, kept for the reasoning and for what it establishes about the code that is still live.)* **The recent-form cut was `playerSplits.ts`'s, and it is not a span.** `last100` is the most recent 100 at-bats on a batter and 100 batters faced on a pitcher, walked **backwards through plate appearances** off the season of pitch rows that file already downloads — so it costs no second request, only a sixth pass. Every pitch of a kept plate appearance is kept with it, because the discipline half of the card is counted off pitches and would otherwise be measured over a fragment of the appearances the batting half is measured over; and the walks *between* those at-bats come along, which is what makes the BB% on the card mean anything. Verified against an independent recount of the raw CSV: Judge's span is **exactly 100 AB over 121 PA**, AVG .230 / OBP .350 / SLG .430 / ISO .200 / K% 28.1 / BB% 15.7 / BABIP .290 on both sides, and Skubal's is exactly 100 BF. **The ordering had to be built rather than read**: `at_bat_number` restarts each game and `pitch_number` each plate appearance, so the key is `game_date, game_pk, at_bat_number, pitch_number` — `game_pk` breaking the doubleheader tie — and the export arrives in **neither** order (measured on Judge: not ascending, not descending). The blob became `{ windows, last100 }` where it had been the bare four cuts, so it is **`-v2`**: a stored v1 deserializes into both fields undefined, which reads as "he has nothing anywhere" — the exact answer that file is at pains to distinguish from a real one.
 
 **The one thing this comparison overstates, measured.** A season value and a cut value are not equally noisy and the ranking does not know it: a qualified player's season figure averages hundreds of events and a cut of it averages dozens, so cut values land nearer the ends of the distribution than the player's real ability does, in proportion to how tight the league is against the noise. On the 2026 boards (**247 qualified batters and 354 qualified pitchers**, which is Savant's own 246 and 354 — so the population is the right one), batter bat speed spans 62.5 → 79.7 mph with p10–p90 at 68.5 → 75.6, and a cut moves a man a few points; **pitcher bat-speed-against spans 70.5 → 73.5 with p10–p90 at 71.4 → 72.6**, one and a fifth mph holding eighty per cent of the league, so Sánchez reads 50th against left-handers at 72.0 and **0th** against right-handers at 73.3, off 1.3 mph. Both bars are arithmetically correct and neither is a finding. This is not a fault to be corrected — the reader asked where a cut value falls among season values — but one to be *disclosed*, which is what the broken bubbles and the `cutSample` on the wire are for.
 
@@ -948,9 +950,86 @@ in the same sequential-by-window loop the player boards use and immediately
 after it — by which point every window but the season's is a handful of `Map`
 additions, the day blobs having just been written.
 
-### One player's spans, cut four ways — and why it has to be his own pitches
+### The Splits tab's other four cuts, and the league's own line
 
-`playerSplits.ts`, behind `GET /api/players/:playerId/windows?cut=vsr|vsl|home|away`
+**MLB publishes home, away and the two halves exactly, and the Splits tab reads
+them** — `sitCodes=[h,a,preas,posas]` on the same `people?hydrate=stats` request
+the platoon pair comes off (`mlbStats.ts::getPlayerSplitCuts` /
+`getPitcherSplitCuts`). They reconcile with the season line by addition: Ohtani's
+2026, home **252 PA** + away **330** = 582, pre-break **406** + post-break **176**
+= 582, season 582.
+
+**`h1`/`h2` are the dead codes in that family and were probed rather than
+assumed.** MLB lists `First Half` and `Second Half` among its 602 situation codes
+and returns **nothing at all** for either, on any player; `preas`/`posas` — *Pre
+All-Star* and *Post All-Star* — are the pair that answer, and they are the same
+break the standings board splits on.
+
+**It is a second request rather than four more codes on the first, and the
+measurement is why.** `getPlayerStats` is the *roster's* read — the report route
+asks it for every player on the board at once — and these four codes are wanted
+by one surface. Measured on a 20-player batch: `sitCodes=[vr,vl]` is **83,739
+bytes** and `[vr,vl,h,a,preas,posas]` is **172,243**, i.e. 88KB added to every
+roster refresh to serve a tab nobody on that screen has opened. So the cuts have
+their own function and their own cache, asked for by the player page alone.
+
+**And the player page's route asks for them only when it is the player page
+asking.** `playerSplitsPayload` takes a `comparisons` flag: `/api/players/:id/page`
+passes true, and `/api/players/:id/splits` — whose one caller is the research
+board's platoon dialog, which reads `vsLeft`/`vsRight` and nothing else — passes
+false. Two upstream reads a board dialog would never draw, on a surface where a
+reader opens one man after another, is the same cost the batch measurement above
+refuses on the roster.
+
+**The league's own line is thirty club lines summed** (`leagueAverage.ts`), with
+the rates taken once at the end. MLB publishes no league-total row —
+`/api/v1/stats?stats=season&group=hitting` is a leaderboard, one row per player —
+and `/teams/stats` is the board that answers. The check that says the sum is over
+the right population is the identity that has to hold: the league's batters and
+its pitchers face each other, so hitting **156,337 PA** and pitching **156,337
+BF** must be the same number, and are, with AVG `.2437` / OBP `.3183` / SLG
+`.4000` / OPS `.7183` / K% `22.08` / BB% `8.92` / HR% `3.03` falling out of both
+sides identically. Both boards are fetched because they carry different columns
+(the pitching one has `outs`, `hitBatsmen`, `earnedRuns`; the hitting one
+`hitByPitch`, `sacFlies`), a board of fewer than 30 clubs is refused outright,
+and league FIP comes to **4.23** against a league ERA of **4.16** — what
+`FIP_CONSTANT` costs.
+
+### One player's news, fanned out over a roster
+
+`GET /api/news/players?ids=…` — the Roster view's **News** reading, which is one
+dated stream across a whole roster where the player page's tab is one man's.
+
+**It is a fan-out over `getPlayerNews` and nothing more**, so the two surfaces
+cannot disagree about what a man's news is: same three upstreams, same
+thirty-minute memory cache, same blob behind it. `mapLimit` at 6, because a cold
+fifteen-man roster is forty-five upstream reads and firing them at once is how a
+fan-out becomes an outage. A player who fails costs his own rows and not the
+list.
+
+**The client names the players and that is the design.** The page may be showing
+the saved roster, an ESPN team, a leaguemate's, or a filtered cut of any of them,
+so a route that read "your roster" here would answer for a list nobody is looking
+at. `MAX_NEWS_IDS` (60) is a bound rather than a policy — the roster is fifteen
+and the research board is six hundred, and this route must never be handed the
+second of those. Measured on the live roster: **232 items** across fifteen
+players, strictly descending by date.
+
+### One player's two halves — and why they have to come off his own pitches
+
+`playerSplits.ts`. **It built four splits over five spans and builds two halves**:
+the Stats tab's cut control is gone (every split it offered is a Splits-tab card,
+drawn from MLB's own published splits), so `getPlayerCutWindows` and the `cut`
+parameter on the windows route went with it. What could *not* move to that tab is
+this: a percentile card ranks barrels, bat speed and chase rate, and no MLB
+`sitCode` has ever carried one. So the season-of-pitches fetch below is still the
+only thing that answers, and every reconciliation recorded here is a check on
+`addPitch`, `toRow` and `NON_PA_EVENTS`, which the two halves are still built by.
+
+*(What follows describes the four-cut, five-span build. The fetch, the parse and
+the arithmetic are unchanged; only what is asked of them narrowed.)*
+
+`GET /api/players/:playerId/windows?cut=vsr|vsl|home|away`
 — the **same route** the uncut Stats tab reads, because it is the same table:
 five spans, `row: null` for a span he has nothing in, and the board's own
 `ResearchRow` shape. A second route would be a second shape for the client to

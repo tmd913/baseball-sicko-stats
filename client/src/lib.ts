@@ -14,7 +14,7 @@ import type {
   PlayerStatus,
   RosterStatus,
 } from './types';
-import { playerKey, RECENT_CUT_SIZE } from './types';
+import { playerKey } from './types';
 
 /**
  * ESPN's eligibility vocabulary, split by the kind of player it describes.
@@ -222,50 +222,36 @@ export function positionCell(
 }
 
 /**
- * **What a cut of a season is called on this man's page**, for every surface
- * that draws one.
+ * **What a cut of a season is called on this man's page.**
  *
- * Here rather than beside either of them because there are two — the player
- * page's **Stats** tab, whose spans are cut four ways, and its **Percentile
- * Rankings** card, whose cuts are those four plus recent form — and two tables
- * of the same words is precisely the duplication that ends with one surface
- * saying `vs LHP` where the other says `vs L`. One vocabulary, two readers.
+ * Here rather than inside the one component that reads it because it had two
+ * readers when it was written — the player page's **Stats** tab, whose spans
+ * were cut four ways, and its **Percentile Rankings** card — and two tables of
+ * the same words is precisely the duplication that ends with one surface saying
+ * `vs LHP` where the other says `vs L`. The Stats tab's control has since gone
+ * (see `PlayerWindowTable`) and the card is the only reader left; it stays here
+ * rather than moving in, because the labels and the sentence form of them are a
+ * *vocabulary* and the component drawing them is not where a vocabulary lives.
  *
- * **The handedness pair names the *other* man's hand**, which is what a platoon
- * split means on both boards: `vsr` reads as *vs RHP* on a batter's page and
- * *vs RHB* on a pitcher's. One value rather than four, because the axis is the
- * same one and the label is a fact about whose page it is — the economy
- * `SplitCut` is defined around.
- *
- * **Recent form follows the same rule from the other side.** A batter's hundred
- * is at-bats and a pitcher's is batters faced: the natural unit on each side of
- * the ball rather than two different questions, so it is one cut with two
- * labels like the pair above it. It has no meaning on the Stats tab — a table
- * whose rows are already spans — so that surface indexes this with a `SplitCut`
- * and never reaches the entry, which is why widening the key cost it nothing.
+ * **It is down to the two halves**, the four handedness and ballpark cuts having
+ * left both surfaces at once — the Stats tab's control is gone entirely and the
+ * percentile card's offers the two halves, because every one of those four is a
+ * *comparison* and the Splits tab draws a comparison whole. The table keeps its
+ * per-kind shape though both entries read the same on both sides of the ball: a
+ * half of the season is a half of the season, and that being true is a fact
+ * about these cuts rather than a reason to change the shape the callers index.
  */
 export const CUT_LABEL: Record<PlayerCut, Record<PlayerKind, string>> = {
-  vsr: { batter: 'vs RHP', pitcher: 'vs RHB' },
-  vsl: { batter: 'vs LHP', pitcher: 'vs LHB' },
-  home: { batter: 'Home', pitcher: 'Home' },
-  away: { batter: 'Away', pitcher: 'Away' },
-  last100: {
-    batter: `Last ${RECENT_CUT_SIZE} AB`,
-    pitcher: `Last ${RECENT_CUT_SIZE} BF`,
-  },
+  firstHalf: { batter: 'First Half', pitcher: 'First Half' },
+  secondHalf: { batter: 'Second Half', pitcher: 'Second Half' },
 };
 
 /** The same cut as an adverbial, for a sentence that already has its noun —
- *  *everybody's line **vs LHP***, *everybody's line **at home***. The pills say
- *  `Home` because a pill is a label; a sentence wants the preposition. */
-export const cutOf = (cut: PlayerCut, kind: PlayerKind): string =>
-  cut === 'home'
-    ? 'at home'
-    : cut === 'away'
-      ? 'on the road'
-      : cut === 'last100'
-        ? `over his last ${RECENT_CUT_SIZE} ${kind === 'pitcher' ? 'batters faced' : 'at-bats'}`
-        : CUT_LABEL[cut][kind];
+ *  *placed among everybody's full season, what he did **before the All-Star
+ *  break***. The pills say `First Half` because a pill is a label; a sentence
+ *  wants the preposition. */
+export const cutOf = (cut: PlayerCut, _kind: PlayerKind): string =>
+  cut === 'firstHalf' ? 'before the All-Star break' : 'since the All-Star break';
 
 /**
  * Which side of the plate he stands on, or which arm he throws with — the one

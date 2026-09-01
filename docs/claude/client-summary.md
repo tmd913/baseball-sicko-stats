@@ -2587,3 +2587,91 @@ for. It defaults to the standard 5×5 rather than to null, which is the one way
 it differs from its neighbours in `hooks.ts`: those answer *what is true of this
 player* and null is a real answer, where this answers *what counts as a good
 day* and there is no such thing as not knowing.
+
+### Full page keeps every reading, not the two that keep the table
+
+**`.expanded-chrome` carried `Schedule` and `Projected` and carries all six**:
+`Matchup · Opponent · Feed · Schedule · Projected · Summary`, in the same order
+and the same `ScrollRow` as the tools row up in the view bar, with the date bar
+under them on its own line as before.
+
+**The argument it replaces was about the box.** The two that stayed were
+readings of *this table*, and the other four replace the table with something
+else — a comparison card, a leaguemate's page, a stream — so pressing one from
+inside the full-page box would empty the very box the control sits in. True, and
+the wrong thing to weigh: a control that exists on a view and not in its
+full-page mode is a mode you have to *leave the page* to reach, and the way out
+is a 14px button in the table's top-left corner cell that a reader out at the
+far columns is not looking at.
+
+**The two that carry no table simply end the mode**, which needs no wiring and
+is the right behavior: `SummaryTable` is unmounted, and `useFullPage` holds a
+`useState` and an inert-background mark on its own ref, both of which go with the
+component. Driven at 1200×900: expand → three `[inert]` marks in the document →
+press `Feed` in the expanded chrome → `.is-expanded` gone, **0** inert marks
+left, `view=feed` in the URL and eleven feed items drawn.
+
+**Measured after the change.** At 1400 the chrome row is `x: 12, w: 1376, h: 98`
+with all six buttons and the date bar in it, the `ScrollRow` inside it spans the
+full width and overflows by **0**, the bar is full-bleed at `x: 0, w: 1400`, and
+the page overflows by 0. At 390 the run scrolls — **431px** of overflow behind
+two arrows, the same as the tools row up in the bar, which is what `ScrollRow`
+is for — and the chrome is **98px**, two lines: the controls and the bar.
+
+### The Roster's third reading: the roster's news, newest first
+
+**`view=news`, at the end of the tools run** — `RosterNews.tsx`, one dated stream
+across every player the page is showing. The question is *what has happened to my
+team since I last looked*, and until now answering it meant opening fifteen
+player pages and reading the top of each.
+
+**It is the same rows, from the same read.** `NewsList` and `NewsRow` are the
+player page's own components with one prop added (`who`, the name on the row),
+and the route is a fan-out over the very `getPlayerNews` his tab calls — so
+nothing here can disagree with what his page says. Two lists of one man's notes
+that merely resembled each other are two lists that would one day differ about
+what a note says, which is the rule `GameLogTable` and `NewsList` were both
+factored out for.
+
+**The ids are the client's**, because the page may be drawing the saved roster,
+an ESPN team or a filtered cut of either, and a route that read "your roster"
+server-side would answer for a list nobody is looking at. `Opponent` stands ahead
+of it in the branch for the same reason it stands ahead of the stream: whose page
+this is, is a coarser question than which reading of it, and `viewCards` is your
+own rows whichever is lit.
+
+**The sort is the date and then the roster's own order**, and the second half is
+the honest part. Both upstreams date to the **day** — MLB stamps a transaction
+with a date, RotoWire a note `August 31, 2026` — so every note filed today ties
+with every other, and the order inside a day is *not* chronological and must not
+pretend to be. It falls back to the order the reader's own list is in, which is
+the one ordering on this page that means something; sorting the ties by name or
+by source would be an arbitrary rule wearing a real one's clothes.
+
+**It is the one roster reading with no days**, so the date bar is not drawn over
+it: both upstreams publish to the day and ship a few weeks of it, and a bar over
+a list that does not answer to it is a control claiming a power it has not got.
+The stat table's own range is untouched underneath (`DateScope`), so crossing
+there and back finds the days where they were left.
+
+**Thirty rows a page, and the count is why.** Measured on a real fifteen-man
+roster the whole stream is **232 rows and 19,622px of page** — six weeks of two
+upstreams, an archive rather than a reading. Thirty is about a screen and a half
+of this row; the button under it is the feed's own `.feed-more` with the same
+count badge (`Load more · 202`), so nothing is filtered away, only not drawn yet.
+Measured after: 30 rows, page **2,900px**, one press → 60, dates strictly
+descending, the column **800px centered at 1200** and **346px at 390** with the
+meta line one line tall and no document overflow at either.
+
+**The name is a label and not a door.** The row is already a `<button>` wherever
+the note has more of itself to read (`item.full`, the analysis paragraph CBS
+republishes), and a button inside a button is not a thing to ask a browser for —
+so `.news-who` is a span, in `--text` against the `--muted` date and `--faint`
+kind beside it, because on this list *whose* it is is what the row is about.
+
+**The read is keyed on the ids and nothing else**, so hiding the injured players
+or crossing to another roster asks a new question and a poll that leaves the same
+fifteen men on screen asks none. `staleMs` is the news's own thirty minutes
+rather than the app's live poll, for the reason `api.recentNews` already records:
+both upstreams publish to the day, so re-asking inside one page-load can only
+return what it already said.

@@ -21,19 +21,19 @@ import type {
 /**
  * **The percentile card, asked about a cut of the season instead of all of it.**
  *
- * The reader's question is *is he a different hitter against left-handers*, and
- * the answer that makes it comparable to anything is the one this module
+ * The reader's question is *has he been a different player since the break*,
+ * and the answer that makes it comparable to anything is the one this module
  * computes: take his value **in the cut** and place it where that value would
  * put him **among all qualified players over the full season**. Both halves are
  * deliberate and neither is the obvious alternative:
  *
- * - It is **not** ranked within a population of left-handed splits. There is no
- *   such board — Savant publishes no split leaderboard — and there is a better
- *   reason than availability: a reader comparing platoon splits wants to know
- *   whether the man is *good* against left-handers, on the one scale every
- *   other number on this page is drawn to. Ranked among split lines, a hitter
- *   who is merely average against left-handers scores 50 twice over and the
- *   card says nothing.
+ * - It is **not** ranked within a population of second-half lines. There is no
+ *   such board — Savant publishes no half-season leaderboard — and there is a
+ *   better reason than availability: a reader looking at a man's second half
+ *   wants to know whether he has been *good* in it, on the one scale every
+ *   other number on this page is drawn to. Ranked among second halves, a hitter
+ *   who is merely average after the break scores 50 twice over and the card
+ *   says nothing.
  * - It is **not** a season card re-scraped with a filter. Savant's
  *   `percent_rank_` fields exist for the season and for nothing else, so every
  *   bar here is **ours**. Every metric on a cut card is therefore marked
@@ -53,6 +53,16 @@ import type {
  * a barrel rate on a cut row and a barrel rate on a board row are the same
  * quantity computed by the same code, so the percentile is a rank inside a
  * distribution the value genuinely belongs to.
+ *
+ * **The cuts this module is asked for are the two halves of the season**, and
+ * were the four platoon and park splits and a recent-form cut until the Splits
+ * tab learned to draw a comparison whole. A card can only ever show one side of
+ * a split at a time, and a reader wanting to know whether a man hits
+ * left-handers better was being asked to hold two cards in their head; the
+ * Splits tab prints both halves of that comparison on one row with the gap
+ * between them measured. What is left here is the cut that is a **span** — the
+ * question *when* rather than *against whom* — which a one-sided card answers
+ * honestly, there being nothing on screen it needs to be read against.
  *
  * **This is why a cut card is drawn in board units and never mixes with the
  * scraped one.** The season card's `Avg Exit Velocity` is Savant's
@@ -78,9 +88,12 @@ import type {
  *   mph of real spread; a cut moves a man a few points and no more.
  * - **Pitcher bat speed against** spans 70.5 → 73.5, p10–p90 **71.4 → 72.6**.
  *   One and a fifth mph holds eighty per cent of the league, which is narrower
- *   than the swing-to-swing noise in a 150-pitch cut — so Sánchez reads 50th
- *   against left-handers at 72.0 and **0th** against right-handers at 73.3, off
- *   1.3 mph. Both bars are arithmetically correct and neither is a finding.
+ *   than the swing-to-swing noise in a cut of a few hundred pitches — so a
+ *   pitcher can read 50th in one half at 72.0 and **0th** in the other at 73.3,
+ *   off 1.3 mph. Both bars are arithmetically correct and neither is a finding.
+ *   (The figure was measured on Sánchez's two platoon halves, which is where
+ *   this control's cuts used to come from; the arithmetic it demonstrates is
+ *   the same one, a cut value placed in a season distribution.)
  *
  * This is not a fault to be corrected — the reader asked where a cut value
  * falls among season values, and that is what is drawn. It is a fault to be
@@ -275,8 +288,12 @@ function build(
  * no round trip saved.
  *
  * **An empty card is an answer, not a failure**, exactly as it is on the season
- * card: a player with no plate appearance in the cut has no row, and the client
- * draws a sentence naming the cut rather than an error. The population failing
+ * card: a player with no plate appearance in the cut has no row — a September
+ * call-up has no first half, and a man who has not played since June has no
+ * second — and the client draws a sentence naming the cut rather than an error.
+ * A season whose All-Star date could not be read has **no halves at all** and
+ * arrives here the same way, which is the honest shape for "we do not know
+ * where the break is". The population failing
  * is different and is *not* swallowed — without the board there is no
  * distribution, and a card of bar-less rows would be a card that has quietly
  * stopped answering the question it was opened for.

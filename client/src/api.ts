@@ -20,6 +20,7 @@ import type {
   SeasonArsenal,
   PlayerKind,
   PitcherSeasonStats,
+  NewsItem,
   PlayerCut,
   PlayerPercentiles,
   PlayerReport,
@@ -38,7 +39,6 @@ import type {
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
-  SplitCut,
   SeasonStats,
   UserPrefs,
   WatchPlayer,
@@ -916,6 +916,27 @@ export const api = {
     return players;
   },
   /**
+   * **Everything said about the players on screen** — the Roster view's News
+   * reading, keyed by MLB id.
+   *
+   * The ids are the caller's rather than the server's, and that is the design:
+   * this page may be drawing the saved roster, an ESPN team, or a leaguemate's,
+   * and a route that read "your roster" server-side would answer for a list the
+   * reader is not looking at. See the route, which is a fan-out over the same
+   * per-player news the player page's own tab reads — so nothing here can
+   * disagree with what his page says.
+   *
+   * A player the server could not read comes back as an empty list rather than
+   * missing, which is what lets the view say "nothing about these fifteen" and
+   * mean it.
+   */
+  async playersNews(ids: number[]): Promise<Record<string, NewsItem[]>> {
+    const { players } = await request<{ players: Record<string, NewsItem[]> }>(
+      `/api/news/players?ids=${ids.join(',')}`,
+    );
+    return players;
+  },
+  /**
    * The percentile card — the whole season, or one cut of it.
    *
    * **One route for both**, because it is one card: same sections, same keys,
@@ -941,25 +962,16 @@ export const api = {
    * more than the request it saves. In practice it is five cache hits: the ten
    * boards are pulled warm nightly.
    */
-  async playerWindows(
-    playerId: number,
-    kind: PlayerKind,
-    /** Which cut of the spans, or null for all of them. A cut is the same five
-     *  rows off the same route — see `playerSplits.ts` for why it cannot be
-     *  read off the board, and what a cut row can and cannot carry. */
-    cut: SplitCut | null = null,
-  ): Promise<PlayerWindows> {
-    const q = cut ? `&cut=${cut}` : '';
-    return request(`/api/players/${playerId}/windows?type=${kind}${q}`);
+  async playerWindows(playerId: number, kind: PlayerKind): Promise<PlayerWindows> {
+    return request(`/api/players/${playerId}/windows?type=${kind}`);
   },
   /**
    * **The same five spans for a club** — the team page's Stats tab, off the
    * board's team reading rather than its player one.
    *
    * `playerWindows`' own answer shape, because the table that draws it is the
-   * same table. What it has no parameter for is the **cut**: the club boards
-   * are summed a day at a time from exports carrying no team-level split, so a
-   * `cut=` here could only be accepted and ignored — see the route.
+   * same table — and now literally the same parameters, the player route's
+   * `cut=` having gone with the control that set it.
    */
   async teamWindows(teamId: number, kind: PlayerKind): Promise<PlayerWindows> {
     return request(`/api/teams/${teamId}/windows?type=${kind}`);

@@ -16,7 +16,6 @@ import type {
   ResearchRow,
   ScheduleWindow,
   SeasonArsenal,
-  SplitCut,
 } from '../types';
 import { PLAYER_CUTS } from '../types';
 import {
@@ -47,7 +46,12 @@ import { RollingXwoba } from './RollingXwoba';
 import { GameLog } from './GameLog';
 import { PlayerWindowTable } from './PlayerWindowTable';
 import { NewsTab } from './PlayerNews';
-import { BatterSplitsTab, PitcherSplitsTab } from './PlatoonSplits';
+import {
+  BatterComparisonCards,
+  BatterSplitsTab,
+  PitcherComparisonCards,
+  PitcherSplitsTab,
+} from './PlatoonSplits';
 import { LoadingBlock, PaneBusy, SpinningBaseball } from './Loading';
 import {
   TAP_SLOP,
@@ -116,23 +120,23 @@ export function toDensity(v: string | undefined): PercentileDensity {
 }
 
 /**
- * **The cuts, in the groups they fall into.**
+ * **The cuts: one run of three, which is which part of the season.**
  *
- * One run of six pills wrapped and stranded the last of them, and worse, said
- * nothing about what the six *are*: `Season` and `Last 100 AB` are two spans,
- * the two hands are one question and the two parks another. Three groups is
- * how a reader looking for the platoon split finds it without reading all six.
+ * It was six across three groups — two spans, the two hands, the two parks —
+ * and five of those six have gone to the **Splits** tab, where each is drawn as
+ * a comparison with both halves on screen at once and the gap between them
+ * measured. A cut card can only ever show one side of a split, so asking *is he
+ * a different hitter against left-handers* here meant flipping between two
+ * cards and subtracting them in your head; the Splits tab answers it in a row.
  *
- * They remain **one selection** — only ever one pill is lit across the three —
- * which is what keeps them alternatives rather than three independent
- * settings. Grouped `.split-switch`es are the board's own language for this:
- * its bar sets the span and the position in two boxes read as one sentence.
+ * What is left is the one cut that is a **span** rather than a split — which
+ * part of the season — and a span reads honestly on a one-sided card, there
+ * being nothing on screen it needs to be held against. Three pills, one
+ * `.split-switch`, no groups to explain and (see the stylesheet) no dropdown to
+ * fall back to at a phone's width: three pills fit on one line where six did
+ * not, which is the whole of why that control existed.
  */
-const CUT_GROUPS: { key: string; cuts: (PlayerCut | null)[] }[] = [
-  { key: 'span', cuts: [null, 'last100'] },
-  { key: 'hand', cuts: ['vsr', 'vsl'] },
-  { key: 'park', cuts: ['home', 'away'] },
-];
+const CUTS: (PlayerCut | null)[] = [null, ...PLAYER_CUTS];
 
 /** The unit `cutSample` is counted in, for the sentence under a cut card. */
 const sampleUnit = (isPitcher: boolean, n: number): string =>
@@ -574,8 +578,6 @@ export function PlayerDetails({
   onStatsColumnsChange,
   showRanks,
   onShowRanksChange,
-  statsCut,
-  onStatsCutChange,
   pctCut,
   onPctCutChange,
   pctDensity,
@@ -662,18 +664,17 @@ export function PlayerDetails({
    *  vocabulary. Held by App for the reason `statsColumns` is. */
   showRanks: boolean;
   onShowRanksChange: (on: boolean) => void;
-  /** **Which cut of the spans the Stats tab is showing**, or null for all of
-   *  them — `cut=` in the URL, since it is which data the table shows rather
-   *  than how it is read. Held by App for the reason `statsColumns` is, and
-   *  because a URL parameter has to outlive the overlay that draws it. */
-  statsCut: SplitCut | null;
-  onStatsCutChange: (cut: SplitCut | null) => void;
-  /** **Which cut the Percentile Rankings card is drawn over**, or null for his
-   *  whole season — `pcut=` in the URL, under its own key rather than sharing
-   *  the Stats tab's `cut=`, since a reader can want the left-handed card and
-   *  the uncut table. Held by App for the reason `statsCut` is: this component
-   *  is unmounted the moment the overlay closes and a URL param has to outlive
-   *  it. Its vocabulary is one wider — `PLAYER_CUTS` adds recent form. */
+  /** **Which part of the season the Percentile Rankings card is drawn over**, or
+   *  null for the whole of it — `pcut=` in the URL, since it is which data the
+   *  card shows rather than how it is read. Held by App rather than here for the
+   *  reason `statsColumns` is: this component is unmounted the moment the
+   *  overlay closes and a URL param has to outlive it.
+   *
+   *  It kept its own key when the Stats tab had a `cut=` of its own and the two
+   *  had to be able to disagree; that control is gone and this one is the only
+   *  cut left on the page, but the key stays `pcut=` — a param in a shared link
+   *  means what it meant when the link was made, and renaming it would break
+   *  every card anybody has sent. */
   pctCut: PlayerCut | null;
   onPctCutChange: (cut: PlayerCut | null) => void;
   /** **How many bars that card draws** — Savant's fifteen or all thirty-odd.
@@ -958,17 +959,15 @@ export function PlayerDetails({
    *  who never opens the tab should pay. Keyed and familied like the percentile
    *  card, and for the same two reasons. */
   const windowsRes = useResource(
-    tab === 'stats' ? `playerWindows:${who}:${statsCut ?? 'all'}` : null,
-    () => api.playerWindows(playerId, kind, statsCut),
+    tab === 'stats' ? `playerWindows:${who}` : null,
+    () => api.playerWindows(playerId, kind),
     { family: who, staleMs: SEASON_STALE_MS },
   );
   const windows = windowsRes.value ?? null;
   const windowsError = windowsRes.error?.message ?? null;
   const windowsLoading = windowsRes.loading;
-  /** The Stats table's cut change, on the same reasoning as `pctBusy` above and
-   *  with the same fault behind it: `windowsRes` is familied on the man, so a
-   *  split press carries the previous split's rows and `loading` stays false
-   *  while they sit under the new split's heading. */
+  /** A re-read over rows already drawn — the poll and the resume, now that the
+   *  cut control that was the third case is gone. Never a wait over data. */
   const windowsBusy = windowsRes.updating;
 
   /** His news — the News tab's items and the Overview's preview of the top
@@ -1519,16 +1518,6 @@ export function PlayerDetails({
           <DetailsTabButton id="splits" tab={tab} onPick={setTab}>
             Splits
           </DetailsTabButton>
-          {/* **News reads before Stats and the Game Log**, which is the same
-              order the Overview's blocks are in and for the same reason: the
-              news is what has happened to him *this week* — an IL placement, a
-              call-up, a report he is losing a job — where Stats and the Game
-              Log are the record of what he has done. A reader deciding about a
-              stranger wants to know he is hurt before reading his 30-day
-              xwOBA. */}
-          <DetailsTabButton id="news" tab={tab} onPick={setTab}>
-            News
-          </DetailsTabButton>
           <DetailsTabButton id="stats" tab={tab} onPick={setTab}>
             Stats
           </DetailsTabButton>
@@ -1561,6 +1550,23 @@ export function PlayerDetails({
               the tab says which kind of reading, the card says which reading. */}
           <DetailsTabButton id="charts" tab={tab} onPick={setTab}>
             Charts
+          </DetailsTabButton>
+          {/* **News is last, where it used to read before Stats and the Game
+              Log.** The old argument was the Overview's own order — the news is
+              what has happened to him *this week*, an IL placement or a report
+              he is losing a job, where Stats and the Game Log are the record of
+              what he has done, so a reader deciding about a stranger wants to
+              know he is hurt before reading his 30-day xwOBA.
+
+              That is still true and it is answered somewhere better: the
+              **Overview carries a news preview** with a `News →` door on it, so
+              the headline a reader must not miss is on the first tab rather
+              than the fourth. What the tab itself holds is the rest of the
+              feed, which is a deeper reading gone to on purpose — the place the
+              Schedule tab was moved to, for the same reason, and the end of the
+              strip is where those live. */}
+          <DetailsTabButton id="news" tab={tab} onPick={setTab}>
+            News
           </DetailsTabButton>
         </>
       }
@@ -1721,12 +1727,6 @@ export function PlayerDetails({
           onShowRanksChange={onShowRanksChange}
           populations={rankPopulations}
           onNeedPopulations={onNeedRankPopulations}
-          /* Which cut is *asked for*, not which the rows on screen are: the
-             pressed pill lights at once and the badge beside it says the table
-             is catching up, which is the app's own answer to a control whose
-             answer takes a round trip. */
-          cut={statsCut}
-          onCutChange={onStatsCutChange}
           updating={windowsBusy}
         />
       )}
@@ -1734,22 +1734,55 @@ export function PlayerDetails({
         <PaneBusy busy={windowsBusy}>Reading the window table</PaneBusy>
       )}
 
-      {/* **The Splits tab: the two halves of the platoon, against each other.**
-          The read is the page's own eager one — the same `/api/players/:id/splits`
+      {/* **The Splits tab: four comparisons, each drawn whole.**
+
+          The two hands, the two parks, his season against the league's, and the
+          first half against the second — one card apiece, all four the same
+          card (`PlatoonSplits.tsx::SplitCard`) with their own labels and their
+          own measured scale. **Three of them arrived when the percentile card's
+          cut control gave them up**: a cut card shows one side of a split at a
+          time and a comparison wants both, so *is he a different hitter against
+          left-handers* was a question that took two cards and some subtraction
+          there and takes one row here.
+
+          The order is the reader's own: the parks and the halves are cuts of
+          his season, and the league sits between them because it is the
+          question the other two are usually asked *in service of* — is this man
+          good — asked directly.
+
+          The read is the page's own eager one — the same `/api/players/:id/page`
           the Overview's season line already waits on — so this tab costs no
           request of its own and is never the first thing on screen to be
           waiting. */}
-      {tab === 'splits' && splitsWait && <LoadingBlock>Reading the platoon splits</LoadingBlock>}
+      {tab === 'splits' && splitsWait && <LoadingBlock>Reading his splits</LoadingBlock>}
       {tab === 'splits' && splitsError && !splitsLoading && (
-        <div className="details-status details-error">
-          Couldn’t load platoon splits: {splitsError}
-        </div>
+        <div className="details-status details-error">Couldn’t load splits: {splitsError}</div>
       )}
       {tab === 'splits' && !splitsLoading && isPitcher && pitcherSplits && (
-        <PitcherSplitsTab vsLeft={pitcherSplits.vsLeft} vsRight={pitcherSplits.vsRight} />
+        <>
+          <PitcherSplitsTab vsLeft={pitcherSplits.vsLeft} vsRight={pitcherSplits.vsRight} />
+          <PitcherComparisonCards
+            season={pitcherSplits.season}
+            home={pitcherSplits.home}
+            away={pitcherSplits.away}
+            firstHalf={pitcherSplits.firstHalf}
+            secondHalf={pitcherSplits.secondHalf}
+            league={pitcherSplits.league}
+          />
+        </>
       )}
       {tab === 'splits' && !splitsLoading && !isPitcher && splits && (
-        <BatterSplitsTab vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
+        <>
+          <BatterSplitsTab vsLeft={splits.vsLeft} vsRight={splits.vsRight} />
+          <BatterComparisonCards
+            season={splits.season}
+            home={splits.home}
+            away={splits.away}
+            firstHalf={splits.firstHalf}
+            secondHalf={splits.secondHalf}
+            league={splits.league}
+          />
+        </>
       )}
 
       {/* **The card's own controls, and they sit outside it on purpose.**
@@ -1803,68 +1836,38 @@ export function PlayerDetails({
             ))}
           </div>
 
-          {/* **The cuts, in the groups they actually fall into**, rather than as
-              one run of six pills that wrapped and stranded the last one.
-              `Season · Last 100 AB` is *which span*, the two hands are *which
-              arm*, and `Home · Away` is *which park* — three questions, and a
-              reader looking for the platoon split can now find it without
-              reading all six.
+          {/* **Which part of the season, in one run of three.** The six pills
+              this control used to carry were three questions wearing one
+              selection — which span, which arm, which park — and the two that
+              were splits have moved to the Splits tab, which draws both halves
+              of each at once. Three alternatives of one question is a single
+              `.split-switch`, the app's plainest control, and it fits one line
+              at every width this page is drawn at.
 
-              They remain **one selection**: only ever one pill is lit across the
-              three groups, which is what says the six are alternatives rather
-              than three independent settings. Grouped `.split-switch`es are the
-              board's own language for exactly this — its bar sets the span and
-              the position in two boxes that are read as one sentence. */}
-          <div className="pct-cuts" role="tablist" aria-label="Which cut of the season">
-            {CUT_GROUPS.map((group) => (
-              <div className="split-switch" key={group.key}>
-                {group.cuts.map((c) => (
-                  <button
-                    key={c ?? 'all'}
-                    type="button"
-                    role="tab"
-                    aria-selected={pctCut === c}
-                    className={`split-tab${pctCut === c ? ' active' : ''}`}
-                    onClick={() => onPctCutChange(c)}
-                    title={
-                      c === null
-                        ? 'His whole season — the only card whose bars are Savant’s own'
-                        : `What he did ${cutOf(c, kind)}, placed among every qualified player’s full season`
-                    }
-                  >
-                    {c === null ? 'Season' : CUT_LABEL[c][kind]}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {/* **And one dropdown where three boxes will not fit.** Below 560 the
-              three groups take three lines of a card that is already the whole
-              screen; a `select` is one line and the same six choices. It is the
-              swap the board's own bar makes at 640 for its span and position
-              runs, and for the same reason — eleven pills behind a horizontal
-              scroll is a control you have to drag through to find `SS`.
-
-              The density stays a switch at every width: two pills fit anywhere,
-              and a `select` holding two options is a control that hides one of
-              them behind a press. */}
-          <label className="pct-cut-select">
-            <span className="sr-only">Which cut of the season</span>
-            <select
-              value={pctCut ?? 'all'}
-              onChange={(e) =>
-                onPctCutChange(e.target.value === 'all' ? null : (e.target.value as PlayerCut))
-              }
-            >
-              <option value="all">Season</option>
-              {PLAYER_CUTS.map((c) => (
-                <option key={c} value={c}>
-                  {CUT_LABEL[c][kind]}
-                </option>
+              **No `select` under it any more.** The dropdown existed because
+              three boxes of pills took three lines of a phone's screen; one box
+              of three takes one, so the swap has nothing left to buy. */}
+          <div className="pct-cuts" role="tablist" aria-label="Which part of the season">
+            <div className="split-switch">
+              {CUTS.map((c) => (
+                <button
+                  key={c ?? 'all'}
+                  type="button"
+                  role="tab"
+                  aria-selected={pctCut === c}
+                  className={`split-tab${pctCut === c ? ' active' : ''}`}
+                  onClick={() => onPctCutChange(c)}
+                  title={
+                    c === null
+                      ? 'His whole season — the only card whose bars are Savant’s own'
+                      : `What he did ${cutOf(c, kind)}, placed among every qualified player’s full season`
+                  }
+                >
+                  {c === null ? 'Season' : CUT_LABEL[c][kind]}
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
           <span
             className={`pct-updating${pctBusy ? '' : ' is-idle'}`}
             role="status"
@@ -1994,7 +1997,7 @@ export function PlayerDetails({
       {tab === 'percentiles' && data && !loading && shownSections.length === 0 && (
         <div className="details-status">
           {data.cut
-            ? `${name} has no ${CUT_LABEL[data.cut][kind]} line this season — nothing to rank. Pick another split above.`
+            ? `${name} has no ${CUT_LABEL[data.cut][kind]} line this season — nothing to rank. Pick another part of the season above.`
             : otherSections.length > 0
               ? `Nothing of ${name}’s season lands in Savant’s own fifteen bars — switch to Detailed above for the rows he does have.`
               : isPitcher

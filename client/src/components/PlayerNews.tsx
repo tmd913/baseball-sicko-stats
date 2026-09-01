@@ -34,12 +34,23 @@ export function NewsList({
   items,
   shown,
   summaries,
+  who,
 }: {
   items: NewsItem[];
   /** How many rows to draw. The preview takes 1 — the latest item is the one
    *  that changes a decision, and one row leaves room to draw the whole of it —
    *  and the tab takes them all. */
   shown?: number;
+  /** **Whose note this is**, on a list that is about more than one man — the
+   *  Roster view's News reading, where the rows of fifteen players are merged
+   *  into one dated stream and a row with no name on it says nothing. Null on
+   *  the two surfaces that are already about one player: a name printed on
+   *  every row of a man's own tab is the page's title repeated fifteen times.
+   *
+   *  A function of the item rather than a field on it, because the item is a
+   *  `NewsItem` off the wire on all three surfaces and the caller is the only
+   *  one that knows which roster row it came from. */
+  who?: (item: NewsItem) => string | null;
   /** The standfirst: RotoWire's note itself, which is the only body text either
    *  upstream publishes. On now for both surfaces — it was off on the preview
    *  while that drew three rows, where three two-line ones would have been the
@@ -52,7 +63,17 @@ export function NewsList({
   return (
     <ul className="news-list">
       {rows.map((item) => (
-        <NewsRow key={item.id} item={item} summary={summaries ?? false} />
+        <NewsRow
+          /* **The player is in the key on a merged list.** `NewsItem.id` is
+             stable per player and prefixed by source, and MLB gives one
+             transaction one id — so a trade between two men on the same roster
+             is one id on two rows, which React would draw once. On a
+             single-player list the name is null and the key is what it was. */
+          key={who ? `${who(item)}:${item.id}` : item.id}
+          item={item}
+          summary={summaries ?? false}
+          who={who?.(item) ?? null}
+        />
       ))}
     </ul>
   );
@@ -80,7 +101,19 @@ export function NewsList({
  * carries what data a view shows and this changes none. Collapsing on a
  * re-read is the honest behavior: a note that has changed is a different note.
  */
-function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
+function NewsRow({
+  item,
+  summary,
+  who,
+}: {
+  item: NewsItem;
+  summary: boolean;
+  /** The player's name, on a list about more than one of them — see `NewsList`.
+   *  A plain span rather than a door onto his page: the outer row is already a
+   *  `<button>` wherever there is more of the note to read, and a button inside
+   *  a button is not a thing a browser can be asked for. */
+  who?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   // Only a row drawing its body can offer more of one. The Overview's preview
   // passes `summaries` too, so this is genuinely both surfaces and not the tab
@@ -89,6 +122,7 @@ function NewsRow({ item, summary }: { item: NewsItem; summary: boolean }) {
   const body = (
     <>
       <span className="news-meta">
+        {who && <span className="news-who">{who}</span>}
         <span className="news-date">{formatDate(item.date)}</span>
         {item.kind && <span className="news-kind">{prettyKind(item)}</span>}
         {more && (

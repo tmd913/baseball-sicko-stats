@@ -1625,67 +1625,33 @@ export interface PlayerWindows {
   season: number;
   kind: PlayerKind;
   windows: PlayerWindowRow[];
-  /**
-   * Which cut of the spans these rows are, or null for all of them.
-   *
-   * On the wire so the answer says what it is an answer to: the table is
-   * re-read when the reader picks a cut, and a stale reply landing on a fresh
-   * one would otherwise be four rows of the wrong split with nothing to say so.
-   * The client sequence-numbers the read as well — this is the belt to that
-   * pair of braces, and the one a cache could get wrong.
-   */
-  cut?: SplitCut | null;
 }
 
 /**
- * The four ways the Stats tab will cut a span.
+ * **The two halves of the season — the only cuts the percentile card offers.**
  *
- * **The handedness pair names the *other* man's hand**, which is what a platoon
- * split means on both boards: `vsr` reads as *vs RHP* on a batter's page and
- * *vs RHB* on a pitcher's. One value rather than four, because the axis is the
- * same one and the label is a fact about whose page it is — the same economy
- * `PlatoonSplits` already makes.
+ * The card used to take four splits and a fifth cut of its own (`last100`,
+ * his most recent hundred at-bats), and every one of them asked *the same*
+ * question the Splits tab asks better: the tab draws both halves of a
+ * comparison side by side with the gap between them measured, where a cut card
+ * could only ever show one half at a time and left the reader subtracting two
+ * cards they could not see at once. So the splits moved there whole — see
+ * `client-player-splits.md` — and what is left here is the one cut that is a
+ * **span** rather than a split, and so genuinely belongs on a control labeled
+ * *which part of the season*.
+ *
+ * **The break is the All-Star game's own date**, asked for rather than
+ * approximated — `mlbStats.ts::getAllStarDate`, the very read the standings
+ * board's two half columns are split on, so the two surfaces cannot come to
+ * disagree about which side of July a game fell on. A season with no All-Star
+ * date read yet has no halves at all, and the card says so rather than guessing
+ * at a mid-July constant.
  */
-export type SplitCut = 'vsr' | 'vsl' | 'home' | 'away';
+export type PlayerCut = 'firstHalf' | 'secondHalf';
 
-/** In the order the control offers them: the hands, then the ballpark. */
-export const SPLIT_CUTS: SplitCut[] = ['vsr', 'vsl', 'home', 'away'];
-
-/**
- * **The recent-form cut, which is not a split and not a span either.**
- *
- * `last100` is the player's most recent 100 **at-bats** on a batter's card and
- * his most recent 100 **batters faced** on a pitcher's — one value whose label
- * is a fact about whose page it is, which is the economy `SplitCut` already
- * makes for the handedness pair.
- *
- * It is deliberately **not** a `ResearchWindow`. The board's windows are days
- * (7, 15, 30, 60) and a day-count is the wrong unit for "how is he going right
- * now": thirty days of a man platooned out of half his club's games is eleven
- * at-bats, and thirty days of an everyday hitter is a hundred and twenty. A
- * count of at-bats is the same amount of evidence for both, which is the whole
- * reason to have it — and it is why this cut has no `window` axis to be crossed
- * with. "His last 100 at-bats within the last 7 days" is not a narrower
- * question than either half; it is not a question.
- *
- * **At-bats rather than plate appearances on the batter's side, because that is
- * what was asked for.** The cut is the *span* of plate appearances containing
- * his last 100 at-bats, so the walks among them are still counted — a BB% over
- * a window that had excluded walks from its own denominator would be a rate
- * measured against the one thing it is about. Which means the card rests on
- * slightly more than 100 plate appearances, and `cutSample` says how many.
- */
-export type RecentCut = 'last100';
-
-/** Every cut of a season the app can draw: the four splits, and recent form. */
-export type PlayerCut = SplitCut | RecentCut;
-
-/** In the order the percentile card's control offers them — the hands, the
- *  ballpark, then recent form, which is last because it is the odd one out. */
-export const PLAYER_CUTS: PlayerCut[] = ['vsr', 'vsl', 'home', 'away', 'last100'];
-
-/** How many at-bats (or batters faced) the `last100` cut looks back over. */
-export const RECENT_CUT_SIZE = 100;
+/** In the order the percentile card's control offers them, which is the order
+ *  they happened in. `Season` is the absence of a cut and so is not in here. */
+export const PLAYER_CUTS: PlayerCut[] = ['firstHalf', 'secondHalf'];
 
 export interface ResearchRow {
   id: number;

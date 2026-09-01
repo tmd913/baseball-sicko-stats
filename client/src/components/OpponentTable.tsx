@@ -51,9 +51,10 @@ import type {
  * **`vsLeft` is the left-handed *other man* on both sides** — the hand on the
  * mound when this club is batting, the hand at the plate when it is pitching —
  * so the field is one field and the label is a fact about whose side of the ball
- * it is. That is the economy `SplitCut` already makes on a player's page, where
- * `vsr` reads as *vs RHP* on a batter's and *vs RHB* on a pitcher's; the
- * alternative is two more fields on the wire saying the same thing twice.
+ * it is. That is the economy a player page's platoon card already makes, where
+ * one pair of fields reads as *vs LHP* on a batter's and *vs LHB* on a
+ * pitcher's; the alternative is two more fields on the wire saying the same
+ * thing twice.
  */
 const ROWS: { key: 'all' | 'vsRight' | 'vsLeft'; label: string; hand: 'L' | 'R' | null }[] = [
   { key: 'all', label: 'Overall', hand: null },

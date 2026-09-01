@@ -764,6 +764,13 @@ uncut *table*. It is put away when the page leaves the screen, the standing rule
 for a lens, by the same effect that puts `statsCut` away and for the same
 reason.
 
+*(**Superseded**: the control offers three cuts — `Season · First Half · Second
+Half` — and the five below are Splits-tab cards. See *The Splits tab is four
+cards now, and the percentile card gave three of them up*, further down, which
+carries the argument and the measurements; what follows is kept as the record of
+why those five were on a cut control in the first place, and the `pcut=`
+reasoning above it is unchanged.)*
+
 **Six cuts, and the sixth is not a split.** `Season · vs RHP · vs LHP · Home ·
 Away · Last 100 AB`, reading `vs RHB` / `vs LHB` / `Last 100 BF` on a pitcher —
 the handedness pair naming the *other* man's hand, which is the economy
@@ -872,7 +879,10 @@ all of them. They stay **one selection** — only ever one pill is lit across th
 three — which is what keeps them alternatives rather than three independent
 settings, and grouped `.split-switch`es are the board's own language for that.
 
-**Below 560 the three groups become one dropdown.** Three boxes are three lines
+**Below 560 the three groups become one dropdown.** *(Gone with the groups —
+three pills fit one line at 390. The paragraph is kept because the argument it
+makes is the one that decides the next control that will not fit.)* Three boxes
+are three lines
 on a card that is already the whole screen, and a `select` is one line with the
 same six choices — the swap the board's bar makes at 640 for its span and
 position runs, at the width this control needs it. The density stays a switch at
@@ -2217,11 +2227,112 @@ so it belongs where the other deep readings are. **The strip as rendered**, read
 off the page at 1200×900: `Overview · Percentile Rankings · Splits · News ·
 Stats · Game Log · Schedule · Charts`, with `Arsenal` third on a pitcher *(the
 arsenal has since gone in **second**, ahead of the percentile card — see
-**Pitchers**, *The Arsenal tab's two charts*; the rest of the run is as measured
-here)*. At
+**Pitchers**, *The Arsenal tab's two charts*, and **News has since gone last**,
+below — the rest of the run is as measured here)*. At
 390×844 the strip is **34px** tall, the selected tab lands **fully inside** it
 (Schedule sits 244px from the strip's left edge), and the page body and the
 overlay each overflow by **0**.
+
+### News is last, and the argument it lost is answered somewhere better
+
+**The strip is `Overview · [Arsenal] · Percentile Rankings · Splits · Stats ·
+Game Log · Schedule · Charts · News`.** News read fourth, directly before Stats
+and the Game Log, on an argument that was right when it was made: the news is
+what has happened to him *this week* — an IL placement, a call-up, a report he
+is losing a job — where Stats and the Game Log are the record of what he has
+done, and a reader deciding about a stranger wants to know he is hurt before
+reading his 30-day xwOBA.
+
+**That reader is served by the Overview now, not by the strip.** The Overview
+carries a news preview with a `News →` door on its heading, so the headline a
+reader must not miss is on the *first* tab rather than the fourth — which is
+strictly better than a well-placed tab, because it costs no press at all. What
+the tab itself holds is the rest of the feed: six weeks of two upstreams, a
+deeper reading gone to on purpose, which is exactly the class the **Schedule**
+tab was moved to the end for. So it joins it there.
+
+Measured at 1200×900 after the move: nine tabs on a pitcher, the strip **34px**,
+every tab reachable, and the page and overlay overflow **0**. Nothing else about
+the tab moved — same key (`news`), same read (it rides on the page's own
+`/api/players/:id/page` burst), same component.
+
+### The Splits tab is four cards now, and the percentile card gave three of them up
+
+**The percentile card's cut control offered six cuts and offers three.** It was
+`Season · vs RHP · vs LHP · Home · Away · Last 100 AB`; it is `Season · First
+Half · Second Half`. What changed is not the card but where a *comparison*
+belongs: five of those six ask whether a man is different **against** something
+or **somewhere**, and a cut card can only ever draw one side of that at a time —
+so a reader asking *is he a different hitter against left-handers* was holding
+two cards in their head and subtracting. The **Splits** tab draws a comparison
+whole: both columns, the gap between them, and a bar scaled to the league's own
+distribution of that gap. So the four splits moved there, `last100` went with
+them (recent form is a comparison too — it is *lately against the season* — and
+was the odd one out on a control whose other five were splits), and what is left
+on the card is the one cut that is a **span**: which part of the season, which
+one card answers honestly because there is nothing on screen it needs to be read
+against.
+
+**The break is the All-Star game's own date**, read off MLB
+(`mlbStats.ts::getAllStarDate`) rather than approximated — the same read the
+standings board's two half columns are split on, moved into `mlbStats.ts` when
+it grew that second caller so a July game cannot fall on one side of the line on
+one screen and the other side on another. A season whose All-Star date could not
+be read has **no halves at all** and the card says so, which is the honest shape
+for "we do not know where the break is" and not the same sentence as "he has no
+line in that half".
+
+**Measured on the live server** (2026, Aug 31): Ohtani's halves are `406 PA`
+and `176 PA` against MLB's own `preas`/`posas` of 406 and 176, and `406 + 176 =
+582`, his season. Judge is `261` and **nothing** — he has not played since the
+break — and the second-half card draws *Aaron Judge has no Second Half line this
+season — nothing to rank. Pick another part of the season above.*, with the
+control standing above it. Abbott (pitcher): `457 BF` and `192 BF` against MLB's
+457 and 192.
+
+**Three pills fit one line, so the dropdown is gone.** The control was three
+`.split-switch` groups with a `select` under it that took over below 560px,
+because three boxes of pills are three lines of a phone's screen. One box of
+three is one line: measured at 390, the pills are on a **single line**, the
+controls box is `x: 16, w: 358, h: 90`, there is no `select` in the DOM at any
+width, and the document overflows by 0. At 1200 the controls and the card both
+read `x: 260, w: 680` — unchanged. `.pct-cut-select` and the `@media (max-width:
+560px)` block that swapped it in are gone from the stylesheet.
+
+### PA/HR, under xHR on the detailed card
+
+**A row the card had no way to say before.** `HR` and `xHR` are counts and `ISO`
+is a rate per at-bat, so the power block said nothing about *opportunity*: 30
+home runs in 700 plate appearances and 30 in 450 are not the same season. `PA/HR`
+is that season divided by the trips it took, and it is the number a bench bat
+gets argued about in.
+
+It is **computed rather than scraped** — Savant publishes no such column and no
+rank for one — so it joins `HR` and `Fast Swing %` in `BATTER_COMPUTED`, ranked
+against a distribution built here: the custom leaderboard with `selections=pa,
+home_run` over qualified batters, the rate taken per row and the rows sorted.
+Probed before it was built on, which is the first rule about an upstream: both
+columns come back filled for every qualified batter (`"Tatis Jr., Fernando",
+665487, 2026, 595, 17`).
+
+Three things about it are decisions rather than defaults:
+
+- **Lower is better**, and it is the only row in `Batting` where the bar and the
+  printed number move in opposite directions. Fewer trips per home run is more
+  power; `leaguePercentile`'s `lowerBetter` is exactly this case.
+- **A man with no home runs has no row.** His ratio is undefined, not enormous —
+  and a qualified batter with none is not hypothetical. He is dropped from the
+  distribution for the same reason and by the same test.
+- **Detailed only.** `extras` is false for the summary card, which is Savant's
+  own fifteen bars; this is one of the rows this app adds, so it appears where
+  the other two do.
+
+It is spliced `after: 'xhr'` rather than after the `hr` above it, so it lands
+*below* the actual/expected dumbbell those two are paired into rather than
+inside it. Measured on Ohtani: `HR 30 · xHR 27.6 · PA/HR 19.4 (88th)`, and
+582 / 30 = 19.4. **`CARD_VERSION` is 7** — a stored v6 card is a list of rows
+and would go on being served without this one, for six hours on this season's
+card and forever on a past season's, which is the case that counter exists for.
 
 **A tab is a key and nothing stores a position**, which is why moving it was a
 one-place change: the button moved in the JSX and the `DetailsTab` union was

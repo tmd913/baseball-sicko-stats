@@ -816,6 +816,182 @@ export async function getPitcherStats(
   return new Map(ids.map((id) => [id, pitcherStatsCache.get(id)?.stats ?? EMPTY_PITCHER_STATS]));
 }
 
+// ---- The other four cuts of a season: home, away, and the two halves -------
+
+/**
+ * **The All-Star game's date, which is the only definition of "half" this app
+ * has.**
+ *
+ * Asked for rather than hardcoded or approximated: the break moves by a week or
+ * more between seasons, so a mid-July constant would put a fortnight of games
+ * on the wrong side of it in some years and be silently wrong in all of them.
+ * `gameType=A` returns exactly one game — **276 bytes**, measured — and every
+ * caller splitting *regular-season* games on it (`gameType=R`) is therefore
+ * splitting on a date no game it is splitting falls on.
+ *
+ * **It lives here because it has two callers now** and they must not come to
+ * disagree: the standings board's `firstHalf`/`secondHalf` columns
+ * (`mlbStandings.ts`) and the percentile card's two half cuts
+ * (`playerSplits.ts`, which splits a season of pitch rows on it). One arithmetic
+ * gets one implementation, and a half of the season is an arithmetic.
+ *
+ * The season is the caller's, for the reason every other read in this file takes
+ * one: this module pins no year of its own.
+ *
+ * A whole season, because it is one: cached for a day, which is as often as it
+ * could conceivably matter. `null` where MLB has no game scheduled yet — the
+ * honest answer for a season before the break is announced, and the callers all
+ * fail their two columns to a dash rather than inventing a boundary.
+ */
+const ALL_STAR_TTL = 24 * 60 * 60 * 1000;
+let allStarCache: { season: number; date: string | null; at: number } | null = null;
+
+export async function getAllStarDate(season: number): Promise<string | null> {
+  if (allStarCache && allStarCache.season === season && Date.now() - allStarCache.at < ALL_STAR_TTL) {
+    return allStarCache.date;
+  }
+  const url =
+    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=${season}&gameType=A` +
+    `&fields=dates,games,officialDate`;
+  const res = await fetch(url, { headers: UA });
+  if (!res.ok) throw new Error(`MLB All-Star schedule returned ${res.status}`);
+  const data = (await res.json()) as {
+    dates?: { games?: { officialDate?: string }[] }[];
+  };
+  const date = data.dates?.[0]?.games?.[0]?.officialDate ?? null;
+  allStarCache = { season, date, at: Date.now() };
+  return date;
+}
+
+/**
+ * **The four cuts of a season the Splits tab draws beside the platoon pair.**
+ *
+ * Home and away, and the two halves of the season. All four are MLB's own —
+ * `sitCodes=[h,a,preas,posas]` on the same `people?hydrate=stats` read the
+ * platoon splits come off — so this is a filter MLB has already applied rather
+ * than one computed here, and the four reconcile with the season line by
+ * addition. Checked on Ohtani's 2026: home 252 PA + away 330 = 582, pre-break
+ * 406 + post-break 176 = 582, and his season line is 582.
+ *
+ * **`h1`/`h2` are the dead codes in this family and were probed rather than
+ * assumed.** MLB lists `First Half` and `Second Half` among its 602 situation
+ * codes and returns **nothing at all** for either on any player; `preas` and
+ * `posas` — *Pre All-Star* and *Post All-Star* — are the pair that answer, which
+ * is also the break the standings board splits on.
+ *
+ * ### Why this is a second request rather than four more codes on the first
+ *
+ * `getPlayerStats` is the **roster's** read: the report route asks it for every
+ * player on the board at once, and the four extra codes are wanted by exactly
+ * one surface, the player page's Splits tab. Measured on a 20-player batch,
+ * `sitCodes=[vr,vl]` is **83,739 bytes** and `sitCodes=[vr,vl,h,a,preas,posas]`
+ * is **172,243** — 88KB added to every roster refresh to serve a tab nobody on
+ * that screen has opened. So the cuts are their own function with their own
+ * cache, asked for by the player page alone, and the roster's request is the
+ * size it always was.
+ */
+interface StatCuts<T> {
+  home: T | null;
+  away: T | null;
+  firstHalf: T | null;
+  secondHalf: T | null;
+}
+
+export type PlayerSplitCuts = StatCuts<SeasonStats>;
+export type PitcherSplitCuts = StatCuts<PitcherSeasonStats>;
+
+/** MLB's situation code for each cut. The keys are the request's `sitCodes` and
+ *  the values are the slots, so the two cannot drift apart. */
+const CUT_CODES = {
+  h: 'home',
+  a: 'away',
+  preas: 'firstHalf',
+  posas: 'secondHalf',
+} as const satisfies Record<string, keyof StatCuts<unknown>>;
+
+const emptyCuts = <T,>(): StatCuts<T> => ({
+  home: null,
+  away: null,
+  firstHalf: null,
+  secondHalf: null,
+});
+
+function parseStatCuts<T>(
+  p: PeopleStatsPerson,
+  build: (stat: Record<string, unknown>) => T,
+): StatCuts<T> {
+  const out = emptyCuts<T>();
+  for (const grp of p.stats ?? []) {
+    if (grp.type?.displayName !== 'statSplits') continue;
+    for (const sp of grp.splits ?? []) {
+      const slot = CUT_CODES[(sp.split?.code ?? '') as keyof typeof CUT_CODES];
+      // Same per-stint rows a traded player's platoon halves arrive in — see
+      // `preferSeasonWide`, whose whole job is that a trade must not read as a
+      // season resetting on trade day.
+      if (slot) out[slot] = preferSeasonWide(out[slot], sp, build);
+    }
+  }
+  return out;
+}
+
+/** One batch, one parse, one cache — the two kinds differ in the stat group they
+ *  hydrate and the shape they build, and in nothing else. */
+async function loadStatCuts<T>(
+  ids: number[],
+  season: number,
+  group: 'hitting' | 'pitching',
+  build: (stat: Record<string, unknown>) => T,
+  cache: Map<number, { cuts: StatCuts<T>; fetchedAt: number }>,
+): Promise<Map<number, StatCuts<T>>> {
+  const now = Date.now();
+  const stale = ids.filter((id) => {
+    const c = cache.get(id);
+    return !c || now - c.fetchedAt >= SEASON_STATS_TTL;
+  });
+  if (stale.length > 0) {
+    const codes = Object.keys(CUT_CODES).join(',');
+    const url =
+      `https://statsapi.mlb.com/api/v1/people?personIds=${stale.join(',')}` +
+      `&hydrate=${encodeURIComponent(
+        `stats(group=[${group}],type=[statSplits],sitCodes=[${codes}],season=${season})`,
+      )}`;
+    try {
+      const res = await fetch(url, { headers: UA });
+      if (!res.ok) throw new Error(`people/${group}-cuts returned ${res.status}`);
+      const data = (await res.json()) as PeopleStatsResponse;
+      const seen = new Set<number>();
+      for (const p of data.people ?? []) {
+        cache.set(p.id, { cuts: parseStatCuts(p, build), fetchedAt: now });
+        seen.add(p.id);
+      }
+      // Cache the empties too, or an id MLB omits is refetched on every open.
+      for (const id of stale) {
+        if (!seen.has(id)) cache.set(id, { cuts: emptyCuts<T>(), fetchedAt: now });
+      }
+    } catch (err) {
+      console.error(`${group} split cuts fetch failed:`, err);
+    }
+  }
+  return new Map(ids.map((id) => [id, cache.get(id)?.cuts ?? emptyCuts<T>()]));
+}
+
+const playerCutsCache = new Map<number, { cuts: PlayerSplitCuts; fetchedAt: number }>();
+const pitcherCutsCache = new Map<number, { cuts: PitcherSplitCuts; fetchedAt: number }>();
+
+export async function getPlayerSplitCuts(
+  ids: number[],
+  season: number = new Date().getFullYear(),
+): Promise<Map<number, PlayerSplitCuts>> {
+  return loadStatCuts(ids, season, 'hitting', toSeasonStats, playerCutsCache);
+}
+
+export async function getPitcherSplitCuts(
+  ids: number[],
+  season: number = new Date().getFullYear(),
+): Promise<Map<number, PitcherSplitCuts>> {
+  return loadStatCuts(ids, season, 'pitching', toPitcherSeasonStats, pitcherCutsCache);
+}
+
 // ---- Roster status + current team (for absent/off-roster players) ------
 
 /** A player's current team id and 40-man roster status (IL, suspended, ...). */

@@ -1,4 +1,140 @@
-### The Splits tab: the two halves of the platoon, against each other
+### The Splits tab: four comparisons, each drawn whole
+
+**It was one card and it is four.** The platoon comparison, `Home and away`,
+`Against the league` and `First half and second` — in that order, stacked down
+one tab, every one of them the same card with its own labels and its own
+measured scale (`SplitCard`, which the whole of this file is about).
+
+**Three of them arrived from the percentile card's cut control**, which offered
+`vs RHP · vs LHP · Home · Away · Last 100 AB` and now offers the two halves of
+the season alone. The reason is the one thing this tab exists to say: a *cut*
+card shows one side of a comparison at a time, so asking *is he a different
+hitter against left-handers* there meant flipping a pill and holding two cards in
+your head; this tab prints both columns on one row with the gap between them
+measured, which is the arithmetic the reader was doing. What stayed on the card
+is the cut that is a **span** — which part of the season — because a span reads
+honestly one-sided.
+
+**The order is the reader's rather than the data's.** The parks and the halves
+are cuts of his season and the league is not, and the league sits *between* them
+because it is the question the other two are usually asked in service of — *is
+this man good* — asked directly.
+
+**Every card is drawn or not drawn on its own.** The server fetches the platoon
+pair, the four cuts and the league line in three separate reads, each failing to
+null in its own `try`, so a man with no second half still gets the other three
+and a dead league board costs one card rather than the tab.
+
+**The `full` scale is the *card's*, not the row's**, which is what lets one row
+definition serve four comparisons: a `.100` OPS gap is an ordinary platoon split
+and a large gap against the league. `SplitStat` carries no `full` any more and
+`SplitCard` takes a table of them; the eight tables and the populations they were
+measured over are in *The four scales* below.
+
+**Measured on the rendered page**, Ohtani at 1200×900 and 390×844: all four cards
+are **680 / 358px** wide with **434 / 173px** rails and **34px** rows, and — the
+figure that says they are one card rather than four that agree — all four are
+**389.2px** tall at 1200 and **383.2** at 390, byte-identical to the platoon
+card's own. Worst `fillWidth − half` is **−3.000px** (the inset) on every card,
+so no fill exceeds its half of the rail; the page and the overlay each overflow
+by **0**. The gap between stacked cards is **16px** (`.pct-card + .pct-card`,
+declared on the later card so a one-card view gains no trailing space).
+
+**Two label changes were forced by that last figure and are worth writing down.**
+The league card's heads read `His season` / `League avg` and the halves' `1st
+half` / `2nd half` — and the head column is `--spl-val-w` (54px, 46 on a phone),
+which is what a *figure* needs. Both wrapped, `1ST` / `HALF` and `156,399` / `PA`,
+which is a quantity parted from its unit and a phrase broken mid-way — the fault
+the percentile card's `— vs LHP` title took a `nowrap` for. So the labels are one
+word each (`Season` / `League` / `First` / `Second`) and `.spl-head-side` takes
+`white-space: nowrap`: the head sits above the rails rather than beside them, its
+middle cell is empty and there is a 10px gutter either side, so a line a pixel
+wider than its column lands on nothing. Before → after, the league card:
+**401.2 → 389.2px** at 1200 and **395.2 → 383.2** at 390, heads `25.2 / 37.2 →
+25.2 / 25.2`.
+
+**The key lost one preposition.** It read *"toward the side he is **stronger**
+against"*, which is right for two hands and wrong for three of the four cards — a
+hitter is not stronger "against" home. It reads *"toward the **stronger** of the
+two columns"* now, and its second sentence says *each stat, and each comparison,
+has its own scale*, which is the thing the four `full` tables buy.
+
+### The four scales, measured off the 2026 league
+
+`full` — the gap that fills the rail end to end — is the **90th percentile** of
+that comparison's own gap distribution, rounded, so a full bar means one thing on
+every row of every card: *one of the biggest gaps in the league for that stat, in
+that comparison*. Each population is the men for whom the comparison is a
+comparison — **100 PA (or BF) on each side** — which is the bar the platoon table
+was measured against, applied to the parks and the halves. The league card is the
+exception and takes **≥200 PA/BF on the season**, which is the same amount of
+evidence asked of one line instead of two.
+
+| | population | OPS | AVG | OBP | SLG | ISO | HR% | K% | BB% |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Batter, platoon | 167 | .300 | .090 | .090 | .200 | .140 | 3.5 | 8.5 | 6.5 |
+| Batter, parks | **313** | .240 | .075 | .080 | .170 | .120 | 3.0 | 8.0 | 5.0 |
+| Batter, halves | **213** | .230 | .080 | .085 | .160 | .110 | 2.8 | 8.0 | 5.0 |
+| Batter, league | **327** | .135 | .045 | .050 | .100 | .085 | 2.2 | 10 | 5.0 |
+
+| | population | OPS | AVG | FIP | WHIP | K% | BB% | HR% |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Pitcher, platoon | 202 | .260 | .080 | 2.40 | 0.60 | 9 | 6.5 | 3 |
+| Pitcher, parks | **269** | .250 | .090 | 2.10 | 0.50 | 8.5 | 5.0 | 3.0 |
+| Pitcher, halves | **134** | .200 | .075 | 2.05 | 0.45 | 8.0 | 4.2 | 2.6 |
+| Pitcher, league | **301** | .150 | .055 | 1.55 | 0.32 | 8.0 | 4.0 | 1.8 |
+
+Four things in those numbers are findings rather than arithmetic:
+
+- **The parks are a hair tighter than the platoon.** The *ordinary* home-road gap
+  is the same size as the ordinary platoon gap (.103 against .101 of OPS median)
+  and the **tail** is shorter — park effects are bounded where a real platoon
+  weakness is not. A shared scale would have drawn every extreme home-road split
+  short.
+- **The halves are the tightest of the three cuts** (median .083 of OPS, 2.6
+  points of K%), which is what you would expect of one man against himself with
+  nothing but time between the two lines.
+- **A man differs from himself twice as much as he differs from the league.**
+  Median .103 of OPS between his own halves against **.055** against the league
+  average. Drawn on the platoon scale every league bar would be a stub and the
+  card would say that nobody is far from average, which is false — which is the
+  whole reason the fourth table exists.
+- **K% breaks the pattern and is worth naming.** Its league gap (p90 **10.3**
+  points) is *wider* than its platoon, park or half gap. Strikeout rate is the
+  most spread-out thing a hitter has — the league runs from about 10% to 35% — so
+  the distance from average is genuinely larger than the distance between any two
+  cuts of one man.
+
+### The league column is a line, not an average of players
+
+`Against the league` compares his whole season with the league's whole season,
+and the second column is **thirty club lines summed with the rates taken once at
+the end** (`server/src/leagueAverage.ts`) — the same rule `teamHitting.ts` states
+for aggregating anything: counts add, rates do not. MLB publishes no league-total
+line; `/api/v1/stats?stats=season&group=hitting` is a *leaderboard*, one row per
+player, and `/teams/stats` is the board that answers.
+
+**The check that says the sum is over the right population** is the identity that
+has to hold: the league's batters and its pitchers face each other, so the two
+boards must agree on the total. Measured through Aug 31 2026 — hitting **156,337
+PA** and pitching **156,337 BF**, the same number, with AVG `.2437`, OBP `.3183`,
+SLG `.4000`, OPS `.7183`, K% `22.08`, BB% `8.92`, HR% `3.03` falling out of both
+sides identically. A board missing a club, or double-counting one, breaks it; the
+module also refuses a board of fewer than 30 rows outright, which is the
+join-to-null rule one number wide.
+
+Both boards are still fetched, because they do not carry the same columns: the
+pitching one has `outs`, `hitBatsmen` and `earnedRuns` (WHIP, FIP, ERA) and the
+hitting one has `hitByPitch` and `sacFlies` (OBP's denominator). League FIP comes
+to **4.23** against a league ERA of **4.16**, which is exactly what
+`FIP_CONSTANT`'s own comment says an approximated constant costs.
+
+**The head prints the league's sample and it is 156,399 PA**, grouped —
+`sample.toLocaleString()` on `SplitHead`, a change no player's card can see (every
+sample on a split of one man is three figures at most) and one the league's
+cannot do without.
+
+### The platoon comparison, and the geometry the whole tab inherits
 
 Split out of `client-player-page.md`, which holds the page this tab sits in. One
 tab and one card, and it earns a file because the bar it draws has taken five
