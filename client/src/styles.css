@@ -20151,7 +20151,21 @@ span.mup-move-name:hover {
    same object: thirty clubs ranked 1-to-30 in a chip under a value. One
    declaration, two selectors — a second copy is how two surfaces come to
    disagree about what 15th of 30 looks like. */
-.research-table.is-teams {
+/* **Every table that draws a rank badge reads this pair**, which is four of
+   them: the research board (both readings), the player page's Stats tab (and
+   the team page's, the same component), the League Rankings above, and the
+   opponent table's `1st`…`30th` on a team's Splits tab and a pitcher's card.
+
+   The two ends are the percentile card's own read off the palette —
+   `--strikeout` is the red that card puts at 100 and `--walk` the blue it puts
+   at 0 — so a reader who has looked at the card meets the same scale on the
+   tables. See `columnRanks.tsx`, *The badge carries a scale*, which is where
+   the reversal of the old monochrome rule is argued: the **values** are still
+   monochrome on every one of these tables, and it is the second line under them
+   that carries the scale. */
+.research-table,
+.stats-table,
+.opp-table {
   --rank-hot: var(--strikeout);
   --rank-cold: var(--walk);
 }
@@ -20171,8 +20185,15 @@ span.mup-move-name:hover {
  * Two classes deep (`.research-table.is-teams`) so it outranks
  * `.research-table td .col-rank`'s `--faint`, which is one class shallower and
  * earlier in the file. */
+/* **One selector list, four tables**, folded on rather than each given a chip
+   of its own: a filled rank under a value is one object in this app. Two of
+   them draw a standing (`4th`) and two a percentile (`88`), which changes what
+   the number *says* and nothing at all about what it is — `columnRanks.tsx`'s
+   `rankFill` and `pctFill` read one `fillAt` between them. */
 .league-table td .col-rank,
-.research-table.is-teams td .col-rank {
+.research-table td .col-rank,
+.stats-table td .col-rank,
+.opp-table td .col-rank {
   /* Block so it takes its own line under the value, `fit-content` so it hugs
      its ordinal, and `margin-left: auto` so it lands on the same right edge the
      number above it is set to. */
@@ -20204,11 +20225,42 @@ span.mup-move-name:hover {
  * box on 14.00. Measured after: rows are **58.00px** on the team reading with
  * the badges on and off, identical to the player reading beside it, and the
  * ordinals (`1st` … `30th`, no descender among them) sit centered in the 12px
- * line. */
-.research-table.is-teams td .col-rank {
+ * line.
+ *
+ * **The Stats tab takes the same three lines and for the same reason.** Its row
+ * is `.glog-table`'s rather than the board's and measures **58.55px**, and the
+ * chip taken whole put it at 63.55 — five pixels of row on a table read down
+ * five spans, bought for nothing a reader can see. Measured after: **58.55**
+ * with the badges on, which is what it was before the chip, and 44.55 with them
+ * off, which is what it was before them; the badge box is back to 14.00 tall. What it
+ * does keep is the pill's width: the chip is 12px of padding wider than a bare
+ * badge, so the table goes **2,988.39 → 2,998.86px** where a narrow column's
+ * widest thing is now its badge. That is ten pixels on a table already three
+ * times its pane and scrolling, against a row height that is on screen at every
+ * width — the one of the two worth protecting. */
+.research-table td .col-rank,
+.stats-table td .col-rank,
+.opp-table td .col-rank {
   margin: 0 0 0 auto;
   padding: 1px 6px;
   line-height: 12px;
+}
+/* **The broken line takes the badge's own ink once the badge has one.**
+ *
+ * `.col-rank--outside` is `--faint` on the board because a badge there *is*
+ * `--faint`, and the note above that rule says why: a mark louder than the
+ * number it encloses would invert the one hierarchy the cell has. On a filled
+ * chip the number is `--text`, so `--faint` is no longer the badge's own ink —
+ * it is a third tone, and a grey dash under white digits on a tinted ground
+ * reads as a smudge rather than as a mark. `currentColor` is the same argument
+ * arriving on the new ground: the line matches the number it is about.
+ *
+ * It fires often on this table and rarely on the board, which is why it is
+ * worth the rule: a seven-day window is short of Savant's bar for most players,
+ * so two or three of the five spans on an ordinary card wear it. */
+.research-table td .col-rank--outside,
+.stats-table td .col-rank--outside {
+  text-decoration-color: currentColor;
 }
 
 /* ---- Transactions ---------------------------------------------------------

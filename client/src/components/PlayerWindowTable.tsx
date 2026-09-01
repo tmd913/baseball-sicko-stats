@@ -515,6 +515,21 @@ export function PlayerWindowTable({
                           scale={ranks.get(String(window))?.get(c.key)}
                           value={c.value(row)}
                           kind={kind}
+                          /* **The club reading draws a standing, the player
+                             reading a percentile**, which is the split the
+                             board's two readings already make and for the
+                             reason written at `asRank` in `columnRanks.tsx`: a
+                             percentile of thirty is a share to the nearest 3.3
+                             points wearing two significant figures, where a
+                             complete population of thirty can say the thing
+                             itself. `4th of 30` is shorter and true in a way
+                             `88` over thirty clubs is not. It arrives late here
+                             — this table drew percentiles on both readings
+                             while the board drew a standing on one, which is
+                             one component saying two things about the same
+                             thirty clubs. */
+                          asRank={teams}
+                          noun={teams ? 'clubs' : undefined}
                           population={
                             window === 'season'
                               ? 'the Season board'
