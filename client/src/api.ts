@@ -34,6 +34,7 @@ import type {
   SharedItem,
   ResearchRow,
   OverviewPayload,
+  PlayerPagePayload,
   RosterSource,
   ScheduleWindow,
   SeasonPlayer,
@@ -1136,6 +1137,17 @@ export const api = {
    * his arm have one list between them, where his day, his log and his boards
    * are two of each.
    */
+  /**
+   * **The player page's open burst as one request** — his day, season line and
+   * platoon halves, news, game log and next game.
+   *
+   * The nine tabs stay lazy; this is only what fires the moment the page
+   * appears. See `PlayerPagePayload` for why `projected-starts` is not in it.
+   */
+  async playerPage(playerId: number, kind: PlayerKind): Promise<PlayerPagePayload> {
+    return request(`/api/players/${playerId}/page?type=${kind}`);
+  },
+
   async playerNews(playerId: number): Promise<PlayerNews> {
     return request(`/api/players/${playerId}/news`);
   },

@@ -2927,39 +2927,12 @@ app.get(
       res.status(400).json({ error: 'invalid playerId' });
       return;
     }
-    if (req.query.type === 'pitcher') {
-      // Both ERA-scale estimators, fetched alongside the line rather than after
-      // it. xERA is one league-wide leaderboard, cached and shared across every
-      // pitcher; xFIP needs *this* pitcher's own season CSV for a fly-ball count,
-      // which is the same blob the Arsenal tab opens on and is already warm for a
-      // watched pitcher (his report pulled it). Neither may take the line down
-      // with it — a failed estimator costs one number, not the whole tab — so the
-      // CSV's throw is caught here and `getPitcherXera` swallows its own.
-      const [pitcherStats, xera, arsenal] = await Promise.all([
-        getPitcherStats([playerId]),
-        getPitcherXera(),
-        getSeasonArsenal(playerId).catch(() => null),
-      ]);
-      const stats = pitcherStats.get(playerId);
-      res.json({
-        season: withEstimators(
-          stats?.season ?? null,
-          arsenal?.battedBalls,
-          xera.get(playerId),
-        ),
-        vsLeft: stats?.vsLeft ?? null,
-        vsRight: stats?.vsRight ?? null,
-        kind: 'pitcher',
-      });
-      return;
-    }
-    const stats = (await getPlayerStats([playerId])).get(playerId);
-    res.json({
-      season: stats?.season ?? null,
-      vsLeft: stats?.vsLeft ?? null,
-      vsRight: stats?.vsRight ?? null,
-      kind: 'batter',
-    });
+    // The shaping lives in `playerSplitsPayload`, which `/page` also calls —
+    // one arithmetic, one implementation, and the estimator reasoning is
+    // recorded there.
+    res.json(
+      await playerSplitsPayload(playerId, req.query.type === 'pitcher' ? 'pitcher' : 'batter'),
+    );
   }),
 );
 
@@ -3174,14 +3147,114 @@ app.get(
     }
     const yearQ = Number(req.query.year);
     const season = Number.isInteger(yearQ) && yearQ >= 2015 ? yearQ : undefined;
-    if (req.query.type === 'pitcher') {
-      res.json({ kind: 'pitcher', games: await getPitcherGameLog(playerId, season) });
+    res.json(
+      await playerGameLogPayload(
+        playerId,
+        req.query.type === 'pitcher' ? 'pitcher' : 'batter',
+        season,
+      ),
+    );
+  }),
+);
+
+/**
+ * **A player's season line and its two platoon halves**, shaped once.
+ *
+ * Extracted from `/api/players/:playerId/splits` so that route and
+ * `/api/players/:playerId/page` below cannot come to disagree about what a
+ * split is — the repo's own rule that one arithmetic gets one implementation.
+ * The pitcher branch's reasoning is unchanged and is worth keeping in view:
+ * both ERA-scale estimators are fetched alongside the line rather than after
+ * it, and neither may take the line down with it, so the CSV's throw is caught
+ * here and `getPitcherXera` swallows its own.
+ */
+async function playerSplitsPayload(playerId: number, kind: PlayerKind) {
+  if (kind === 'pitcher') {
+    const [pitcherStats, xera, arsenal] = await Promise.all([
+      getPitcherStats([playerId]),
+      getPitcherXera(),
+      getSeasonArsenal(playerId).catch(() => null),
+    ]);
+    const stats = pitcherStats.get(playerId);
+    return {
+      season: withEstimators(stats?.season ?? null, arsenal?.battedBalls, xera.get(playerId)),
+      vsLeft: stats?.vsLeft ?? null,
+      vsRight: stats?.vsRight ?? null,
+      kind: 'pitcher' as const,
+    };
+  }
+  const stats = (await getPlayerStats([playerId])).get(playerId);
+  return {
+    season: stats?.season ?? null,
+    vsLeft: stats?.vsLeft ?? null,
+    vsRight: stats?.vsRight ?? null,
+    kind: 'batter' as const,
+  };
+}
+
+/** The season game log, shaped once for the same reason. `gaps` rides beside
+ *  `games` rather than merged into it — see `gameLog.ts::getBatterLog`. */
+async function playerGameLogPayload(playerId: number, kind: PlayerKind, season?: number) {
+  return kind === 'pitcher'
+    ? { kind: 'pitcher' as const, games: await getPitcherGameLog(playerId, season) }
+    : { kind: 'batter' as const, ...(await getBatterLog(playerId, season)) };
+}
+
+/**
+ * **Everything the player page opens with, in one request.**
+ *
+ * The page's nine tabs are lazy and stay lazy — that rule is the reason the
+ * percentile card's 1–2s Savant scrape and the Charts tab's 6s xwOBA query are
+ * not paid by a reader who never presses them, and batching all nine would
+ * throw it away. What this batches is the **open burst**: the five reads that
+ * fire together the moment the page appears, measured at +283ms in one tick.
+ *
+ * Same mechanism as `/api/overview`, and the same measurement behind it: five
+ * parallel requests is five Lambda containers, and on a low-traffic app most
+ * are new — cold containers cost 1,368ms at p50 against 239ms warm for the
+ * same work, each holding its own empty copy of the server's caches. One
+ * request is one container and one warm set of them.
+ *
+ * **`projected-starts` is deliberately not here.** It is pitcher-only and the
+ * client asks for it only when the day it just read says he is a rotation
+ * starter — a genuinely *dependent* read, which cannot share a round trip with
+ * the thing it depends on, and which would otherwise be fetched for every
+ * reliever anybody opens.
+ *
+ * Each of the five fails to `null` in its own `try`, which is this app's rule
+ * that a failure costs its own column and never the request: a dead Savant
+ * leaves the day standing, exactly as it did when these were five routes.
+ */
+app.get(
+  '/api/players/:playerId/page',
+  requireUser,
+  asyncRoute(async (req, res) => {
+    const playerId = Number(req.params.playerId);
+    if (!Number.isInteger(playerId) || playerId <= 0) {
+      res.status(400).json({ error: 'invalid playerId' });
       return;
     }
-    // `gaps` rides beside `games` rather than merged into it — see
-    // `gameLog.ts::getBatterLog`. Everything already reading `games` reads
-    // exactly the list it always has.
-    res.json({ kind: 'batter', ...(await getBatterLog(playerId, season)) });
+    const kind: PlayerKind = req.query.type === 'pitcher' ? 'pitcher' : 'batter';
+    // The server's own baseball day, for the reason `/day` states: the client
+    // mirrors the 3am ET rule, and a tab left open past the rollover would
+    // otherwise ask for yesterday.
+    const date = baseballToday();
+
+    const quiet = <T>(what: string, p: Promise<T>): Promise<T | null> =>
+      p.catch((err: unknown) => {
+        console.error(`player page ${playerId} ${what} failed:`, err);
+        return null;
+      });
+
+    const [day, splits, news, gameLog, nextGame] = await Promise.all([
+      quiet('day', getPlayerDay(playerId, kind, date)),
+      quiet('splits', playerSplitsPayload(playerId, kind)),
+      quiet('news', getPlayerNews(playerId)),
+      quiet('gameLog', playerGameLogPayload(playerId, kind)),
+      quiet('nextGame', getNextGame(playerId, false)),
+    ]);
+
+    res.json({ playerId, kind, date, day, splits, news, gameLog, nextGame });
   }),
 );
 

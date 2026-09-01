@@ -8,12 +8,10 @@ import {
 import { api } from '../api';
 import { useResource, useResourcePoll } from '../resource';
 import type {
-  BatterGameLog,
-  GameLogGap,
-  PitcherGameLog,
   PlayerCut,
   PercentileMetric,
   PlayerKind,
+  PlayerPagePayload,
   PlayerReport,
   ResearchRow,
   ScheduleWindow,
@@ -848,14 +846,34 @@ export function PlayerDetails({
    * change, so nothing is re-read and the club never blinks.
    */
   const dayKey = `playerDay:${who}`;
-  const dayRes = useResource(
+  /**
+   * **The page's open burst, as one read** — his day, season line and platoon
+   * halves, news, game log and next game.
+   *
+   * These were five requests firing in the same tick (measured, +283ms on
+   * open), which on Lambda is five containers; on a low-traffic app most are
+   * new, and a cold container costs 1,368ms at p50 against 239ms warm for the
+   * same work because each holds its own empty copy of the server's caches.
+   * One request is one container and one warm set of them.
+   *
+   * **The nine tabs stay lazy and that is the point.** The percentile card, the
+   * Stats table, Charts and the arsenal are still keyed on their own tab and
+   * still cost nothing to a reader who never presses them — batching those
+   * would have thrown away the rule this page is built on. What is batched is
+   * only what already fired together on open.
+   *
+   * `keepPrevious: false` for the reason the day always had it: an answer about
+   * a different man is not a stale answer to the question on screen.
+   */
+  const pageRes = useResource<PlayerPagePayload>(
     dayKey,
-    () => api.playerDay(playerId, kind).then((d) => d.player),
-    { keepPrevious: false },
+    () => api.playerPage(playerId, kind),
+    { keepPrevious: false, staleMs: SEASON_STALE_MS },
   );
-  const day = dayRes.value ?? null;
-  const dayError = dayRes.error?.message ?? null;
-  const dayLoading = dayRes.loading;
+  const page = pageRes.value ?? null;
+  const day = page?.day ?? null;
+  const dayError = pageRes.error?.message ?? null;
+  const dayLoading = pageRes.loading;
   /**
    * **And it re-reads itself while he is batting**, on the roster's own twenty
    * seconds.
@@ -924,20 +942,15 @@ export function PlayerDetails({
      Two hooks with one live key between them rather than one hook over a union:
      a batter's splits and a pitcher's are different shapes, and the kind that
      is not on screen simply has no key. */
-  const batSplitsRes = useResource(
-    isPitcher ? null : `splits:batter:${playerId}`,
-    () => api.splits(playerId),
-    { keepPrevious: false, staleMs: SEASON_STALE_MS },
-  );
-  const pitSplitsRes = useResource(
-    isPitcher ? `splits:pitcher:${playerId}` : null,
-    () => api.pitcherSplits(playerId),
-    { keepPrevious: false, staleMs: SEASON_STALE_MS },
-  );
-  const splits = batSplitsRes.value ?? null;
-  const pitcherSplits = pitSplitsRes.value ?? null;
-  const splitsError = (isPitcher ? pitSplitsRes.error : batSplitsRes.error)?.message ?? null;
-  const splitsLoading = isPitcher ? pitSplitsRes.loading : batSplitsRes.loading;
+  /* Off the page read above. It was two hooks with one live key between them —
+     a batter's splits and a pitcher's being different shapes — and the wire now
+     carries one field discriminated on `kind`, which says the same thing in one
+     read instead of two. The narrowing below is what keeps the two shapes
+     apart on this side. */
+  const splits = page?.splits?.kind === 'batter' ? page.splits : null;
+  const pitcherSplits = page?.splits?.kind === 'pitcher' ? page.splits : null;
+  const splitsError = pageRes.error?.message ?? null;
+  const splitsLoading = pageRes.loading;
 
   /** The Stats tab's window table: this player's row on each of the research
    *  board's five windows. Five reads of blobs the warmer already keeps hot, so
@@ -963,14 +976,13 @@ export function PlayerDetails({
    *  showing different items. Keyed by **player alone**, where the day, the log
    *  and the window table are keyed by kind as well: news is a fact about a
    *  person, so a two-way player has one list rather than two. */
-  const newsRes = useResource(
-    tab === 'news' || tab === 'overview' ? `playerNews:${playerId}` : null,
-    () => api.playerNews(playerId),
-    { keepPrevious: false, staleMs: SEASON_STALE_MS },
-  );
-  const news = newsRes.value ?? null;
-  const newsError = newsRes.error?.message ?? null;
-  const newsLoading = newsRes.loading;
+  /* Off the page read. It was gated on `news` or `overview`; both now have it
+     the moment the page opens, and the News tab costs no request of its own —
+     which is the guarantee the old comment wanted (one read, so the preview and
+     the tab can never show different items) made stronger. */
+  const news = page?.news ?? null;
+  const newsError = pageRes.error?.message ?? null;
+  const newsLoading = pageRes.loading;
 
   /** His rotation — the **Projected Starts** block. Read here rather than
    *  inside the component so the Overview and the Schedule tab cannot show
@@ -1017,17 +1029,12 @@ export function PlayerDetails({
    *  as the Overview's preview. One read serves both, so crossing from the
    *  summary to the full log is free and the two can never show different
    *  rows. */
-  const gameLogRes = useResource<
-    | { kind: 'batter'; games: BatterGameLog[]; gaps: GameLogGap[] }
-    | { kind: 'pitcher'; games: PitcherGameLog[] }
-  >(
-    tab === 'gamelog' || tab === 'overview' ? `gameLog:${who}` : null,
-    () => (isPitcher ? api.pitcherGameLog(playerId) : api.gameLog(playerId)),
-    { keepPrevious: false, staleMs: SEASON_STALE_MS },
-  );
-  const gameLog = gameLogRes.value ?? null;
-  const gameLogError = gameLogRes.error?.message ?? null;
-  const gameLogLoading = gameLogRes.loading;
+  /* Off the page read, on the same reasoning as the news above: one answer
+     serves the Overview's five-game preview and the Game Log tab, so crossing
+     between them is free and the two cannot show different rows. */
+  const gameLog = page?.gameLog ?? null;
+  const gameLogError = pageRes.error?.message ?? null;
+  const gameLogLoading = pageRes.loading;
 
   /** The season arsenal behind the pitcher-only Arsenal tab — another heavy
    *  Savant fetch, lazy in the same way. */
@@ -1568,6 +1575,10 @@ export function PlayerDetails({
           report={day}
           playerId={playerId}
           name={name}
+          /* His club's next game rides on the page read now — see
+             `NextGameBlock`, which fetched it itself and fetched it twice. */
+          nextGame={page?.nextGame ?? null}
+          nextGameLoading={pageRes.loading}
           /* The season line and the game log are the page's own reads, handed
              down rather than fetched again: the Stats tab and the Game Log tab
              already hold them, and a second copy would be a second answer free

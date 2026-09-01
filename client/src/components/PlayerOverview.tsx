@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useState } from 'react';
 import {
   formatStartTime,
   handThrows,
@@ -89,6 +88,8 @@ export function OverviewTab({
   report,
   playerId,
   name,
+  nextGame,
+  nextGameLoading,
   season,
   pitcherSeason,
   seasonLoading,
@@ -110,6 +111,10 @@ export function OverviewTab({
   report: PlayerReport;
   playerId: number;
   name: string;
+  /** His club's next game, off the page's own batched read. Null where there
+   *  is none to name or that half of the read failed — its own column. */
+  nextGame: NextGameInfo | null;
+  nextGameLoading: boolean;
   /** The season line, whichever kind he is. Both are handed down rather than
    *  fetched here, because `PlayerDetails` already holds them for the Stats tab
    *  and a second read would be a second answer to one question. */
@@ -232,7 +237,17 @@ export function OverviewTab({
           /* Nothing today for a batter or a reliever, and for them the club's
              next game really is the answer: any of its games could be his,
              where a starter is in one in five. */
-          <NextGameBlock playerId={playerId} name={name} />
+          /* **Handed in rather than fetched here.** This was a `useState` +
+             `useEffect` + `live` flag of its own — one of the 84 the resource
+             layer was written to replace, and the last one on this page. It
+             never went through that layer, so it never deduped: driven on open,
+             `/api/players/:id/next-game` fired **twice**, 1ms apart, where none
+             of the page's other reads did. It rides on `/api/players/:id/page`
+             now, which asks for it once with everything else the page opens
+             with. `start` was hard-coded false there and is still false here —
+             this block is the club's-next-game half of the question and
+             Projected Starts is the other. */
+          <NextGameBlock info={nextGame} loading={nextGameLoading} name={name} />
         )}
       </section>
 
@@ -525,33 +540,17 @@ function SeasonSummary({
  * Its own read, on open, and only in this branch: a day that holds a game never
  * asks the question, so a player who is playing today costs nothing.
  */
-function NextGameBlock({ playerId, name }: { playerId: number; name: string }) {
-  const [info, setInfo] = useState<NextGameInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+function NextGameBlock({
+  info,
+  loading,
+  name,
+}: {
+  /** Off the page's own read now — see below. */
+  info: NextGameInfo | null;
+  loading: boolean;
+  name: string;
+}) {
   const wait = useDelayedFlag(loading);
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    setInfo(null);
-    api
-      // False, and hard-coded rather than passed: this block is the club's-next-game
-      // half of the question and the other half is the Projected Starts block's.
-      .nextGame(playerId, false)
-      .then((d) => {
-        if (live) setInfo(d);
-      })
-      .catch(() => {
-        // A failed read costs the line and nothing else — the "no game today"
-        // above it is still the answer to what was asked.
-        if (live) setInfo(null);
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [playerId]);
 
   const game = info?.game ?? null;
   // **The label is the block's heading now, so it is not repeated here.** The
