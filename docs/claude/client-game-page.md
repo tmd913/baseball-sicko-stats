@@ -212,6 +212,40 @@ quietly stale the first time MLB added a kind. **The ballpark is dropped from
 it**: the head names it already, on every tab, and one fact twice in one page
 reads as two facts that happen to agree.
 
+### The line score says where the game is, and where it is not yet
+
+**A cell with no number in it is a dash, not a blank.** Three things can be in
+one — a number, an `x` for a half nobody played, and nothing at all for the
+innings a game has not reached and the half being thrown right now — and the
+third had no mark. A blank is not the absence of a reading, it is a reading the
+table failed to make: on a game in the fourth it drew five empty columns that
+looked like the table running out rather than like five innings still to play.
+An em-dash is what every other table in this app prints for a figure that is not
+there yet.
+
+**And the inning being played is marked on its column** — the header and both
+cells. A live line score is the one reading on this page where *where we are* is
+half the information, and nothing on the table said it: a game in the seventh
+drew six columns of runs, three empty and a nine, and the reader had to find the
+last filled cell and add one. The chip in the head says `Top 7` and the column
+now says which seven that is.
+
+It takes `--accent`, which is what the app's colour rule reserves colour for — a
+live inning is named in `RULES.md` explicitly, beside a postponement and a
+lineup pip — and it takes it as a **wash on the column** rather than as ink on
+the digits: the runs in that column are the same runs as the ones beside them,
+and colouring them would say the numbers are different. The head is the loud
+half (accent outright, on a number nobody was otherwise reading); the two cells
+take a tenth-strength wash, enough to draw the column together and not enough to
+compete with the runs in it. The header also carries the fact in words on its
+`title`, the app's rule that identity never rests on hue alone.
+
+`null` on anything but a live game, which is what keeps it a mark on a *state*:
+a final game has no inning being played, and marking the last one would be a
+live tint on a game that has stopped. Measured on a live game in the seventh:
+innings 7, 8 and 9 draw `–`, the 7th column marked on the header and both cells,
+and nothing marked once the game goes final.
+
 ### Box Score
 
 **One club at a time, and the switch above the table is which.**
@@ -384,11 +418,64 @@ quietly.
 
 ---
 
+### The inning picker, and `Live` first
+
+**The Plays tab pages an inning at a time and now chooses which end to page
+from.** Beside the `All`/`Scoring` cut there is a `<select>`: `Live` (only while
+the game is on), `All innings`, and every inning the game has.
+
+- **`All innings`** is what this tab has always been — forwards from the first,
+  `Show the 2nd` adding one.
+- **`Live` reads backwards**, and it is the **default while a game is on**. A
+  reader who opens the Plays tab of a game in the seventh has come for the
+  seventh, and paging forwards from the first made them press `Show more` six
+  times to reach it. So the newest half leads and `Show the 6th` adds the one
+  below it.
+- **A number is one inning on its own**, which is the question the line score's
+  own cells ask and the only way to ask it of this tab without paging to it. It
+  is never paged: one inning is one page by construction.
+
+**Descending reverses the blocks and nothing inside them.** A half-inning's own
+plays stay in the order they happened — a half read backwards is not a reading
+anybody wants — so what reverses is which half is at the top.
+
+**The pick rides in a per-game memo beside the paging** (`pickMemo` next to
+`shownMemo`), so a page stepped back onto comes back on the inning it was left
+on, which is the argument `shownMemo` already makes applied to the other half of
+what the reader chose. **`live` is normalised on read rather than watched**: a
+game that was on when the page was opened and has since ended leaves `live` in
+the memo and the dropdown no longer offers it, so it reads as `all` there —
+the app's standing rule for an unrecognized value, and it needs no effect to
+chase the state change.
+
+**Hidden under the `Scoring` cut**, which is a dozen plays over the whole game
+and is never paged: a control that cannot change what is on screen is worse than
+no control, because nothing would say why nothing happened.
+
+The select is `.research-pick-select`'s family folded onto rather than restyled
+— the app's one dropdown shape, drawn at every width, with the app's control
+height and its own chevron. Measured on a live game in the top of the 7th:
+options `Live · All innings · 1st … 7th`, value `live`, one block drawn
+(`Top 7th · NYY batting`) and `Show the 6th · 6` under it.
+
 ## The head
 
 **Two clubs with the score between them**, which is the one thing that names
 this subject: a game has no portrait and no single club to take the crest's
 place. So it is a row rather than `.details-id`'s photo-beside-text column.
+
+**It stands 32px off the `Back` button where the other two pages stand 20**, and
+the reason is what is next to the button. `.details-head`'s 20px column gap is
+right where the thing after the button is a *portrait* — a player's headshot and
+a club's crest both carry their own ring of empty pixels, so 20 reads as more
+than 20. A game's head begins with a crest and then immediately with the
+**score**, `NYY 1 – 7 LAA` set large and bold, and at 20 the `Back` chip and the
+away club's abbreviation were two runs of text a thumb apart with nothing
+between them. 32 is the gap the other two *look* like they have. It is a
+`column-gap` scoped with `:has(> .game-head)`, so on a phone — where the head
+wraps to its own line under the button — the horizontal gap is not spent at all
+and the row gap is the shell's own 16. Measured at 1200 and 390: gap 32 at both,
+and `--details-chrome-h` unchanged at 137px.
 
 The crests are **`TeamPhoto`** — the same round mark the research board's team
 rows and the summary table's club cell draw, at a size this box sets through

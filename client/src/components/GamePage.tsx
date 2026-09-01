@@ -120,6 +120,14 @@ import type {
  */
 const shownMemo = new Map<number, number>();
 
+/**
+ * **Which innings the Plays tab was reading**, by `gamePk` — the other half of
+ * what the reader chose, kept for the reason the paging is: a page stepped back
+ * onto comes back the page it was left.
+ */
+type InningPick = 'all' | 'live' | number;
+const pickMemo = new Map<number, InningPick>();
+
 export function GamePage({
   gamePk,
   players,
@@ -680,6 +688,20 @@ function LineScore({
   const columns = Math.max(game.innings.length, game.scheduledInnings);
   const nums = Array.from({ length: columns }, (_, i) => i + 1);
   const over = game.status.state === 'final';
+  /**
+   * **The inning being played**, which the column is marked with while it is.
+   *
+   * A live line score is the one reading on this page where *where we are* is
+   * half the information, and nothing on the table said it: a game in the
+   * seventh drew six columns of runs, three empty ones and a nine — and the
+   * reader had to find the last filled cell and add one. The chip in the head
+   * says `Top 7` and the column now says which seven that is.
+   *
+   * `null` on anything but a live game, which is what keeps this a mark on a
+   * *state*: a final game has no inning being played, and marking the last one
+   * would be a live tint on a game that has stopped.
+   */
+  const activeInning = game.status.state === 'live' ? game.status.currentInning : null;
   const row = (which: 'away' | 'home') => {
     const side = game[which];
     const half = which === 'home' ? 'Bot' : 'Top';
@@ -701,9 +723,25 @@ function LineScore({
            * inning for was batted in.
            */
           const dead = !inning || (over && runs === null);
-          const label = runs !== null ? runs : over && inning ? 'x' : '';
+          /**
+           * **A dash where there is no number yet**, which was a blank cell.
+           *
+           * Three things can be in this cell and only two of them had a mark: a
+           * number, an `x` for a half nobody played, and — for the innings a
+           * game has not reached and the half being thrown right now — nothing
+           * at all. A blank is not the absence of a reading, it is a reading
+           * this table failed to make: on a game in the fourth it drew five
+           * empty columns that looked like the table running out rather than
+           * like five innings still to play. An em-dash is the app's own mark
+           * for a figure that is not there yet, and it is what every other table
+           * in here prints in the same case.
+           */
+          const label = runs !== null ? runs : over && inning ? 'x' : '–';
           return (
-            <td key={n} className="game-ls-cell">
+            <td
+              key={n}
+              className={`game-ls-cell${n === activeInning ? ' game-ls-now' : ''}`}
+            >
               {dead ? (
                 label
               ) : (
@@ -739,7 +777,16 @@ function LineScore({
             <tr>
               <th scope="col" className="game-ls-team" />
               {nums.map((n) => (
-                <th key={n} scope="col" className="game-ls-cell">
+                <th
+                  key={n}
+                  scope="col"
+                  className={`game-ls-cell${n === activeInning ? ' game-ls-now' : ''}`}
+                  /* The head carries the state in words as well as in the tint,
+                     which is the app's rule that identity never rests on hue
+                     alone — a reader who cannot tell the column apart by color
+                     gets the same fact off the tooltip. */
+                  title={n === activeInning ? `The ${ordinalInning(n)} — being played now` : undefined}
+                >
                   {n}
                 </th>
               ))}
@@ -1288,6 +1335,36 @@ function GamePlays({
 }) {
   const [scoringOnly, setScoringOnly] = useState(false);
   /**
+   * **Which innings, and in which direction** — the tab's second control.
+   *
+   * `all` is the whole game forwards from the first, which is what this tab has
+   * always been. `live` is the whole game *backwards* from the inning being
+   * played, and it is the default while a game is on: a reader who opens the
+   * Plays tab of a game in the seventh has come for the seventh, and paging
+   * forwards from the first made them press `Show more` six times to reach it.
+   * A number is one inning on its own, which is the question the line score's
+   * own cells ask and the only way to ask it of this tab without paging to it.
+   *
+   * **The pick rides in the same per-game memo the paging does** (`pickMemo`),
+   * so a page stepped back onto comes back on the inning it was left on — the
+   * argument `shownMemo` already makes, applied to the other half of what the
+   * reader chose.
+   *
+   * **`live` is normalised on read rather than watched.** A game that was on
+   * when the page was opened and has since ended leaves `live` in the memo, and
+   * the dropdown does not offer it any more; reading it as `all` there is the
+   * app's standing rule for an unrecognized value — fall back rather than empty
+   * the view — and it needs no effect to chase the state change.
+   */
+  const isLive = game.status.state === 'live';
+  const [pickRaw, setPick] = useState<InningPick>(
+    () => pickMemo.get(game.gamePk) ?? (isLive ? 'live' : 'all'),
+  );
+  const pick: InningPick = pickRaw === 'live' && !isLive ? 'all' : pickRaw;
+  useEffect(() => {
+    pickMemo.set(game.gamePk, pick);
+  }, [game.gamePk, pick]);
+  /**
    * **How many innings of the whole game are drawn**, and the reason the tab
    * has a page at all.
    *
@@ -1307,6 +1384,7 @@ function GamePlays({
    * would be a control answering a problem that filter had already solved.
    */
   const [shownInnings, setShownInnings] = useState(() => shownMemo.get(game.gamePk) ?? 1);
+  const descending = pick === 'live';
   useEffect(() => {
     shownMemo.set(game.gamePk, shownInnings);
   }, [game.gamePk, shownInnings]);
@@ -1325,7 +1403,7 @@ function GamePlays({
    * beat later, on the first. Measured — `innings drawn 2` where the fifth
    * needs ten.
    */
-  const lastCut = useRef(scoringOnly);
+  const lastCut = useRef<{ scoringOnly: boolean; pick: InningPick }>({ scoringOnly, pick });
   useEffect(() => {
     /**
      * **Not on the mount**, which is the one run of this effect that is not a
@@ -1340,19 +1418,39 @@ function GamePlays({
      * half-innings deep came back two, and the scroll offset restored onto it
      * clamped to 0.
      */
-    if (lastCut.current === scoringOnly) return;
-    lastCut.current = scoringOnly;
+    if (lastCut.current.scoringOnly === scoringOnly && lastCut.current.pick === pick) return;
+    lastCut.current = { scoringOnly, pick };
     setShownInnings(1);
-  }, [scoringOnly]);
+  }, [scoringOnly, pick]);
   const halves = useMemo(() => buildHalves(reports, scoringOnly), [reports, scoringOnly]);
 
   /** The innings the game actually has, which is what the button counts down —
    *  not `scheduledInnings`, since a game can go twelve and a rain-shortened
    *  one stops at seven. */
   const lastInning = halves.length > 0 ? halves[halves.length - 1].inning : 0;
-  /* The `Scoring` cut is never paged, so `shown` is the whole game there. */
-  const shown = scoringOnly ? halves : halves.filter((h) => h.inning <= shownInnings);
-  const moreInnings = scoringOnly ? 0 : Math.max(0, lastInning - shownInnings);
+  /**
+   * **Which halves are drawn, and in which order.**
+   *
+   * The `Scoring` cut is never paged, so `shown` is the whole game there — it is
+   * a dozen plays and is the summary a reader switched to *because* it is short.
+   * One inning is never paged either: it is one page by construction.
+   *
+   * **Descending reverses the blocks and nothing inside them.** The newest half
+   * leads, which is what `live` means, and a half's own plays stay in the order
+   * they happened — a half-inning read backwards is not a reading anybody wants.
+   */
+  const shown = useMemo(() => {
+    if (scoringOnly) return halves;
+    if (typeof pick === 'number') return halves.filter((h) => h.inning === pick);
+    if (!descending) return halves.filter((h) => h.inning <= shownInnings);
+    const from = lastInning - shownInnings;
+    return halves.filter((h) => h.inning > from).slice().reverse();
+  }, [halves, scoringOnly, pick, descending, shownInnings, lastInning]);
+  /** What the button has left to show — the innings *below* the run on screen
+   *  when it reads backwards, and the innings above it when it reads forwards.
+   *  The arithmetic is the same either way; only which end is drawn differs. */
+  const moreInnings =
+    scoringOnly || typeof pick === 'number' ? 0 : Math.max(0, lastInning - shownInnings);
 
   const wait = useDelayedFlag(loading && reports === null);
 
@@ -1401,6 +1499,42 @@ function GamePlays({
             </button>
           ))}
         </div>
+        {/* **And which innings of it** — a `<select>` rather than a run of
+            pills, which is the one control shape a nine-to-twelve-value choice
+            can take on a page this narrow. It is the app's own select
+            (`.research-pick-select`'s family, folded onto rather than
+            restyled): a dropdown at every width, the app's control height and
+            its drawn chevron.
+
+            **Hidden under the `Scoring` cut**, which is a dozen plays over the
+            whole game and is never paged — a control that cannot change what is
+            on screen is worse than no control, because nothing would say why
+            nothing happened. */}
+        {!scoringOnly && lastInning > 0 && (
+          <label className="game-inning-pick">
+            <span className="sr-only">Which innings</span>
+            <select
+              className="research-pick-select game-inning-select"
+              value={String(pick)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPick(v === 'all' || v === 'live' ? v : Number(v));
+              }}
+            >
+              {/* **`Live` leads and is the default while the game is on.** A
+                  reader who opens the Plays tab of a game in the seventh has
+                  come for the seventh, and paging forwards from the first made
+                  them press `Show more` six times to reach it. */}
+              {isLive && <option value="live">Live</option>}
+              <option value="all">All innings</option>
+              {Array.from({ length: lastInning }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={String(n)}>
+                  {ordinalInning(n)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       {halves.length === 0 ? (
         /* The filter names itself and the control that set it — a message
@@ -1444,7 +1578,7 @@ function GamePlays({
           className="feed-more game-plays-more"
           onClick={() => setShownInnings((n) => n + 1)}
         >
-          Show the {ordinalInning(shownInnings + 1)}
+          Show the {ordinalInning(descending ? lastInning - shownInnings : shownInnings + 1)}
           <span className="feed-more-count">{moreInnings}</span>
         </button>
       )}

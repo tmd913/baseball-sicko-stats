@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { PlateAppearance } from '../types';
 import { playerKey } from '../types';
@@ -197,9 +198,22 @@ export function InlineVideoClip({ playId, gamePk }: { playId: string; gamePk: nu
  * can get away with; the dialog is a page about that one at-bat and has to say
  * whose it was, which the item's own header used to do from outside it.
  */
+/**
+ * **The dialog's title, and the inning is not in it any more.**
+ *
+ * It read `Aaron Judge — SINGLE · Top 7`, which said the inning in *words* at
+ * the top of a box whose head already had room for it in the vocabulary this
+ * app draws a half-inning in everywhere else — the glyph and the base diamond
+ * the summary row itself carries. So the situation moved into the head, beside
+ * the two faces (see `PlateAppearanceDetail`), and the title says what the trip
+ * to the plate came to and who took it.
+ *
+ * That is one fact in one place rather than two: the header said `Top 7` and
+ * the row that opened the box said it in a glyph, and a reader crossing between
+ * them was reading the same thing twice in two vocabularies.
+ */
 function paTitle(pa: PlateAppearance, name?: string): string {
-  const when = `${pa.half === 'Top' ? 'Top' : 'Bot'} ${pa.inning}`;
-  return `${name ? `${name} — ` : ''}${eventLabel(pa.event)} · ${when}`;
+  return `${name ? `${name} — ` : ''}${eventLabel(pa.event)}`;
 }
 
 /**
@@ -454,17 +468,34 @@ export interface MatchupMan {
 export function PlayMatchup({
   batter,
   pitcher,
+  lead,
 }: {
   batter: MatchupMan | null;
   pitcher: MatchupMan | null;
+  /**
+   * **Something ahead of the two faces**, on the one caller that has it: the
+   * plate-appearance dialog puts the half-inning glyph, the base diamond and the
+   * outs there, where the title used to say `· Top 7` in words.
+   *
+   * A slot rather than the situation itself, because this head has two callers
+   * and the inning dialog's (`Innings.tsx`) is *already inside* a half-inning —
+   * a graphic saying which one would be the box repeating its own heading.
+   *
+   * It is a child of the grid rather than a wrapper round it, so it takes the
+   * head's own row, its centering and its bleeding rule for nothing. The grid
+   * flows by column and sizes its own tracks, which is what lets it hold two,
+   * three or four items without a template per case.
+   */
+  lead?: ReactNode;
 }) {
   const left = batter ? <PaMan {...batter} role="batter" /> : null;
   const right = pitcher ? <PaMan {...pitcher} role="pitcher" /> : null;
   // Nothing to say and no box to say it in — the card's own rule for an absent
   // foot, one dialog up.
-  if (!left && !right) return null;
+  if (!left && !right && !lead) return null;
   return (
     <div className="pa-matchup">
+      {lead && <span className="pa-mu-lead">{lead}</span>}
       {left}
       {left && right && <span className="pa-mu-vs">vs</span>}
       {right}
@@ -505,6 +536,20 @@ function PlateAppearanceDetail({
       <PlayMatchup
         batter={name ? { id: batterId ?? null, name, hand: pa.stand } : null}
         pitcher={pa.pitcherName ? { id: pa.pitcherId, name: pa.pitcherName, hand: pa.pThrows } : null}
+        /* **The situation, where the title used to say the inning in words** —
+           the same `PlaySituation` the summary row that opened this box draws,
+           so the glyph a reader pressed is the glyph at the head of what it
+           opened. `outsWhenUp` is the outs *this man came to the plate with*,
+           which is what the row says and the only reading that is a fact about
+           the at-bat rather than about what it did. */
+        lead={
+          <PlaySituation
+            inning={pa.inning}
+            half={pa.half}
+            bases={pa.onBase}
+            outs={pa.outsWhenUp ?? 0}
+          />
+        }
       />
 
       <div className="pa-body">
