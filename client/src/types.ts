@@ -2908,6 +2908,18 @@ export interface GameReport {
   weather: string | null;
   away: GameTeamLine;
   home: GameTeamLine;
+  /**
+   * **Whom each club has up while the game is live** — the man in the box for
+   * the club batting, and the man who leads off the other club's next half.
+   *
+   * Both are MLB's own (`linescore.offense.batter` and `linescore.defense
+   * .batter`), keyed by side rather than by offence and defence because the
+   * consumer is a box score that knows which club's table it is drawing and not
+   * which of them is in the field. Both null off a live game.
+   *
+   * Mirrors `server/src/types.ts` by hand, like everything else in this file.
+   */
+  dueUpIds: { away: number | null; home: number | null };
   innings: GameInning[];
   /** How many innings the game was scheduled for — 9 ordinarily, and the
    *  number a line score's empty columns are drawn out to. */

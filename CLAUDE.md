@@ -74,7 +74,7 @@ what it is, and most of them are not recoverable from the code.
 | --- | --- |
 | `savant.ts` `mlbStats.ts` `research.ts` `statcastWindow.ts` `percentiles.ts` `percentileCuts.ts` `playerSplits.ts` `teamHitting.ts` `leagueWoba.ts` `leagueAverage.ts` `xwoba.ts` `expectedStats.ts` `armAngle.ts` `pitcherArsenal.ts` `parkFactors.ts` | `sicko-server` |
 | `index.ts` (routes) `etDate.ts` `schedule.ts` `rotations.ts` `gameLog.ts` `stints.ts` `nextGame.ts` `news.ts` `recentNews.ts` `rotowire.ts` `cbs.ts` `projectedStarts.ts` `warmer.ts` `revisions.ts` `mlbScoreboard.ts` `mlbStandings.ts` | `sicko-server` |
-| `store.ts` `storage.ts` `auth.ts` `cognito.ts` `auth.tsx` `invite.ts` | `sicko-server` |
+| `store.ts` `storage.ts` `auth.ts` `cognito.ts` `auth.tsx` `invite.ts` `upstream.ts` | `sicko-server` |
 | `espn.ts` `projection.ts` `EspnSettings.tsx` `LeagueOnboarding.tsx` | `sicko-espn` |
 | `App.tsx` `hooks.ts` `lib.ts` `api.ts` `resource.ts` `PlayerAdder.tsx` `Loading.tsx` `DateControls.tsx` `DateRangePicker.tsx` `simulate.ts` | `sicko-client` |
 | `OverviewView.tsx` `categoryValue.ts` | `sicko-overview` |

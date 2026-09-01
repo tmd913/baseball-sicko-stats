@@ -2025,3 +2025,22 @@ export const SEASON_STALE_MS = 5 * 60_000;
  * (`?preset=Today&view=overview&roster=fantasy`).
  */
 export const RELOAD_AFTER_MS = 30 * 60_000;
+
+/**
+ * **How long that reload waits for the write queue, at the outside.**
+ *
+ * The reload drains `queueUserWrite` first, so a preference saved in the breath
+ * before the app was backgrounded is not thrown away by the page that replaces
+ * it. Uncapped, that drain can wait for ever: the chain is `.then`-ed onto
+ * whatever is in it, and a request suspended across half an hour is exactly the
+ * one that may never settle — the browser resumes it into a connection that is
+ * gone, and until it gives up, the reload is behind it. Which is the reported
+ * symptom, *"it takes a really long time to load"*, with the queue holding the
+ * page hostage to a preference.
+ *
+ * Two seconds: long enough for a queue that is empty (which settles in a tick)
+ * or holding a request about to land, short enough that a reader who asked for
+ * a fresh page gets one. Losing the race costs one saved preference; not
+ * capping it costs the page.
+ */
+export const RELOAD_DRAIN_MS = 2_000;

@@ -1,3 +1,7 @@
+/* **First, and for its side effect**: every upstream read this server makes
+   gets a deadline. See `upstream.ts` — a hung upstream used to ride to the
+   Lambda's own 29-second limit and answer the reader with a 500. */
+import './upstream.js';
 import express from 'express';
 import compression from 'compression';
 import path from 'node:path';

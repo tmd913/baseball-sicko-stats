@@ -702,6 +702,36 @@ function LineScore({
    * would be a live tint on a game that has stopped.
    */
   const activeInning = game.status.state === 'live' ? game.status.currentInning : null;
+  /**
+   * **And which half of it**, because a column is two halves and only one of
+   * them is being played.
+   *
+   * The column marked both cells to begin with, which drew a live game in the
+   * top of the seventh as though both clubs were batting in it — the away
+   * club's `–` and the home club's `–` lit alike, where one of them is a half
+   * in progress and the other is a half nobody has come to yet. So the wash is
+   * on the one cell and the **header keeps the column**: the heading is what
+   * names the inning, and a single lit cell with nothing above it reads as an
+   * anomaly in a row rather than as a place in the game.
+   *
+   * **`inningState` has four words and only one of them is the away club's.**
+   * MLB writes `Top`, `Middle`, `Bottom` and `End`, and the middle two are the
+   * gaps either side of the home half: `Middle` is the top over and the bottom
+   * not started, `End` is the bottom over and the inning not turned. In both
+   * the away club's half of *this* inning is finished and the home club's is
+   * where the game is — being played, or a moment past it — so `Top` alone
+   * marks the away row and everything else marks the home one.
+   *
+   * The test is written out here rather than through `isBottom`, which answers
+   * a different question (*is this half the bottom*, of the two a play can be
+   * in) and would put `End` on the away row.
+   */
+  const activeSide: 'away' | 'home' | null =
+    activeInning === null
+      ? null
+      : (game.status.inningState ?? '').toLowerCase().startsWith('top')
+        ? 'away'
+        : 'home';
   const row = (which: 'away' | 'home') => {
     const side = game[which];
     const half = which === 'home' ? 'Bot' : 'Top';
@@ -740,7 +770,9 @@ function LineScore({
           return (
             <td
               key={n}
-              className={`game-ls-cell${n === activeInning ? ' game-ls-now' : ''}`}
+              className={`game-ls-cell${
+                n === activeInning && which === activeSide ? ' game-ls-now' : ''
+              }`}
             >
               {dead ? (
                 label
@@ -929,7 +961,16 @@ function GameBox({
         </p>
       )}
       {posted ? (
-        <BoxSide side={shown} openable={openable} onOpenPlayer={onOpenPlayer} />
+        <BoxSide
+          side={shown}
+          /* **Who is up for the club on screen** — the man in the box if they
+             are batting, the man who leads off their next half if they are in
+             the field. The report keys it by side (`dueUpIds`) precisely so
+             this line does not have to ask which of them that is. */
+          dueUpId={game.dueUpIds[side]}
+          openable={openable}
+          onOpenPlayer={onOpenPlayer}
+        />
       ) : (
         <BoxRoster
           side={shown}
@@ -942,12 +983,31 @@ function GameBox({
   );
 }
 
+/**
+ * One club's box score, and — while the game is on — **the man they have up**.
+ *
+ * A box score is a record of what has happened, and on a live game a reader
+ * looking at it wants one thing it did not say: *whose turn is it*. The head
+ * chip says `Top 7` and the club switch says which club, and between them the
+ * answer was still a matter of counting down the order and remembering who
+ * batted last. So the row is marked.
+ *
+ * **Both clubs get a mark and they mean two different things**, which is what
+ * makes the feature worth having on the club that is not batting: for the club
+ * at the plate it is *the man in the box*, and for the other it is *the man who
+ * leads off their next half-inning*. The distinction is in the row's own
+ * tooltip rather than in a second colour, because a reader who has pressed the
+ * club switch knows which of the two they are looking at.
+ */
 function BoxSide({
   side,
+  dueUpId,
   openable,
   onOpenPlayer,
 }: {
   side: GameTeamLine;
+  /** The man this club has up, or null off a live game — see `dueUpIds`. */
+  dueUpId: number | null;
   openable: Set<string>;
   onOpenPlayer: (key: string) => void;
 }) {
@@ -988,7 +1048,13 @@ function BoxSide({
             </thead>
             <tbody>
               {side.batters.map((b) => (
-                <BatterRow key={b.id} line={b} openable={openable} onOpenPlayer={onOpenPlayer} />
+                <BatterRow
+                  key={b.id}
+                  line={b}
+                  up={b.id === dueUpId}
+                  openable={openable}
+                  onOpenPlayer={onOpenPlayer}
+                />
               ))}
             </tbody>
             {side.batting && (
@@ -1084,15 +1150,25 @@ function BoxSide({
  */
 function BatterRow({
   line,
+  up,
   openable,
   onOpenPlayer,
 }: {
   line: GameBatterLine;
+  /** He is the man this club has up — see `BoxSide`. */
+  up: boolean;
   openable: Set<string>;
   onOpenPlayer: (key: string) => void;
 }) {
   return (
-    <tr className={line.sub > 0 ? 'game-box-sub' : undefined}>
+    <tr
+      className={`${line.sub > 0 ? 'game-box-sub' : ''}${up ? ' game-box-up' : ''}`.trim() || undefined}
+      /* **The mark says which of its two meanings it has**, and a title is where
+         it can: the colour is one colour on both clubs, because a second tone
+         would be a second thing to learn for a distinction the club switch above
+         has already made. */
+      title={up ? `${line.name} is up` : undefined}
+    >
       <th scope="row" className="game-box-name">
         <span className="game-box-slot">{line.sub === 0 && line.order !== null ? line.order : ''}</span>
         <PlayerName

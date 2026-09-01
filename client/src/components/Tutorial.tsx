@@ -661,11 +661,12 @@ const CHAPTERS: Chapter[] = [
           biggest adds, twice for the drops.
         </p>
         <p className="tut-note">
-          The one thing the app cannot see for itself is a move you make on ESPN.{' '}
+          The one thing the app cannot see for itself is a move you make on ESPN. The{' '}
           <Ui>
-            <RefreshIcon /> Refresh from ESPN
+            <RefreshIcon /> refresh
           </Ui>{' '}
-          is what sends it to go and look.
+          button in the header is what sends it to go and look — it reads your league again
+          and reloads the page with the answer.
         </p>
       </>
     ),

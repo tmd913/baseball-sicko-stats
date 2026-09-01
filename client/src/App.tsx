@@ -49,6 +49,7 @@ import {
   LEAGUE_POLL_MS,
   LIVE_POLL_MS,
   RELOAD_AFTER_MS,
+  RELOAD_DRAIN_MS,
   projectStarters,
   rangeDatesOf,
   seatKinds,
@@ -223,14 +224,11 @@ import type { StandingsGroup } from './components/MlbStandings';
  *  every render would rebuild every one of them. */
 const EMPTY_REPORTS: PlayerReport[] = [];
 
-// How long a press-triggered mark keeps spinning at a minimum — the fantasy
-// popover's `Refresh from ESPN`, and the league page's own Refresh through it.
-// A warm league answers in milliseconds, which is a baseball nobody sees turn,
-// and a control that answers a press with nothing at all reads as broken. The
-// waits nobody pressed take `WAIT_DELAY` at the other end of the same argument
-// (`hooks.ts`), which is a delay before a mark goes up rather than a floor on
-// how long it stays.
-const MIN_SPIN = 450;
+// *(A local `MIN_SPIN = 450` stood here for the fantasy popover's `Refresh from
+// ESPN` and the league page's own Refresh through it — both gone, and the
+// header's refresh needs no floor because what follows its press is a page
+// reload. The number itself is `hooks.ts`'s, where the rule lives and where
+// `useBusyMark` reads it; this was a second copy of it.)*
 
 /**
  * The app's three pages. **Roster** is the summary table over the date range,
@@ -7640,80 +7638,54 @@ export default function App() {
     [knownPlayers, openPlayer],
   );
 
-  const refreshFantasy = useCallback(() => {
-    // The League page's transactions feed goes with it — a move made on ESPN is
-    // exactly what changes one, and it is the one thing no cache can know
-    // about. It **asks** rather than being dropped, which is two corrections to
-    // what stood here: `?refresh=1` is what actually reaches past the server's
-    // own cache (clearing the client copy only ever re-read the same cached
-    // answer), and setting the result rather than blanking first is rule 1 —
-    // the feed stays readable while the read is out, where a null left the tab
-    // empty until the reader navigated away and back. Only when there is a feed
-    // to refresh: a reader who has never opened the League page is not made to
-    // pay for one by pressing this. The scoreboard and the rankings re-read on
-    // entry and on the poll's own tick, so neither needs a request from here.
-    if (transactionsRef.current) {
-      api
-        .espnTransactions(true)
-        .then(setTransactions)
-        .catch((e: Error) => console.error('refreshing transactions failed:', e.message));
-    }
-    const fresh = espnConnected ? loadOwnership(true) : Promise.resolve();
-    return fresh.then(() => {
-      if (!usingFantasy) return;
-      loadFantasyRoster();
-      void reloadReport({ quiet: false });
-    });
-  }, [espnConnected, usingFantasy, loadOwnership, loadFantasyRoster, reloadReport]);
-
   /**
-   * The same read, from the fantasy popover — one press from any view.
+   * **Everything again, from the top** — the header's refresh button.
    *
-   * It was only on the Fantasy league page, which put two navigations between
-   * "I just moved somebody on ESPN" and the app agreeing: open the popover,
-   * open the page, press. That is the wrong distance for the one thing this app
-   * cannot see for itself, and the popover is already where every other fantasy
-   * control ended up for exactly that reason.
+   * It replaces `Refresh from ESPN`, which lived in the fantasy popover and on
+   * the league settings page, and it is a different action wearing a similar
+   * name. That one re-read the *league* and left the page it had changed to
+   * catch up through the caches it had just filled; this one busts ESPN's
+   * server-side cache and then **reloads the page**, which is what a reader
+   * pressing a refresh button means and what they were doing by hand anyway.
    *
-   * **It stays on the league page too**, and the two are not quite the same
-   * control. That one re-reads the **team picker** after the league (see
-   * `EspnSettings`'s `refresh`), which is the page's own business and nothing
-   * the popover has any use for; the page also carries the paragraph explaining
-   * the ten-minute cache, and a note naming a button that isn't there is worse
-   * than a second doorway. They are never on screen together — opening the page
-   * closes the popover — so this is one action reached from two places rather
-   * than the duplicated affordance the search bar's own close button was.
+   * **The order is the whole of it.** A bare reload would re-read the same
+   * ten-minute answer the server is already holding, so the ESPN caches have to
+   * be dropped *first* and the reload made to wait for them — `?refresh=1` on
+   * ownership (which clears every entry for the league) and on the transactions
+   * feed, which are the two reads nothing else re-asks. The scoreboard, the
+   * rankings and the projection re-read on entry and on the poll's own tick, so
+   * a reload gets them fresh without being asked.
    *
-   * `refreshFantasy` is called unchanged, sequencing and all: the flag rides on
-   * the ownership read alone and the roster and report follow through the cache
-   * it just filled.
+   * **A failed bust still reloads.** The page a reader asked for is a fresh
+   * page, and refusing to give them one because ESPN was slow would be the
+   * button withholding the half it can do on account of the half it cannot;
+   * the reads that fail will fail again after the reload, where the app's own
+   * error banners say so in the place they belong.
+   *
+   * **It is offered whether or not a league is connected**, because the reload
+   * is the part everybody gets: the ESPN half is the extra a connected reader
+   * gets for free, not the reason the button exists.
+   *
+   * No `MIN_SPIN` here, unlike every other press in this app: what follows the
+   * press is a page reload, so the mark does not have to survive being brief —
+   * the browser's own blank frame is the end of it.
    */
-  const [fantasyRefreshing, setFantasyRefreshing] = useState(false);
-  const [fantasyRefreshed, setFantasyRefreshed] = useState(false);
-  const refreshFantasyFromMenu = useCallback(() => {
-    setFantasyRefreshing(true);
-    setFantasyRefreshed(false);
-    // `MIN_SPIN`, for the measured reason it exists: a warm league answers in
-    // milliseconds, and a menu row that flickers and settles reads as a press
-    // that did nothing.
-    Promise.all([
-      Promise.resolve(refreshFantasy()),
-      new Promise((r) => setTimeout(r, MIN_SPIN)),
-    ])
-      .then(() => setFantasyRefreshed(true))
-      // Silent here on purpose: the report's own request carries the same
-      // failure and banners it across the page, where this row could only
-      // repeat it inside a popover that is about to be dismissed.
-      .catch((e: Error) => console.error('fantasy refresh failed:', e.message))
-      .finally(() => setFantasyRefreshing(false));
-  }, [refreshFantasy]);
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const refreshAll = useCallback(() => {
+    setRefreshingAll(true);
+    const busts = espnConnected
+      ? [
+          api.espnOwnership(true).catch((e: Error) => {
+            console.error('refresh: ownership failed:', e.message);
+          }),
+          api.espnTransactions(true).catch((e: Error) => {
+            console.error('refresh: transactions failed:', e.message);
+          }),
+        ]
+      : [];
+    void Promise.all(busts).finally(() => window.location.reload());
+  }, [espnConnected]);
 
-  // "Up to date ✓" is about the press, not a standing state, so it is dropped
-  // the moment the menu is reopened — otherwise a tick from an hour ago greets
-  // someone who has come back precisely because they suspect it isn't.
-  useEffect(() => {
-    if (fantasyOpen) setFantasyRefreshed(false);
-  }, [fantasyOpen]);
 
   // The reports as rendered: the real ones, or a synthetic live-day overlay when
   // the demo toggle is on. Everything downstream (nav, cards, feed, the live
@@ -7877,15 +7849,33 @@ export default function App() {
      * nothing here reaches it. See `RELOAD_AFTER_MS` for the threshold and what
      * a reload costs.
      *
-     * **The write queue is drained first**, the same rule the league-onboarding
-     * reload follows and for a sharper reason here: an app backgrounded in the
-     * breath after a toggle was suspended with that `PUT` in flight, and the
-     * request resumes with the page. Enqueueing a no-op and awaiting it settles
-     * once everything already in the chain has, and costs nothing when the
-     * queue is empty — which, after half an hour away, is the ordinary case.
+     * **The write queue is drained first, and the drain is capped.** The rule
+     * is the league-onboarding reload's, for a sharper reason here: an app
+     * backgrounded in the breath after a toggle was suspended with that `PUT`
+     * in flight, and the request resumes with the page — so enqueueing a no-op
+     * and awaiting it settles once everything already in the chain has, and
+     * costs nothing when the queue is empty, which after half an hour away is
+     * the ordinary case.
+     *
+     * **What it must not do is wait for ever, and uncapped it could.** The
+     * chain is `.then`-ed onto whatever is in it, and a request suspended
+     * across a thirty-minute background is exactly the one that may never
+     * settle at all: the browser resumes it into a server that is no longer
+     * there, and until it gives up, the reload the reader asked for is behind
+     * it. That is the reported symptom — *"it takes a really long time to
+     * load"* — and it is a queue holding a page hostage to a preference.
+     *
+     * So the drain races a short timer, and the reload happens either way. Two
+     * seconds is long enough for a queue that is already empty (instant) or
+     * holding a request that is about to land, and short enough that a reader
+     * who asked for a fresh page gets one. What is risked by losing the race is
+     * one saved preference; what is risked by not capping it is the page.
      */
     if (awayMs >= RELOAD_AFTER_MS) {
-      void queueUserWrite(async () => undefined).finally(() => {
+      void Promise.race([
+        queueUserWrite(async () => undefined).catch(() => undefined),
+        new Promise((r) => setTimeout(r, RELOAD_DRAIN_MS)),
+      ]).finally(() => {
         window.location.reload();
       });
       return;
@@ -10112,10 +10102,11 @@ export default function App() {
                     with one answer, and `menuitemradio` is what says so to a
                     screen reader, where a row of `menuitemcheckbox`es would
                     claim as many independent switches. The menu deliberately **stays
-                    open** across a press, the way `Refresh from ESPN` does and
-                    for the same reason: the result is a change in the page
+                    open** across a press: the result is a change in the page
                     behind it, so shutting the menu would hide the thing the
-                    press was for.
+                    press was for. (`Refresh from ESPN` made the same argument
+                    from the row below this one; it is a header button now, and
+                    it closes nothing because it reloads.)
 
                     **It leads the menu**, where it used to trail the two
                     toggles. It is the one entry here that changes the whole
@@ -10346,57 +10337,16 @@ export default function App() {
                     Use my fantasy team
                   </button>
                 )}
-                {/* Read the league again, now. The one thing this app cannot
-                    see is a move made on ESPN, and until this it took two
-                    navigations to tell it — see `refreshFantasyFromMenu` for
-                    why it is here as well as on the league page.
-
-                    Above League settings and below the toggle: it acts on what
-                    this menu is about without leaving it, where the entry under
-                    it is the menu's way *out*. The popover deliberately stays
-                    open across the press — this is the one entry whose result
-                    is a change in the page behind it, and closing on the press
-                    would take away the only thing saying the read happened. */}
-                <button
-                  type="button"
-                  className="help-btn fantasy-refresh"
-                  role="menuitem"
-                  onClick={refreshFantasyFromMenu}
-                  disabled={fantasyRefreshing}
-                  aria-busy={fantasyRefreshing}
-                  title="Read your league from ESPN again — for a lineup or roster move you have just made there"
-                >
-                  {/* Three quarters of a circle with an arrowhead on the open
-                      end, at the menu's 15px, swapped for the app's own
-                      spinning baseball in flight — so the swap reads as the
-                      arrow closing into the ball it was drawing. */}
-                  {fantasyRefreshing ? (
-                    <SpinningBaseball />
-                  ) : (
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="15"
-                      height="15"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.1"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-                      <path d="M20 4.2V9h-4.8" />
-                    </svg>
-                  )}
-                  {/* No ellipsis: the ball beside the word is what says the
-                      read is still going, which is the rule everywhere the two
-                      appear together. */}
-                  {fantasyRefreshing
-                    ? 'Reading'
-                    : fantasyRefreshed
-                      ? 'Up to date ✓'
-                      : 'Refresh from ESPN'}
-                </button>
+                {/* **The `Refresh from ESPN` item stood here and is a button in the
+                    header now** — beside the one that opens this popover. Two
+                    things were wrong with it here. It was *two* doorways to one
+                    action (this and the league settings page), which is the
+                    duplication the search bar's own close button was retired
+                    for; and what it refreshed was the league, where what a
+                    reader pressing it wants is **the page** — a move made on
+                    ESPN changes the roster every view is reporting on, and the
+                    honest answer to that is to go and get everything again.
+                    See `refreshAll`. */}
                 {/* Below the toggle, as the how-to button sits below the gear's:
                     it opens a page rather than flipping a setting, so it reads
                     as the menu's way *out* of it. */}
@@ -10416,6 +10366,53 @@ export default function App() {
               </div>
             )}
           </div>
+          {/* **Everything again**, beside the button that opens the fantasy
+              popover — which is where the action it replaces used to live, one
+              press further in.
+
+              It reads as a peer of the gear and the baseball rather than as an
+              entry inside either, and that is what it is: the gear opens what
+              the app looks like, the baseball opens which league it is reading,
+              and this one goes and gets the whole page afresh. A refresh is not
+              a *setting* and was never at home in a menu of them.
+
+              The glyph is the arrow the popover entry carried — three quarters
+              of a circle with an arrowhead on the open end — swapped for the
+              app's own spinning baseball while the press is in flight, so the
+              swap reads as the arrow closing into the ball it was drawing. See
+              `refreshAll` for what the press actually does and in what order. */}
+          <button
+            type="button"
+            className="header-refresh"
+            onClick={refreshAll}
+            disabled={refreshingAll}
+            aria-busy={refreshingAll}
+            aria-label="Refresh"
+            title={
+              espnConnected
+                ? 'Reload the page, reading your league from ESPN again — for a lineup or roster move you have just made there'
+                : 'Reload the page and read everything again'
+            }
+          >
+            {refreshingAll ? (
+              <SpinningBaseball />
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                <path d="M20 4.2V9h-4.8" />
+              </svg>
+            )}
+          </button>
         </div>
         {/* The icon cluster, in the header rather than over the list: these
             belong to the watchlist itself, not to whichever view is reading it,
@@ -10853,8 +10850,9 @@ export default function App() {
           <div className="empty-state">
             <p className="empty-title">Your fantasy team is empty</p>
             <p>
-              Add players to it on ESPN, then use Refresh from ESPN in the fantasy menu — or
-              turn off “Use my fantasy team” there to go back to your own roster.
+              Add players to it on ESPN, then press the refresh button in the header — or
+              turn off “Use my fantasy team” in the fantasy menu to go back to your own
+              roster.
             </p>
           </div>
         )}
@@ -11735,7 +11733,6 @@ export default function App() {
           status={espnStatus}
           joinError={espnJoinError}
           onStatusChange={onEspnStatusChange}
-          onRefresh={refreshFantasy}
           onClose={() => setEspnOpen(false)}
         />
       )}

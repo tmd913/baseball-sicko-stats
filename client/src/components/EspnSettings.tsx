@@ -105,7 +105,6 @@ export function EspnSettings({
   status,
   joinError,
   onStatusChange,
-  onRefresh,
   onClose,
 }: {
   status: EspnStatus | null;
@@ -114,7 +113,6 @@ export function EspnSettings({
   onStatusChange: (s: EspnStatus) => void;
   /** Re-read the league past the server's ten-minute cache — the roster, the
    *  report it decides the players of, and the ownership map. */
-  onRefresh: () => Promise<void> | void;
   onClose: () => void;
 }) {
   useLockBodyScroll();
@@ -132,10 +130,6 @@ export function EspnSettings({
   // — the one call that already knows them — and only once connected.
   const [teams, setTeams] = useState<EspnTeam[]>([]);
   const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  // Marks the moment, for the button — there is nothing else on this page that
-  // would visibly change, the roster it re-read being shown on the views behind.
-  const [refreshed, setRefreshed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The form stays on screen after a successful connect — the panel above it
@@ -250,33 +244,10 @@ export function EspnSettings({
     }
   };
 
-  /**
-   * Read the league again, now, rather than on whatever the ten-minute cache
-   * decides. The button exists because the one thing this app cannot see is a
-   * move made on ESPN — a lineup swapped at 6.55 is a change in the roster
-   * every roster view is reporting on, and until now the only way to make it
-   * land was to reload the page.
-   *
-   * The team list is re-read after, not alongside: `onRefresh` has just made
-   * the server's copy current, so this is a lookup rather than a fourth trip to
-   * ESPN, and it is what keeps a leaguemate's rename from sitting in the picker.
-   */
-  const refresh = async () => {
-    setRefreshing(true);
-    setError(null);
-    setRefreshed(false);
-    try {
-      await onRefresh();
-      const own = await api.espnOwnership();
-      setTeams(own.teams);
-      setRefreshed(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read the league');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
+  /* *(`refresh` stood here — `onRefresh()` and then a re-read of the team
+     picker off the answer it had just made current. Both halves went with the
+     button: the league read is the header's now, and the picker is re-read on
+     the page's own mount, which a reload is.)* */
   const chooseTeam = async (teamId: number) => {
     setSaving(true);
     setError(null);
@@ -406,33 +377,19 @@ export function EspnSettings({
                 </p>
               </div>
             </div>
+            {/* **`Refresh from ESPN` stood here and is a button in the header
+                now**, beside the one that opens the fantasy popover. It was two
+                doorways to one action — this and that popover — which is the
+                duplication the search bar's own close button was retired for;
+                and what a reader pressing it wants is *the page*, not the
+                league object, so the control that replaced it reloads. This
+                page keeps the one action that is genuinely its own. */}
             <div className="espn-status-actions">
-              <button
-                type="button"
-                className="espn-refresh"
-                onClick={refresh}
-                disabled={saving || refreshing}
-                aria-busy={refreshing}
-                title="Read your league from ESPN again — for a lineup or roster move you have just made there"
-              >
-                {/* The popover's own Refresh from ESPN swaps its arrow for the
-                    ball; this one has a label rather than a glyph, so the ball
-                    joins the label instead of replacing it. Same mark, same
-                    press, one loading language across the two doorways to one
-                    action. */}
-                {refreshing ? (
-                  <LoadingLine announce={false}>Reading</LoadingLine>
-                ) : refreshed ? (
-                  'Up to date ✓'
-                ) : (
-                  'Refresh from ESPN'
-                )}
-              </button>
               <button
                 type="button"
                 className="espn-disconnect"
                 onClick={disconnect}
-                disabled={saving || refreshing}
+                disabled={saving}
               >
                 Disconnect
               </button>
@@ -443,9 +400,9 @@ export function EspnSettings({
         {connected && status.connected && (
           <p className="espn-note espn-refresh-note">
             The app holds ESPN's answer for ten minutes, so a move made over
-            there lands here within that. <strong>Refresh from ESPN</strong>{' '}
-            reads it now — the rosters, the lineup slots and who is a free
-            agent.
+            there lands here within that. The <strong>refresh button in the
+            header</strong> reads it now and reloads the page with it — the
+            rosters, the lineup slots and who is a free agent.
           </p>
         )}
 
