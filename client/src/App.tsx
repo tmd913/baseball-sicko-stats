@@ -7,6 +7,7 @@ import {
   MAX_SEARCHES,
   playerKey,
   RESEARCH_WINDOWS,
+  type OverviewSliceKey,
 } from './types';
 import { projectedRowValue, projectedRowValuePerGame, STANDARD_5X5 } from './categoryValue';
 import type {
@@ -251,6 +252,20 @@ const EMPTY_REPORTS: PlayerReport[] = [];
  * `summary` rather than `roster` because that is the name `view=` has always
  * used for it, and it is the default every link in the wild omits.
  */
+/**
+ * **What the first wave asks for, before anything has been observed.**
+ *
+ * The carousel opens on Today (`OPENS_ON`), so that card is certainly on screen
+ * and its read is the one nothing should delay — seeding it here means the boot
+ * request goes out the moment the gate opens rather than a frame later when the
+ * observers have had their say. Everything else, including the two cards either
+ * side of it on a wide screen, arrives in the second wave a frame behind.
+ *
+ * Measured on the live league: this is **96 KB** against the whole page's
+ * **4.42 MB**.
+ */
+const BOOT_SLICES: OverviewSliceKey[] = ['mine.today'];
+
 type View = 'overview' | 'summary' | 'feed' | 'news' | 'research' | 'league' | 'mlb';
 
 /** The three *readings* of the Roster page that are a page's worth apart — the
@@ -6350,28 +6365,13 @@ export default function App() {
    */
   const [ovSpanMine, setOvSpanMine] = useState<OverviewSpan | null>(null);
   const [ovSpanOpp, setOvSpanOpp] = useState<OverviewSpan | null>(null);
-  /**
-   * **Have the two effects below actually fired?** — which is the one thing
-   * eight `loading` flags cannot say, and the whole difference between *this
-   * read has not started* and *this read is over*. Both look identical from
-   * outside: nothing in flight and nothing in hand.
-   *
-   * It matters because the page is drawn all at once now (see
-   * `overviewSettled`), so the gate has to hold through the window before
-   * anything is asked for — a fantasy reader's four reads wait on
-   * `espnStatusSettled`, and the opponent's four wait on a board that lands
-   * later still. Without these the gate would read *settled* on the very first
-   * render, draw an empty page, and then be overtaken by everything it was
-   * supposed to wait for.
-   *
-   * A latch rather than a counter, and never lowered: a **re**-read is the case
-   * rule 1 protects — the last answer stays standing and no curtain goes over
-   * it — so once these are up they have said all they have to say. The
-   * opponent's stays up across a period step for the same reason, which leaves
-   * last week's cards on screen while this week's are read rather than blanking
-   * the foot of the page.
+  /*
+   * **`ovFired` is gone with the gate.** It existed to tell *not started* from
+   * *finished*, which look identical from outside — nothing in flight, nothing
+   * in hand — and only mattered to a flag that had to decide whether the whole
+   * page was done. `ovHave` never has that problem: a slice that has answered
+   * is in the set and one that has not is not, whatever the reason.
    */
-  const [ovFired, setOvFired] = useState(false);
   /**
    * **Two sequence numbers, for the two days the live tick re-reads.** It was
    * ten, one per block, while the page was ten reads; the other eight went
@@ -6458,6 +6458,47 @@ export default function App() {
    */
   const ovBatch = useRef(0);
   const [ovBatchLoading, setOvBatchLoading] = useState(false);
+
+  /**
+   * **What the page has asked for, what has answered, and what is in flight.**
+   *
+   * The route computes ten reads and the reader can see two of them. Measured
+   * on the live league: the whole payload is **4.42 MB** and
+   * `want=mine.today` is **96 KB** — 46× smaller — while the two matchup spans
+   * are **3.81 MB**, 86% of it, for a block below the fold. So the page asks
+   * for what is on screen and comes back for the rest.
+   *
+   * - `ovWant` is what the page has *decided it needs* — seeded with the card
+   *   the carousel opens on and grown by `OverviewView` as blocks come into
+   *   view. It never shrinks: a slice scrolled past is one the reader can
+   *   scroll back to.
+   * - `ovAsked` is what has been requested. The difference is the next wave.
+   * - `ovHave` is what has *answered*, and it is the only thing the shimmer
+   *   reads. A slice with no answer draws bars; a slice with one draws itself.
+   *
+   * **`ovHave` survives a re-read, which is rule 1.** Stepping the date or
+   * crossing a tab clears `ovAsked` so every wanted slice is asked again, and
+   * deliberately leaves `ovHave` alone — the last answer stays on screen while
+   * the next is in flight, and a curtain over data is the thing that rule
+   * forbids. It is the same job `ovDrawn` did for the whole page, done a slice
+   * at a time.
+   */
+  const [ovWant, setOvWant] = useState<Set<OverviewSliceKey>>(() => new Set(BOOT_SLICES));
+  const [ovAsked, setOvAsked] = useState<Set<OverviewSliceKey>>(() => new Set());
+  const [ovHave, setOvHave] = useState<Set<OverviewSliceKey>>(() => new Set());
+
+  /**
+   * **A block on screen wants its data.**
+   *
+   * Called by `OverviewView`'s visibility observers, once per slice. Adding to
+   * a `Set` in state rather than to a ref, because the wave effect below has to
+   * *run* when it changes — and several observers firing in one
+   * `IntersectionObserver` callback are one React batch, which is what makes a
+   * scroll that reveals three blocks into one request rather than three.
+   */
+  const needOverviewSlice = useCallback((slice: OverviewSliceKey) => {
+    setOvWant((w) => (w.has(slice) ? w : new Set(w).add(slice)));
+  }, []);
   /**
    * **The roster spelled as its content, and only where it is part of the
    * question** — the same two rules `reportKey` above states, for the same
@@ -6506,10 +6547,89 @@ export default function App() {
     (prefsSettled || rosterSourceFromUrl) &&
     !(rosterSource === 'fantasy' && !espnStatusSettled) &&
     (usingFantasy || rosterLoaded);
+  /**
+   * **A wave per set of newly-wanted slices**, replacing the one request that
+   * read the whole page.
+   *
+   * `ovWant` minus `ovAsked` is the next wave. It fires when that difference is
+   * non-empty, which is: once on the gate opening (`BOOT_SLICES`), once a frame
+   * later when the observers report what is actually on screen, and then
+   * whenever a scroll or a swipe reveals something new.
+   *
+   * **Several observations are one wave**, because `IntersectionObserver`
+   * delivers every entry of one cycle in a single callback and React batches
+   * the `setOvWant`s inside it. A scroll that brings the opponent's carousel and
+   * the leaders block into view at once is one request for three slices, not
+   * three requests.
+   *
+   * **A key change re-asks rather than re-mounting.** Stepping the date,
+   * crossing to the fantasy roster or editing the saved one clears `ovAsked`,
+   * so the whole of `ovWant` goes out again — but leaves `ovHave` alone, which
+   * is what keeps the last answer on screen instead of putting a shimmer over
+   * it. Rule 1, a slice at a time.
+   */
+  /**
+   * **Coming back to the page is a re-read**, and it has to be said explicitly
+   * now. The single request re-fired on every one of this effect's dependencies
+   * and `view` was one of them, so crossing to Research and back read the page
+   * again for free. With the slices asked once each, that stopped happening —
+   * driven, and a tab crossing made **no request at all** — which would leave a
+   * reader looking at yesterday's answer until the clock rolled.
+   *
+   * A counter rather than `view` in the key: the key must change when the page
+   * is *entered*, not every time `view` moves.
+   *
+   * What comes back is only what the reader has actually looked at — `ovWant`,
+   * not all eight — so a reader who never scrolled past the carousel re-reads
+   * three slices where the old page re-read ten.
+   */
+  const [ovVisit, setOvVisit] = useState(0);
+  const ovLeft = useRef(false);
+  const ovHaveRef = useRef(ovHave);
+  ovHaveRef.current = ovHave;
+  useEffect(() => {
+    if (view !== 'overview') {
+      ovLeft.current = true;
+      return;
+    }
+    if (!ovLeft.current) return;
+    ovLeft.current = false;
+    /**
+     * **Only a return to a page that has been drawn.** Two things look like a
+     * re-entry and are not: the first render, and the *landing* — a connected
+     * reader boots on another view and `setView('overview')` moves them, which
+     * is a `view` transition into this page before it has read anything. Both
+     * bumped the key under the boot wave and asked for `mine.today` twice,
+     * measured — four waves at boot where there should be three, which is the
+     * duplicate-read fault this page has already been fixed for once.
+     *
+     * `ovHave` is the test because it is the honest one: a page with an answer
+     * on it is a page being *re*-visited, whatever route the reader took.
+     */
+    if (ovHaveRef.current.size === 0) return;
+    setOvVisit((v) => v + 1);
+  }, [view]);
+
+  const ovKey = `${overviewDates.today}|${usingFantasy ? 'f' : 's'}|${matchupPeriod ?? ''}|${ovRosterKey}|${ovVisit}`;
+  const ovKeyRef = useRef(ovKey);
+  useEffect(() => {
+    if (ovKeyRef.current === ovKey) return;
+    ovKeyRef.current = ovKey;
+    // Not `ovHave`: see above. Not `ovWant` either — what the reader has
+    // scrolled to is a fact about the page, not about the date on it.
+    setOvAsked(new Set());
+  }, [ovKey]);
+
   useEffect(() => {
     if (view !== 'overview') return;
     if (!ovReady) return;
-    setOvFired(true);
+    const wave = [...ovWant].filter((k) => !ovAsked.has(k));
+    if (wave.length === 0) return;
+    setOvAsked((a) => {
+      const next = new Set(a);
+      for (const k of wave) next.add(k);
+      return next;
+    });
     const seq = ++ovBatch.current;
     setOvBatchLoading(true);
     /** The wire carries lineup keys as an array; the blocks want the `Set` they
@@ -6518,52 +6638,74 @@ export default function App() {
       d ? { players: d.players, lineup: d.lineup ? new Set(d.lineup) : null } : null;
     const span = (s: OverviewSpanRead | null): OverviewSpan | null =>
       s ? { players: s.players, lineups: s.lineups } : null;
+    const asked = new Set(wave);
     void api
-      .overview(overviewDates.today, usingFantasy ? 'fantasy' : 'saved', matchupPeriod)
+      .overview(overviewDates.today, usingFantasy ? 'fantasy' : 'saved', matchupPeriod, wave)
       .then((r) => {
-        if (seq !== ovBatch.current) return;
-        // **Supersede any live tick already in flight.** The tick reads today
-        // through `loadOverviewDay` on its own sequence numbers, so a poll that
+        // **A late wave is not a stale one.** The sequence guard the single
+        // request used would discard every wave but the newest, which is
+        // exactly wrong here — two waves are two different questions and both
+        // answers are wanted. What has to be discarded is a wave asked *before*
+        // a key change, and `ovKeyRef` is the test for that.
+        if (ovKeyRef.current !== ovKey) return;
+        // **Supersede any live tick already in flight**, but only where this
+        // wave actually carries Today: the tick reads it through
+        // `loadOverviewDay` on its own sequence numbers, and a poll that
         // started before this answer could otherwise land after it and put an
-        // older Today on screen. Bumping the two counters it uses discards it,
-        // which is the same mechanism the tick uses against itself.
-        ovRead.current.today += 1;
-        ovRead.current.oppToday += 1;
-        setOvToday(day(r.mine.today));
-        setOvYesterday(day(r.mine.yesterday));
-        setOvTomorrow(r.mine.tomorrow);
-        setOvTodayProjection(r.mine.todayProjection);
-        setOvSpanMine(span(r.mine.span));
+        // older Today on screen. A wave that did not ask for Today has nothing
+        // to say about it and must not cancel the tick.
+        if (asked.has('mine.today')) ovRead.current.today += 1;
+        if (asked.has('theirs.today')) ovRead.current.oppToday += 1;
+        // Each setter is guarded by whether this wave asked for it, because a
+        // slice that was not asked for comes back `null` and writing that would
+        // be the wave erasing an answer another wave had already given.
+        if (asked.has('mine.today')) {
+          setOvToday(day(r.mine.today));
+          setOvTodayProjection(r.mine.todayProjection);
+        }
+        if (asked.has('mine.yesterday')) setOvYesterday(day(r.mine.yesterday));
+        if (asked.has('mine.tomorrow')) setOvTomorrow(r.mine.tomorrow);
+        if (asked.has('mine.span')) setOvSpanMine(span(r.mine.span));
         // **A side that is absent clears the other half rather than leaving
         // it**, which is the period-step case: last week's opponent must not
         // stay on screen under this week's heading. `null` here is the same
         // three-way absence the section is already drawn on — no league, no
         // matchup, a bye.
-        setOvOppToday(day(r.theirs?.today ?? null));
-        setOvOppYesterday(day(r.theirs?.yesterday ?? null));
-        setOvOppTomorrow(r.theirs?.tomorrow ?? null);
-        setOvOppTodayProjection(r.theirs?.todayProjection ?? null);
-        setOvSpanOpp(span(r.theirs?.span ?? null));
+        if (asked.has('theirs.today')) {
+          setOvOppToday(day(r.theirs?.today ?? null));
+          setOvOppTodayProjection(r.theirs?.todayProjection ?? null);
+        }
+        if (asked.has('theirs.yesterday')) setOvOppYesterday(day(r.theirs?.yesterday ?? null));
+        if (asked.has('theirs.tomorrow')) setOvOppTomorrow(r.theirs?.tomorrow ?? null);
+        if (asked.has('theirs.span')) setOvSpanOpp(span(r.theirs?.span ?? null));
+        // **Answered, whatever the answer was.** A slice the server computed
+        // and found nothing for is finished, and the block draws the empty
+        // state it already had — drawing that is finishing, not failing to
+        // finish, which is the rule the page-wide gate already followed.
+        setOvHave((h) => {
+          const next = new Set(h);
+          for (const k of asked) next.add(k);
+          return next;
+        });
       })
       .catch((e: Error) => {
-        // The page's own failure and the page's own empty states: every block
-        // draws the `no roster is being read` it already had, which is
-        // finishing rather than failing to finish. The route itself answers 200
-        // with holes for a *partial* failure, so reaching here means the whole
-        // request did not land.
-        if (seq === ovBatch.current) console.error('reading the overview failed:', e.message);
+        // The page's own failure and the page's own empty states. The route
+        // answers 200 with holes for a *partial* failure, so reaching here
+        // means the whole wave did not land — and those slices go back to
+        // unasked, so coming into view again retries them rather than leaving
+        // a block shimmering for the session.
+        console.error('reading the overview failed:', e.message);
+        if (ovKeyRef.current !== ovKey) return;
+        setOvAsked((a) => {
+          const next = new Set(a);
+          for (const k of asked) next.delete(k);
+          return next;
+        });
       })
       .finally(() => {
         if (seq === ovBatch.current) setOvBatchLoading(false);
       });
-  }, [
-    view,
-    overviewDates,
-    usingFantasy,
-    matchupPeriod,
-    ovRosterKey,
-    ovReady,
-  ]);
+  }, [view, ovReady, ovWant, ovAsked, ovKey, overviewDates, usingFantasy, matchupPeriod]);
 
   /** Whose matchup this is, still read off the board — it decides whether the
    *  foot of the page is *drawn*, and the matchup card above it needs the board
@@ -6583,75 +6725,42 @@ export default function App() {
     return out;
   }, [matchupSpan]);
 
-  /**
-   * **Has the Overview got everything it is going to draw?**
+  /*
+   * **The page no longer arrives all at once, and the argument that said it
+   * should is why the shimmer works.**
    *
-   * The page is a composition of up to nine reads that answer over about a
-   * second, and it used to draw each of them the moment it had it. What that
-   * looks like from a chair is the fault: the matchup card lands, the page
-   * jumps; three day cards swap their own waits for figures one at a time, each
-   * a different height, and the carousel resizes under the finger; then the
-   * board answers, `Their days` appears out of nothing, and the page grows by a
-   * second carousel. Six reflows to arrive at one page. The app's rule that a
-   * block wait belongs where there is nothing to show yet was being kept **per
-   * card** on a surface where the *page* is the unit — three cards of one row
-   * are not three panes, and a heading that appears a beat after the block it
-   * names was never one either.
+   * `overviewSettled` stood here: nine reads, four terms, one flag, and the
+   * whole body held behind it — because a page that draws each read as it lands
+   * is a page assembling itself, six reflows to arrive at one page. Every word
+   * of that is still true and none of it is being taken back.
    *
-   * So the whole body waits, and lands at once. Which is a question only this
-   * component can answer: the view is handed eight loading flags and can see
-   * that none is up, and cannot see that four of them have not been *raised*
-   * yet, or that a board is still in flight whose answer decides whether there
-   * is a `Their days` section at all.
+   * What the flag could not do is say *which* read was outstanding, so the only
+   * curtain it could raise was over everything — and that is what made the page
+   * unable to ask for only what is on screen. Nothing is on screen behind a
+   * curtain, and a visibility observer with nothing to observe asks for
+   * nothing.
    *
-   * **Four terms, and each is a different way of not being finished:**
-   *
-   * - `ovFired` — the reader's own four have been asked for. Before that they
-   *   are waiting on `prefsSettled` and `espnStatusSettled`, which from outside
-   *   is indistinguishable from having finished.
-   * - the four flags — none of them still in flight.
-   * - the board — `espnStatusSettled` says whether one is even coming, and then
-   *   `scoreboard` or `scoreboardError` says it has come, **one way or the
-   *   other**. The error term is what keeps a dead ESPN from spinning this page
-   *   for ever: a failure costs the matchup card and the opponent's carousel,
-   *   which is this app's rule that a failure costs its own column and never
-   *   the request.
-   * - the opponent's four, on the same two terms as the reader's own, and only
-   *   where there is an opponent to read: no league, no matchup, a bye and a
-   *   saved-watchlist reader all resolve to no section rather than to a wait.
-   *
-   * **A failed day read settles like a successful one**, `loading` going false
-   * either way — the card has an empty state for it (`no roster is being read`)
-   * and drawing that is finishing, not failing to finish.
-   *
-   * **It is false again on a re-read and the page does not blank**, which is
-   * rule 1 and is enforced one level down: `OverviewView` latches the first
-   * settle and never puts the curtain up twice. The live tick is quiet and does
-   * not move this at all.
+   * `ovHave` makes the same claim per slice, and the reflow the gate existed to
+   * prevent is prevented a different way: the frame is drawn out of the real
+   * cards' own classes, so the geometry is final from the first paint and the
+   * figures appear in boxes that were already the right size. Measured when the
+   * skeleton was built — the matchup card, the `Your days` heading and the
+   * carousel do not move at all between the wait and the page.
    */
-  const overviewSettled =
-    ovFired &&
-    !ovBatchLoading &&
-    espnStatusSettled &&
-    (!needsScoreboard || scoreboard !== null || scoreboardError !== null);
 
-  /**
-   * **And once it has been drawn, it is never curtained again** — rule 1, which
-   * `overviewSettled` on its own would break in two places. Crossing to another
-   * tab and back **unmounts and remounts** the view, and its effects re-fire, so
-   * the raw flag goes false over four reads whose last answers this component is
-   * still holding; the clock rolling on resume does the same. Both are re-reads,
-   * and a re-read leaves the last answer standing.
+  /*
+   * **`overviewSettled` and `ovDrawn` are gone with the gate they fed.**
    *
-   * Latched here rather than in the view for exactly that reason: a `useRef` in
-   * `OverviewView` is a new ref on every remount, which is the case it is needed
-   * for. The `||` is what makes the first settle frame-accurate — the term is
-   * already true on the render that flips it, and this only has to catch up.
+   * They answered one question for the whole page — has every read finished,
+   * and has the page been drawn once already — because the page had one curtain
+   * and it had to go up exactly once. `ovHave` answers a better version of both
+   * a slice at a time: a block draws itself when its own slice has answered,
+   * and the set only grows within a reading, so a re-read leaves every block
+   * standing without needing a latch to remember that it had.
+   *
+   * The paragraph above them is kept in the note on `ovHave`, which is where
+   * the rule they enforced now lives.
    */
-  const [ovDrawn, setOvDrawn] = useState(false);
-  useEffect(() => {
-    if (overviewSettled) setOvDrawn(true);
-  }, [overviewSettled]);
 
   /**
    * **The Overview's `TODAY` card follows the day it is about.**
@@ -11070,7 +11179,16 @@ export default function App() {
              yet, and that a board is still to say whether there is a foot to
              the page. Latched, so a re-read never puts the curtain back up over
              cards this component is still holding. */
-          ready={overviewSettled || ovDrawn}
+          /**
+           * **Which slices have answered**, which is the only thing the shimmer
+           * reads: a block whose slice is in here draws itself, and one whose
+           * slice is not draws bars. It replaces the page-wide `ready` gate,
+           * which had to hold the whole frame back because it could not say
+           * *which* of the ten reads was outstanding.
+           */
+          have={ovHave}
+          /** A block on screen asking for its data — see `needOverviewSlice`. */
+          onNeed={needOverviewSlice}
         />
       ) : view === 'league' ? (
         <LeagueView

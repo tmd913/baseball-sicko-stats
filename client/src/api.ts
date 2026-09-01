@@ -1228,9 +1228,21 @@ export const api = {
     today: string,
     source: RosterSource,
     period?: number | null,
+    /**
+     * **Which slices to compute** — `mine.today`, `theirs.span` and so on. The
+     * page asks for what is on screen and comes back for the rest, because the
+     * whole payload is **4.42 MB** on the live league and `mine.today` alone is
+     * **96 KB**, while the two matchup spans are 3.81 MB of it for a block
+     * below the fold.
+     *
+     * Omitted asks for everything, which is what the route did before any
+     * caller named a slice and is still what a caller that does not care gets.
+     */
+    want?: readonly string[],
   ): Promise<OverviewPayload> {
     const src = source === 'fantasy' ? '&source=fantasy' : '';
     const p = period != null ? `&period=${period}` : '';
-    return request(`/api/overview?today=${today}${src}${p}`);
+    const w = want && want.length > 0 ? `&want=${want.join(',')}` : '';
+    return request(`/api/overview?today=${today}${src}${p}${w}`);
   },
 };

@@ -3225,6 +3225,28 @@ export interface OverviewSide {
   span: OverviewSpanRead | null;
 }
 
+/**
+ * **The Overview's slice names, mirroring the server's `OVERVIEW_SLICES` by
+ * hand** — the two workspaces cannot import from each other, which is the same
+ * reason everything else in this file is mirrored.
+ *
+ * It is checked the same way too: the route echoes `want` back, so a name this
+ * side spells wrongly comes back as a slice the server did not compute and the
+ * block never leaves its shimmer. A visible failure rather than a silent one,
+ * which is the most a hand-mirrored vocabulary can offer.
+ *
+ * **`today` carries its projection on both sides.** The card is drawn as a
+ * projection until the day's first game and as a result after, and one without
+ * the other is a card that cannot draw itself, so they are one slice.
+ *
+ * Here rather than in `App.tsx` because it is a wire vocabulary — it is the
+ * `want=` parameter — and because `OverviewView` needs it, which from `App`
+ * would be a cycle.
+ */
+export const OVERVIEW_SLICES = ['today', 'yesterday', 'tomorrow', 'span'] as const;
+export type OverviewSlice = (typeof OVERVIEW_SLICES)[number];
+export type OverviewSliceKey = `mine.${OverviewSlice}` | `theirs.${OverviewSlice}`;
+
 export interface OverviewPayload {
   dates: { yesterday: string; today: string; tomorrow: string };
   /** `'watchlist'` is what the saved roster has always been called on the wire,
@@ -3239,6 +3261,14 @@ export interface OverviewPayload {
   /** The matchup period clamped to today, or null where there is none to read
    *  or it is longer than the route will answer for in one payload. */
   span: { start: string; end: string } | null;
+  /**
+   * **Which slices the server actually computed**, echoed back — `mine.today`,
+   * `theirs.span`. Every field of a side is nullable for two reasons now, the
+   * read having failed or never been asked for, and this is what tells them
+   * apart from the payload alone. Absent `want` on the request means all of
+   * them, and this lists all of them.
+   */
+  want: string[];
   mine: OverviewSide;
   theirs: OverviewSide | null;
 }
