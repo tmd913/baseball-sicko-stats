@@ -18,7 +18,8 @@ export interface ArsenalPitch {
 }
 
 /** Season outcomes a pitch type produced (the Baseball Savant "Results" columns):
- * batting line against, whiff%, and put-away% — all over the pitcher's season. */
+ * batting line against, whiff%, put-away% and run value — all over the
+ * pitcher's season. */
 export interface PitchResults {
   pa: number | null; // plate appearances that ended on this pitch type
   ba: number | null; // batting average against (0-1)
@@ -27,6 +28,28 @@ export interface PitchResults {
   xwoba: number | null; // expected wOBA against (est_woba on BIP, woba weights else)
   whiff: number | null; // whiffs / swings (0-1)
   putAway: number | null; // 2-strike strikeouts / 2-strike pitches (0-1)
+  /**
+   * Runs the pitch saved him this season, against what an average pitch in the
+   * same count and base-out state would have done — Savant's own Run Value,
+   * **pitcher-positive**: `+8` means the four-seamer cost the batting side eight
+   * runs, `-1` that the cutter handed them one.
+   *
+   * The sum of the CSV's `delta_pitcher_run_exp`, which is a per-pitch column
+   * rather than anything derived here — Savant publishes both signs
+   * (`delta_run_exp` is the batter's, and is exactly the negation, measured to
+   * the cent over a 2,550-pitch season), and reading the pitcher's own is one
+   * fewer place to get a sign wrong.
+   *
+   * **Probed before it was built on**, which this file's own history asks for:
+   * over Logan Gilbert's 2026, 4 of 2,550 rows carry no value and the six pitch
+   * types Savant's own Run Values table prints agree to the run and to the tenth
+   * of an RV/100 — FF 7.72 → `8` / 0.8, SL 8.85 → `9` / 1.4, FS 0.44 → `0` /
+   * 0.1, CH 0.98 → `1` / 0.5, ST 0.54 → `1` / 0.3, FC −0.78 → `-1` / −0.5.
+   *
+   * Null where no row of that type carried the column at all; a pitch that
+   * genuinely broke even is `0`, and the two must not read alike.
+   */
+  runValue: number | null;
 }
 
 /** How often a pitch type was thrown, and how often it was a strike. Only the
@@ -220,8 +243,14 @@ interface StoredArsenals {
 // undefined, and the game chart then draws its dots over nothing at all — a
 // cloud with no baseline behind it, on the one chart whose whole claim is the
 // comparison. It is a field read straight back out of the blob, which is the
-// test this file applies.
-const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v7.json`;
+// test this file applies. **v8 is the per-pitch-type run value**, and it passes
+// the same test twice over: a v7 blob deserializes with `runValue` undefined,
+// and the Arsenal tab's Run Value chart then has nothing to draw — but `null`
+// is also the honest reading of "no row carried the column", so a stale blob
+// would be indistinguishable from a pitcher Savant has no run values for, and
+// the chart would simply be absent for six hours with nothing on screen saying
+// why.
+const storeKey = (pitcherId: number) => `arsenal-${pitcherId}-${SEASON}-v8.json`;
 
 const NO_BATTED_BALLS: BattedBallMix = { total: 0, fly: 0, ground: 0, line: 0 };
 
@@ -483,6 +512,8 @@ function aggregate(records: Record<string, string>[]): Arsenal {
     whiffs: number;
     twoStrike: number; // pitches thrown in a 2-strike count
     putaways: number; // 2-strike pitches that were strike three
+    rv: number; // Σ delta_pitcher_run_exp — runs saved, pitcher-positive
+    rvRows: number; // of `count`, the pitches that carried the column
   }
   const agg = new Map<string, Acc>();
   for (const r of records) {
@@ -490,7 +521,7 @@ function aggregate(records: Record<string, string>[]): Arsenal {
     if (!name || name === 'null') continue;
     let a = agg.get(name);
     if (!a) {
-      a = { count: 0, strikes: 0, velo: [], spin: [], hb: [], vb: [], pa: 0, ab: 0, hits: 0, tb: 0, wobaVal: 0, wobaDen: 0, xwobaNum: 0, swings: 0, whiffs: 0, twoStrike: 0, putaways: 0 };
+      a = { count: 0, strikes: 0, velo: [], spin: [], hb: [], vb: [], pa: 0, ab: 0, hits: 0, tb: 0, wobaVal: 0, wobaDen: 0, xwobaNum: 0, swings: 0, whiffs: 0, twoStrike: 0, putaways: 0, rv: 0, rvRows: 0 };
       agg.set(name, a);
     }
     a.count++;
@@ -505,6 +536,15 @@ function aggregate(records: Record<string, string>[]): Arsenal {
     if (px !== null) a.hb.push(-px * 12); // −pfx_x → the feed's horizontal-break sign
     const pz = num(r.pfx_z);
     if (pz !== null) a.vb.push(pz * 12); // pfx_z → induced vertical break
+
+    // Run value, per pitch and already from the pitcher's side. Counted rows
+    // are tracked separately from `count` so a type whose every row is missing
+    // the column comes out null rather than as a pitch that broke even.
+    const rv = num(r.delta_pitcher_run_exp);
+    if (rv !== null) {
+      a.rv += rv;
+      a.rvRows++;
+    }
 
     // Whiff / swing (per pitch, on `description`).
     const d = r.description ?? '';
@@ -580,6 +620,9 @@ function aggregate(records: Record<string, string>[]): Arsenal {
       xwoba: a.wobaDen ? r3(a.xwobaNum / a.wobaDen) : null,
       whiff: a.swings ? r3(a.whiffs / a.swings) : null,
       putAway: a.twoStrike ? r3(a.putaways / a.twoStrike) : null,
+      // To the hundredth of a run: the chart prints whole runs and a rate per
+      // 100 pitches to the tenth, and both are derived from this one figure.
+      runValue: a.rvRows ? Math.round(a.rv * 100) / 100 : null,
     });
   }
 

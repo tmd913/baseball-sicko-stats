@@ -21986,6 +21986,41 @@ html[data-theme='light'] .league-table thead th {
   display: inline;
 }
 
+/* ---- Run Value ------------------------------------------------------------ */
+
+/* **Folded onto the Pitch Usage grid, not given one of its own.** A run-value
+   row *is* a usage row — five columns, a pressable pitch badge down the middle,
+   a bar growing outward from it — with one side of the butterfly used at a time
+   instead of two. `.pu-head` / `.pu-row` are a single template precisely so the
+   header and the rows cannot drift apart by hand; a second copy of those five
+   widths one figure down would be that same fault, and it would have to be kept
+   in step through the narrow container query as well.
+
+   What genuinely differs is **which figure is the headline**. On the butterfly
+   the middle number is the season share and the side figures are its two
+   halves, so the middle takes `--text` and the sides `--muted`. Here the sides
+   carry the runs — the quantity the bar is actually drawn from — and the middle
+   carries the per-100 rate, so the emphasis is the other way round. That swap is
+   the whole of this block. */
+.rv-chart .pu-pct-side {
+  color: var(--text);
+}
+.rv-chart .pu-pct-main {
+  color: var(--muted);
+  font-weight: 500;
+}
+/* The badge's counterweight — see `RunValueChart`'s own note. `visibility`
+   rather than `display`, because the whole point of it is that it still takes
+   the space. */
+.rv-chart .rv-mirror {
+  visibility: hidden;
+}
+/* Selected, the badge grows into the pitch's full name and takes the cell, so
+   the thing there was to balance has gone with the figure it mirrored. */
+.rv-chart .pu-row.on .rv-mirror {
+  display: none;
+}
+
 /* ---- Movement Profile ----------------------------------------------------- */
 
 .mv-chart {

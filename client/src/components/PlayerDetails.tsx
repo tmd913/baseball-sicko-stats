@@ -28,6 +28,7 @@ import {
 import {
   MovementChart,
   PitchUsageChart,
+  RunValueChart,
   seasonChartPitches,
   usePitchSelection,
 } from './ArsenalCharts';
@@ -417,6 +418,17 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
           // app (measured against a stale dev server: `#root` went to 0
           // children on the press).
           samples={arsenal.samples ?? []}
+          selection={selection}
+        />
+        {/* Last, because it is the only one of the three that is about what
+            *came of* the pitches rather than what they were: what he throws,
+            where it moves, what it earned. It draws nothing at all when the
+            column is missing (see `RunValueChart`), so a server older than the
+            v8 arsenal blob costs the tab one figure rather than five rows of
+            dashes. */}
+        <RunValueChart
+          season={arsenal.season ?? null}
+          pitches={pitches}
           selection={selection}
         />
       </div>

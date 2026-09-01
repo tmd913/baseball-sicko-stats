@@ -139,6 +139,14 @@ export interface ChartPitch {
   /** Share of the pitches in *this* view (0-1) — a season, a game, or one hand
    *  of either, so a split's usage adds to 100%. */
   share: number;
+  /** How many of them there were. The Run Value chart's denominator: run value
+   *  is a total, and per 100 pitches is what makes a wipeout slider thrown 180
+   *  times comparable with a fastball thrown a thousand. */
+  count: number;
+  /** Runs the pitch saved, pitcher-positive — what the Run Value chart draws.
+   *  Null on a caller that has none, which is the game one: run value is a
+   *  season column off Savant's CSV and there is no such thing as tonight's. */
+  runValue: number | null;
   velo: number | null;
   hBreak: number | null;
   vBreak: number | null;
@@ -158,6 +166,8 @@ export function seasonChartPitches(pitches: SeasonArsenalPitch[]): ChartPitch[] 
   return pitches.map((p) => ({
     pitchType: p.pitchType,
     share: p.share,
+    count: p.count,
+    runValue: p.runValue ?? null,
     velo: p.velo,
     hBreak: p.hBreak,
     vBreak: p.vBreak,
@@ -174,6 +184,11 @@ export function gameChartPitches(mix: PitchMix[]): ChartPitch[] {
   return mix.map((m) => ({
     pitchType: m.pitchType,
     share: m.share,
+    count: m.count,
+    // A night has no run value: the figure is a season column off Savant's CSV,
+    // and `RunValueChart` draws nothing when every pitch answers null — so the
+    // outing page cannot accidentally grow a chart of dashes.
+    runValue: null,
     velo: m.avgVelo,
     hBreak: m.hBreak,
     vBreak: m.vBreak,
@@ -499,6 +514,208 @@ export function PitchUsageChart({
                   <span className="pu-pct pu-pct-side">{pctText(r)}</span>
                 </>
               )}
+            </button>
+          );
+        })}
+      </div>
+    </figure>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Run Value
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs, **unsigned** — the side of the chart the bar is on is what says saved
+ * or allowed, exactly as `vs. LHH` / `vs. RHH` says it on the butterfly one
+ * figure up. A signed `-1` printed under a head already reading `Runs allowed`
+ * is the same fact twice and, worse, invites reading it as a run saved back.
+ *
+ * **To the tenth of a run, where Savant's own table prints whole ones.** The
+ * whole run was tried first and matched that table exactly — `8` against its
+ * `8`, `9` against `9` — and it is wrong *here* for a reason the table does not
+ * have: Savant drops a pitch thrown ten times a season and this chart draws
+ * every pitch the other two draw, so three of this pitcher's eight rows round
+ * to `0` and each one prints that nought **beside a visible bar**. A capsule
+ * over a zero is a row contradicting itself. The tenth costs one character in a
+ * column that has room for it (measured: `25.4` is 26px of a 35px cell at the
+ * narrowest width the app draws) and every row then says what its bar says.
+ */
+const runsText = (rv: number): string => (Math.round(Math.abs(rv) * 10) / 10).toFixed(1);
+
+/**
+ * Runs per 100 pitches, signed — this one has no side to carry its sign, being
+ * down the middle. `−` is U+2212 rather than a hyphen, the same minus the
+ * movement chart's inch labels use.
+ */
+const per100Text = (rv: number | null, count: number): string => {
+  if (rv === null || !count) return '—';
+  const v = (rv / count) * 100;
+  const a = Math.abs(v);
+  // −0.04 rounds to 0.0, and `−0.0` is a sign on a number that has none.
+  if (Math.round(a * 10) === 0) return '0.0';
+  // **Four characters at the outside, sign included.** The figure rides in a
+  // 7.6em column that a phone narrows to 6.4em, and it shares that column with
+  // the badge and the badge's mirror; `−10.5` is 32px of a 90px cell once the
+  // other two have taken theirs. Past ten runs a hundred the tenth is not the
+  // reading anyway — a rate that size is three pitches, and this pitcher's
+  // curveball is exactly that case.
+  return `${v < 0 ? '−' : '+'}${a >= 10 ? Math.round(a) : (Math.round(a * 10) / 10).toFixed(1)}`;
+};
+
+/** One side of a run-value row: a bar, or the empty half of the track.
+ *
+ *  **The bar element exists only on the side the run value is on.** `.pu-bar`
+ *  carries a `min-width: 4px` so a capsule of no length is still visible — which
+ *  is right on the butterfly, where a pitch he never throws to lefties is a fact
+ *  worth a nub, and wrong here, where it would put a mark for runs allowed
+ *  beside a pitch that allowed none. */
+function RunValueBar({
+  rv,
+  max,
+  color,
+  side,
+}: {
+  rv: number | null;
+  max: number;
+  color: string;
+  side: 'allowed' | 'saved';
+}) {
+  const on = rv !== null && max > 0 && (side === 'saved' ? rv > 0 : rv < 0);
+  return (
+    <span className={`pu-track pu-track-${side === 'allowed' ? 'right' : 'left'}`}>
+      {on && (
+        <span
+          className="pu-bar"
+          style={{ width: `${Math.min(100, (Math.abs(rv) / max) * 100).toFixed(2)}%`, background: color }}
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * **What each pitch earned him**, as the third picture on the tab: runs saved
+ * growing right of the pitch, runs allowed growing left of it.
+ *
+ * ### Why it is here at all
+ *
+ * The other two charts are about the *stuff* — what he throws and where it
+ * moves — and neither of them says a word about what came of it. That was the
+ * one thing the per-pitch rows underneath still carried that the pictures did
+ * not (a season BA/SLG/wOBA strip), and it was carried as six numbers a row
+ * across five rows, which is a table nobody reads a row of. Run value is the
+ * single figure those six are trying to add up to: one number per pitch, in
+ * runs, already accounting for the count and the base-out state the pitch was
+ * thrown in. So it draws as a picture rather than a strip, and the strip goes.
+ *
+ * ### Folded onto the butterfly's own row, deliberately
+ *
+ * A run-value row **is** a usage row — five columns, a pressable pitch badge
+ * down the middle, a bar growing outward from it — with one side used at a time
+ * instead of two. It shares `.pu-head` / `.pu-row`'s single grid template for
+ * the reason that template exists: two sets of column widths kept in step by
+ * hand is the fault it was written to avoid, and a second copy of it one figure
+ * down would be that fault again. It shares `usePitchSelection` for the reason
+ * the first two do — picking the slider out has to pick it out in all three, or
+ * a reader has two answers to "which pitch am I looking at" on one screen.
+ *
+ * What genuinely differs is **which figure is the headline**: on the butterfly
+ * the middle number is the season share and the sides are its two halves, where
+ * here the sides carry the runs the bar is drawn from and the middle carries the
+ * rate. That is a swap of emphasis, and it is the whole of `.rv-chart`.
+ *
+ * ### The bar is the total, and the middle figure is why
+ *
+ * Scaled to the largest magnitude on the chart, like `UsageBar` and for the same
+ * reason: the comparison a reader makes here is between *these* pitches. The
+ * total is what the bar has to be — it is the runs, and a rate would draw a
+ * pitch thrown eleven times the length of one thrown a thousand. RV/100 is
+ * printed beside the badge precisely because the bar cannot say it: a slider
+ * worth +1.4 per hundred and a four-seamer worth +0.8 are the two readings, and
+ * the bars have the four-seamer ahead on the season.
+ *
+ * Absent where there is nothing to draw — a game's pitches, or a server old
+ * enough not to send the column — rather than a chart of dashes.
+ */
+export function RunValueChart({
+  season,
+  pitches,
+  selection,
+}: {
+  /** Which season these are, printed before the title, the way the other two
+   *  do it. */
+  season: number | null;
+  pitches: ChartPitch[];
+  selection: PitchSelection;
+}) {
+  const max = useMemo(
+    () => pitches.reduce((m, p) => Math.max(m, Math.abs(p.runValue ?? 0)), 0),
+    [pitches],
+  );
+
+  // Nothing to draw is nothing drawn. `runValue` is null on a game's pitches and
+  // on anything a pre-v8 server answers with, and a five-row chart of dashes
+  // reads as a pitcher who broke even on everything rather than as a figure we
+  // do not have.
+  if (!pitches.some((p) => p.runValue !== null)) return null;
+
+  return (
+    <figure className="pu-chart rv-chart">
+      <figcaption className="chart-title">
+        {season != null && <span className="chart-title-year">{season}</span>} Run Value
+      </figcaption>
+      <div className="pu-head" aria-hidden="true">
+        <span className="pu-head-side">Runs allowed</span>
+        <span className="pu-head-mid">RV/100</span>
+        <span className="pu-head-side">Runs saved</span>
+      </div>
+      <div className="pu-rows">
+        {pitches.map((p) => {
+          const { abbr, color } = pitchStyle(p.pitchType);
+          const rv = p.runValue;
+          const on = selection.selected === p.pitchType;
+          const dim = selection.selected !== null && !on;
+          // A run value of exactly 0 sits on the saved side with no bar: it has
+          // to print somewhere, and "cost him nothing" is the reading.
+          const saved = rv !== null && rv >= 0;
+          return (
+            <button
+              key={p.pitchType}
+              type="button"
+              className={`pu-row${on ? ' on' : ''}${dim ? ' dim' : ''}`}
+              {...pitchButtonProps(p.pitchType, selection)}
+              title={
+                rv === null
+                  ? `${p.pitchType} — no run value`
+                  : `${p.pitchType} — ${runsText(rv)} runs ${
+                      saved ? 'saved' : 'allowed'
+                    } over ${p.count} pitches (${per100Text(rv, p.count)} per 100)`
+              }
+            >
+              <span className="pu-pct pu-pct-side">{rv !== null && !saved ? runsText(rv) : ''}</span>
+              <RunValueBar rv={rv} max={max} color={color} side="allowed" />
+              <span className="pu-mid">
+                {/* **The badge is this chart's zero, so it has to sit on the
+                    column's center** — not on the center of badge-plus-figure,
+                    which is what `.pu-mid`'s flex row gives and what put the
+                    two bars 175px and 95px from it on a 900px page, measured.
+                    The figure is therefore laid out a second time on the badge's
+                    other side and made invisible, which balances the row at any
+                    width and in any font rather than declaring an offset that
+                    would be right at one of them. */}
+                <span className="pu-pct rv-mirror" aria-hidden="true">
+                  {per100Text(rv, p.count)}
+                </span>
+                <span className="pu-badge" style={{ background: color, color: inkOn(color) }}>
+                  <span className="pu-abbr">{abbr}</span>
+                  <span className="pu-full">{p.pitchType}</span>
+                </span>
+                <span className="pu-pct pu-pct-main">{per100Text(rv, p.count)}</span>
+              </span>
+              <RunValueBar rv={rv} max={max} color={color} side="saved" />
+              <span className="pu-pct pu-pct-side">{rv !== null && saved ? runsText(rv) : ''}</span>
             </button>
           );
         })}

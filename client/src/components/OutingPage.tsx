@@ -9,7 +9,7 @@ import { TabStrip } from './TabStrip';
 import { LoadingBlock } from './Loading';
 import { DialogLayerContext, DIALOG_LAYER } from './Modal';
 import { InningsList } from './Innings';
-import { ArsenalSection, GameLine, OpponentSection, outingBar } from './PitcherCard';
+import { GameLine, OpponentSection, outingBar } from './PitcherCard';
 import { GameArsenalCharts } from './ArsenalCharts';
 import { matchupLine } from './PlayerCard';
 
@@ -58,6 +58,38 @@ import { matchupLine } from './PlayerCard';
  * result. Order is where a reading *lives*; the default is which question was
  * asked, and this page has answered them separately since the live case was
  * written.
+ *
+ * ### The rows are gone, and the tab is the two pictures
+ *
+ * The Arsenal tab drew `GameArsenalCharts` and then an `ArsenalSection` under
+ * it — one card per pitch type, carrying the night's velo/spin/iVB/HB with ▲▼
+ * deltas against his season, a usage and a strike bar, and a `Season Results`
+ * strip of six figures. **They were kept, once, on the argument that three
+ * things on them are not in either picture** (the pitch count and strike rate,
+ * the whiff rate, and that season strip) and had no other home on this page.
+ *
+ * That argument does not survive the cards being looked at rather than
+ * enumerated. Five pitch types is five cards of eleven figures each — fifty-odd
+ * numbers under two charts drawn from the same night — and the three that were
+ * genuinely unique are the *only* reason the other fifty are on screen. Two of
+ * the three are the pictures' own subject said again in digits: the usage bar
+ * repeats the butterfly's row and the velo/break grid repeats the cloud's
+ * position, and the `Season Results` strip is a **season** reading printed five
+ * times over on the one page in the app whose whole claim is that it is about
+ * one night. The tab is the two pictures now, which is what the player page one
+ * screen up did with its own rows for exactly these reasons.
+ *
+ * **The split control goes with them, having nothing left to cut.** It survived
+ * the player page's own argument on the grounds that here it narrowed the rows
+ * only — the charts above it drawing the whole game either way — so a per-hand
+ * whiff rate stayed reachable and nothing on screen was contradicted. That is
+ * an argument about the rows, and it ends with them; the butterfly draws vs LHH
+ * and vs RHH side by side on this page as it does on that one.
+ *
+ * **`ArsenalSection` itself stays** in `PitcherCard.tsx`, whose components have
+ * rendered nowhere for a long time and are kept as parts — this page took
+ * `GameLine` and `OpponentSection` out of it. It is not orphaned by this change
+ * so much as returned to that file's normal condition.
  *
  * ### What it borrows
  *
@@ -303,17 +335,12 @@ export function OutingPage({
                   bare
                 />
               )}
-              {active === 'arsenal' && (
-                <>
-                  {/* The two pictures first, the rows under them — see the note
-                      on this page's tab order. `report.throws` is the hand: the
-                      charts read it to tell a tail from a break, and it is a
-                      fact about the man rather than about the night, so his
-                      report is where it comes from. */}
-                  <GameArsenalCharts pg={pg} hand={report.throws} />
-                  <ArsenalSection pg={pg} bare />
-                </>
-              )}
+              {/* The two pictures, and nothing under them — see *The rows are
+                  gone* above. `report.throws` is the hand: the charts read it
+                  to tell a tail from a break, and it is a fact about the man
+                  rather than about the night, so his report is where it comes
+                  from. */}
+              {active === 'arsenal' && <GameArsenalCharts pg={pg} hand={report.throws} />}
             </>
           ) : pending?.error ? (
             <div className="details-status details-error">⚠ {pending.error}</div>

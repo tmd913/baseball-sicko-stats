@@ -690,6 +690,13 @@ export interface SeasonArsenalPitch {
   xwoba: number | null;
   whiff: number | null;
   putAway: number | null;
+  /** Runs this pitch saved him this season, **pitcher-positive**: `+8` means the
+   *  four-seamer cost the batting side eight runs, `-1` that the cutter handed
+   *  them one. Savant's own Run Value (Σ `delta_pitcher_run_exp`), to the
+   *  hundredth — the Run Value chart prints whole runs, and divides by `count`
+   *  for the RV/100 beside them. Null where Savant carried no run value for the
+   *  pitch at all; a pitch that genuinely broke even is `0`. */
+  runValue: number | null;
 }
 
 /** A pitcher's season line (and platoon splits vs L/R), for the card header. */
