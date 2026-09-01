@@ -463,6 +463,152 @@ copies are gone, and the one thing that is this label's alone and not the rail's
 `.date-row .date-presets` and the narrow-screen blocks already record, arrived at
 from a third direction.
 
+### The page reads what is on screen, and shimmers the rest
+
+**Ten reads, of which a reader can see two.** The carousel opens on Today and
+everything else is a swipe or a scroll away, and the page computed all ten
+before it drew a card. Measured on the live league, that payload is **4.42 MB**
+— and of it:
+
+| slice | bytes |
+| --- | --- |
+| `mine.today` (with its projection) | **96 KB** |
+| the reader's three days | 308 KB |
+| the opponent's three days | 308 KB |
+| **the two matchup spans** | **3.81 MB** |
+| everything | 4.42 MB |
+
+**86% of the page is the block below the fold**, and the first card was waiting
+for it.
+
+#### `want=` and a wave per set of newly-visible blocks
+
+`/api/overview` takes a list of slices — `mine.today`, `theirs.span` — and
+computes only those. Names are side-qualified because the two managers' halves
+come into view at different moments: the reader's carousel is at the top and the
+opponent's is below the fold, and asking for one must not compute the other.
+`today` carries its projection, the card being drawn as a projection until the
+day's first game and as a result after, so one without the other is a card that
+cannot draw itself. **Absent means all of them**, which keeps the parameter an
+optimization rather than a contract.
+
+The client keeps three sets: `ovWant` (decided it needs), `ovAsked`
+(requested), `ovHave` (answered). The difference between the first two is the
+next wave. Driven at 1200×900, a boot and a scroll to the foot:
+
+```
++65ms    want=mine.today
++100ms   want=mine.tomorrow,mine.yesterday
++scroll  want=mine.span,theirs.span,theirs.today,theirs.tomorrow,theirs.yesterday
+```
+
+**Three requests, and the last one is five slices in one.** That is
+`IntersectionObserver` delivering every entry of a cycle in a single callback
+and React batching the `setOvWant`s inside it — a scroll that reveals three
+blocks is one request, not three.
+
+**The batching argument that created this route is not reversed by that.** It
+exists because five parallel client requests were five cold Lambda containers at
+1,368ms each; a wave is still one request for a batch of slices, and the waves
+after the first happen while the reader is reading. A cold container on wave
+three costs nobody anything they are waiting on.
+
+#### Visibility, not gestures
+
+`useOnVisible` is what decides "on screen", and it has to be visibility rather
+than a swipe or a scroll *event*: the same three cards are one-at-a-time on a
+phone and all three at once on a desk, so a rule written in gestures would load
+nothing on the desk, where nothing is ever swiped to. Driven at both:
+
+| | boot asks for | then |
+| --- | --- | --- |
+| 390px | `mine.today` — the row reads `YESTERDAY:bars TODAY:real TOMORROW:bars` | a swipe left asks `mine.yesterday`, a swipe right `mine.tomorrow` |
+| 1200px | `mine.today`, then `mine.yesterday,mine.tomorrow` a frame later | all three are in view, so all three load |
+
+**A day card wants half of itself showing.** The carousel's neighbors peek 22px
+into the viewport at every width — measured at 390, Today is 100% and each
+neighbor about 6% — and a peek is not a card the reader is looking at. **A block
+below the fold wants any of itself plus 300px of `rootMargin`**, because it is
+scrolled *into* rather than swiped to, and half of a tall block showing puts the
+request behind the eye instead of in front of it.
+
+**It returns a ref callback, and that is the whole of why it works.** Written
+against a `useRef` object it silently observed nothing: the effect reads
+`ref.current` once, and two of the three blocks do not exist on the render that
+runs it — `Matchup leaders` and the opponent's carousel are drawn only once the
+board says there is an opponent, a round trip later. Measured before the fix:
+`theirs.*` and both spans were never asked for, at any scroll position.
+
+*(And a note on testing it: a scroll that **jumps** straight to the foot fires
+nothing. An element that was below the viewport and is now above it never
+intersected, so the observer has nothing to report. The first run of this test
+scrolled to `scrollHeight` in one go and concluded the observers were broken;
+they were not, and stepping down the page in quarters is what showed it.)*
+
+#### The page-wide gate is gone, and the frame is what replaced it
+
+`overviewSettled`, `ovDrawn` and `ovFired` are all gone. They answered one
+question for the whole page — has everything finished, and has it been drawn
+once — because there was one curtain and it had to go up exactly once. **What
+the flag could not do is say which read was outstanding**, so the only curtain
+it could raise was over everything; and that is precisely what made the page
+unable to ask for what is on screen, because nothing is on screen behind a
+curtain and an observer with nothing to observe asks for nothing.
+
+`ovHave` makes the same claim per slice. The reflow the gate existed to prevent
+is prevented a different way — the skeleton is built from the real cards' own
+classes, so the geometry is final from the first paint. Measured, shimmering
+against filled:
+
+| | shimmering | filled |
+| --- | --- | --- |
+| `.ov-leaders` | **275px** | **276px** |
+| an opponent day card | 362px | 381px |
+
+The leaders block moves **1px**. The day card's 19 is the same one the skeleton
+already records — a real `ol.ov-perfs` is 128px where a performer's line wraps
+and 115 where none does, so the placeholder reserves the no-wrap floor rather
+than over-reserving and making the page shrink.
+
+**And `ovHave` only grows within a reading, which is rule 1.** Crossing to
+another tab and back re-asks everything the reader has looked at and leaves
+every block standing: driven, **peak bars 0** across the whole return, one
+request, no curtain.
+
+**Coming back is a re-read, and it had to be said out loud.** The single request
+re-fired on every dependency and `view` was one of them, so a tab crossing read
+the page again for free; with the slices asked once each that stopped happening,
+and a reader would have sat looking at a stale answer. `ovVisit` restores it —
+and only re-reads what the reader has actually looked at, so somebody who never
+scrolled past the carousel re-reads three slices where the old page re-read ten.
+
+**Two things look like a re-entry and are not**, and both cost a duplicate boot
+read before they were excluded: the first render, and the *landing* — a
+connected reader boots on another view and `setView('overview')` moves them,
+which is a `view` transition into a page that has not read anything yet.
+Measured, four waves at boot where there should be three. `ovHave.size === 0` is
+the test, because a page with an answer on it is a page being revisited whatever
+route the reader took.
+
+#### The `Projected` switch draws the same bars
+
+It has always been fetched on its first press — the days the week has *left*,
+which nothing else on the page needs — and it drew a turning ball. Now it draws
+what every other unanswered block draws: measured on the press, **36 bars and 0
+balls**, and the block 275px against the 276 it settles at. A reader who has
+learnt that bars mean *coming* should not have to learn a second thing for one
+control.
+
+#### Two boxes are stated rather than laid out, which is the rule's own exception
+
+A box is reserved by laying out the worst case *when there is a worst case to
+lay out*. Two here have none, because the real element is sized by its own text:
+`.ov-heat-cell` is `🥵 11` and `.ov-leader-name` is the manager's. Measured with
+a percentage inside them, both collapsed — the cell to **24px** where the real
+three are **61, 66 and 68**, and the name to **0**. So the cell takes a 64px
+floor and the name 160px, which is the middle of the 99–239px the league's ten
+names span.
+
 ### The wait is the page with its values missing
 
 **A turning ball is the right thing to show for a second and the wrong thing to
@@ -654,6 +800,14 @@ issued at +1545 where the old *second* one went at +1561 — 16ms earlier, becau
 the read that was dropped is the one whose answer was being discarded anyway.
 
 ### The page arrives all at once, or not at all
+
+> **Superseded, and the reasoning below is why the replacement is shaped as it
+> is.** The page reads what is on screen now and shimmers the rest — see *The
+> page reads what is on screen* above. What that changes is the *unit* the
+> argument is applied at: the reflow this section is about is still forbidden,
+> and it is prevented by the skeleton having the page's own geometry rather than
+> by a curtain over everything. Every measurement here stands.
+
 
 **Nine reads answer over about a second, and the page used to draw each of them
 the moment it had it.** From a chair that is not a page loading, it is a page

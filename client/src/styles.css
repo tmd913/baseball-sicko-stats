@@ -22927,6 +22927,41 @@ html[data-theme='light'] .league-table thead th {
 .ov-perf-val .sk-bar {
   margin-left: auto;
 }
+/* A club crest stands in the leaders block's head, where a day card's head has
+   only text. `.lg-logo` is an `<img>` rule and this is a `<span>`, so the box
+   has to be stated — 22px square, the size the real crest is drawn at there. */
+.sk-crest {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+}
+/* A heat count is a pressable cell, reserved the way a foot's doors are and for
+   the same reason — a button that looks pressable and is not is worse than a
+   bar. Two deep, because `.ov-heat-cell` is declared later in this file; see
+   `.ov-day-more.sk-door` above, which is the same trap.
+
+   **And it is the one place a number is stated rather than laid out**, which is
+   the standing rule meeting its own exception: a box is reserved by laying out
+   the worst case *when there is a worst case to lay out*, and here the real
+   cell is sized by its own content — `🥵 11` — so a placeholder with no glyph
+   and no count is 24px where the cell is 66. Measured on a real block: the
+   three cells are **61, 66 and 68px wide and 30 tall**. The same exception, for
+   the same reason, applies to the manager's name below. */
+.ov-heat-cell.sk-door {
+  display: grid;
+  place-items: center;
+  border-color: transparent;
+  background: none;
+  cursor: default;
+  min-width: 64px;
+  min-height: 30px;
+}
+/* `.ov-leader-name` is an `h4` sized by the manager's name, which is 99–239px
+   across this league's ten — so a percentage inside it resolves against zero.
+   160 is the middle of that range and the bar takes the whole of it. */
+.sk-leader-name {
+  width: 160px;
+}
 
 /* **The sweep is motion, and motion is a preference.** A still bar is still a
    bar — the shape it reserves is the whole of what it says — so the light goes

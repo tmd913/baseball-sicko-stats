@@ -55,6 +55,7 @@ import type {
   TrendWindow,
 } from '../types';
 import { playerKey } from '../types';
+import type { OverviewSliceKey } from '../types';
 import { categoryTotal, dayValue, STANDARD_5X5 } from '../categoryValue';
 import type { DayLine } from '../categoryValue';
 import {
@@ -74,7 +75,6 @@ import { formatTrend, trendDirection } from './researchColumns';
 import { rankFill } from './columnRanks';
 import { LoadingBlock } from './Loading';
 import { Modal } from './Modal';
-import { useDelayedFlag } from '../hooks';
 import { useOverflowArrows } from './TabStrip';
 import { MatchupCard, TeamLogo, categoryGroups, fmtValue } from './LeagueView';
 import { ProjectedGlyph } from './Projection';
@@ -526,6 +526,8 @@ function DayBlock({
   categoriesTitle,
   performers,
   loading,
+  settled,
+  onVisible,
   onOpenPlayer,
   onSeeDay,
   seeDayTitle,
@@ -576,7 +578,21 @@ function DayBlock({
    * pass — there is nothing to rank.
    */
   onRankAll: (() => void) | null;
+  /**
+   * **This card's slice has answered.** False draws the shimmer — the card's
+   * own chrome with bars where the figures go — which is what a card looks like
+   * before its data has been asked for *and* while it is in flight, those being
+   * the same thing from the reader's chair.
+   *
+   * Distinct from `loading`, which is the re-read case: a card that has an
+   * answer and is getting a new one keeps the old on screen (rule 1) and only
+   * the per-card `LoadingBlock` may show, on the day a rollover empties it.
+   */
+  settled: boolean;
+  /** Fires when half of the card is on screen — see `useOnVisible`. */
+  onVisible: () => void;
 }) {
+  const watch = useOnVisible(onVisible, { threshold: 0.5, off: settled });
   const total = useMemo(
     () => addLines((performers ?? []).map((p) => p.line)),
     [performers],
@@ -586,8 +602,25 @@ function DayBlock({
   const all = useMemo(() => rankDay(performers, projected), [performers, projected]);
   const top = all.slice(0, TOP_N);
 
+  // **The shimmer is the card, not a box in place of it.** A skeleton that
+  // replaced the whole section would be a different height from the card it
+  // stands for, and the reflow it caused on arrival is the thing the page-wide
+  // wait was built to avoid. `SkeletonDay` is built from these same classes, so
+  // the swap is figures appearing in boxes that were already the right size.
+  if (!settled) {
+    return (
+      <SkeletonDay
+        lead={lead}
+        date={date}
+        categories={categories}
+        projected={projected}
+        sectionRef={watch}
+      />
+    );
+  }
+
   return (
-    <section className={projected ? 'ov-day ov-day-proj' : 'ov-day'}>
+    <section ref={watch} className={projected ? 'ov-day ov-day-proj' : 'ov-day'}>
       <header className="ov-day-head">
         <span className="ov-day-lead">
           {lead}
@@ -1176,11 +1209,74 @@ const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'neutral', cold: 
  * it is not is a `DayBlock`: that component's head is a *day*, its body is a
  * category line and its states are four mornings, none of which this has.
  */
+/**
+ * One manager's half of `Matchup leaders`, with its figures missing.
+ *
+ * Same rule as `SkeletonDay`: built from `.ov-leader-side`'s own classes so the
+ * two columns are the height they will be, and only the things the read answers
+ * with are bars. The crest and the manager's name are bars too, unlike a day
+ * card's head — a day card's lead and date are facts the app already holds,
+ * where whose block this is comes off the same board read that fills it.
+ *
+ * Three rows and three heat cells, which are `TOP_N` and the three cuts the
+ * real block always draws.
+ */
+function SkeletonLeaderSide() {
+  return (
+    <div className="ov-leader-side">
+      <div className="ov-leader-head">
+        <span className="lg-logo sk-bar sk-crest" />
+        <h4 className="ov-perfs-head ov-leader-name sk-leader-name">
+          <SkBar w="100%" />
+        </h4>
+      </div>
+      <div className="ov-perfs-head-row">
+        <span className="ov-perfs-head">Top Performers</span>
+        <span className="ov-perfs-val-head">VALUE</span>
+      </div>
+      <ol className="ov-perfs">
+        {Array.from({ length: TOP_N }, (_, i) => (
+          <li key={i}>
+            <span className="ov-perf sk-perf">
+              <span className="ov-perf-rank">{i + 1}</span>
+              <span className="ov-perf-face sk-bar" />
+              <span className="ov-perf-body">
+                <span className="ov-perf-name">
+                  <SkBar w={['58%', '44%', '51%'][i] ?? '52%'} />
+                </span>
+                <span className="ov-perf-line">
+                  <SkBar w={['84%', '70%', '78%'][i] ?? '78%'} />
+                </span>
+              </span>
+              <span className="ov-perf-val">
+                <SkBar w="34px" />
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="ov-heat">
+        {['🥵', '😐', '🥶'].map((glyph) => (
+          <span className="ov-heat-cell sk-door" key={glyph}>
+            <SkBar w="60%" />
+          </span>
+        ))}
+      </p>
+      <footer className="ov-day-foot">
+        <span className="ov-day-more sk-door">
+          <SkBar w="56%" />
+        </span>
+      </footer>
+    </div>
+  );
+}
+
 function LeaderSide({
   name,
   team,
   performers,
   loading,
+  settled,
   projected,
   categoriesTitle,
   categories,
@@ -1196,6 +1292,9 @@ function LeaderSide({
    *  two are drawn differently, which is the whole of why this is nullable. */
   performers: Performer[] | null;
   loading: boolean;
+  /** This side's span has answered. False draws the shimmer — the block's own
+   *  chrome with bars where the three rows and the heat counts go. */
+  settled: boolean;
   projected: boolean;
   categoriesTitle: string;
   categories: EspnCategory[];
@@ -1208,6 +1307,11 @@ function LeaderSide({
   const top = (performers ?? []).slice(0, TOP_N);
   const heat = heatTally(performers ?? [], projected);
   const cuts = projected ? HEAT_CUTS.projected : HEAT_CUTS.played;
+  // The shimmer is the block, for the reason it is on a day card: built from
+  // `.ov-leader-side`'s own classes, so the two columns are the height they
+  // will be and the figures land in boxes that were already right.
+  if (!settled) return <SkeletonLeaderSide />;
+
   return (
     <div className="ov-leader-side">
       {/* **The manager's name gets the line to itself**, where a day card's
@@ -2162,6 +2266,74 @@ function SpotlightSection({
  * at the ends, where the row's own padding is what lets the first and last
  * cards reach the middle at all.
  */
+/**
+ * **Tell the page when this block is on screen, once.**
+ *
+ * The Overview asks for the slices a reader can actually see and comes back for
+ * the rest, and this is what decides "can see". Visibility rather than a swipe
+ * or a scroll *event*, because the same three day cards are one-at-a-time on a
+ * phone and all three at once on a desk — a rule written in gestures would load
+ * nothing on the desk, where nothing is ever swiped to.
+ *
+ * **It returns a ref callback, and that is the whole of why it works.** Written
+ * against a `useRef` object it silently observed nothing: the effect reads
+ * `ref.current` once, and two of the three blocks on this page do not exist on
+ * the render that runs it — `Matchup leaders` and the opponent's carousel are
+ * drawn only once the board has said there is an opponent, which is a round
+ * trip later. A callback ref fires when the element actually arrives, and again
+ * when it is swapped (a skeleton card becoming a real one is two elements), so
+ * attachment cannot drift from the DOM.
+ *
+ * **It fires once and then stops observing.** A slice is asked for once; a
+ * reader scrolling back past a block that already has its data must not make a
+ * second request, and `App` would ignore it anyway.
+ *
+ * `threshold` is the whole of the difference between the callers. A day card
+ * wants **half** of itself showing, because the carousel's neighbors peek 22px
+ * into the viewport at every width and a peek is not a card the reader is
+ * looking at — measured at 390, Today is 100% and each neighbor about 6%. A
+ * block below the fold wants **any** of itself plus a `rootMargin` head start,
+ * so its data is in flight by the time it is under the eye.
+ */
+function useOnVisible(
+  onSeen: () => void,
+  {
+    threshold = 0,
+    rootMargin = '0px',
+    off = false,
+  }: { threshold?: number; rootMargin?: string; off?: boolean } = {},
+): (el: HTMLElement | null) => void {
+  // Both read through refs so the callback identity is stable: it is a `ref`
+  // prop, and a new one every render would detach and re-attach the observer on
+  // every render of the page.
+  const cb = useRef(onSeen);
+  cb.current = onSeen;
+  const offRef = useRef(off);
+  offRef.current = off;
+  const io = useRef<IntersectionObserver | null>(null);
+  return useCallback(
+    (el: HTMLElement | null) => {
+      io.current?.disconnect();
+      io.current = null;
+      // A block that already has its answer is not watched at all — which is
+      // also what stops the real card, mounting in the skeleton's place, from
+      // asking a second time.
+      if (!el || offRef.current) return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          obs.disconnect();
+          cb.current();
+        },
+        { threshold, rootMargin },
+      );
+      obs.observe(el);
+      io.current = obs;
+    },
+    [threshold, rootMargin],
+  );
+}
+
 function centerCard(
   box: HTMLElement | null,
   i: number,
@@ -2202,14 +2374,25 @@ function SkeletonDay({
   lead,
   date,
   categories,
+  projected = false,
+  sectionRef,
 }: {
   lead: string;
   date: string;
   categories: EspnCategory[];
+  /** Drawn as a projection when the card it stands for will be — the dashed
+   *  border is the card's own height and border, so a card that arrives dashed
+   *  must not have been reserved plain. Tomorrow always is; today is until its
+   *  first game starts, which the page knows before the read lands. */
+  projected?: boolean;
+  /** The observer's handle, when this skeleton *is* the card — a card cannot
+   *  ask for its data unless the thing standing in its place is what is being
+   *  watched. A ref callback, not a ref object; see `useOnVisible`. */
+  sectionRef?: (el: HTMLElement | null) => void;
 }) {
   const groups = categoryGroups(categories);
   return (
-    <section className="ov-day sk-day">
+    <section ref={sectionRef} className={`ov-day sk-day${projected ? ' ov-day-proj' : ''}`}>
       <header className="ov-day-head">
         <span className="ov-day-lead">{lead}</span>
         <span className="ov-day-date">{prettyGameDate(date)}</span>
@@ -2278,49 +2461,25 @@ function SkeletonDay({
   );
 }
 
-/**
- * The wait's own row of three cards.
+/*
+ * **`SkeletonDays` is gone, and its job moved into the row itself.**
  *
- * A component rather than markup inline in the gate, for one reason: it has to
- * **open on Today before paint**, the same as the real row, or the wait shows
- * Yesterday and the page slides sideways when it lands. `centerCard` is the
- * row's own arithmetic and `OPENS_ON` its own index, so neither can drift.
- *
- * It is not a `DayCarousel`. That component owns a scroll position it keeps, an
- * overflow observer, arrows and a row of dots — every one of which is about
- * *moving between* cards, and there is nothing to move between when all three
- * are the same three bars. What is borrowed is the two classes that give the
- * cards their width and their peek.
+ * It drew three placeholder cards while the page's one gate was closed, which
+ * was right when the gate was the whole page and wrong the moment the cards
+ * became independent: `DayCarousel` renders one card per day either way, and
+ * the card is the thing that knows whether *its* slice has answered. A second
+ * row that had to be kept in step with the first — its scroll position, its
+ * card order, its `OPENS_ON` — is exactly the kind of second copy this file's
+ * `centerCard` note was written about, and `DayBlock` returning a `SkeletonDay`
+ * needs none of it.
  */
-function SkeletonDays({
-  dates,
-  categories,
-}: {
-  dates: Record<DayKey, string>;
-  categories: EspnCategory[];
-}) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    centerCard(boxRef.current, OPENS_ON);
-  }, []);
-  return (
-    <div className="ov-carousel">
-      {/* `aria-hidden`, and the `role="status"` line under the row is what a
-          screen reader gets instead: a grid of empty boxes announced cell by
-          cell is worse than a sentence saying the days are being read. */}
-      <div className="ov-days" ref={boxRef} aria-hidden="true">
-        {DAYS.map((k) => (
-          <SkeletonDay key={k} lead={k.toUpperCase()} date={dates[k]} categories={categories} />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function DayCarousel({
   dates,
   perf,
   loading,
+  settled,
+  onNeed,
   isProjected,
   categories,
   categoriesTitle,
@@ -2333,6 +2492,13 @@ function DayCarousel({
   dates: Record<DayKey, string>;
   perf: Record<DayKey, Performer[] | null>;
   loading: Record<DayKey, boolean>;
+  /** Which of the three have answered. A card that has not draws the shimmer,
+   *  and asks for itself the moment half of it is on screen. */
+  settled: Record<DayKey, boolean>;
+  /** One card, on screen, wanting its day. The row passes the day key and the
+   *  page turns it into a slice name — the row does not know whose carousel it
+   *  is, which is the whole reason it is drawn twice. */
+  onNeed: (day: DayKey) => void;
   isProjected: Record<DayKey, boolean>;
   categories: EspnCategory[];
   categoriesTitle: string;
@@ -2459,6 +2625,8 @@ function DayCarousel({
             categoriesTitle={categoriesTitle}
             performers={perf[d]}
             loading={loading[d]}
+            settled={settled[d]}
+            onVisible={() => onNeed(d)}
             onOpenPlayer={onOpenPlayer}
             onSeeDay={onSeeDay}
             seeDayTitle={seeDayTitle}
@@ -2538,7 +2706,8 @@ export default function OverviewView({
   onSeeDay,
   onSeeOppDay,
   connected,
-  ready,
+  have,
+  onNeed,
 }: {
   board: EspnScoreboard | null;
   onOpenMatchup: (id: number) => void;
@@ -2653,18 +2822,31 @@ export default function OverviewView({
    */
   onSeeOppDay: ((date: string) => void) | null;
   connected: boolean;
-  /** **The page may be drawn** — every read behind it has answered, all nine of
-   *  them, the board included and including the four that only exist once the
-   *  board has said who the opponent is. Worked out in
-   *  `App.tsx::overviewSettled`, which is where the two things this component
-   *  cannot see live: whether a read has been *asked for* yet, and whether a
-   *  board is still coming.
+  /**
+   * **Which slices have answered** — `mine.today`, `theirs.span`. A block whose
+   * slice is in here draws itself; one whose slice is not draws bars.
    *
-   *  **Latched there, so it is one-way.** A re-read — the tab crossed and come
-   *  back to, the clock rolling on resume — leaves this true and the cards
-   *  standing, which is rule 1: a curtain belongs where there is nothing to
-   *  show, and by then there is. */
-  ready: boolean;
+   * It replaces a single page-wide `ready`, and the reason is the reason this
+   * page is lazy at all: that flag had to hold the *whole frame* back because
+   * it could not say which of the ten reads was outstanding, and holding the
+   * frame back is what made the page unable to ask for only what is on screen.
+   * A set can say, so the frame is drawn at once and each block waits for its
+   * own answer.
+   *
+   * **It only grows within a reading.** A re-read — the tab crossed and come
+   * back to, the clock rolling on resume, the date stepped — leaves it alone,
+   * so the last answer stays on screen while the next is in flight. That is
+   * rule 1, and it is the job `ovDrawn` used to do for the page as a whole.
+   */
+  have: ReadonlySet<string>;
+  /**
+   * **This block is on screen and wants its data.**
+   *
+   * Called by the visibility observers below, once per slice. Idempotent by
+   * construction on the other side — `App` keeps the set — so a block may say
+   * it as often as it likes.
+   */
+  onNeed: (slice: OverviewSliceKey) => void;
 }) {
   /**
    * **The league's categories, or the standard 5×5.** A reader with no league
@@ -2673,6 +2855,47 @@ export default function OverviewView({
    * ranked over rather than leaving him to assume it was his.
    */
   const categories = board?.categories?.length ? board.categories : STANDARD_5X5;
+  /**
+   * **`have` as the two carousels want it** — a slice name per card, read off
+   * the set the page keeps. The row does not know whose it is (it is drawn
+   * twice, identically), so the side is qualified here where it is known and
+   * the row deals in day keys alone.
+   */
+  /**
+   * **The two matchup spans, asked for when the block they feed is reached.**
+   *
+   * They are the most expensive thing this route computes and the furthest down
+   * the page: measured on the live league, the two spans are **3.81 MB of the
+   * payload's 4.42** — 86% of it — for a block below the fold on every screen
+   * the app is checked at. So they are asked for on approach rather than at
+   * boot, and the block shimmers until they land.
+   *
+   * **Any of it, plus 300px of head start**, where a day card wants half of
+   * itself: this is a tall block a reader scrolls *into* rather than swipes to,
+   * and waiting for half of it to show would put the request behind the eye
+   * instead of in front of it. Both sides at once, because the block is drawn
+   * as one two-column card and half of it shimmering beside half of it filled
+   * would be a card that looks broken rather than one that is loading.
+   */
+  const spansHave = have.has('mine.span') && have.has('theirs.span');
+  const watchLeaders = useOnVisible(
+    () => {
+      onNeed('mine.span');
+      onNeed('theirs.span');
+    },
+    { rootMargin: '300px', off: spansHave },
+  );
+
+  const mineSettled: Record<DayKey, boolean> = {
+    yesterday: have.has('mine.yesterday'),
+    today: have.has('mine.today'),
+    tomorrow: have.has('mine.tomorrow'),
+  };
+  const theirsSettled: Record<DayKey, boolean> = {
+    yesterday: have.has('theirs.yesterday'),
+    today: have.has('theirs.today'),
+    tomorrow: have.has('theirs.tomorrow'),
+  };
   /**
    * **The caption says which *set*, not which league.** It printed
    * `board.leagueName` and read as a non-sequitur under a list of players —
@@ -2687,11 +2910,6 @@ export default function OverviewView({
   const categoriesTitle = `Ranked over ${
     own > 0 ? `your league's ${own} categories` : 'the standard 5×5'
   } — ${categories.map((c) => c.label).join(' · ')}`;
-
-  /** The ball, once the wait has outlasted `WAIT_DELAY` — see the gate at the
-   *  foot of this component, where it is argued. Called here because it is a
-   *  hook and the gate is a return. */
-  const showWait = useDelayedFlag(!ready);
 
   const nameOf = useMemo(() => {
     const map = new Map<number, string>();
@@ -2994,6 +3212,23 @@ export default function OverviewView({
   const showProjected = canProject && leaders === 'projected';
   const [myLeaders, oppLeaders] = showProjected ? projectedLeaders : playedLeaders;
   const leadersLoading = showProjected && projLoading;
+  /**
+   * **The switch is a lazy read too, and it draws the same bars.**
+   *
+   * `Projected` has always been fetched on its first press — the days the week
+   * has *left*, which nothing else on the page needs — and it drew a turning
+   * ball while it came. Now it draws what every other unanswered block on this
+   * page draws, which is the point of the shimmer being a *frame*: a reader who
+   * has learnt that bars mean "coming" should not have to learn a second thing
+   * for one control.
+   *
+   * Per side, because the two are read together but a block half filled and
+   * half spinning was never the alternative — both are null until the one
+   * request lands.
+   */
+  const leadersSettled = showProjected
+    ? [myLeaders !== null, oppLeaders !== null]
+    : [spansHave, spansHave];
   /** The reader's own team name for the block's left head, off the board the
    *  matchup card is already drawn from. `You` where the board has no row for
    *  him, which is the same fallback his own card's identity takes. */
@@ -3122,34 +3357,30 @@ export default function OverviewView({
    * period, or a bye — so a skeleton for them would be a claim the page might
    * have to take back, which is worse than growing downward below the fold.
    */
-  if (!ready) {
-    return (
-      <div className="overview-view">
-        {showWait ? (
-          <>
-            {matchupBlock}
-            {/* Real text: the app has had these three dates since before it
-                asked anybody anything. */}
-            <h2 className="ov-heading">
-              Your days
-              <span className="ov-heading-note">
-                {prettyDate(dates.yesterday)} – {prettyDate(dates.tomorrow)}
-              </span>
-            </h2>
-            <SkeletonDays dates={dates} categories={categories} />
-            {/* The words the ball used to carry. The shape says what is coming
-                to anybody who can see it; this says it to a reader who cannot,
-                and it keeps the app's rule that a wait names what is being
-                read. */}
-            <p className="sr-only" role="status">
-              Reading your days
-            </p>
-          </>
-        ) : null}
-      </div>
-    );
-  }
-
+  /**
+   * **The frame is drawn at once and each block waits for its own answer.**
+   *
+   * The page used to hold the *whole* body behind one `ready`, on the argument
+   * that three cards of one carousel are not three panes and a page that
+   * assembles itself in five states is a page assembling itself. Every word of
+   * that is still true, and it is what makes the shimmer a *frame* rather than
+   * a spinner: the skeleton is built from the real cards' own classes, so the
+   * page has its final geometry from the first paint and nothing reflows when
+   * the figures land.
+   *
+   * **What changed is that the frame no longer waits for the data.** It cannot:
+   * the whole point of asking for what is on screen is that something has to be
+   * on screen for the observers to see, and a gate that hides the frame hides
+   * the very blocks whose visibility decides what to ask for. So the frame is
+   * unconditional and `have` decides, block by block, whether a block draws
+   * itself or bars.
+   *
+   * The `WAIT_DELAY` that used to sit in front of the ball is gone with it. It
+   * was there because a warm load cleared the gate inside it and a quarter
+   * second of spinner before a finished page is a flash — but the frame is not
+   * a spinner, it is the page, and there is nothing to flash: the headings, the
+   * dates and the category names are the same before the read and after it.
+   */
   return (
     <div className="overview-view">
       {/* **The matchup block is absent rather than empty without a league**, the
@@ -3181,6 +3412,8 @@ export default function OverviewView({
         dates={dates}
         perf={perf}
         loading={loading}
+        settled={mineSettled}
+        onNeed={(d) => onNeed(`mine.${d}` as OverviewSliceKey)}
         isProjected={isProjected}
         categories={categories}
         categoriesTitle={categoriesTitle}
@@ -3236,6 +3469,8 @@ export default function OverviewView({
             dates={dates}
             perf={oppPerf}
             loading={oppLoading}
+            settled={theirsSettled}
+            onNeed={(d) => onNeed(`theirs.${d}` as OverviewSliceKey)}
             isProjected={oppProjected}
             categories={categories}
             categoriesTitle={categoriesTitle}
@@ -3315,8 +3550,12 @@ export default function OverviewView({
           {/* **An estimate never wears the same clothes as a measurement** —
               the dashed border `.ov-day-proj` already takes, at the size of the
               whole card because every figure in it is one. */}
-          <section className={showProjected ? 'ov-leaders is-proj' : 'ov-leaders'}>
+          <section
+            ref={watchLeaders}
+            className={showProjected ? 'ov-leaders is-proj' : 'ov-leaders'}
+          >
             <LeaderSide
+              settled={leadersSettled[0]}
               name={myName}
               team={myTeamId != null ? teams.get(myTeamId) : undefined}
               performers={myLeaders}
@@ -3328,6 +3567,7 @@ export default function OverviewView({
               onRankAll={(heat) => setRanked({ kind: 'span', opp: false, heat })}
             />
             <LeaderSide
+              settled={leadersSettled[1]}
               name={opponentName}
               team={oppTeamId != null ? teams.get(oppTeamId) : undefined}
               performers={oppLeaders}

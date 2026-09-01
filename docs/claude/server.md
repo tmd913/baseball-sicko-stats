@@ -223,6 +223,45 @@ reading the span separately from the three day cards, or shortening what it
 covers — were changes to what the front page **is** rather than to how it
 caches. **There was a third way, and it is below.**
 
+#### `want=` — the page asks for what is on screen
+
+The other half of the same problem, from the client's end. This route computes
+ten reads and a reader can see two of them, so it takes a list of slices and
+computes only those: `want=mine.today`, `want=theirs.span,mine.span`. Names are
+**side-qualified**, because the two managers' halves come into view at different
+moments and asking for one must not compute the other; `today` carries its
+projection, the card being drawn as a projection until the day's first game and
+as a result after. **Absent means all of them**, which keeps every other caller
+working and makes the parameter an optimization rather than a contract. An
+unrecognized name is ignored, and a `want` that parses to nothing is treated as
+absent — asking for an empty page is much more likely a client bug than a
+request.
+
+Measured on the live league:
+
+| want | bytes |
+| --- | --- |
+| `mine.today` | **96 KB** |
+| the reader's three days | 308 KB |
+| the opponent's three days | 308 KB |
+| the two spans | **3.81 MB** |
+| (absent — everything) | 4.42 MB |
+
+**86% of the payload is the block below the fold.** The boot wave is 46× smaller
+than the page.
+
+Two things ride on it inside the handler. `parseWant` runs before anything is
+read, and `overviewParseSet` is given **only the sides actually asked for** — a
+wave wanting `mine.today` has no business reading the opponent's roster to widen
+a filter nobody will use, which on the boot wave is the difference between one
+roster read and two. And the response **echoes `want` back**: every field of a
+side is nullable for two reasons now, the read having failed or never been asked
+for, and only the caller can otherwise tell them apart.
+
+The client's side of this — the waves, the visibility observers, and why the
+page-wide loading gate had to go for any of it to work — is in *The Overview*,
+under *The page reads what is on screen*.
+
 #### The long-span Overview: one parse, not four
 
 **The 14.7-second boot with no cold container in it was this route's own work**,

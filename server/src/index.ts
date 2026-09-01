@@ -1008,8 +1008,64 @@ interface OverviewSpanRead {
   lineups: Record<string, string[]> | null;
 }
 
+/**
+ * **What a caller wants computed, so a page can ask for what is on screen.**
+ *
+ * This route answers ten reads and the reader can see two of them: the carousel
+ * opens on Today and everything else is a swipe or a scroll away. Computing all
+ * ten before the first card can be drawn is what made the page's p50 3.5s and
+ * its p90 7.1 — so `want` lets the client ask for the visible slices first and
+ * come back for the rest as they are reached.
+ *
+ * **A name is side-qualified**, because the two managers' halves become visible
+ * at different moments — the reader's carousel is at the top of the page and
+ * the opponent's is below the fold, and asking for one must not compute the
+ * other. `mine.today`, `theirs.span`.
+ *
+ * **`today` carries its projection with it.** The card is drawn as a projection
+ * until the day's first game starts and as a result after, and the client
+ * decides which — so a `today` that answered without `todayProjection` would be
+ * a card that cannot draw itself for half the day. They are one slice.
+ *
+ * **Absent means all of them**, which keeps every caller that is not the
+ * Overview page working unchanged and makes the parameter an optimization
+ * rather than a contract.
+ */
+const OVERVIEW_SLICES = ['today', 'yesterday', 'tomorrow', 'span'] as const;
+type OverviewSlice = (typeof OVERVIEW_SLICES)[number];
+
+/** Which slices of one side to compute. */
+type SliceWant = Set<OverviewSlice>;
+
+const ALL_SLICES: SliceWant = new Set(OVERVIEW_SLICES);
+
+/**
+ * Parse `want=mine.today,theirs.span` into a set per side.
+ *
+ * An unrecognized name is **ignored rather than rejected**, the rule the client
+ * already follows in the other direction: a link or a client build that names a
+ * slice this server has not heard of should cost that slice and not the page. A
+ * `want` that survives parsing empty is treated as absent — asking for nothing
+ * is much more likely a client bug than a request for an empty page, and the
+ * old behavior is the safe answer to it.
+ */
+function parseWant(raw: unknown): { mine: SliceWant; theirs: SliceWant } {
+  if (typeof raw !== 'string' || !raw) return { mine: ALL_SLICES, theirs: ALL_SLICES };
+  const mine = new Set<OverviewSlice>();
+  const theirs = new Set<OverviewSlice>();
+  for (const token of raw.split(',')) {
+    const [side, name] = token.trim().split('.');
+    if (!OVERVIEW_SLICES.includes(name as OverviewSlice)) continue;
+    if (side === 'mine') mine.add(name as OverviewSlice);
+    else if (side === 'theirs') theirs.add(name as OverviewSlice);
+  }
+  if (mine.size === 0 && theirs.size === 0) return { mine: ALL_SLICES, theirs: ALL_SLICES };
+  return { mine, theirs };
+}
+
 /** One manager's half of the page. Every field independently nullable, because
- *  every field is independently fetched. */
+ *  every field is independently fetched — and now also because it may not have
+ *  been asked for. `OverviewPayload.want` is what tells the two apart. */
 interface OverviewSide {
   today: OverviewDayRead | null;
   yesterday: OverviewDayRead | null;
@@ -1125,20 +1181,33 @@ async function readOverviewSide(
   span: { start: string; end: string } | null,
   whose: string,
   parseWith: WatchPlayer[] | undefined,
+  /** Which of the five to compute — see `parseWant`. A slice not in here is not
+   *  read and comes back null, which the payload's own `want` distinguishes
+   *  from a slice that was read and answered with nothing. */
+  want: SliceWant,
 ): Promise<OverviewSide> {
   const quiet = <T>(what: string, p: Promise<T>): Promise<T | null> =>
     p.catch((err: unknown) => {
       console.error(`overview ${whose} ${what} failed:`, err);
       return null;
     });
+  const off = Promise.resolve(null);
   const [today, yesterday, tomorrow, todayProjection, spanRead] = await Promise.all([
-    quiet('today', overviewDay(user, fantasy, teamId, dates.today, parseWith)),
-    quiet('yesterday', overviewDay(user, fantasy, teamId, dates.yesterday, parseWith)),
-    quiet('tomorrow', overviewProjection(user, fantasy, teamId, dates.tomorrow)),
-    quiet('todayProjection', overviewProjection(user, fantasy, teamId, dates.today)),
-    span
+    want.has('today') ? quiet('today', overviewDay(user, fantasy, teamId, dates.today, parseWith)) : off,
+    want.has('yesterday')
+      ? quiet('yesterday', overviewDay(user, fantasy, teamId, dates.yesterday, parseWith))
+      : off,
+    want.has('tomorrow')
+      ? quiet('tomorrow', overviewProjection(user, fantasy, teamId, dates.tomorrow))
+      : off,
+    // Rides with `today`, never asked for on its own — the card cannot draw
+    // itself without both. See `OVERVIEW_SLICES`.
+    want.has('today')
+      ? quiet('todayProjection', overviewProjection(user, fantasy, teamId, dates.today))
+      : off,
+    span && want.has('span')
       ? quiet('span', overviewSpan(user, fantasy, teamId, span.start, span.end, parseWith))
-      : Promise.resolve(null),
+      : off,
   ]);
   return { today, yesterday, tomorrow, todayProjection, span: spanRead };
 }
@@ -1216,6 +1285,7 @@ app.get(
       tomorrow: addDays(today, 1),
     };
     const fantasy = req.query.source === 'fantasy';
+    const wanted = parseWant(req.query.want);
 
     let period: number | null = null;
     const periodParam = req.query.period;
@@ -1302,23 +1372,58 @@ app.get(
     // day parse. Costs no upstream read of its own: `overviewRoster` is the
     // same call each half makes, behind `fantasyWatchlist`'s per-container
     // cache.
+    //
+    // **Only the sides that were actually asked for.** A wave that wants
+    // `mine.today` alone has no business reading the opponent's roster to widen
+    // a filter nobody will use — and on the boot wave that is the difference
+    // between one roster read and two.
+    const parseSides: (number | null)[] = [];
+    if (wanted.mine.size > 0) parseSides.push(null);
+    if (opponent && wanted.theirs.size > 0) parseSides.push(opponent.teamId);
     const parseWith = await overviewParseSet(
       userId(req),
       fantasy,
-      opponent ? [null, opponent.teamId] : [null],
+      parseSides,
       span?.start ?? dates.yesterday,
       dates.today,
     );
 
     // ---- Both halves, in one flight --------------------------------------
     const [mine, theirs] = await Promise.all([
-      readOverviewSide(userId(req), fantasy, null, dates, span, 'mine', parseWith),
+      readOverviewSide(userId(req), fantasy, null, dates, span, 'mine', parseWith, wanted.mine),
       opponent
-        ? readOverviewSide(userId(req), fantasy, opponent.teamId, dates, span, 'theirs', parseWith)
+        ? readOverviewSide(
+            userId(req),
+            fantasy,
+            opponent.teamId,
+            dates,
+            span,
+            'theirs',
+            parseWith,
+            wanted.theirs,
+          )
         : Promise.resolve(null),
     ]);
 
-    res.json({ dates, source: fantasy ? 'fantasy' : 'watchlist', myTeamId, opponent, span, mine, theirs });
+    // **What was computed, echoed back.** Every field of a side is nullable for
+    // two reasons now — the read failed, or it was never asked for — and only
+    // the caller can otherwise tell them apart. It does know what it asked, but
+    // a self-describing answer is what keeps a retry, a replay from a log line
+    // and a second reader honest.
+    const want = [
+      ...[...wanted.mine].map((k) => `mine.${k}`),
+      ...(opponent ? [...wanted.theirs].map((k) => `theirs.${k}`) : []),
+    ];
+    res.json({
+      dates,
+      source: fantasy ? 'fantasy' : 'watchlist',
+      myTeamId,
+      opponent,
+      span,
+      want,
+      mine,
+      theirs,
+    });
   }),
 );
 
