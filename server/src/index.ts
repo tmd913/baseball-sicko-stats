@@ -3438,6 +3438,7 @@ app.get(
             xwoba: p.xwoba,
             whiff: p.whiff,
             putAway: p.putAway,
+            runValue: p.runValue,
           };
         })
         .sort((a, b) => b.count - a.count);

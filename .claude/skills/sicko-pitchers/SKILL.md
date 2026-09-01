@@ -1,6 +1,6 @@
 ---
 name: sicko-pitchers
-description: The pitcher side — the server pipeline (PitcherGame, per-game lines, decisions, holds, splits, season estimators FIP/xFIP/xERA), the outing page and its four tabs, the innings list and the inning popup, batters faced and the pitch sequence, the arsenal table, the two Arsenal-tab charts (Pitch Usage butterfly, Movement Profile dot cloud with its arm-angle mark), and the opposing-lineup table's nine cuts. Use when editing PitcherCard.tsx, Arsenal.tsx, ArsenalCharts.tsx, Innings.tsx, OutingPage.tsx, OpponentTable.tsx, PitchSequence.tsx, StrikeZone.tsx, or server-side pitcherArsenal.ts, pitchLeague.ts, armAngle.ts or leagueRates.ts.
+description: The pitcher side — the server pipeline (PitcherGame, per-game lines, decisions, holds, splits, season estimators FIP/xFIP/xERA), the outing page and its four tabs, the innings list and the inning popup, batters faced and the pitch sequence, the arsenal table, the three Arsenal-tab charts (Pitch Usage butterfly, Movement Profile dot cloud with its arm-angle mark, Run Value diverging bar), and the opposing-lineup table's nine cuts. Use when editing PitcherCard.tsx, Arsenal.tsx, ArsenalCharts.tsx, Innings.tsx, OutingPage.tsx, OpponentTable.tsx, PitchSequence.tsx, StrikeZone.tsx, or server-side pitcherArsenal.ts, pitchLeague.ts, armAngle.ts or leagueRates.ts.
 ---
 
 # Pitchers
@@ -23,10 +23,11 @@ delete them, and do not assume a component in them is live.
   else; the season estimators and their league constants; **`OutingPage`** and
   its `Line · Innings · Opponent · Arsenal` tabs, and which one it opens on;
   **the inning as a popup** and the rung that was given back; the arsenal table
-  and its per-pitch-type delta directions; **the two Arsenal charts** — the
+  and its per-pitch-type delta directions; **the three Arsenal charts** — the
   usage butterfly, the movement cloud's one-dot-per-percent rule, the arm-angle
-  mark and its press, and the label geometry; and the opposing-lineup table's
-  nine cuts, spans and venues.
+  mark and its press, the label geometry, and the run-value diverging bar folded
+  onto the butterfly's own row; and the opposing-lineup table's nine cuts, spans
+  and venues.
 
 **No carets on collapsibles here or anywhere** — the bar is the affordance. This
 keeps getting re-added; don't.
