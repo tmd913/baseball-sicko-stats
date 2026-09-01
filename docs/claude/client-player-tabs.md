@@ -856,6 +856,32 @@ no entry at all.
 0.1KB over the wire, for a sort, a saved preference, a route and a picker
 *extraction* that left the board with less code than it had.
 
+### The rank badge is a filled chip
+
+**The Stats tab's percentile badges carry the scale**, where they were a bare
+`--faint` second line. The argument is `columnRanks.tsx`'s and reaches four
+tables at once — the values stay monochrome and the quiet line under them, whose
+whole job is to say *is that any good*, is a scale and is drawn as one.
+
+Two things are this table's own and both are measurements. Its row is
+`.glog-table`'s **58.55px** rather than the board's 58, and the chip taken whole
+put it at **63.55** — five pixels of row on a table read down five spans, bought
+for nothing a reader can see — so it takes the same three lines of compensation
+the board's team reading already had (`margin: 0`, `padding: 1px 6px`,
+`line-height: 12px`) and comes back to **58.55**, badge box **14.00**. And the
+table goes **2,988.39 → 2,998.86px** wide, because in a narrow column the chip's
+12px of padding makes the badge the widest thing in it; that is ten pixels on a
+table already three times its pane and scrolling, against a row height that is
+on screen at every width.
+
+**The dashed underline takes `currentColor` here**, where it is `--faint` on a
+bare badge. That mark says *he is short of the bar this scale is built from*, and
+its rule was "a mark louder than the number it encloses would invert the cell's
+one hierarchy" — on a filled chip the number is `--text`, so `--faint` is a third
+tone and a grey dash under white digits reads as a smudge. Measured on Judge,
+whose season row is unqualified: **33 of 33** badges marked, decoration computing
+`rgb(223, 225, 226)`.
+
 ### The Stats tab's cut control is gone, and the table is the uncut one
 
 **It carried `All · vs RHP · vs LHP · Home · Away` and carries nothing.** Every

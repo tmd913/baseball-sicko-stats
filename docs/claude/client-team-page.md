@@ -740,8 +740,18 @@ rule 1 of the loading system working, not a missing state.
 same component: a projected start on Logan Gilbert's page opens the `Opponent`
 heading, `Overall / vs RHP / vs LHP`, with the row for his hand still accented.
 
-**Stats**: five spans down the side with percentile badges against the **thirty
-clubs** — season `G 129` at the 53rd, `R 644` at the 88th — and no cut control.
+**Stats**: five spans down the side with a rank badge against the **thirty
+clubs** — and it is a *standing* now rather than a percentile: `G 26th`,
+`R/G 4th`, `OPS 2nd`. It drew `53rd percentile` and `88th percentile` on the
+same rows, which is the fault the board's own team reading fixed and this table
+did not: **a percentile of thirty is a share to the nearest 3.3 points wearing
+two significant figures**, where a complete population of thirty can say the
+thing itself (`columnRanks.tsx`, *`asRank`*). One component was saying two
+things about the same thirty clubs, so this reading passes `asRank` and `noun`
+exactly as the board's does — the tooltip reads *"26th of the 30 clubs with a
+figure on the Season board"* where it used to say *batters*. The badge is a
+filled chip on the same scale every rank badge in the app now draws. There is no
+cut control.
 The side switch to `Pitching` writes `tside=pitching`, keeps the Stats tab, and
 redraws with the pitching board's own columns (`G · GS · IP · W · L · SVHD · H ·
 ER · HR · BB · K · ERA · xERA · FIP`, `xERA` a dash because Savant publishes no

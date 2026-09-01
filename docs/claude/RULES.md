@@ -348,10 +348,17 @@ convention rather than a property of the number — so it is a table of stats
 (`lib.ts`), never a test on the name or the value. On-base *percentage* is
 `.xxx`; K% is a percent, to one decimal.
 
-**Color is spent on state, not on emphasis.** The wide tables' stat columns are
-monochrome; a live inning, a postponement, a lineup pip and a role tint are what
-color means. Where a scale genuinely *is* the reading (the League rankings'
-rank badge), it is argued where it sits.
+**Color is spent on state, not on emphasis.** The wide tables' stat **values**
+are monochrome; a live inning, a postponement, a lineup pip and a role tint are
+what color means. Where a scale genuinely *is* the reading it is drawn as one,
+and the **rank badge** is that case on every table that has one — the League
+rankings, the research board (both readings), the player and team pages' Stats
+tab, and the opponent table's `1st`…`30th`. One chip, one pair of tokens
+(`--rank-hot` / `--rank-cold`), one `fillAt` in `columnRanks.tsx`; hot is always
+the good end, and it colors the badge and never the value. The board's
+percentile badge was monochrome for a while on the reasoning that its color was
+spoken for; that argument was about the *values*, and `columnRanks.tsx` carries
+the reversal.
 
 **One arithmetic, one implementation.** The figure that ranks the Overview's top
 performers (`categoryValue.ts::dayValue`) is the same figure the roster lens's

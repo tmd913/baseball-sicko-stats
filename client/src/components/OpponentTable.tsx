@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useDelayedFlag } from '../hooks';
 import { ordinal } from '../lib';
+import { rankFill } from './columnRanks';
 import { CardSection } from './PitcherCard';
 import { LoadingBlock } from './Loading';
 import { TEAM_HITTING_WINDOWS } from '../types';
@@ -43,6 +44,12 @@ import type {
  * population, a 30-day home line against the other 29 teams' 30-day home lines,
  * never against the season board and never against the other side of the ball.
  */
+
+/** The league, which every rank on this table is out of. A club with no line in
+ *  a cut is out of that cut's ranking rather than at the bottom of it, so the
+ *  *ranked* population can be a little short of this — see the fill's own note
+ *  at the badge for why the scale is drawn against the league regardless. */
+const MLB_CLUBS = 30;
 
 /**
  * The rows, in the order the reader asked for them: everyone, then the other
@@ -388,7 +395,29 @@ function OpponentBody({
                           <>
                             {c.of(line)}
                             {c.rank && line.ranks?.[c.rank] ? (
-                              <span className="col-rank">{ordinal(line.ranks[c.rank]!)}</span>
+                              /* **Filled from the same scale the other three
+                                 rank badges are** — 1st at the hot end, 30th at
+                                 the cold one, a plain neutral chip through the
+                                 middle. `rankFill` is `columnRanks.tsx`'s, the
+                                 same function the board's team reading and the
+                                 League Rankings read, so `15th of 30` is one
+                                 color in this app rather than three that agree.
+
+                                 **`MLB_CLUBS` rather than the clubs ranked in
+                                 this cut**, which is what the server actually
+                                 ranked over — a club with no line in a cut is
+                                 out of the ranking rather than at the bottom of
+                                 it, so a fortnight nobody started a lefty in
+                                 can be 27 deep. The count is not on the wire and
+                                 is not worth putting there for a fill: the
+                                 scale this chip means is *where in the league*,
+                                 the league is thirty, and a 27-club cut's last
+                                 place reads a shade short of full cold, which
+                                 is a rounding error in the direction of
+                                 understatement. */
+                              <span className="col-rank" style={rankFill(line.ranks[c.rank]!, MLB_CLUBS)}>
+                                {ordinal(line.ranks[c.rank]!)}
+                              </span>
                             ) : null}
                           </>
                         ) : (

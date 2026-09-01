@@ -376,6 +376,37 @@ export function rankFill(rank: number | undefined, n: number): CSSProperties | u
   // 0 at the best rank, 1 at the worst; `d` is the distance from the middle, so
   // the scale passes through the neutral chip where a row is neither.
   const t = Math.min(1, Math.max(0, (rank - 1) / (n - 1)));
+  return fillAt(t);
+}
+
+/**
+ * **The same fill, read off a percentile instead of a standing** — the Stats
+ * tab's badge, where the board's team reading has `rankFill`.
+ *
+ * One line of arithmetic apart and deliberately not one function with a flag:
+ * the two inputs run in opposite directions (`1st` is best and `100` is best),
+ * and a single `fill(value, n, invert)` is exactly the shape that gets called
+ * with the wrong boolean. What they *do* share is `fillAt`, which is the scale
+ * itself — so a chip at the 88th percentile and a chip 4th of 30 are the same
+ * ink at the same strength, which is the whole reason these are one object in
+ * three places.
+ *
+ * **Hot is 100 and cold is 0**, which is the direction the percentile card one
+ * tab over already draws: `--rank-hot` resolves to `--strikeout` (red) and
+ * `--rank-cold` to `--walk` (blue), against the card's own deep blue at 0 →
+ * gray at 50 → red at 100. A reader who has looked at the card meets the same
+ * two ends here.
+ */
+export function pctFill(pct: number | null): CSSProperties | undefined {
+  if (pct === null || !Number.isFinite(pct)) return undefined;
+  return fillAt(1 - Math.min(100, Math.max(0, pct)) / 100);
+}
+
+/** `t` is 0 at the good end and 1 at the bad one. `d` is the distance from the
+ *  middle, so the scale passes through a plain neutral chip where a row is
+ *  neither — a badge in the middle of a column says *middling* by being gray,
+ *  not by being a washed-out something. */
+function fillAt(t: number): CSSProperties {
   const d = Math.abs(t - 0.5) * 2;
   const pct = Math.round(d * BADGE_MAX * 10) / 10;
   return {
@@ -422,12 +453,55 @@ const populationNoun = (kind: PlayerKind) => (kind === 'pitcher' ? 'pitchers' : 
  * rank smaller and in `--faint`, the tone the board already gives the quieter
  * of two lines in a cell (`.research-opp-sp`).
  *
- * **Monochrome, deliberately.** A heat scale is the obvious thing to reach for
- * and this table has already refused it once: "the stat columns are monochrome
- * — OPS and ERA used to be `--accent`, which just made the eye jump between
- * columns. Color is reserved for *state*." A green 94 beside a red 12 would be
- * a second color system on the one table whose color vocabulary is already
- * spoken for by the live inning, the postponement and the trend.
+ * ---
+ *
+ * ## The badge carries a scale, and every table that draws one draws it colored
+ *
+ * **This was monochrome and the reversal is the whole of this section.** The
+ * argument for a bare `--faint` second line was the board's own colour rule —
+ * *"the stat columns are monochrome; OPS and ERA used to be `--accent`, which
+ * just made the eye jump between columns. Color is reserved for state"* — and a
+ * red 94 beside a blue 12 was said to be a second color system on a table whose
+ * vocabulary is already spoken for by the live inning, the postponement and the
+ * trend.
+ *
+ * **What that argument gets wrong is which thing is colored.** The rule it
+ * quotes is about the **values**: `OPS` in accent made the eye jump between
+ * *columns of numbers*, and the values are still monochrome on every one of
+ * these tables. A rank badge is not a value — it is a quiet second line whose
+ * entire job is to say *is that any good*, which is a **scale**, and this app's
+ * own standing rule is that where a scale genuinely is the reading it is
+ * argued and drawn. `RULES.md` names the League rankings' rank badge as exactly
+ * that case. There is nothing about a percentile that makes it a different kind
+ * of object from a standing.
+ *
+ * **And it was already drawn colored on two surfaces**, which is what made the
+ * remaining monochrome one a difference nothing on screen could explain: the
+ * League Rankings' chip, and the board's own **team** reading (`asRank`, below).
+ * A reader crossing from the board's team reading to its player reading met the
+ * same badge in the same slot on the same table, one of them a scale and one of
+ * them grey.
+ *
+ * So all four now fill the badge from one `fillAt`: the **research board**
+ * (both readings), the **player page's Stats tab** (and the team page's, which
+ * is the same component), the **League Rankings**, and the **opponent table**'s
+ * `1st`…`30th` on a team's Splits tab and a pitcher's card. One chip, one pair
+ * of tokens, one scale.
+ *
+ * **It colors the badge and never the value**, which is the rule all four carry
+ * and the reason a heat scale is affordable at all: the value stays the primary
+ * reading in the app's plain ink, and the color is on the line under it.
+ *
+ * **The text does not carry the scale, the fill does.** `--text` on the tinted
+ * grounds is the League table's measurement — 5.1–5.7:1 at the ends of the
+ * scale and 12.8:1 at its neutral middle — where coloring the digits instead
+ * put a mid-luminance red on a mid-luminance ground at 3.1:1, under the 4.5 an
+ * 11px label owes a reader.
+ *
+ * **Hot is the good end on all four**, and the two ends are the percentile
+ * card's own read off the palette: `--rank-hot` is `--strikeout` (red), which
+ * that card puts at 100, and `--rank-cold` is `--walk` (blue), which it puts at
+ * 0. A reader who has looked at the card meets the same scale on the tables.
  *
  * **The one mark it does carry is the dashed underline on a player outside the
  * population** — argued at the head of this file, and drawn as a
@@ -553,6 +627,7 @@ export function RankBadge({
   return (
     <span
       className={`col-rank${outside ? ' col-rank--outside' : ''}`}
+      style={pctFill(pct)}
       title={`${col.title}: ${ordinal(
         pct,
       )} percentile of the ${scale.n} ${who} with a figure on ${population}. 100 is best.${dir}${short}`}
