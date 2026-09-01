@@ -2304,3 +2304,49 @@ longer does is name one file, so follow it by the surface it is talking about: t
 and `pitchers.md` mostly mean the roster table, the research board or the feed, and
 each of those now has a file named for it.
 
+
+
+### The header's refresh button, and the reload after half an hour
+
+**`Refresh from ESPN` was in two places and is one button in the header.** It
+sat in the fantasy popover and again on the league settings page — two doorways
+to one action, which is the duplication the search bar's own close button was
+retired for. It is now a third icon square in the brand cluster, beside the gear
+and the baseball, and it does a different thing under a similar name.
+
+**What it does, in order.** `refreshAll` busts the server's ESPN caches
+(`?refresh=1` on ownership, which clears every entry for the league, and on the
+transactions feed — the two reads nothing else re-asks) and *then* reloads the
+page. The order is the whole of it: a bare reload would re-read the same
+ten-minute answer the server is already holding. The scoreboard, the rankings
+and the projection re-read on entry and on the poll's own tick, so a reload gets
+them fresh without being asked.
+
+**A failed bust still reloads.** The page a reader asked for is a fresh page, and
+refusing to give them one because ESPN was slow would be the button withholding
+the half it can do on account of the half it cannot. **It is offered whether or
+not a league is connected**, because the reload is the part everybody gets. And
+it takes no `MIN_SPIN`, unlike every other press in this app: what follows the
+press is a page reload, so the mark does not have to survive being brief.
+
+**A refresh is not a setting**, which is why it is a peer of the gear and the
+baseball rather than an entry inside either: the gear opens what the app looks
+like, the baseball opens which league it is reading, and this one goes and gets
+the whole page afresh.
+
+**And the resume reload's queue drain is capped.** `RELOAD_AFTER_MS` (30
+minutes) replaces the page rather than refreshing it, and it drains
+`queueUserWrite` first so a preference saved in the breath before the app was
+backgrounded is not thrown away by the page that replaces it. Uncapped, that
+drain can wait for ever: the chain is `.then`-ed onto whatever is in it, and a
+request suspended across half an hour is exactly the one that may never settle —
+the browser resumes it into a connection that is gone, and until it gives up the
+reload is behind it. Which is the reported symptom, *"it takes a really long time
+to load"*, with the queue holding the page hostage to a preference.
+
+So the drain races `RELOAD_DRAIN_MS` (2s) and the reload happens either way.
+Long enough for a queue that is empty (a tick) or holding a request about to
+land; short enough that a reader who asked for a fresh page gets one. Losing the
+race costs one saved preference; not capping it costs the page. *(The other half
+of that report — a 500 after the wait — was the server's, and is
+`upstream.ts`.)*

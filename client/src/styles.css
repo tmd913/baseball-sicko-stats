@@ -5312,6 +5312,29 @@ body {
 .game-box-sub .game-box-slot {
   width: 24px;
 }
+/* **The man this club has up**, while the game is on — the batter in the box on
+   the club that is batting, and whoever leads off the next half on the one in
+   the field.
+
+   A box score is a record of what has happened, and the one thing a reader of a
+   *live* one wants that it did not say is whose turn it is. It takes `--accent`,
+   which is what the app's colour rule reserves colour for — a live inning is
+   named in `RULES.md` beside a postponement and a lineup pip, and this is the
+   same fact one table over.
+
+   **A wash on the row and a rule down its start**, rather than ink on the
+   figures: the numbers in that row are the same numbers as the ones above it,
+   and colouring them would say the *line* is different. The rule is what carries
+   it at a glance on a table that scrolls sideways — the wash goes off the left
+   edge of the scrollport, the border does not. Two selectors deep so it outranks
+   the zebra stripe, which paints the cell's own ground. */
+.game-box-table tbody tr.game-box-up td,
+.game-box-table tbody tr.game-box-up th {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+}
+.game-box-table tbody tr.game-box-up .game-box-name {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 
 /* Who did not play, under each club's two tables. `.game-roster` groups a
    heading with its list; the rows are the roster tab's own. */
@@ -8578,6 +8601,12 @@ button.start-line:focus-visible {
    ended up going. */
 .settings-btn,
 .fantasy-btn,
+/* **And the refresh beside them**, folded on rather than given a box of its
+   own: it is a third icon square in the same cluster, and three controls that
+   agree today are three that will one day differ. What it adds under its own
+   name is below (`.header-refresh`) — one declaration, for the state it has
+   that the other two have not got. */
+.header-refresh,
 /* There were five, the fifth being `.tx-btn` — the way to the league's moves.
    It is gone, and what it carried is on the League tab in the row below (see
    `.main-tab` and the note on `.lg-tab-dot`): the mark it existed for is worth
@@ -11194,25 +11223,24 @@ button.start-line:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* Refresh from ESPN, in the fantasy popover. A `.help-btn` like the entry below
-   it rather than a control of its own — the two are the same kind of row and
-   folding the class on keeps them identical by construction.
-
-   The one thing it adds is a glyph slot that doesn't move: the baseball is
-   14px inline and the arrow it replaces is 15, so without this the label steps
-   1px left the moment the read starts and back when it lands. Naming `svg`
-   covers both, the ball being one. */
-.fantasy-refresh > svg {
-  flex: none;
-  width: 15px;
-  height: 15px;
-}
-.fantasy-refresh:disabled {
+/* *(`.fantasy-refresh` stood here — `Refresh from ESPN` as a `.help-btn` row in
+   the fantasy popover, with a fixed 15px glyph slot so the label did not step a
+   pixel when the arrow became a ball. Both rules went with the row; the header
+   button that replaced it is a bare icon square with no label to hold still.)* */
+/* **Disabled because it is working**, which is a busier state than idle and not
+   a lesser one — so it is held at the text colour rather than dimmed, which is
+   the reading `.fantasy-refresh` had before it and the one the ball inside it is
+   already making. The glyph slot is fixed for the reason that row's was: the
+   spinning baseball and the arrow it replaces are not the same box, and a header
+   square that resized mid-press would move the two icons beside it. */
+.header-refresh:disabled {
   cursor: default;
-  /* Held at the hover color rather than dimmed: it is disabled *because* it is
-     working, which is a busier state than idle and not a lesser one. */
   color: var(--text);
-  border-color: var(--accent);
+}
+.header-refresh > svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
 }
 .sim-dot,
 .settings-dot {
@@ -16734,27 +16762,10 @@ button.start-line:focus-visible {
 /* Reading the league again is an ordinary action, so it takes the page's accent
    — the red beside it is reserved for the one control that undoes the
    connection. */
-.espn-refresh {
-  flex: none;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 14px;
-  min-height: var(--control-h);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 0.14s ease, color 0.14s ease;
-}
-.espn-refresh:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.espn-refresh:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+/* *(`.espn-refresh` stood here — the league page's own `Refresh from ESPN`,
+   beside `Disconnect`. The action is the header's now and this page keeps the
+   one control that is genuinely its own; the note below it still explains the
+   ten-minute cache, naming the button that does the reading.)* */
 .espn-refresh-note {
   margin-top: 8px;
 }

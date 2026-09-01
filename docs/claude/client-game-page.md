@@ -232,13 +232,30 @@ now says which seven that is.
 
 It takes `--accent`, which is what the app's colour rule reserves colour for — a
 live inning is named in `RULES.md` explicitly, beside a postponement and a
-lineup pip — and it takes it as a **wash on the column** rather than as ink on
-the digits: the runs in that column are the same runs as the ones beside them,
-and colouring them would say the numbers are different. The head is the loud
-half (accent outright, on a number nobody was otherwise reading); the two cells
-take a tenth-strength wash, enough to draw the column together and not enough to
-compete with the runs in it. The header also carries the fact in words on its
+lineup pip — and it takes it as a **wash** rather than as ink on the digits: the
+runs there are the same runs as the ones beside them, and colouring them would
+say the numbers are different. The header is the loud half (accent outright, on
+a number nobody was otherwise reading) and carries the fact in words on its
 `title`, the app's rule that identity never rests on hue alone.
+
+**And it is one cell, not the column.** Both cells were washed to begin with,
+which drew a game in the top of the seventh as though both clubs were batting in
+it — the away club's `–` and the home club's `–` lit alike, where one is a half
+in progress and the other a half nobody has come to yet. The header keeps the
+column, because the heading is what names the inning and a single lit cell with
+nothing above it reads as an anomaly in a row rather than as a place in the
+game.
+
+**Which half is `inningState`, and only one of its four words is the away
+club's.** MLB writes `Top`, `Middle`, `Bottom` and `End`, and the middle two are
+the gaps either side of the home half: `Middle` is the top over and the bottom
+not started, `End` is the bottom over and the inning not turned. In both, the
+away club's half of *this* inning is finished and the home club's is where the
+game is. So `Top` alone marks the away row. The test is written out rather than
+put through `isBottom`, which answers a different question — *is this half the
+bottom*, of the two a play can be in — and would put `End` on the away row.
+Measured on a live game in `Bottom 8`: header column 8 marked, the home club's
+8th cell marked, the away club's not.
 
 `null` on anything but a live game, which is what keeps it a mark on a *state*:
 a final game has no inning being played, and marking the last one would be a
@@ -417,6 +434,40 @@ re-reads on the same twenty-second clock while the game is being played, and
 quietly.
 
 ---
+
+### The box score says who is up
+
+**A box score is a record of what has happened, and on a live game the one thing
+a reader of it wants that it did not say is whose turn it is.** The head chip
+says `Top 7` and the club switch says which club; between them, the answer was
+still a matter of counting down the order and remembering who batted last. So
+the row is washed in `--accent` with a rule down its start, on both clubs.
+
+**The two marks mean two different things and that is the point.** For the club
+at the plate it is *the man in the box*; for the club in the field it is *the man
+who leads off their next half-inning*, which is the half of this that is worth
+having and the half MLB is unexpectedly generous about:
+`linescore.defense.batter` is that man, published on every live game. The
+alternative was arithmetic on the batting order — find the slot after the last
+completed plate appearance — which pinch-hitters, double switches and a batter
+left mid-count each break differently.
+
+`buildDueUp` keys the pair by **`away`/`home`** rather than by offence and
+defence, because the consumer is a box score that knows which club's table it is
+drawing and does not know which of them is in the field; `isTopInning` turns one
+into the other once, on the server. Both are **null off a live game**: before
+first pitch there is no offense block, and after the last out `defense.batter`
+still names somebody — a man due up in a half-inning nobody is going to play,
+which would draw as a highlight on a finished box score.
+
+**One colour for both meanings**, with the distinction in the row's own `title`
+(`Christian Moore is up`): a second tone would be a second thing to learn for a
+distinction the club switch above has already made. The wash goes on the cells
+and the rule on the name column, which is what carries it at a glance on a table
+that scrolls sideways — the wash goes off the left edge of the scrollport and
+the border does not. Measured on a live game in `Bottom 8`: the fielding club's
+table marks Cody Bellinger (due up), the batting club's marks Christian Moore
+(at the plate), one row each.
 
 ### The inning picker, and `Live` first
 

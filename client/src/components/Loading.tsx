@@ -54,7 +54,7 @@ import type { ReactNode } from 'react';
  * Three, and each belongs to one situation:
  *
  * - **`sm` (14px)** — inline: inside a control that was pressed (the header's
- *   Refresh, the fantasy popover's Refresh from ESPN, the ESPN page's two
+ *   Refresh, the header's own refresh button, the ESPN page's two
  *   buttons, the sign-in form's submit), or leading a one-line status that sits
  *   beside data rather than instead of it (the "Updating" badge, the research
  *   board's count line). It is one number where the old spinner was two — 13px

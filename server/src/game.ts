@@ -102,6 +102,13 @@ const FEED_FIELDS = [
   'inningState',
   'isTopInning',
   'outs',
+  // **Who is up, on both sides.** `offense.batter` is the man at the plate and
+  // `defense.batter` is the one who leads off the fielding club's next half —
+  // MLB publishes both, and the second is the only place it says who is due up
+  // for the club that is not batting. See `dueUpIds`.
+  'offense',
+  'defense',
+  'batter',
   'scheduledInnings',
   'innings',
   'num',
@@ -251,6 +258,8 @@ interface Feed {
         home?: { runs?: number; hits?: number; errors?: number; leftOnBase?: number };
         away?: { runs?: number; hits?: number; errors?: number; leftOnBase?: number };
       };
+      offense?: { batter?: { id?: number } };
+      defense?: { batter?: { id?: number } };
     };
     boxscore?: {
       teams?: { home?: BoxTeam; away?: BoxTeam };
@@ -335,6 +344,41 @@ function buildStatus(feed: Feed): GameStatus {
     pitchingId: null,
     inGamePitcherIds: [],
   };
+}
+
+/**
+ * **Whom each club has up, keyed by side** — the batter at the plate for the
+ * club that is batting, and the man who leads off the *other* club's next
+ * half-inning.
+ *
+ * The second of those is the interesting one and MLB gives it away for free.
+ * `linescore.offense.batter` is the man in the box, which every reading of a
+ * live game already has; `linescore.defense.batter` is the same field for the
+ * fielding club — *who is up when they get the bat back* — and it is the only
+ * place MLB says so. The alternative was arithmetic on the box score's batting
+ * order (find the slot after the last completed plate appearance), which
+ * pinch-hitters, double switches and a batter left mid-count all break in
+ * different ways.
+ *
+ * **Keyed by `away`/`home` rather than by `offense`/`defense`**, because the
+ * consumer is a box score that knows which club's table it is drawing and does
+ * not know which of them is in the field. `isTopInning` is what turns one into
+ * the other, and doing it here means the client never has to.
+ *
+ * **Both null off a live game.** Before first pitch MLB has no offense block,
+ * and after the last out `defense.batter` still names somebody — a man due up
+ * in a half-inning that is never going to be played, which would draw as a
+ * highlight on a finished box score.
+ */
+function buildDueUp(feed: Feed): { away: number | null; home: number | null } {
+  const s = feed.gameData?.status;
+  const ls = feed.liveData?.linescore;
+  const live = !isPostponedStatus(s) && !isFinalStatus(s) && s?.abstractGameState === 'Live' && hasStarted(s);
+  if (!live) return { away: null, home: null };
+  const atBat = numOrNull(ls?.offense?.batter?.id);
+  const dueUp = numOrNull(ls?.defense?.batter?.id);
+  const top = ls?.isTopInning === true;
+  return top ? { away: atBat, home: dueUp } : { away: dueUp, home: atBat };
 }
 
 /**
@@ -597,6 +641,7 @@ function buildReport(gamePk: number, feed: Feed): GameReport {
         : null,
     away: side('away'),
     home: side('home'),
+    dueUpIds: buildDueUp(feed),
     innings: buildInnings(feed),
     scheduledInnings: scheduled,
     decisions: buildDecisions(feed),
