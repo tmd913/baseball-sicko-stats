@@ -115,6 +115,36 @@ a flag cannot tell them apart.
 request that never finishes still names its route. 5 s sits well past the
 measured warm p90 of 857 ms, so it fires for the tail rather than for traffic.
 
+**`qs` is the query string, and it is there because its absence cost an
+afternoon.** `p` is `req.path` and drops it, so the Overview firing
+`/api/overview` **three times on one boot** — 2026-09-01 at 16:35:51, +404ms,
++894 and +967, each on its own container and each taking 21 seconds — read in
+the logs as three identical lines, and the logs could not say whether that was
+three different questions or one asked three times. Answering it meant
+reproducing the boot in a headless browser with the reads artificially
+staggered. One field would have answered it.
+
+**Its own field rather than folded into `p`,** because the two are read
+differently: `p` and `r` are what you *group by* and want low cardinality, where
+this is looked at one line at a time and would ruin a `by p` the moment it
+carried a date. Absent entirely when there is no query, so the ordinary line
+does not grow a `"qs":""`.
+
+**`q=` is redacted to its length as sent** (`q=<16 chars>` for `walker
+jenkins`). It is the one parameter in the whole API carrying free text a person
+typed — the header search — where the rest are dates, ids and enum values the
+app chose. Nothing here is a credential (checked: no route takes a token, a code
+or a cookie in the query string), so this is not a security measure; it is that
+a log of what somebody typed is a different kind of record from a log of what
+the app asked for. **And it is capped at 200 characters**, because `ids=` and
+`teams=` take lists — a 60-id request logs 200 and an ellipsis, a 25-player
+roster fits whole.
+
+It rides on the breadcrumb too, which is the line that matters most: a request
+killed at the 29 s wall leaves nothing else, and `"t":"slow"` naming the route
+without the parameters is half an answer. Both verified against a running
+server at `SLOW_MS=150`.
+
 #### Two things that would otherwise cost an afternoon
 
 **HTTP APIs need no account-level CloudWatch role.** Almost everything written
@@ -135,7 +165,11 @@ directly. Writing the regex that *looks* necessary is the trap — a
 filter t="req" | stats count(*) as n, pct(ms,50) as p50, pct(ms,99) as p99 by r | sort p99 desc
 filter t="req" and n=1 | stats pct(ms,50) as coldP50 by r | sort coldP50 desc
 filter t="slow" | stats count(*) as n by r | sort n desc
+fields @timestamp, r, qs, ms, n, up | filter t="req" and ms > 5000 | sort ms desc
 ```
+
+That last one is the shape the `qs` field was added for: the slowest reads with
+enough of each to tell them apart. Group by `r`, read by `qs`.
 
 **`ApiFunction`'s own log group is deliberately left alone.** It has
 `retentionInDays: null` — never expire, 18 MB today, and the request lines add
