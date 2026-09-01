@@ -6458,14 +6458,57 @@ export default function App() {
    */
   const ovBatch = useRef(0);
   const [ovBatchLoading, setOvBatchLoading] = useState(false);
+  /**
+   * **The roster spelled as its content, and only where it is part of the
+   * question** — the same two rules `reportKey` above states, for the same
+   * reason and now with a measurement of what breaking them costs.
+   *
+   * This effect depended on `roster` itself, which is a *new array* the moment
+   * the boot read lands. It never reads one: the route takes the roster off the
+   * user's own record, so what the dependency is actually for is "the server's
+   * copy has changed", and a roster edited and put back is the answer the app
+   * already has. Content, not identity — and nothing at all under `fantasy`,
+   * where the page is about ESPN's roster and the saved list has no bearing on
+   * it, exactly as the report's fantasy key leaves it out.
+   *
+   * **Measured on the live app, 2026-09-01.** The 16:35:51 boot issued
+   * `/api/overview` **three times** inside 563ms — at +404ms, +894ms and
+   * +967ms — and every one of them landed on a container of its own and took 21
+   * seconds. Three identical answers to one question: the first fired on the
+   * empty roster the gate did not wait for, the second when it landed and the
+   * array changed identity, the third when `usingFantasy` resolved. The
+   * sequence number made two of them harmless, which is not the same as free —
+   * this is the most expensive route in the app and each spare copy is another
+   * cold container asking every upstream from scratch.
+   */
+  const ovRosterKey = usingFantasy ? '' : roster.map(playerKey).join(',');
+  /**
+   * **The gate as one boolean, which is what `reportReady` above already is.**
+   *
+   * The first two waits are that effect's, for its reasons: firing before the
+   * saved preference and the connection status have landed spends the request
+   * on the wrong list and replaces it a moment later. The third is the same
+   * argument one step further — on the saved roster this page *is* about the
+   * list, so firing before it arrives buys a duplicate of the most expensive
+   * route in the app. Under `fantasy` the list is not the question and the wait
+   * does not apply.
+   *
+   * **It has to be a boolean and not three conditions in the dependency
+   * array**, which is the mistake this replaces: `rosterLoaded` listed as its
+   * own dependency fires the effect when the roster lands *whether or not this
+   * page cares*, which under `fantasy` it does not. Measured with the boot
+   * reads staggered the way the network staggers them (`/api/espn` at 400ms,
+   * `/api/prefs` at 900, `/api/watchlist` at 1500): two requests before, two
+   * with `rosterLoaded` in the array, **one** with the gate folded into a value
+   * that stops moving once it is true.
+   */
+  const ovReady =
+    (prefsSettled || rosterSourceFromUrl) &&
+    !(rosterSource === 'fantasy' && !espnStatusSettled) &&
+    (usingFantasy || rosterLoaded);
   useEffect(() => {
     if (view !== 'overview') return;
-    // The same two waits every other roster read makes, and for the same
-    // reason: firing before the saved preference and the connection status have
-    // landed spends the request on the wrong list and replaces it a moment
-    // later. See the report effect above, which carries the measurement.
-    if (!prefsSettled && !rosterSourceFromUrl) return;
-    if (rosterSource === 'fantasy' && !espnStatusSettled) return;
+    if (!ovReady) return;
     setOvFired(true);
     const seq = ++ovBatch.current;
     setOvBatchLoading(true);
@@ -6518,11 +6561,8 @@ export default function App() {
     overviewDates,
     usingFantasy,
     matchupPeriod,
-    roster,
-    prefsSettled,
-    rosterSourceFromUrl,
-    rosterSource,
-    espnStatusSettled,
+    ovRosterKey,
+    ovReady,
   ]);
 
   /** Whose matchup this is, still read off the board — it decides whether the

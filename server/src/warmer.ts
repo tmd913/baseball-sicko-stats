@@ -10,7 +10,7 @@ import { getAllRosterPlayers } from './store.js';
 import { mapLimit } from './limit.js';
 import { baseballToday } from './etDate.js';
 import { revisedDates } from './revisions.js';
-import { getRosterTrend } from './espn.js';
+import { buildMlbIndex, getRosterTrend, refreshProspects } from './espn.js';
 import { buildLeagueXwoba } from './leagueWoba.js';
 import { warmXwobaSeries } from './xwoba.js';
 import { warmCbsIndex } from './cbs.js';
@@ -146,8 +146,38 @@ async function warmRevisions(): Promise<string[]> {
   return dates;
 }
 
+/**
+ * The MLB name index, rebuilt rather than read.
+ *
+ * **In `live` as well as `backfill`, which nothing else here is.** The index is
+ * governed by an hour's TTL and this runs every five minutes, so the point is
+ * not to fill it — a reader would fill it in 45–152ms — but to guarantee that a
+ * reader *never* does. Every other warm here is about a build too big for the
+ * interactive path; this one is about a build that is small and on the critical
+ * path of every boot, behind an upstream that can hang. The API function's four
+ * slowest boots on 2026-09-01 were 14.9 to 22.6 seconds and three of them were
+ * a name lookup not answering.
+ *
+ * `buildMlbIndex` rather than `getMlbIndex`: the reader would answer from
+ * whichever tier happened to be warm and leave the blob to age out under a
+ * reader, which is the one thing this is here to prevent.
+ *
+ * A failure costs the run this line and nothing else — the same rule every
+ * other warm below follows, and here the reader simply pays what it used to.
+ */
+async function warmMlbIndex(): Promise<void> {
+  try {
+    const index = await buildMlbIndex();
+    console.log(`MLB name index warm: ${index.byName.size} names`);
+  } catch (err) {
+    console.error('MLB name index warm failed:', err);
+  }
+}
+
 export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates: string[] }> {
   const mode = event.mode ?? 'live';
+
+  await warmMlbIndex();
 
   // Before anything else: a day MLB has rescored is a day every board below is
   // summed from, so rebuilding it first means the boards are built once, off
@@ -226,6 +256,18 @@ export async function warm(event: WarmEvent = {}): Promise<{ mode: string; dates
     await getRosterTrend().catch((err) =>
       console.error('ESPN ownership snapshot failed:', err),
     );
+    // The prospect answers behind the name join — every name MLB's own season
+    // list cannot account for, re-asked and re-stamped. **Daily rather than
+    // every five minutes on purpose**: the blob is good for 24 hours and this
+    // is the only thing that renews the stamp, so it has to run inside that
+    // window and there is nothing to gain by running it 288 times inside it.
+    // Here rather than beside `warmMlbIndex` for the same reason, and after
+    // `getRosterTrend` because that read is what discovers a name in the first
+    // place — a prospect signed this morning is in the blob by the time this
+    // line asks about him.
+    await refreshProspects()
+      .then((n) => n && console.log(`prospect index warm: ${n} names`))
+      .catch((err) => console.error('prospect index warm failed:', err));
     // The rolling chart's reference line: what an average plate appearance has
     // been worth this season, summed from the same per-date exports the two
     // boards above are built from. **The read path never builds this** — a

@@ -463,6 +463,56 @@ copies are gone, and the one thing that is this label's alone and not the rail's
 `.date-row .date-presets` and the narrow-screen blocks already record, arrived at
 from a third direction.
 
+### One read, and it took a staggered network to see that it was three
+
+**The Overview's batch read fired three times on a boot**, and the app had no
+way to notice. `App.tsx`'s `ovBatch` sequence number discards every answer but
+the newest, so the *page* was always right; what the extra reads cost was
+invisible from the client and enormous from the server.
+
+Measured on the live app on 2026-09-01, the 16:35:51 boot: `/api/overview` at
+**+404ms, +894 and +967**, each landing on a Lambda container of its own and
+each taking **21 seconds**. It is the most expensive route in the app — ten
+range reports behind one request — and every spare copy is another cold
+container asking every upstream from scratch.
+
+**The dependency array was the bug, in two ways, and both are rules `reportKey`
+one screen up already states.**
+
+- It depended on `roster`, which is a *new array* the moment the boot read
+  lands. The effect never reads one: `/api/overview` takes the roster off the
+  user's own record, so what the dependency is for is "the server's copy has
+  changed" — **content, not identity**, and a roster edited and put back is the
+  answer the app already has. It is `roster.map(playerKey).join(',')` now, and
+  **nothing at all under `fantasy`**, where the page is about ESPN's roster and
+  the saved list has no bearing on it — exactly as the report's fantasy key
+  leaves it out.
+- And it did not *wait* for the roster on the saved side, where the page is
+  about that list. So the first fire asked about an empty roster and the second
+  asked the real question.
+
+**The gate is one boolean, not three conditions in the array**, which is the
+mistake the first attempt made: `rosterLoaded` listed as its own dependency
+fires the effect the moment the roster lands **whether or not this page cares**,
+and under `fantasy` it does not. `ovReady` folds the three waits into a value
+that stops moving once it is true.
+
+**Local timing hides all of this**, which is why it survived: a warm local
+server answers the boot reads together and React batches them into a single
+render, so the effect fires once and the fault is invisible. Reproduced by
+staggering them the way a network does — `/api/espn` at 400ms, `/api/prefs` at
+900, `/api/watchlist` at 1500 — and driven at 1200×900:
+
+| | fantasy | saved roster |
+| --- | --- | --- |
+| before | **2** reads, +951ms and +1551 | **2** reads, +963ms and +1561 |
+| `rosterLoaded` in the array | **2** reads | — |
+| after | **1** read, +966ms | **1** read, +1545ms |
+
+**The wait costs nothing measurable.** On the saved roster the surviving read is
+issued at +1545 where the old *second* one went at +1561 — 16ms earlier, because
+the read that was dropped is the one whose answer was being discarded anyway.
+
 ### The page arrives all at once, or not at all
 
 **Nine reads answer over about a second, and the page used to draw each of them

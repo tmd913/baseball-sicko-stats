@@ -3,7 +3,12 @@
  *
  * This module has no exports and is imported for its one side effect: it wraps
  * the global `fetch` so that every request this server makes to MLB, Savant,
- * ESPN, RotoWire or CBS carries a deadline.
+ * ESPN, RotoWire or CBS carries a deadline. **Only `index.ts` imports it**, and
+ * that is load-bearing rather than incidental — the warmer Lambda must not get
+ * this, its whole job being the reads the interactive path cannot absorb. A
+ * caller that wants a deadline of its own therefore reaches for
+ * `deadline.ts::withDeadline`, which is a plain function in a plain module; see
+ * the note there for why it could not live here.
  *
  * ## What it is for, measured
  *
@@ -50,10 +55,25 @@
  *
  * ## Two things it deliberately does not do
  *
- * **It does not touch a caller that brought its own `signal`.** A caller with a
- * signal has said something about the lifetime of its request, and a second
- * deadline stapled on top would be this module overruling it. Nothing in
- * `server/src` passes one today; the guard is for the one that will.
+ * **It does not choose the deadline for a caller that brought its own
+ * `signal`.** A caller with a signal has said something about the lifetime of
+ * its request, and a second deadline stapled on top would be this module
+ * overruling it. There is one such caller now, and it is the reason this
+ * paragraph changed: `mlbStats.ts::searchPeople` carries **3s**, because it is
+ * the prospect-name fallback — a read whose failure already costs one row and
+ * never a page, on a path a page boot waits for. Fifteen seconds is the right
+ * ceiling for a read a route genuinely needs and the wrong one for a read a
+ * route can do without.
+ *
+ * **What it still does for that caller is make the failure legible.** The abort
+ * used to be passed straight back, which meant a caller-supplied deadline
+ * produced `The operation was aborted due to timeout` and no log line — the one
+ * thing this module exists to prevent, reintroduced by the first caller to use
+ * the carve-out. Measured: seven Lambda containers timed out on the identical
+ * `people/search` URL within the same second on 2026-09-01, and the only reason
+ * that was findable at all is the line below. So the deadline is the caller's
+ * and the *reporting* is this module's, which is the split that was wanted all
+ * along.
  *
  * **It does not retry.** A timeout here is reported to the route that made it,
  * and every route in this server already knows what to do with a failed
@@ -70,6 +90,8 @@
  * true of the whole server rather than of most of it.
  */
 
+import { deadlineOf } from './deadline.js';
+
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
 const real = globalThis.fetch;
@@ -85,20 +107,26 @@ globalThis.fetch = function timedFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  if (init?.signal) return real(input, init);
-  const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
-  return real(input, { ...init, signal }).catch((err: unknown) => {
+  // The caller's own deadline where it brought one, ours where it did not —
+  // and either way the same catch below, so a timeout is logged and named
+  // whoever set it. `deadlineOf` is only for the message: a caller's signal may
+  // abort for reasons that are not a timeout at all.
+  const own = init?.signal ?? undefined;
+  const signal = own ?? AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+  const ms = own ? deadlineOf(own) : UPSTREAM_TIMEOUT_MS;
+  return real(input, own ? init : { ...init, signal }).catch((err: unknown) => {
     // `AbortSignal.timeout` rejects with a `TimeoutError`; the `aborted` test
     // beside it covers a runtime that reports the abort some other way, since
     // the whole point of this file is that the failure must be legible.
     if ((err as { name?: string })?.name === 'TimeoutError' || signal.aborted) {
       const where = urlOf(input);
-      console.error(`upstream timed out after ${UPSTREAM_TIMEOUT_MS}ms: ${where}`);
+      const said = ms === null ? 'its caller’s deadline' : `${ms}ms`;
+      console.error(`upstream timed out after ${said}: ${where}`);
       // A plain `Error` rather than the `TimeoutError`, because what every
       // caller does with this is put its message in a log line or on the wire,
       // and `The operation was aborted due to timeout` says nothing about who
       // did not answer.
-      throw new Error(`Upstream did not answer within ${UPSTREAM_TIMEOUT_MS / 1000}s: ${where}`);
+      throw new Error(`Upstream did not answer within ${said}: ${where}`);
     }
     throw err;
   });
