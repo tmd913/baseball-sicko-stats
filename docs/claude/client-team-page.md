@@ -165,8 +165,49 @@ thrown to the top of it.
 
 ### Overview
 
-Two blocks, and the tab is deliberately short — a club's page is opened to get
-*to* something, where a player's is opened to read his day.
+**Five blocks, ordered by how soon each of them moves**: `Next Game`,
+`Next Games`, `Recent Games`, `News`, `Season`.
+
+**It was two, and the season line led.** That is the order a *reference* page is
+built in — the summary, then the detail — and a club page is not opened as a
+reference. It is opened on a game day with one question, *who are they playing
+and how is it going*, and the answer to that was the second block, under a table
+of season totals that will read the same tomorrow. So: the next game (or the one
+being played right now) is the fastest-moving thing on the page and leads; then
+the fixtures behind it; then the results, which stopped moving a few hours ago;
+then the news, which reaches back two days; then the season, which is a fact
+about four months and is where a reader goes on purpose.
+
+**`Next Game` and `Next Games` are one list sliced twice**, `TeamGames` with a
+`skip`. A second component would sort a doubleheader by its own rule sooner or
+later, and this page has already had to write that rule down once (the nightcap
+arrives first off the live window). A game being played **now** is the head of
+the same list — the schedule window opens on today — so the block says *Live* on
+its own row without knowing what live is.
+
+**The `Next Game` block draws no span note.** The `the next 14 days` line says
+what the *list* covers, which is a fact about the window; over a single row it
+named a span the block does not draw, so it is scoped to the whole-window list
+(`limit === undefined`).
+
+**`Recent Games` is the Results tab at five rows** with `Results →`, off the same
+`teamGames` read, which arrives newest-first (`teamGames.ts` walks the season
+backwards) so the head of the list is the head of it. The count in the head is
+the whole list's and stays there: a count over five rows is the number five.
+
+**`News` is the recent-news map filtered to the club**, and the choice is
+measured. The alternative was the roster page's reading — fan out over the club's
+players and merge their notes, which `RosterNews` already does — and a club
+carries about **fifty** players (median 48, max 55, LAD 50) against a fantasy
+roster's fifteen, so every club page open would fire fifty `getPlayerNews` reads
+and a hundred and fifty upstream requests **on the default tab**. The map costs
+nothing at all: `/api/news/recent` is one league-wide read `App` already makes on
+boot for the marks beside every name, and filtering it to a club's ids is a pass
+over memory. What that costs is depth — two days, one headline a man — and both
+are stated rather than discovered: the head says `last 2 days`, and every row is
+a press onto that player's page, whose News tab has the rest. Joined on
+`teamId`, the Roster tab's own join: read straight, `players` is the whole league
+and the block drew **253 rows on the Dodgers' page with Aaron Judge at the top**.
 
 **Season** is the club's line for the side on screen, drawn as the one-row
 `.glog-table` the player page's own Season block draws. Which numbers is the side
@@ -175,8 +216,10 @@ than a set chosen here: a reader who wants a different eight has the Stats tab's
 picker one door along, and a third vocabulary of stat labels is the thing this
 app has spent `researchColumns` on not having. `Stats →` is its door.
 
-**Next Games** is the fixture list at five rows, with `Schedule →` through to the
-whole fortnight.
+**Measured at 1400×1100 on the Dodgers**: `Next Game` 1 row and no note,
+`Next Games` 5 with `Schedule →`, `Recent Games` 5 with `Results →`, `News` 3
+with `last 2 days`, `Season` one row with `Stats →`, and the page overflows by
+0.
 
 ### Schedule
 

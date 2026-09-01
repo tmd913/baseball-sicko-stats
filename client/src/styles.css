@@ -6268,6 +6268,28 @@ button.start-line:focus-visible {
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
+/* **A rule down the start of each group of columns** — the standing, the runs
+   behind it, the run of games, the splits, and the division board's magic
+   number. The board is sixteen columns wide and they are four readings; evenly
+   spaced, a reader counts headers to find out where `L10` stops meaning the
+   same kind of thing as `HOME`. See `startsGroup` in `MlbStandings.tsx`, which
+   is where the four are named.
+
+   **A border rather than a wider gap**, which was the other way to say it and
+   is the wrong one on a table that already scrolls sideways at every width: a
+   gap costs the board width it has not got, where a rule is drawn inside the
+   cell's own padding and costs nothing across. It runs the full height of the
+   cell because the cell paints its own ground (the zebra stripe), so a rule
+   inset from the row would leave two notches of stripe at every boundary.
+
+   `--border` is the table's own line — the one already drawn under every row —
+   so the grid it makes reads as one grid rather than as a second, louder set of
+   lines crossing the first. It is drawn on the header too, which is what makes
+   the boundary legible before a reader has looked at a single number. */
+.mlb-standings-table th.mlb-col-group,
+.mlb-standings-table td.mlb-col-group {
+  border-left: 1px solid var(--border);
+}
 .glog-table tbody tr:nth-child(even) td,
 .glog-table tbody tr:nth-child(even) .glog-date,
 .stats-table tbody tr:nth-child(even) td,
@@ -17321,6 +17343,36 @@ button.start-line:focus-visible {
      pixel and paint as a grey smear rather than as dashes. */
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
+}
+
+/* ---- The team page's News block --------------------------------------------
+   The recent-news map filtered to one club: a headline a day old at most, one
+   row per player, each a door onto his own page.
+
+   **It borrows `.news-list` and `.news-item` and adds two things**, which is the
+   fold rather than a second list: this row is a *press* where the roster page's
+   is a line — the whole note is on the page it opens, not in the row — so it
+   takes `.news-press`, the class that file already gives a row with something
+   behind it. And the recency the mark beside a name carries in two tones is
+   carried here by the date instead, in the same two: `--strikeout` for today,
+   `--faint` for yesterday. Two tones, no third, for the reason `NewsMark` gives
+   — anything older is not in the map at all. */
+.team-news-item .news-date {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.team-news-item.level-today .news-date {
+  color: var(--strikeout);
+}
+.team-news-item.level-yesterday .news-date {
+  color: var(--faint);
+}
+/* The block sits in the Overview's reading column with the four beside it, so
+   the list takes that column rather than `.news-list`'s own `--card-column`
+   cap — which would be a second, narrower column inside one that is already the
+   right width. */
+.team-news {
+  max-width: none;
 }
 
 /* ---- Fantasy lineup slot ----------------------------------------------------

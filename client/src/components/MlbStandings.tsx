@@ -92,6 +92,22 @@ interface Column {
   value: (t: StandingsTeam) => string;
   /** Where a cell says more than its text — the run differential's sign. */
   className?: (t: StandingsTeam) => string;
+  /**
+   * **This column opens a new group**, and gets a rule down its left edge.
+   *
+   * The board is sixteen columns wide and they are **four readings**, which the
+   * order below already argues for at length and which nothing on screen said:
+   * the *standing* (`W L PCT GB`), the *runs* behind it (`RS RA DIFF`), the
+   * *run of games* (`STRK L10 L30` and the two halves), and the *splits*
+   * (`HOME AWAY vs .500+ 1-RUN xW-L`), with the division board's `MAG` a fifth
+   * of one. Sixteen evenly-spaced columns is a reader counting headers to find
+   * out where `L10` stops meaning the same kind of thing as `HOME`.
+   *
+   * It marks the **start** of a group rather than the end of one, so the last
+   * column never draws a rule against the table's own edge and adding a column
+   * to the end of a group needs nothing said.
+   */
+  startsGroup?: boolean;
 }
 
 /**
@@ -134,7 +150,7 @@ function columnsFor(group: StandingsGroup): Column[] {
     // streak between a club's record and its run differential — the two figures
     // a reader compares clubs on — and left the run columns adrift in the
     // middle of the board.
-    { key: 'rs', label: 'RS', title: 'Runs scored', value: (t) => String(t.runsScored) },
+    { key: 'rs', label: 'RS', title: 'Runs scored', value: (t) => String(t.runsScored), startsGroup: true },
     { key: 'ra', label: 'RA', title: 'Runs allowed', value: (t) => String(t.runsAllowed) },
     {
       key: 'diff',
@@ -147,7 +163,7 @@ function columnsFor(group: StandingsGroup): Column[] {
     // ten, the last thirty, and then the season's two halves. They are one
     // reading — *how has this club been going* — and a reader comparing them
     // wants them adjacent rather than separated by three columns of runs.
-    { key: 'strk', label: 'STRK', title: 'Current run of wins or losses', value: (t) => t.streak ?? '—' },
+    { key: 'strk', label: 'STRK', title: 'Current run of wins or losses', value: (t) => t.streak ?? '—', startsGroup: true },
     { key: 'l10', label: 'L10', title: 'Record in the last ten games', value: (t) => rec(t.lastTen) },
     { key: 'l30', label: 'L30', title: 'Record in the last thirty games', value: (t) => rec(t.lastThirty) },
     {
@@ -162,7 +178,7 @@ function columnsFor(group: StandingsGroup): Column[] {
       title: 'Record since the All-Star break',
       value: (t) => rec(t.secondHalf),
     },
-    { key: 'home', label: 'HOME', title: 'Record at home', value: (t) => rec(t.home) },
+    { key: 'home', label: 'HOME', title: 'Record at home', value: (t) => rec(t.home), startsGroup: true },
     { key: 'away', label: 'AWAY', title: 'Record on the road', value: (t) => rec(t.away) },
     {
       key: 'vs500',
@@ -186,6 +202,7 @@ function columnsFor(group: StandingsGroup): Column[] {
       label: 'MAG',
       title: 'Magic number to clinch the division',
       value: (t) => t.magicNumber ?? '—',
+      startsGroup: true,
     });
   }
   return cols;
@@ -413,7 +430,12 @@ function StandingsTable({
                 Team
               </th>
               {columns.map((c) => (
-                <th scope="col" key={c.key} className="glog-num" title={c.title}>
+                <th
+                  scope="col"
+                  key={c.key}
+                  className={`glog-num${c.startsGroup ? ' mlb-col-group' : ''}`}
+                  title={c.title}
+                >
                   {c.label}
                 </th>
               ))}
@@ -478,7 +500,12 @@ function StandingsTable({
                   </span>
                 </td>
                 {columns.map((c) => (
-                  <td key={c.key} className={`glog-num ${c.className?.(t) ?? ''}`}>
+                  <td
+                    key={c.key}
+                    className={`glog-num${c.startsGroup ? ' mlb-col-group' : ''} ${
+                      c.className?.(t) ?? ''
+                    }`}
+                  >
                     {c.value(t)}
                   </td>
                 ))}

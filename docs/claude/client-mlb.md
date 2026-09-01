@@ -192,6 +192,27 @@ score on one line — collapsing to one column below 430.
 
 One board, one control over it, and nineteen columns of the season.
 
+**Those columns are four readings and a rule now says so.** `W L PCT GB` is the
+standing; `RS RA DIFF` is the nearest thing to a reason for it; `STRK L10 L30
+1st Half 2nd Half` is how the club has been going; `HOME AWAY vs .500+ 1-RUN
+xW-L` are the splits; and the division board's `MAG` is a fifth of one. The
+order already argued for all four (see the notes in `columnsFor`) and nothing on
+screen said it — sixteen evenly-spaced columns is a reader counting headers to
+find out where `L10` stops meaning the same kind of thing as `HOME`. So each
+group's **first** column takes a `border-left` in `--border`, the table's own
+line, on the header and every cell.
+
+Three things about that are decisions. It marks the **start** of a group rather
+than the end, so the last column never draws a rule against the table's own edge
+and adding a column to the end of a group needs nothing said. It is a **border
+rather than a wider gap**, which was the other way to say it and is the wrong one
+on a table that scrolls sideways at every width: a gap costs width this board has
+not got, where a rule is drawn inside the cell's own padding and costs none. And
+it runs the **full height of the cell**, because the cell paints its own ground
+(the zebra stripe) and a rule inset from the row would leave two notches of
+stripe at every boundary. Measured at 1400 on the Division board: table 1400px
+wide as before, rows 49px, and the page overflows by 0.
+
 ### The three groupings are three questions
 
 **Division** (six tables), **Wild Card** (the clubs not leading one, per league,
