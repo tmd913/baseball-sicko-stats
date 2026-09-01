@@ -1,3 +1,45 @@
+### The tab row has its own ground
+
+**The chrome holds two different kinds of thing** — the app's identity and its
+controls above, the page's five destinations below — and painted on one color
+they read as one tall bar with words scattered through it. `.main-tabs-band` is
+a band under the strip saying *these five are a set*.
+
+**A wrapper, because `.main-tabs` is centered at 860px**: a background on the
+strip itself is an 860px stripe floating in the chrome rather than a band across
+it. It gives back the chrome's own `--app-gutter` so it runs to the window's
+edges, and sits flush at the bottom because `.app-chrome` has no bottom padding
+— the strip was already the last thing in it.
+
+**Two things had to be measured rather than assumed.** `.view-bar` is a flex
+row, so the band came out **443px in a 1200px window** until it claimed the line
+with `width: 100%`; and a negative inline margin on a flex item *moves* its
+edges without growing the box, so `width: 100%` with `-22px` either side was
+1156px starting at 0 — the right edge 44px short. `calc(100% + 2 *
+var(--app-gutter))` is what actually spans it. Measured after: left edge 0 and
+width the window's, at 1200 and at 390.
+
+**The ground is a translucent ink**, the same mechanism the Overview's skeleton
+bars take and for the same reason. `--panel` is the obvious token and it is
+`#fff` on Light and Powder Blue where `--bg` is `#fff` too — a band with
+contrast **1.00**, which is no band. Read off rendered pixels in the chrome's
+own gutter, where both rows are bare:
+
+| | header | band | contrast |
+| --- | --- | --- | --- |
+| Dark | (18,19,20) | (33,35,36) | **1.18** |
+| Light | (255,255,255) | (238,238,238) | **1.16** |
+| Midnight | (11,18,32) | (28,35,49) | 1.19 |
+| Lavender | (28,27,34) | (44,42,50) | 1.21 |
+| Maroon | (29,19,25) | (45,36,42) | 1.21 |
+| Powder Blue | (255,255,255) | (238,237,237) | 1.17 |
+
+*(And a note on measuring it: `getComputedStyle().backgroundColor` returns
+`color-mix` **unresolved** — `color(srgb 0.87 0.88 0.89 / 0.08)` — so a script
+that parses it reads the mix's own components rather than what is on screen.
+The numbers above are sampled from a screenshot, which also has to account for
+the capture being at `deviceScaleFactor: 2`.)*
+
 ### Client
 
 `App.tsx` holds all top-level state and persists it in the **URL query string** (seeded from `window.location.search` on load, synced via `history.replaceState`) — so a reload or shared link restores the same view. There is no `localStorage`. Params: `preset` **or** `start`/`end` (never both), expanded **player keys**, open details player (also a key), `view=feed`, `plays=hr` and `newplays=1` (the feed's two axes — which kind of play, one at a time, and whether it is narrowed to the plays since the reader last marked it read; both can be in force at once, so a link may carry either or both — see **Client — the Feed view**), *(`oldest=1` and `noldest=1` stood here — which way each of the feed's two streams ran, deliberately two params for the reason `proj`/`rproj` are two. The control is gone; both are unread and dropped on the first sync, which is the courtesy `group=player` gets.)* `proj=1` (a league **matchup's** projected figures — see **Client — a league matchup**), `mr=` (which reading of a matchup team page — `summary` or `feed`, `roster` being the omitted default; see the same document) and `rproj=1` (the **Roster** view's own projected reading, which is a different question about a different span and so deliberately a different param — see **Client — the Roster view**), `board=teams` (the research board read as thirty clubs rather than six hundred players — its own param and not a value smuggled into `pos=`, which already means which position and so which board; `players` is the default and is never written, and an unrecognized value falls back to it rather than emptying the view, exactly as `toResearchPos` and `toResearchWindow` do — see **Client — research**), *(`cut=vsr|vsl|home|away` stood here — which cut of his spans the player page's Stats tab was showing. That control is gone: every split it offered is a card on the **Splits** tab now, where both halves are drawn at once with the gap between them measured, and a cut table could only ever show one side. The param is unread and dropped on the first sync, the courtesy `group=player` gets. `pcut=firstHalf|secondHalf`, the **percentile card's** own cut, survived that round and is gone in the next: the card is its season's, always, and its bars are Savant's own ranks rather than ones this app draws broken. Both params are unread and dropped on the first sync.)* `view=news` (**the Roster page's third reading** — everything MLB and RotoWire have said about the players on screen, newest first. A `view=` of its own rather than a flag beside `view=summary`, on the same terms as `view=feed`: it is a page's worth of difference, with its own scroll memory and its own URL. It is the one roster reading with **no days**, so the date bar is not drawn over it and the table's own range is untouched underneath), `sim=1`, `help=1` (the how-to page — in the URL like every other view, so it survives a reload and can be handed to someone directly). **A preset is a rule, not a range** — while one is active the URL carries only its label and the dates are re-derived from `datePresets()` on load, so a link (or a reloaded tab) saved under "Today" opens on the *new* today after the date rolls over. Only a custom range from the picker writes `start`/`end`. An unrecognized `preset=` label falls back to whatever `start`/`end` say; legacy links that carry both follow the preset. `readKeys()` also accepts bare ids in `expanded`/`player` — links from before two-way support, read as batters.

@@ -10640,6 +10640,13 @@ export default function App() {
               row, the date bar and the research board's own chrome are gated on
               their own conditions and none of them depends on the report. */}
           {initialLoadSettled && (
+            /* **A band of its own, so the tab row is not the header's second
+               line.** The chrome holds two different kinds of thing — the app's
+               identity and its controls above, the page's five destinations
+               below — and on one ground they read as one long bar. The wrapper
+               exists because `.main-tabs` is centered at 860px: a background on
+               the strip itself would be an 860px stripe rather than a band. */
+            <div className="main-tabs-band">
             <div className="main-tabs" role="tablist" aria-label="Page">
               {/* **The Overview leads**, and it leads because it is the only
                   tab that answers a question rather than offering a reading:
@@ -10823,6 +10830,7 @@ export default function App() {
               >
                 MLB
               </button>
+            </div>
             </div>
           )}
         </div>
@@ -11173,6 +11181,26 @@ export default function App() {
           onSeeDay={openOverviewDay}
           onSeeOppDay={myOpponent ? openOverviewOppDay : null}
           connected={espnConnected}
+          /**
+           * **The board has not answered yet, so assume there is an opponent.**
+           *
+           * Whether this page has a matchup card, a `Their days` carousel and a
+           * `Matchup leaders` block at all is a fact only the scoreboard knows,
+           * and it arrives a round trip after the frame is drawn. Drawing them
+           * only once it lands is what made the page **double in height
+           * mid-load** — measured with 800ms of latency on every read, the view
+           * went 1089px with three cards and one heading at +1680ms to 2117px
+           * with six cards and three headings at +2040.
+           *
+           * So a connected reader gets the whole frame at once and the three
+           * blocks shimmer until the board says who they are about. If it comes
+           * back with no matchup or a bye they collapse — one shrink, in the
+           * rare case, against a jump on every load.
+           *
+           * Exactly the term `overviewSettled` used for this: a board is coming
+           * when one is needed and neither it nor its error has arrived.
+           */
+          boardPending={needsScoreboard && scoreboard === null && scoreboardError === null}
           /* Whether every read behind this page has answered — see
              `overviewSettled` above, which is the one thing the view is not
              already holding: that four of its eight flags have not been raised
