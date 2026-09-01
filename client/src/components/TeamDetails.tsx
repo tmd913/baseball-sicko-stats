@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useResource } from '../resource';
 import {
@@ -11,7 +11,7 @@ import {
   teamColor,
   teamLogoUrl,
 } from '../lib';
-import { useDelayedFlag, useGameDoor } from '../hooks';
+import { RecentNewsContext, useDelayedFlag, useGameDoor } from '../hooks';
 import type { GameDoor, TeamPageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine, PaneBusy } from './Loading';
@@ -22,6 +22,7 @@ import { buildScheduleIndex, gamesOn, OpponentPress, opponentText, spanPhrase } 
 import type { PitcherLookup } from './schedule';
 import type {
   PlayerKind,
+  RecentNews,
   ResearchRow,
   ScheduleGame,
   ScheduleWindow,
@@ -471,15 +472,45 @@ export function TeamDetails({
         </>
       }
     >
+      {/* **The Overview reads forwards, then back, then sideways** — the club's
+          next game, the run after it, the games just played, what has been said
+          about them, and the season line last.
+
+          It was the season line *first* and the fixtures under it, which is the
+          order a *reference* page is built in: the summary, then the detail. A
+          club page is not opened as a reference. It is opened on a game day
+          with one question — *who are they playing and how is it going* — and
+          the answer to that was the second block, under a table of season
+          totals that will read the same tomorrow.
+
+          So the order is by **how soon it moves**: the next game (or the one
+          being played right now) is the fastest-moving thing on the page and
+          leads; then the fixtures behind it; then the results, which stopped
+          moving a few hours ago; then the news, which reaches back two days;
+          then the season, which is a fact about four months and is where a
+          reader goes on purpose. Every block but the news carries a door onto
+          the tab that holds the whole of it, which is what keeps a preview a
+          preview. */}
       {tab === 'overview' && (
         <div className="details-overview">
-          <TeamSeasonBlock
+          {/* **The next game on its own, and the same list the block under it
+              slices.** `skip` is what makes that one list rather than two: a
+              second component would sort a doubleheader by its own rule sooner
+              or later, and this page has already had to write that rule down
+              once (see `TeamGames`, where the nightcap arrives first). A game
+              being played *now* is the head of the same list — the window opens
+              on today — so `Next Game` says `Live` on its own row without this
+              block having to know what live is. */}
+          <TeamGames
             team={team}
-            side={side}
-            row={seasonRow}
-            loading={windowsLoading}
-            error={windowsError}
-            onSeeAll={() => setTab('stats')}
+            scheduleWindow={scheduleWindow}
+            scheduleError={scheduleError}
+            onNeedSchedule={onNeedSchedule}
+            pitcherLookup={pitcherLookup}
+            onOpenDetails={onOpenDetails}
+            onOpenGame={gameDoor}
+            limit={1}
+            heading="Next Game"
           />
           <TeamGames
             team={team}
@@ -489,8 +520,24 @@ export function TeamDetails({
             pitcherLookup={pitcherLookup}
             onOpenDetails={onOpenDetails}
             onOpenGame={gameDoor}
+            skip={1}
             limit={PREVIEW}
             onSeeAll={() => setTab('schedule')}
+          />
+          <TeamResults
+            team={team}
+            onOpenGame={gameDoor}
+            limit={PREVIEW}
+            onSeeAll={() => setTab('results')}
+          />
+          <TeamNews team={team} players={players} onOpenDetails={onOpenDetails} />
+          <TeamSeasonBlock
+            team={team}
+            side={side}
+            row={seasonRow}
+            loading={windowsLoading}
+            error={windowsError}
+            onSeeAll={() => setTab('stats')}
           />
         </div>
       )}
@@ -731,6 +778,8 @@ function TeamGames({
   onOpenDetails,
   onOpenGame,
   limit,
+  skip = 0,
+  heading: headingProp,
   onSeeAll,
 }: {
   team: TeamInfo;
@@ -742,6 +791,15 @@ function TeamGames({
   /** The game's own page, off the matchup in the middle of the row. */
   onOpenGame: GameDoor | null;
   limit?: number;
+  /** **Rows to drop off the front**, which is what lets the Overview draw the
+   *  next game on its own and the run after it beneath — one list, sliced twice,
+   *  rather than a second component that would one day sort a doubleheader
+   *  differently. */
+  skip?: number;
+  /** What the block is called, where the default derivation cannot say it: the
+   *  Overview draws this component twice and the two blocks are `Next Game` and
+   *  `Next Games`. */
+  heading?: string;
   onSeeAll?: () => void;
 }) {
   useEffect(() => {
@@ -773,12 +831,13 @@ function TeamGames({
       }
       out.push(...day);
     }
-    return limit === undefined ? out : out.slice(0, limit);
-  }, [index, team.id, limit]);
+    const from = out.slice(skip);
+    return limit === undefined ? from : from.slice(0, limit);
+  }, [index, team.id, limit, skip]);
 
   const loading = scheduleWindow === null && scheduleError === null;
   const wait = useDelayedFlag(loading);
-  const heading = limit === undefined ? 'Schedule' : 'Next Games';
+  const heading = headingProp ?? (limit === undefined ? 'Schedule' : 'Next Games');
 
   if (index && rows.length > 0) {
     const phrase = spanPhrase(index);
@@ -790,14 +849,18 @@ function TeamGames({
             <button type="button" className="ovw-link" onClick={onSeeAll}>
               Schedule →
             </button>
-          ) : (
+          ) : limit === undefined ? (
+            /* **The span, on the whole-window list and nowhere else.** It says
+               what the *list* covers, which is a fact about the window; on a
+               block of one row it read `the next 14 days` over a single game,
+               naming a span the block does not draw. */
             <span
               className="start-note"
               title={`Every game ${team.name} are scheduled to play ${phrase}. A postponement is not a game they get, so it is not here.`}
             >
               {phrase.replace(/^in /, '')}
             </span>
-          )}
+          ) : null}
         </div>
         <ol className="start-list">
           {rows.map((g) => (
@@ -1000,7 +1063,126 @@ function StarterName({
  * games rather than an omission: a club's result is its result, and there is no
  * batting reading of a 5–3 win.
  */
-function TeamResults({ team, onOpenGame }: { team: TeamInfo; onOpenGame: GameDoor | null }) {
+/**
+ * **What has been said about this club lately** — the Overview's News block.
+ *
+ * It is the **recent-news map**, filtered to the club's own players, and that
+ * choice is the whole of the design. The alternative was the roster page's
+ * reading: fan out over the club's players and merge their notes, which is the
+ * component `RosterNews` already is. Measured, that is what it would cost —
+ * **a club carries about fifty players** (median 48, max 55, LAD 50), against a
+ * fantasy roster's fifteen — so opening any club page would fire fifty
+ * `getPlayerNews` reads, a hundred and fifty upstream requests, on the *default
+ * tab*. A page's first tab must not be the most expensive thing in the app.
+ *
+ * The map costs **nothing at all**: `/api/news/recent` is one league-wide read
+ * `App` already makes on boot for the news marks beside every name, held in
+ * `RecentNewsContext`, and every player with news is in it. Filtering it to
+ * thirty ids is a pass over a map already in memory.
+ *
+ * **What that buys and what it costs.** It reaches back **two days** — the map
+ * carries today and yesterday and nothing older, by design (`recentNews.ts`) —
+ * and it carries one headline per player rather than his whole feed. Both are
+ * stated on the block rather than left to be discovered: the note says the
+ * span, and every row is a door onto the man's own page, whose **News** tab has
+ * the rest. A section that says "here is what has happened to this club since
+ * you last looked, press for the whole of it" is what an Overview is for; a
+ * section that quietly showed six weeks for six of the fifty men would not be.
+ *
+ * **Today before yesterday, then by name**, which is the honest sort: both
+ * upstreams date to the day, so every note filed today ties with every other,
+ * and the only thing left to order them by is the name the reader is scanning.
+ * The same argument `RosterNews` makes for falling back to roster order.
+ */
+function TeamNews({
+  team,
+  players,
+  onOpenDetails,
+}: {
+  team: TeamInfo;
+  players: SeasonPlayer[];
+  onOpenDetails: (key: string) => void;
+}) {
+  const map = useContext(RecentNewsContext);
+  const rows = useMemo(() => {
+    if (!map) return [];
+    const out: { player: SeasonPlayer; news: RecentNews }[] = [];
+    for (const p of players) {
+      // **Joined on the club id, exactly as the Roster tab joins**: `players` is
+      // the whole season roster the app holds from boot, so a block that read it
+      // straight would put every man in the league on one club's page — seen,
+      // 253 rows on the Dodgers' with Aaron Judge at the top of them.
+      if (p.teamId !== team.id) continue;
+      const news = map.get(p.id);
+      if (news) out.push({ player: p, news });
+    }
+    out.sort(
+      (a, b) =>
+        b.news.date.localeCompare(a.news.date) || a.player.name.localeCompare(b.player.name),
+    );
+    return out;
+  }, [map, players, team.id]);
+
+  return (
+    <section className="ovw-block ovw-starts">
+      <div className="ovw-head-row">
+        <h2 className="ovw-head">News</h2>
+        {/* The span, in the head's own note slot, because it is the one thing a
+            reader cannot infer from the rows: an empty block over a club with a
+            quiet fortnight and an empty block over a club nobody has written
+            about are the same block, and only this line tells them apart. */}
+        <span
+          className="start-note"
+          title={`Everything MLB’s transactions and RotoWire’s desk have filed on a ${team.name} player today or yesterday. Older notes are on each player’s own News tab.`}
+        >
+          last 2 days
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="ovw-none">Nothing filed on a {team.name} player today or yesterday.</p>
+      ) : (
+        <ul className="news-list team-news">
+          {rows.map(({ player, news }) => (
+            <li key={player.id} className={`news-item team-news-item level-${news.level}`}>
+              {/* A press, where the roster page's news rows are not — and the
+                  difference is what is behind it. There every row already holds
+                  the whole note; here it holds a headline, and the rest of it is
+                  on the page this opens. A press with something behind it is the
+                  rule; a press with nothing behind it is the fault. */}
+              <button
+                type="button"
+                className="news-press"
+                onClick={() => onOpenDetails(`${player.kind}-${player.id}`)}
+                title={`Open ${player.name}’s page — his News tab has the whole note`}
+              >
+                <span className="news-meta">
+                  <span className="news-who">{player.name}</span>
+                  <span className="news-date">{news.level === 'today' ? 'Today' : 'Yesterday'}</span>
+                </span>
+                <span className="news-headline">{news.headline}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function TeamResults({
+  team,
+  onOpenGame,
+  limit,
+  onSeeAll,
+}: {
+  team: TeamInfo;
+  onOpenGame: GameDoor | null;
+  /** **The most recent `limit` games**, for the Overview's own preview of this
+   *  tab — the list arrives newest-first (`teamGames.ts` walks the season
+   *  backwards), so the head of it is the head of it. */
+  limit?: number;
+  onSeeAll?: () => void;
+}) {
   /* Keyed on the club alone — **not** on the side switch, and that is a fact
      about games rather than an omission: a club's result is its result, and
      there is no batting reading of a 5–3 win. */
@@ -1018,41 +1200,58 @@ function TeamResults({ team, onOpenGame }: { team: TeamInfo; onOpenGame: GameDoo
   const wait = useDelayedFlag(loading && games === null);
 
   if (games && games.length > 0) {
-    return (
-      <div className="details-overview">
-        <section className="ovw-block ovw-starts">
-          <div className="ovw-head-row">
-            <h2 className="ovw-head">Results</h2>
-            {/* The count, in the head, for the reason the Roster tab's is: it is
-                the answer to the question the heading asks, and a list of a
-                hundred and thirty rows is one a reader scrolls rather than
-                counts. */}
+    const rows = limit === undefined ? games : games.slice(0, limit);
+    const section = (
+      <section className={`ovw-block ovw-starts${onSeeAll ? ' ovw-upcoming' : ''}`}>
+        <div className="ovw-head-row">
+          <h2 className="ovw-head">{limit === undefined ? 'Results' : 'Recent Games'}</h2>
+          {onSeeAll ? (
+            <button type="button" className="ovw-link" onClick={onSeeAll}>
+              Results →
+            </button>
+          ) : (
+            /* The count, in the head, for the reason the Roster tab's is: it is
+               the answer to the question the heading asks, and a list of a
+               hundred and thirty rows is one a reader scrolls rather than
+               counts. **Only on the whole list**: a count over five rows would
+               be the number five, which the reader can see. */
             <span className="start-note" title={`Games ${team.name} have played this season`}>
               {games.length}
             </span>
-          </div>
-          <ol className="start-list">
-            {games.map((g) => (
-              <TeamResultRow key={g.gamePk} game={g} onOpenGame={onOpenGame} />
-            ))}
-          </ol>
-        </section>
-      </div>
+          )}
+        </div>
+        <ol className="start-list">
+          {rows.map((g) => (
+            <TeamResultRow key={g.gamePk} game={g} onOpenGame={onOpenGame} />
+          ))}
+        </ol>
+      </section>
     );
+    /* The tab draws its own page box; the Overview is already inside one, so a
+       second `.details-overview` there would be a column inside a column. */
+    return limit === undefined ? <div className="details-overview">{section}</div> : section;
   }
   if (wait) return <LoadingBlock>Reading {team.name}&rsquo;s games</LoadingBlock>;
   if (loading) return null;
-  return (
-    <div className="details-overview">
-      {/* Two causes and two sentences — a read that failed and a club with
-          nothing behind it are different facts, and one "no games" would claim
-          the second in both cases. */}
-      <p className="ovw-none">
-        {error
-          ? `Couldn’t read ${team.name}’s games.`
-          : `${team.name} haven’t played a game this season.`}
-      </p>
-    </div>
+  /* Two causes and two sentences — a read that failed and a club with nothing
+     behind it are different facts, and one "no games" would claim the second in
+     both cases. */
+  const none = (
+    <p className="ovw-none">
+      {error
+        ? `Couldn’t read ${team.name}’s games.`
+        : `${team.name} haven’t played a game this season.`}
+    </p>
+  );
+  return limit === undefined ? (
+    <div className="details-overview">{none}</div>
+  ) : (
+    <section className="ovw-block ovw-starts">
+      <div className="ovw-head-row">
+        <h2 className="ovw-head">Recent Games</h2>
+      </div>
+      {none}
+    </section>
   );
 }
 
