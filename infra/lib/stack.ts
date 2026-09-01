@@ -213,7 +213,37 @@ export class SickoStack extends Stack {
     const bundling = {
       format: OutputFormat.ESM,
       target: 'node22',
-      sourceMap: true,
+      /**
+       * **Minified, and the prize is the package rather than the parse.**
+       *
+       * Measured on the real entry point, best of four: parse-and-evaluate is
+       * ~70ms whether the bundle is minified or not, so nothing here is bought
+       * on that side. What moves is what Lambda has to fetch and unpack before
+       * init can start — **2.21 MB zipped → ~0.6 MB**, a 3.7x cut:
+       *
+       * | | raw | zipped |
+       * | --- | --- | --- |
+       * | plain, with a source map beside it | 3.43 MB | 2.21 MB (shipped) |
+       * | minified | 1.81 MB | 0.56 MB |
+       * | minified + `keepNames` | 1.88 MB | 0.58 MB |
+       *
+       * **`keepNames` costs 0.02 MB zipped and buys back the thing dropping
+       * the source map takes away.** Without it a minified stack trace names
+       * `t`, `n` and `e`, and every `console.error` in the server — a failed
+       * upstream, a swallowed cache write, the per-route line — becomes a
+       * riddle. 4% of a bundle is a cheap price for logs that still say which
+       * function threw.
+       *
+       * **And so `sourceMap` goes, with `--enable-source-maps` beside it.** The
+       * map was 6.45 MB against a 3.42 MB bundle — nearly two thirds of a
+       * package it inflated, read at init, for stack traces `keepNames` now
+       * covers well enough. Measured before removing it: the flag costs ~20ms
+       * of init *when the map is actually present* (80ms against 60ms on the
+       * deployed asset); against a bundle with no map beside it, it is free,
+       * which is why the two have to be dropped together to mean anything.
+       */
+      minify: true,
+      keepNames: true,
       // Ship the SDK rather than trusting the runtime's copy. The default
       // (external) is wrong here: `@aws-sdk/lib-dynamodb` — the DocumentClient
       // the watchlist is written through — is not part of the SDK bundled into
@@ -494,7 +524,6 @@ export class SickoStack extends Stack {
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       COGNITO_DOMAIN: cognitoDomain,
-      NODE_OPTIONS: '--enable-source-maps',
     };
 
     const apiFn = new NodejsFunction(this, 'ApiFunction', {
