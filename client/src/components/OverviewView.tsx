@@ -2130,6 +2130,193 @@ function SpotlightSection({
  * overflow, nothing scrolls, nothing snaps and the dots are not drawn. The
  * desktop layout is what a carousel that fits looks like.
  */
+/**
+ * One placeholder for one value — a bar where a figure will be, with a light
+ * travelling across it.
+ *
+ * **The width is a prop because a bar's width is a claim.** A row of identical
+ * bars reads as a loading pattern; bars the width of the things they stand in
+ * for read as the page, unfinished. So a surname is wider than a rank and a
+ * category value is narrower than a batting line, and the shape a reader sees
+ * at 250ms is the shape they get at 3s.
+ */
+/**
+ * **Put card `i` in the middle of the scrollport.**
+ *
+ * Lifted out of `DayCarousel` when the wait grew a row of its own: the two
+ * rows have to open on the same card, and two copies of this arithmetic are two
+ * chances for the wait to show Yesterday and the page to show Today — which is
+ * a horizontal jump under the reader's eye, and is exactly what the first
+ * version of the skeleton did (measured at 390: the wait opened on
+ * `YESTERDAY`).
+ *
+ * Written as a `scrollTo` on the row itself rather than as `scrollIntoView`,
+ * which is the rule the League page's week list already records: that walks
+ * *every* scrollable ancestor including the page, so centering a card would
+ * also carry the whole Overview up or down under a reader who asked for
+ * neither.
+ *
+ * The offset is measured off the two rects rather than computed from a card
+ * width and a gap. Those are a percentage and a token, and the arithmetic would
+ * be a third opinion about a number the browser already has — and the wrong one
+ * at the ends, where the row's own padding is what lets the first and last
+ * cards reach the middle at all.
+ */
+function centerCard(
+  box: HTMLElement | null,
+  i: number,
+  behavior: ScrollBehavior = 'auto',
+): void {
+  const card = box?.children[i] as HTMLElement | undefined;
+  if (!box || !card) return;
+  const delta =
+    card.getBoundingClientRect().left -
+    box.getBoundingClientRect().left -
+    (box.clientWidth - card.clientWidth) / 2;
+  box.scrollTo({ left: box.scrollLeft + delta, behavior });
+}
+
+function SkBar({ w, h }: { w: string; h?: number }) {
+  return <span className="sk-bar" style={{ width: w, ...(h === undefined ? null : { height: h }) }} />;
+}
+
+/**
+ * A day card with its chrome and none of its figures.
+ *
+ * **Everything the app already knows is drawn for real.** The lead
+ * (`YESTERDAY`/`TODAY`/`TOMORROW`), the date under it and the category
+ * abbreviations are not read from anywhere — they are the props this view is
+ * given and the league's own category list, both in hand before the first
+ * request lands. Only what the read answers with is a bar. That is what makes
+ * this a page waiting for its values rather than a grey rectangle: it says
+ * *Today, R HR RBI SB OPS, three performers* while it waits.
+ *
+ * **It is built out of the real card's own classes** — `.ov-day`,
+ * `.ov-day-head`, `.lg-cats`, `.ov-perfs`, `.ov-day-foot` — rather than out of
+ * declared heights, which is this app's standing rule about reserving a box:
+ * the worst case here is a function of the width and of a font the app does not
+ * choose, so it is laid out and not stated. Three `.ov-perf` rows are three
+ * `.ov-perf` rows whatever they contain.
+ */
+function SkeletonDay({
+  lead,
+  date,
+  categories,
+}: {
+  lead: string;
+  date: string;
+  categories: EspnCategory[];
+}) {
+  const groups = categoryGroups(categories);
+  return (
+    <section className="ov-day sk-day">
+      <header className="ov-day-head">
+        <span className="ov-day-lead">{lead}</span>
+        <span className="ov-day-date">{prettyGameDate(date)}</span>
+      </header>
+      <div className="lg-cats">
+        {groups.map((g) => (
+          <div className="ov-cat-block" key={g.side}>
+            <div className="lg-cat-row lg-cat-head">
+              <span className="lg-cat-side">{g.label}</span>
+              {g.categories.map((c) => (
+                <span key={c.statId}>{c.label}</span>
+              ))}
+            </div>
+            <div className="lg-cat-row">
+              <span className="lg-cat-side" aria-hidden="true" />
+              {g.categories.map((c) => (
+                <span className="ov-cat-val" key={c.statId}>
+                  <SkBar w="72%" />
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="ov-perfs-head-row">
+        <h4 className="ov-perfs-head">Top Performers</h4>
+        <span className="ov-perfs-val-head">VALUE</span>
+      </div>
+      <ol className="ov-perfs">
+        {/* Three, because three is the card's own height — `TOP_N`, which the
+            real block reads and this one has no reason to guess differently. */}
+        {Array.from({ length: TOP_N }, (_, i) => (
+          <li key={i}>
+            <span className="ov-perf sk-perf">
+              <span className="ov-perf-rank">{i + 1}</span>
+              <span className="ov-perf-face sk-bar" />
+              <span className="ov-perf-body">
+                <span className="ov-perf-name">
+                  {/* Three different widths down the column, because three
+                      identical ones read as a pattern and a list of names is
+                      not one. */}
+                  <SkBar w={['62%', '48%', '55%'][i] ?? '55%'} />
+                </span>
+                <span className="ov-perf-line">
+                  <SkBar w={['88%', '74%', '81%'][i] ?? '80%'} />
+                </span>
+              </span>
+              <span className="ov-perf-val">
+                <SkBar w="34px" />
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {/* The foot is reserved as the row of doors it is, not drawn as one: a
+          button that looks pressable and is not is worse than a bar. */}
+      <footer className="ov-day-foot">
+        <span className="ov-day-more sk-door">
+          <SkBar w="60%" />
+        </span>
+        <span className="ov-day-more sk-door">
+          <SkBar w="52%" />
+        </span>
+      </footer>
+    </section>
+  );
+}
+
+/**
+ * The wait's own row of three cards.
+ *
+ * A component rather than markup inline in the gate, for one reason: it has to
+ * **open on Today before paint**, the same as the real row, or the wait shows
+ * Yesterday and the page slides sideways when it lands. `centerCard` is the
+ * row's own arithmetic and `OPENS_ON` its own index, so neither can drift.
+ *
+ * It is not a `DayCarousel`. That component owns a scroll position it keeps, an
+ * overflow observer, arrows and a row of dots — every one of which is about
+ * *moving between* cards, and there is nothing to move between when all three
+ * are the same three bars. What is borrowed is the two classes that give the
+ * cards their width and their peek.
+ */
+function SkeletonDays({
+  dates,
+  categories,
+}: {
+  dates: Record<DayKey, string>;
+  categories: EspnCategory[];
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    centerCard(boxRef.current, OPENS_ON);
+  }, []);
+  return (
+    <div className="ov-carousel">
+      {/* `aria-hidden`, and the `role="status"` line under the row is what a
+          screen reader gets instead: a grid of empty boxes announced cell by
+          cell is worse than a sentence saying the days are being read. */}
+      <div className="ov-days" ref={boxRef} aria-hidden="true">
+        {DAYS.map((k) => (
+          <SkeletonDay key={k} lead={k.toUpperCase()} date={dates[k]} categories={categories} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DayCarousel({
   dates,
   perf,
@@ -2207,16 +2394,10 @@ function DayCarousel({
    * wrong one at the ends, where the row's own padding is what lets the first
    * and last cards reach the middle at all.
    */
-  const center = useCallback((i: number, behavior: ScrollBehavior = 'auto') => {
-    const box = boxRef.current;
-    const card = box?.children[i] as HTMLElement | undefined;
-    if (!box || !card) return;
-    const delta =
-      card.getBoundingClientRect().left -
-      box.getBoundingClientRect().left -
-      (box.clientWidth - card.clientWidth) / 2;
-    box.scrollTo({ left: box.scrollLeft + delta, behavior });
-  }, []);
+  const center = useCallback(
+    (i: number, behavior: ScrollBehavior = 'auto') => centerCard(boxRef.current, i, behavior),
+    [],
+  );
 
   /** Which card the row is showing: the one whose center is nearest the
    *  scrollport's. A distance test rather than a division by the card pitch,
@@ -2830,6 +3011,45 @@ export default function OverviewView({
 
 
   /**
+   * **The matchup card, defined once and drawn in both states of the page.**
+   *
+   * It is the one block here whose data is not part of what `ready` waits for
+   * — `/api/espn/scoreboard` is its own read, and a fast one (549–768ms on the
+   * two slow boots measured, against 3.7s and 21s for the days) — so it is the
+   * one block the wait can show for real rather than as bars. Bound to a name
+   * rather than written twice: two copies of a card carrying a
+   * `markMine={false}` argument are two chances for the wait and the page to
+   * draw the same matchup differently.
+   */
+  const matchupBlock =
+    connected && mine ? (
+      <section className="ov-matchup">
+        <h2 className="ov-heading">
+          Your matchup
+          {board?.start && board?.end ? (
+            <span className="ov-heading-note">
+              {board.live ? 'through' : 'final ·'} {prettyGameDate(board.end)}
+            </span>
+          ) : null}
+        </h2>
+        <MatchupCard
+          matchup={mine}
+          categories={board!.categories}
+          teams={teams}
+          myTeamId={myTeamId}
+          format={board!.format}
+          live={board!.live}
+          /* Neither the label nor the accent border: this is the only card
+             on the page, so a mark saying *which one is yours* marks nothing
+             — see `markMine`, where that rule and the reversal it records
+             live. */
+          markMine={false}
+          onOpen={onOpenMatchup}
+        />
+      </section>
+    ) : null;
+
+  /**
    * **The page arrives all at once, or not at all.**
    *
    * It is a composition of up to nine reads and it used to draw each of them
@@ -2864,11 +3084,68 @@ export default function OverviewView({
    * draws — a card whose day has rolled over on resume, which is a block with
    * genuinely nothing in it under headings that are already on screen, which is
    * exactly the case `md` and `LoadingBlock` were written for.
+   *
+   * ### And what the wait draws is the page, not a ball
+   *
+   * Everything above is about the **unit** — one wait for the whole page rather
+   * than nine — and none of it has moved. What changed is what that one wait
+   * looks like, and the reason is measured: this page's read is **3.5s at p50
+   * and 7.1 at p90** in production, and it has been 21. A turning ball is the
+   * right thing to show for a second and the wrong thing to show for seven,
+   * because all it says is *something is happening* and the reader has nothing
+   * to read while it says it.
+   *
+   * So the wait is **the page with its values missing**. Everything the app
+   * already knows is drawn for real — the headings, the span note, the three
+   * day leads and their dates, the league's own category abbreviations, the
+   * `Top Performers` head — and only the figures the read answers with are
+   * bars. A reader at 250ms already knows what page they are on, which three
+   * days it covers and which categories it is about; what they are waiting for
+   * is the numbers, and the bars are where the numbers go.
+   *
+   * **It costs no extra reflow, which is what makes it allowed at all.** The
+   * skeleton is built out of the real cards' own classes, so its geometry is
+   * the page's by construction rather than by declared heights that would be
+   * wrong at some width — the app's standing rule about reserving a box. The
+   * sequence stays two states and one change.
+   *
+   * **The matchup card is drawn for real here**, when its own read has
+   * answered, and that is an application of the all-at-once rule rather than a
+   * hole in it: the card comes off `/api/espn/scoreboard`, which is not one of
+   * the reads `ready` waits for and lands well before them. Where it has not
+   * yet, it arrives during the wait and pushes the skeleton down — the one
+   * reflow this keeps, and it is a block appearing above an unread placeholder
+   * rather than under a reader's finger.
+   *
+   * **`Their days` and `Matchup leaders` are deliberately not drawn.** Whether
+   * either exists at all depends on the board — no league, no matchup this
+   * period, or a bye — so a skeleton for them would be a claim the page might
+   * have to take back, which is worse than growing downward below the fold.
    */
   if (!ready) {
     return (
-      <div className="overview-view overview-wait">
-        {showWait ? <LoadingBlock size="lg">Reading your days</LoadingBlock> : null}
+      <div className="overview-view">
+        {showWait ? (
+          <>
+            {matchupBlock}
+            {/* Real text: the app has had these three dates since before it
+                asked anybody anything. */}
+            <h2 className="ov-heading">
+              Your days
+              <span className="ov-heading-note">
+                {prettyDate(dates.yesterday)} – {prettyDate(dates.tomorrow)}
+              </span>
+            </h2>
+            <SkeletonDays dates={dates} categories={categories} />
+            {/* The words the ball used to carry. The shape says what is coming
+                to anybody who can see it; this says it to a reader who cannot,
+                and it keeps the app's rule that a wait names what is being
+                read. */}
+            <p className="sr-only" role="status">
+              Reading your days
+            </p>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -2880,32 +3157,7 @@ export default function OverviewView({
           reading `Your matchup` over a message saying there isn't one is chrome
           for a feature the reader hasn't got, and the three day blocks below it
           are a whole page on their own. */}
-      {connected && mine ? (
-        <section className="ov-matchup">
-          <h2 className="ov-heading">
-            Your matchup
-            {board?.start && board?.end ? (
-              <span className="ov-heading-note">
-                {board.live ? 'through' : 'final ·'} {prettyGameDate(board.end)}
-              </span>
-            ) : null}
-          </h2>
-          <MatchupCard
-            matchup={mine}
-            categories={board!.categories}
-            teams={teams}
-            myTeamId={myTeamId}
-            format={board!.format}
-            live={board!.live}
-            /* Neither the label nor the accent border: this is the only card
-               on the page, so a mark saying *which one is yours* marks nothing
-               — see `markMine`, where that rule and the reversal it records
-               live. */
-            markMine={false}
-            onOpen={onOpenMatchup}
-          />
-        </section>
-      ) : null}
+      {matchupBlock}
 
       {/* **A heading of its own, beside the matchup's.** The block had none —
           the three cards each name their day, so the section looked like it was
