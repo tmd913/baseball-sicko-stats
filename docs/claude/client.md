@@ -102,8 +102,40 @@ the *click*, which is `pointerup` — the app's own rule that a press arms on
 navigate. That rule is about the navigation, and it left the mark waiting for
 it: on a touch the finger is down, and nothing has moved, for as long as the
 finger stays down. A delegated `pointerdown` on the strip aims the mark at once
-and the navigation still waits for the release; an abandoned press restores it,
-because `place()` with no argument reads whichever tab is actually active.
+and the navigation still waits for the release.
+
+**And the aim has to outlive the press, which is the bug that shipped.** The
+first version passed the pressed tab as an argument and nothing else — so
+*anything* that then called `place()` with no argument (the per-render layout
+effect, the release handler, a resize) read `.is-active`, still the **old** tab,
+and sent the mark home. The click landed a moment later and sent it back out.
+
+Measured off the frames of a screen recording at 30fps: the mark left `Fantasy`
+(1052) for `Overview`, reached 348, **reversed all the way to 1052**, and set off
+again — five times in seven seconds, each leg a full 260ms transition. Not a
+flicker; the mark visibly changing its mind.
+
+So the aim is a **ref that survives**, and `place()` with no argument prefers it
+over the page. It is cleared in the layout effect on the very commit that moves
+`.is-active` — exact, and one frame rather than one animation — and on a 180ms
+timer after release, for the press that never navigated. **The release handler
+was itself part of the race**: it was `setTimeout(0)`, and `pointerup` and
+`click` are separate tasks, so a zero timeout can run *between* them and read an
+`.is-active` that has not moved yet.
+
+Reproduced and fixed by forcing the condition the earlier tests were missing —
+something calling `place()` while the press is still open:
+
+| | reversals |
+| --- | --- |
+| aim as an argument | **4 of 4**, up to 103px backwards mid-slide |
+| aim as a surviving ref | **0 of 4**, monotonic |
+
+*(Worth its own line: **six clean synthetic presses proved nothing** before
+this. A press and release against an idle app never reproduces it, because
+nothing calls `place()` in the window between the two. The reproduction needs a
+render — or a resize — landing inside the press, which is what a real app with
+live polls does constantly and what a harness does never.)*
 
 Driven, with the press **held** so nothing has navigated yet:
 
