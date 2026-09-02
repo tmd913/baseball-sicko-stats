@@ -23,7 +23,7 @@ import type {
 } from '../types';
 import type { PitcherLookup } from './schedule';
 import { useDelayedFlag } from '../hooks';
-import { LoadingLine } from './Loading';
+import { LoadingLine, SkBar } from './Loading';
 import { GameLogPreview } from './GameLog';
 import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
@@ -84,8 +84,207 @@ import { OVERVIEW_GAMES, UpcomingGames } from './PlayerSchedule';
  * with `shown` set small — see `GameLog.tsx` and `PlayerNews.tsx`, where both
  * were factored out for exactly this.
  */
+/**
+ * **The tab's own frame, drawn before anything has answered.**
+ *
+ * This page did what the app's Overview used to do and stopped doing: one
+ * `LoadingBlock` over the whole tab, gated on `day`. So a reader who pressed a
+ * player row got a turning ball in an empty 900px box, then five blocks at
+ * once. Measured on a cold local server, opening a pitcher's page: the overlay
+ * appeared at **767ms** with nothing in it and its content landed at **920ms**
+ * — and against a genuinely cold read (a pitcher whose day, splits and game log
+ * all resolve behind one Savant fetch) that gap is **5.7 seconds** of empty box.
+ *
+ * Every block below already had a wait of its own, drawn where its content
+ * goes; none of them could ever appear, because the curtain was above all five.
+ *
+ * So the frame is drawn from the first render and the values shimmer. The rule
+ * is the Overview's own: **everything the app already knows is drawn for real**
+ * — every heading, every `→` door, and the season strip's column labels, which
+ * are a function of his kind and nothing else — and only what a read answers
+ * with is a bar. And the boxes are the real components' own classes
+ * (`.ovw-block`, `.glog-table`, `.start-row`), so the geometry is the page's by
+ * construction rather than a height declared here and left to drift.
+ *
+ * **Two of the five blocks cannot be drawn for real without the day**, and they
+ * are the two at the top: the day block itself, and the slot under it that is
+ * *either* Projected Starts or the next five games depending on whether he
+ * works out of the rotation — which `isRotationStarter` reads off the day. The
+ * slot is drawn on the kind's own likelihood (a pitcher's page is most often a
+ * starter's) and the heading settles when the day lands. That is the Overview's
+ * trade, made again: **one heading that changes in the uncommon case against a
+ * frame that jumps on every open**, and the block's height is five rows either
+ * way.
+ */
+function DaySkeleton({ head }: { head: string }) {
+  return (
+    <section className="ovw-block ovw-day">
+      <h2 className="ovw-head">{head}</h2>
+      {/* Three lines. Measured on a starter with no game today, the real block
+          is **68px** and two lines drew 43, so the frame settled taller than it
+          reserved; three draw 52. It is not closed further because there is no
+          one number to close it to — a day with a game in it is a whole
+          `PlayerDay` and several times this tall — so the floor is the sentence
+          case and a played day grows past it. */}
+      <p className="ovw-next-line">
+        <SkBar w="132px" />
+        <SkBar w="88px" />
+        <SkBar w="150px" />
+      </p>
+      <p className="ovw-next-line">
+        <SkBar w="196px" />
+      </p>
+      <p className="ovw-next-line">
+        <SkBar w="164px" />
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The slot under the day — five rows of a fixture list or a rotation, which are
+ * the same box.
+ *
+ * **No `→` door, where the other blocks' doors are drawn for real.** This is
+ * the one slot that does not know which block it is going to be: a rotation
+ * starter gets Projected Starts, which has no door, and everybody else gets the
+ * five-fixture preview, which has one. A door drawn here would be a control
+ * that is pressable and then is not, on every starter's page — where a door
+ * that *arrives* costs nothing, the head row being right-aligned and moving
+ * nothing under it.
+ */
+function NextSlotSkeleton({ head }: { head: string }) {
+  return (
+    /* **`ovw-starts`, which is not decoration.** `.ovw-day, .ovw-starts,
+       .ovw-news` is the rule that caps and centers this tab's three reading
+       columns, and both blocks this slot can become carry it — `ProjectedStarts`
+       and the five-fixture preview alike. Without it the skeleton was measured
+       at **x=16 w=1068** against the real block's **x=150 w=800**: the box slid
+       134px sideways and shed a third of its width as the read landed, which is
+       a worse jump than the one the skeleton exists to remove. */
+    <section className="ovw-block ovw-starts">
+      <div className="ovw-head-row">
+        <h2 className="ovw-head">{head}</h2>
+      </div>
+      <ol className="start-list">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <li className="start-row" key={i}>
+            <div className="start-line static">
+              <span className="ovw-next-when">
+                <SkBar w={['104px', '96px', '110px', '92px', '100px'][i]} />
+              </span>
+              <span className="ovw-next-opp">
+                <SkBar w="62px" />
+              </span>
+              <span className="ovw-next-vs">
+                <SkBar w={['118px', '104px', '112px', '98px', '108px'][i]} />
+              </span>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** One news row, the shape `NewsList` draws at `shown={1}` with its standfirst:
+ *  a meta line, a headline and two lines of summary. */
+function NewsSkeleton() {
+  return (
+    <ul className="news-list">
+      <li className="news-item">
+        <div className="news-static">
+          <span className="news-meta">
+            <SkBar w="150px" />
+          </span>
+          <span className="news-headline">
+            <SkBar w="72%" />
+          </span>
+          <span className="news-summary">
+            <SkBar w="94%" />
+          </span>
+        </div>
+      </li>
+    </ul>
+  );
+}
+
+/** The season strip with its labels and none of its figures. The labels are
+ *  the same list `SeasonSummary` prints, taken from the one place that decides
+ *  them, so the skeleton cannot come to head a different table from the answer
+ *  that replaces it. */
+function StatStripSkeleton({ labels }: { labels: string[] }) {
+  return (
+    <div className="glog-scroll">
+      <table className="glog-table ovw-table">
+        <thead>
+          <tr>
+            {labels.map((label) => (
+              <th key={label} className="glog-num" scope="col">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {labels.map((label) => (
+              <td key={label} className="glog-num">
+                <SkBar w="80%" />
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The five-game preview, one bar per cell. Its column count is the log's, not
+ *  the season strip's, so it is its own list rather than a reuse of that one. */
+function GameLogSkeleton({ isPitcher }: { isPitcher: boolean }) {
+  const labels = isPitcher
+    ? ['DATE', 'OPP', 'IP', 'H', 'ER', 'BB', 'K', 'ERA']
+    : ['DATE', 'OPP', 'AB', 'R', 'H', 'HR', 'RBI', 'BB', 'K'];
+  return (
+    <div className="glog-scroll">
+      <table className="glog-table ovw-table">
+        <thead>
+          <tr>
+            {labels.map((label) => (
+              <th key={label} className="glog-num" scope="col">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <tr key={row}>
+              {labels.map((label) => (
+                <td key={label} className="glog-num">
+                  <SkBar w={label === 'DATE' ? '86%' : label === 'OPP' ? '70%' : '58%'} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The season strip's columns, which are a function of his kind and nothing
+ *  else — so the skeleton and the answer are headed by one list. */
+function seasonLabels(isPitcher: boolean): string[] {
+  return isPitcher
+    ? ['IP', 'W-L', 'SV', 'HD', 'ERA', 'WHIP', 'K%']
+    : ['G', 'R', 'HR', 'RBI', 'SB', 'AVG', 'SLG', 'OPS'];
+}
+
 export function OverviewTab({
   report,
+  kindIsPitcher,
   playerId,
   name,
   nextGame,
@@ -107,8 +306,22 @@ export function OverviewTab({
   onTab,
   onOpenDetails,
 }: {
-  /** His day — the same `PlayerReport` the feed reads, off `/api/players/:id/day`. */
-  report: PlayerReport;
+  /**
+   * His day — the same `PlayerReport` the feed reads, off the page's batched
+   * read.
+   *
+   * **Null until it lands, where it used to be the gate on the whole tab.**
+   * `PlayerDetails` drew a `LoadingBlock` over everything until this arrived,
+   * so the five blocks below — each with a wait of its own, drawn where its
+   * content goes — could never once appear. The frame is drawn from the first
+   * render now and this is null for the length of the read; see
+   * `DaySkeleton`.
+   */
+  report: PlayerReport | null;
+  /** Which side of the ball this page is, known from the key that opened it and
+   *  so **before** the day lands. `report.kind` is the same answer a read later,
+   *  and is preferred once there is one. */
+  kindIsPitcher: boolean;
   playerId: number;
   name: string;
   /** His club's next game, off the page's own batched read. Null where there
@@ -153,23 +366,27 @@ export function OverviewTab({
   onTab: (tab: 'news' | 'stats' | 'gamelog' | 'schedule') => void;
   onOpenDetails?: (key: string) => void;
 }) {
-  const isPitcher = report.kind === 'pitcher';
+  const isPitcher = report ? report.kind === 'pitcher' : kindIsPitcher;
   // **The combined line only appears when there is something to combine.** A
   // day is one game almost every time, and that game's own section header
   // already carries his line for it — so on a single-game day the strip was the
   // same string twice, an inch apart. On a doubleheader it is genuinely new,
   // being the only place the two halves are added up.
-  const line = report.games.length > 1 ? playerDayLine(report) : null;
-  const hasGames = report.games.length > 0;
+  const line = report && report.games.length > 1 ? playerDayLine(report) : null;
+  const hasGames = report !== null && report.games.length > 0;
   // Whether he works out of the rotation, which decides two things on this tab:
   // that the Projected Starts block is drawn at all, and that the day block
   // above it stops trying to answer "when next". `lib.ts::isRotationStarter` is
   // the app's one definition of it and is read rather than restated.
-  const wantStart = isPitcher && isRotationStarter(report);
+  const wantStart = isPitcher && report !== null && isRotationStarter(report);
   // The day block's heading names what the block holds. For a starter that is
   // always the day — the next turn is the block *under* it now — so the third
   // wording, `Next start`, has gone with the sentence it used to head.
-  const dayHead = hasGames || wantStart ? 'Today' : 'Next game';
+  /** **`Today` while the read is out**, which is the heading four players in
+   *  five end on and the one the block keeps whenever he has a game or a turn.
+   *  A heading that settles to `Next game` is a word changing in place; a
+   *  heading that arrives is the block changing height under the reader. */
+  const dayHead = report === null || hasGames || wantStart ? 'Today' : 'Next game';
   /**
    * **He has not appeared in a major-league game this season, and the page has
    * to say so.**
@@ -218,76 +435,88 @@ export function OverviewTab({
           centers the tab's three reading columns. It carried no modifier while
           the cap sat on `.player-day` *inside* it, which centered the day's
           items and left this heading at the tab's left edge. */}
-      <section className="ovw-block ovw-day">
-        <h2 className="ovw-head">{dayHead}</h2>
-        {line && <p className="details-note details-day-line">{line}</p>}
-        {hasGames ? (
-          <PlayerDay report={report} onOpenDetails={onOpenDetails} />
-        ) : wantStart ? (
-          /* **A rotation starter's "when, then" is the block below**, and that
-             is a deferral rather than a loss. `NextGameBlock` answered this for
-             a starter by asking for his next *announced* start, which for most
-             of the month is nothing — clubs name a rotation three or four days
-             out — so what it mostly said was `Not yet scheduled.`: a true
-             sentence, and a useless one over a question the club's own schedule
-             and his own cadence can answer in five rows. So he gets the line
-             saying today is empty, and Projected Starts says when. */
-          <p className="ovw-none">No game for {name} today.</p>
-        ) : (
-          /* Nothing today for a batter or a reliever, and for them the club's
-             next game really is the answer: any of its games could be his,
-             where a starter is in one in five. */
-          /* **Handed in rather than fetched here.** This was a `useState` +
-             `useEffect` + `live` flag of its own — one of the 84 the resource
-             layer was written to replace, and the last one on this page. It
-             never went through that layer, so it never deduped: driven on open,
-             `/api/players/:id/next-game` fired **twice**, 1ms apart, where none
-             of the page's other reads did. It rides on `/api/players/:id/page`
-             now, which asks for it once with everything else the page opens
-             with. `start` was hard-coded false there and is still false here —
-             this block is the club's-next-game half of the question and
-             Projected Starts is the other. */
-          <NextGameBlock info={nextGame} loading={nextGameLoading} name={name} />
-        )}
-      </section>
-
-      {/* Second, because "when does he pitch next" is the forward half of the
-          question the block above answers — see this file's own head.
-
-          **Every player has a block in this slot now, and which one he gets is
-          the same test the day block above him just made.** A rotation starter's
-          forward question is his turns and he gets those; everybody else is in
-          every game his club plays, so his is the fixture list — five rows of
-          it, over to the Schedule tab that holds the fortnight. The two are
-          never both drawn, which is the property that makes this a slot rather
-          than two blocks: the Overview's rhythm is *now → next → what has
-          happened → the record*, and `next` is one block wherever the reader
-          lands. */}
-      {wantStart ? (
-        <ProjectedStartsBlock
-          playerId={playerId}
-          name={name}
-          throws={report.throws}
-          info={starts}
-          loading={startsLoading}
-          failed={startsFailed}
-        />
+      {report === null ? (
+        /* **The two blocks that cannot be drawn without the day**, and they are
+           the two at the top. Everything below this reads its own field off the
+           page payload and draws its own skeleton where the value goes. */
+        <>
+          <DaySkeleton head={dayHead} />
+          <NextSlotSkeleton head={isPitcher ? 'Projected Starts' : `Next ${OVERVIEW_GAMES} games`} />
+        </>
       ) : (
-        <UpcomingGames
-          onOpenDetails={onOpenDetails}
-          report={report}
-          reportLoading={false}
-          playerId={playerId}
-          name={name}
-          isPitcher={isPitcher}
-          scheduleWindow={scheduleWindow}
-          scheduleError={scheduleError}
-          onNeedSchedule={onNeedSchedule}
-          pitcherLookup={pitcherLookup}
-          limit={OVERVIEW_GAMES}
-          heading={`Next ${OVERVIEW_GAMES} games`}
-          onSeeAll={() => onTab('schedule')}
-        />
+        <>
+      <section className="ovw-block ovw-day">
+          <h2 className="ovw-head">{dayHead}</h2>
+          {line && <p className="details-note details-day-line">{line}</p>}
+          {hasGames ? (
+            <PlayerDay report={report} onOpenDetails={onOpenDetails} />
+          ) : wantStart ? (
+            /* **A rotation starter's "when, then" is the block below**, and that
+               is a deferral rather than a loss. `NextGameBlock` answered this for
+               a starter by asking for his next *announced* start, which for most
+               of the month is nothing — clubs name a rotation three or four days
+               out — so what it mostly said was `Not yet scheduled.`: a true
+               sentence, and a useless one over a question the club's own schedule
+               and his own cadence can answer in five rows. So he gets the line
+               saying today is empty, and Projected Starts says when. */
+            <p className="ovw-none">No game for {name} today.</p>
+          ) : (
+            /* Nothing today for a batter or a reliever, and for them the club's
+               next game really is the answer: any of its games could be his,
+               where a starter is in one in five. */
+            /* **Handed in rather than fetched here.** This was a `useState` +
+               `useEffect` + `live` flag of its own — one of the 84 the resource
+               layer was written to replace, and the last one on this page. It
+               never went through that layer, so it never deduped: driven on open,
+               `/api/players/:id/next-game` fired **twice**, 1ms apart, where none
+               of the page's other reads did. It rides on `/api/players/:id/page`
+               now, which asks for it once with everything else the page opens
+               with. `start` was hard-coded false there and is still false here —
+               this block is the club's-next-game half of the question and
+               Projected Starts is the other. */
+            <NextGameBlock info={nextGame} loading={nextGameLoading} name={name} />
+          )}
+        </section>
+
+        {/* Second, because "when does he pitch next" is the forward half of the
+            question the block above answers — see this file's own head.
+
+            **Every player has a block in this slot now, and which one he gets is
+            the same test the day block above him just made.** A rotation starter's
+            forward question is his turns and he gets those; everybody else is in
+            every game his club plays, so his is the fixture list — five rows of
+            it, over to the Schedule tab that holds the fortnight. The two are
+            never both drawn, which is the property that makes this a slot rather
+            than two blocks: the Overview's rhythm is *now → next → what has
+            happened → the record*, and `next` is one block wherever the reader
+            lands. */}
+        {wantStart ? (
+          <ProjectedStartsBlock
+            playerId={playerId}
+            name={name}
+            throws={report.throws}
+            info={starts}
+            loading={startsLoading}
+            failed={startsFailed}
+          />
+        ) : (
+          <UpcomingGames
+            onOpenDetails={onOpenDetails}
+            report={report}
+            reportLoading={false}
+            playerId={playerId}
+            name={name}
+            isPitcher={isPitcher}
+            scheduleWindow={scheduleWindow}
+            scheduleError={scheduleError}
+            onNeedSchedule={onNeedSchedule}
+            pitcherLookup={pitcherLookup}
+            limit={OVERVIEW_GAMES}
+            heading={`Next ${OVERVIEW_GAMES} games`}
+            onSeeAll={() => onTab('schedule')}
+          />
+        )}
+        </>
       )}
 
       <NewsPreview
@@ -317,7 +546,11 @@ export function OverviewTab({
       ) : (
         <section className="ovw-block">
           <h2 className="ovw-head">Recent games</h2>
-          <GameLogWait loading={gameLogLoading} />
+          {gameLogLoading ? (
+            <GameLogSkeleton isPitcher={isPitcher} />
+          ) : (
+            <GameLogWait loading={gameLogLoading} />
+          )}
         </section>
       )}
     </div>
@@ -375,7 +608,6 @@ function NewsPreview({
   name: string;
   onSeeAll: () => void;
 }) {
-  const wait = useDelayedFlag(loading);
   const items = news?.items ?? [];
   return (
     <section className="ovw-block ovw-news">
@@ -391,9 +623,17 @@ function NewsPreview({
       </div>
       {items.length > 0 ? (
         <NewsList items={items} shown={1} summaries />
-      ) : wait ? (
-        <LoadingLine>Reading the latest news</LoadingLine>
-      ) : loading ? null : (
+      ) : loading ? (
+        /* **No `WAIT_DELAY` on a skeleton, and that is the difference between
+           the two kinds of wait.** The delay exists so a mark that would appear
+           and vanish inside a tenth of a second never appears — it is about a
+           *spinner*, which is a claim that something is slow. A bar where the
+           value goes claims nothing: it is the block at rest with its content
+           missing, and drawing it on the first frame is what stops the box
+           being empty. `useDelayedFlag` is still what governs the *lines*
+           below, which are spinners. */
+        <NewsSkeleton />
+      ) : (
         <p className="ovw-none">No recent news for {name}.</p>
       )}
     </section>
@@ -448,7 +688,6 @@ function SeasonSummary({
   loading: boolean;
   onSeeAll: () => void;
 }) {
-  const wait = useDelayedFlag(loading);
   const cells: [string, string][] | null = isPitcher
     ? pitcherSeason && pitcherSeason.gamesPlayed > 0
       ? [
@@ -509,9 +748,9 @@ function SeasonSummary({
             </tbody>
           </table>
         </div>
-      ) : wait ? (
-        <LoadingLine>Reading the season line</LoadingLine>
-      ) : loading ? null : (
+      ) : loading ? (
+        <StatStripSkeleton labels={seasonLabels(isPitcher)} />
+      ) : (
         <p className="ovw-none">
           No {isPitcher ? 'innings' : 'plate appearances'} this season.
         </p>

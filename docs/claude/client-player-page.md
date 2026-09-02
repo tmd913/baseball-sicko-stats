@@ -1314,6 +1314,82 @@ projection wanted, that slot is not his — it is skipped and the rest re-phased
 from wherever he lands, up to `MAX_SLIP` (3) consecutive skips, past which the
 rotation has clearly been re-ordered and a shorter list beats a longer wrong one.
 
+### The tab is drawn before its read answers, and the values shimmer
+
+**The page did the thing the app's own Overview stopped doing.** `PlayerDetails`
+drew one `LoadingBlock` over the whole Overview tab, gated on `day`:
+
+```tsx
+{tab === 'overview' && dayWait && <LoadingBlock>Reading today's game</LoadingBlock>}
+{tab === 'overview' && day && !dayLoading && <OverviewTab report={day} … />}
+```
+
+Every block inside already had a wait of its own, drawn where its content goes —
+`Reading the latest news`, `Reading the season line`, `Reading the game log`.
+**None of them could ever appear**, because the curtain was above all five. The
+tab was a turning ball in an empty box, and then a whole page at once.
+
+Driven at 1100×1200 with the page read held 2.5s (the same hold on both sides,
+since what is being compared is the client's paint sequence):
+
+| | frame appears | height then | height settled | jump |
+| --- | --- | --- | --- | --- |
+| before | **~2930ms** — all five blocks at once | 900 (an empty box, spinner from 715ms) | 1111 | **211px** |
+| after | **~150ms** | 1080 | 1111 | **31px** |
+
+Unheld, against a cold local server, the same shape: the overlay used to appear
+at 767ms holding nothing and fill at 920, and a genuinely cold pitcher — whose
+day, splits and game log all resolve behind one Savant fetch — leaves that box
+empty for **5.7 seconds**.
+
+**Everything the app already knows is drawn for real.** The five headings, the
+`News →` and `Stats →` doors, and the season strip's column labels, which are a
+function of his kind and nothing else (`seasonLabels`) — only what a read
+answers with is a bar. The bars are `SkBar`, which moved to `Loading.tsx` when
+this became the second surface drawing skeletons, so the Overview's day cards
+and this tab cannot come to paint them differently.
+
+**The boxes are the real components' own classes**, which is the rule rather
+than a convenience, and it was worth exactly what the rule says it is: the first
+draft of the next-game slot used a bare `.ovw-block` and measured **x=16
+w=1068** against the real block's **x=150 w=800**. `.ovw-day, .ovw-starts,
+.ovw-news` is what caps and centers this tab's three reading columns, and the
+skeleton had missed `ovw-starts` — so the box slid 134px sideways and shed a
+third of its width as the read landed, a worse jump than the one it existed to
+remove. With it, every block's `x` and `width` are exact on both a batter's page
+and a pitcher's, and what is left is height: Today 52 → 68, the other four
+within 5px, 107 → 107 exact on the season strip.
+
+**Two of the five blocks cannot be drawn for real without the day**, and they
+are the two at the top. The day block is one; the slot under it is the other,
+being *either* Projected Starts or the next five fixtures depending on
+`isRotationStarter`, which reads the day. So the slot is drawn on the kind's own
+likelihood — a pitcher's page is most often a starter's — and the heading
+settles when the day lands. It is the Overview's own trade made again: **a
+heading that changes in the uncommon case against a frame that jumps on every
+open**, and the block is five rows and 186px either way. The day block's heading
+takes `Today` for the same reason, settling to `Next game` only for a man with
+neither a game nor a turn.
+
+**And a skeleton wants no `WAIT_DELAY` in front of it**, which is the one place
+this departs from the app's loading rules rather than applying them.
+`useDelayedFlag` exists so a spinner that would appear and vanish inside a tenth
+of a second never appears — it is about a mark that *claims something is slow*.
+A bar where a value goes claims nothing: it is the block at rest with its
+content missing, and drawing it on the first frame is the whole point. The
+lines that are still spinners — `ProjectedStartsBlock`'s, `NextGameBlock`'s —
+keep their delay.
+
+**What this does not do is make the read faster**, and the measurement says
+where that would have to come from. `/api/players/:id/page` answers when its
+slowest half does, and the five parts do not finish together — probed on a cold
+pitcher: `nextGame` **369ms**, `news` **701ms**, then `gameLog`, `day` and
+`splits` all at **5.68s**, the three of them behind one shared upstream. The two
+fast parts are ready five seconds before the page answers with them. A `want=`
+split of the kind `/api/overview` took would land News and the next game early;
+the three that matter would still arrive together, because what makes them slow
+is one fetch they share rather than the batching.
+
 ### A start today is the anchor, and for a while nothing could see it
 
 **Reported as "the projected starts look wrong for pitchers starting today":
