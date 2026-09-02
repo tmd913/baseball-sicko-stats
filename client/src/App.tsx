@@ -298,14 +298,34 @@ function useTabSlider(active: string) {
    *  itself — so the transition is off until it has a position. */
   const placed = useRef(false);
 
+  /**
+   * **The tab being pressed, until the page catches up with it.**
+   *
+   * This is the whole of the back-and-forth bug, and it needs to be a ref
+   * rather than an argument. A press aims the mark before anything has
+   * navigated; then *anything at all* that calls `place()` with no argument —
+   * the per-render layout effect, the pointerup restore, a resize — reads
+   * `.is-active`, which is still the **old** tab, and sends the mark home.
+   * The click then lands and sends it back out.
+   *
+   * Measured off the frames of a screen recording, sampled at 30fps: the mark
+   * left Fantasy (1052) for Overview, got to 348, **reversed to 1052**, and set
+   * off again — and the same shape five times in seven seconds. Each leg is a
+   * full 260ms transition, so it is not a flicker; it is the mark visibly
+   * changing its mind.
+   *
+   * So the aim outlives the press. It is cleared when the page agrees with it
+   * (the layout effect below) or when the press turns out to have been
+   * abandoned (the timer on release).
+   */
+  const aim = useRef<HTMLElement | null>(null);
+
   const place = useCallback((aimAt?: HTMLElement) => {
     const strip = stripEl.current;
     const mark = markRef.current;
     if (!strip || !mark) return;
-    // `aimAt` is a tab being *pressed*, which the mark follows before anything
-    // has navigated — see the pointerdown listener below. Without one it goes
-    // where the page actually is.
-    const tab = aimAt ?? strip.querySelector<HTMLElement>('.main-tab.is-active');
+    // A pending aim beats the page, because the page has not caught up yet.
+    const tab = aimAt ?? aim.current ?? strip.querySelector<HTMLElement>('.main-tab.is-active');
     if (!tab) {
       // No tab is active — the mark has nothing to point at, so it goes rather
       // than parking under whichever tab it last visited.
@@ -320,10 +340,12 @@ function useTabSlider(active: string) {
     // element's style invalidates it, this runs on every render and on every
     // resize the observer reports, and the numbers are the same on nearly all
     // of them.
-    const nextX = `translateX(${x}px)`;
-    const nextW = `${w}px`;
-    if (mark.style.transform !== nextX) mark.style.transform = nextX;
-    if (mark.style.width !== nextW) mark.style.width = nextW;
+    // **One property, both numbers.** The element is 1px wide and `scaleX` is
+    // its width — see `.main-tab-mark`, where the reason is recorded: `width`
+    // is not compositor-animatable, so animating it beside a `transform` ran
+    // the two halves of one movement on two threads at two speeds.
+    const next = `translateX(${x}px) scaleX(${w})`;
+    if (mark.style.transform !== next) mark.style.transform = next;
     if (mark.style.opacity !== '1') mark.style.opacity = '1';
     if (!placed.current) {
       placed.current = true;
@@ -386,14 +408,30 @@ function useTabSlider(active: string) {
        */
       const onDown = (e: PointerEvent) => {
         const tab = (e.target as HTMLElement | null)?.closest<HTMLElement>('.main-tab');
-        if (tab) place(tab);
+        if (!tab) return;
+        aim.current = tab;
+        place(tab);
       };
-      // **After the click has been handled**, so this is a restore and never a
-      // fight: by then React has committed whatever the press did, so `place()`
-      // either agrees with where the mark already is (the press navigated) or
-      // takes it back (it did not). A frame is not enough — the commit and this
-      // listener are both discrete work on the same tick.
-      const onUp = () => setTimeout(() => place(), 0);
+      /**
+       * **The press is over; the aim is not, until it has had time to land.**
+       *
+       * This used to drop the aim on a `setTimeout(0)` and re-place, which is
+       * the race that caused the reversal: `pointerup` and `click` are separate
+       * tasks, so a zero timeout can run *between* them — reading an
+       * `.is-active` that has not moved yet and yanking the mark back before
+       * the navigation it was waiting for even happened.
+       *
+       * A press that navigates has its aim cleared by the layout effect, which
+       * runs on the commit. This only has to catch the press that did **not** —
+       * cancelled by a scroll, or lifted somewhere else — so it can afford to
+       * wait, and 180ms is comfortably past a click without being a pause a
+       * reader would notice on an abandoned one.
+       */
+      const onUp = () =>
+        setTimeout(() => {
+          aim.current = null;
+          place();
+        }, 180);
       el.addEventListener('pointerdown', onDown);
       window.addEventListener('pointerup', onUp);
       window.addEventListener('pointercancel', onUp);
@@ -415,7 +453,16 @@ function useTabSlider(active: string) {
   // re-measuring when the font lands — and re-placing is two rect reads against
   // two comparisons. `active` is in the signature so a caller cannot forget
   // that this depends on which tab is current.
-  useLayoutEffect(() => place());
+  useLayoutEffect(() => {
+    // **The page has caught up with the press, so the aim is spent.** Doing it
+    // here rather than on a timer is what makes the common path exact: this
+    // runs on the very commit that moved `.is-active`, so the aim is dropped in
+    // the same frame the navigation lands and never one animation later.
+    if (aim.current && stripEl.current?.querySelector('.main-tab.is-active') === aim.current) {
+      aim.current = null;
+    }
+    place();
+  });
   void active;
 
   return { stripRef, markRef };

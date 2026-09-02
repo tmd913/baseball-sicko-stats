@@ -42,8 +42,37 @@ from where it was to where it is going, so **180ms of travel reads as fast where
 Position and width both animate, because the tabs are the width of their own
 words: `Overview` is 93px and `MLB` is 58, measured.
 
-**`transform` and `width`, not `left`.** A translated box is composited; a `left`
-is laid out, and this strip sits over the whole app.
+**One `transform`, and that took two goes to get right.** The first version was
+`transform` for the position and `width` for the size, with a note saying a
+translated box is composited where a `left` is laid out — true of the half it
+described, and it missed the other half. **`width` is not compositor-animatable
+either.** It needs layout and paint every frame, on the same main thread that is
+busy mounting the research board while the mark is crossing to it, so the two
+halves of one movement ran on two threads at two speeds.
+
+Measured off **presented frames**, two bars animating the same distance with the
+main thread jammed for 220ms in the middle:
+
+| | left edge | width |
+| --- | --- | --- |
+| `width` | glides 198 → 467 | **frozen at 147 for ~190ms**, then **+83 in one frame** |
+| `scaleX` | glides 198 → 467 | 157 → 233, +3/+4/+7 every frame |
+
+A bar whose left edge travels while its right edge stands still for a fifth of a
+second and then snaps 83px is not a mark that moves; it is a mark that stretches
+and jerks. So the element is 1px wide and `scaleX` is its width — position and
+size are one composited property and cannot come apart. The `border-radius` went
+with the width, a scaled radius being an ellipse, and a 2px bar has none to lose.
+
+Confirmed in the app off presented frames, with the main thread jammed 140ms
+mid-slide: `170/93 → 972/58` with **both edges interpolating every frame**
+(93, 88, 84, 79, 72, 70, 67, 66, 63, 62, 61, 59, 58).
+
+*(And a warning about measuring it: the first attempt jammed the main thread
+**before** the transition started, because a style change does not begin
+animating until the frame after the handler returns. Both bars then ran on an
+idle thread and looked identical, which reads as "no bug here". The jam has to
+be scheduled* into *the animation.)*
 
 **Measured rather than declared**, which is this app's rule for anything whose
 worst case is a function of the width or of a font it does not choose — the
@@ -73,8 +102,40 @@ the *click*, which is `pointerup` — the app's own rule that a press arms on
 navigate. That rule is about the navigation, and it left the mark waiting for
 it: on a touch the finger is down, and nothing has moved, for as long as the
 finger stays down. A delegated `pointerdown` on the strip aims the mark at once
-and the navigation still waits for the release; an abandoned press restores it,
-because `place()` with no argument reads whichever tab is actually active.
+and the navigation still waits for the release.
+
+**And the aim has to outlive the press, which is the bug that shipped.** The
+first version passed the pressed tab as an argument and nothing else — so
+*anything* that then called `place()` with no argument (the per-render layout
+effect, the release handler, a resize) read `.is-active`, still the **old** tab,
+and sent the mark home. The click landed a moment later and sent it back out.
+
+Measured off the frames of a screen recording at 30fps: the mark left `Fantasy`
+(1052) for `Overview`, reached 348, **reversed all the way to 1052**, and set off
+again — five times in seven seconds, each leg a full 260ms transition. Not a
+flicker; the mark visibly changing its mind.
+
+So the aim is a **ref that survives**, and `place()` with no argument prefers it
+over the page. It is cleared in the layout effect on the very commit that moves
+`.is-active` — exact, and one frame rather than one animation — and on a 180ms
+timer after release, for the press that never navigated. **The release handler
+was itself part of the race**: it was `setTimeout(0)`, and `pointerup` and
+`click` are separate tasks, so a zero timeout can run *between* them and read an
+`.is-active` that has not moved yet.
+
+Reproduced and fixed by forcing the condition the earlier tests were missing —
+something calling `place()` while the press is still open:
+
+| | reversals |
+| --- | --- |
+| aim as an argument | **4 of 4**, up to 103px backwards mid-slide |
+| aim as a surviving ref | **0 of 4**, monotonic |
+
+*(Worth its own line: **six clean synthetic presses proved nothing** before
+this. A press and release against an idle app never reproduces it, because
+nothing calls `place()` in the window between the two. The reproduction needs a
+render — or a resize — landing inside the press, which is what a real app with
+live polls does constantly and what a harness does never.)*
 
 Driven, with the press **held** so nothing has navigated yet:
 
