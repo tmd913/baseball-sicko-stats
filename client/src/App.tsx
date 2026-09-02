@@ -291,18 +291,21 @@ const BOOT_SLICES: OverviewSliceKey[] = ['mine.today'];
  * again.
  */
 function useTabSlider(active: string) {
-  const stripRef = useRef<HTMLDivElement | null>(null);
+  const stripEl = useRef<HTMLDivElement | null>(null);
   const markRef = useRef<HTMLSpanElement | null>(null);
   /** Whether the mark has ever been placed. The first placement must not
    *  animate — a slider that flies in from x=0 on boot is a page announcing
    *  itself — so the transition is off until it has a position. */
   const placed = useRef(false);
 
-  const place = useCallback(() => {
-    const strip = stripRef.current;
+  const place = useCallback((aimAt?: HTMLElement) => {
+    const strip = stripEl.current;
     const mark = markRef.current;
     if (!strip || !mark) return;
-    const tab = strip.querySelector<HTMLElement>('.main-tab.is-active');
+    // `aimAt` is a tab being *pressed*, which the mark follows before anything
+    // has navigated — see the pointerdown listener below. Without one it goes
+    // where the page actually is.
+    const tab = aimAt ?? strip.querySelector<HTMLElement>('.main-tab.is-active');
     if (!tab) {
       // No tab is active — the mark has nothing to point at, so it goes rather
       // than parking under whichever tab it last visited.
@@ -330,26 +333,90 @@ function useTabSlider(active: string) {
     }
   }, []);
 
-  // A layout effect, and with no dependency list: the strip's contents change
-  // with things no observer reports — a tab appearing when a league connects,
-  // a word re-measuring when the font lands — and re-placing is two rect reads
-  // against two comparisons.
-  useLayoutEffect(place);
-  useLayoutEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const ro = new ResizeObserver(place);
-    ro.observe(strip);
-    // The strip's own box can hold still while a tab inside it moves — the
-    // window narrowing changes `--tab-pad` at a breakpoint, which re-flows the
-    // words without resizing the row.
-    for (const tab of strip.querySelectorAll('.main-tab')) ro.observe(tab);
-    window.addEventListener('resize', place);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', place);
-    };
-  }, [place, active]);
+  /**
+   * **A callback ref, because the strip does not exist on the render that would
+   * attach the listeners.**
+   *
+   * The whole chrome is behind `initialLoadSettled`, so on the first render
+   * `stripEl.current` is null and an effect reading it wires nothing up. Its
+   * dependencies do not change when the strip finally mounts, so it never runs
+   * again — and the listeners are never attached at all. Measured: **the first
+   * press of the session did not move the mark**, and every press after it did,
+   * because the first navigation changed `active` and re-ran the effect.
+   *
+   * That is the second time this exact shape has cost something today (see
+   * `OverviewView::useOnVisible`, where two of three blocks were never
+   * observed). A callback ref fires when the element actually arrives, which is
+   * the only version of this that cannot be wrong.
+   */
+  const teardown = useRef<(() => void) | null>(null);
+  const stripRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      teardown.current?.();
+      teardown.current = null;
+      stripEl.current = el;
+      if (!el) return;
+
+      const onResize = () => place();
+      // The strip's own box can hold still while a tab inside it moves — a
+      // narrower window changes `--tab-pad` at a breakpoint, which re-flows the
+      // words without resizing the row.
+      const ro = new ResizeObserver(onResize);
+      ro.observe(el);
+      for (const tab of el.querySelectorAll('.main-tab')) ro.observe(tab);
+      window.addEventListener('resize', onResize);
+
+      /**
+       * **The mark leaves on the press, not on the navigation.**
+       *
+       * A tab commits on the *click*, which is `pointerup` — the app's own rule
+       * that a press arms on `pointerdown` and decides on release, so a scroll
+       * that starts on a tab does not navigate. That rule is about the
+       * navigation, and it left the mark waiting for it: on a touch the finger
+       * is down, and nothing has moved, for as long as the finger stays down.
+       *
+       * So the mark follows the finger at once and the navigation still waits
+       * for the release. If the press is abandoned — cancelled by a scroll, or
+       * lifted somewhere else — the mark goes back, because `place()` with no
+       * argument reads whichever tab is actually active.
+       *
+       * **Delegated on the strip** rather than five `onPointerDown` props: the
+       * mark is the strip's, and a tab that appears later (the fantasy tab,
+       * when a league connects) is covered without being told.
+       */
+      const onDown = (e: PointerEvent) => {
+        const tab = (e.target as HTMLElement | null)?.closest<HTMLElement>('.main-tab');
+        if (tab) place(tab);
+      };
+      // **After the click has been handled**, so this is a restore and never a
+      // fight: by then React has committed whatever the press did, so `place()`
+      // either agrees with where the mark already is (the press navigated) or
+      // takes it back (it did not). A frame is not enough — the commit and this
+      // listener are both discrete work on the same tick.
+      const onUp = () => setTimeout(() => place(), 0);
+      el.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+
+      teardown.current = () => {
+        ro.disconnect();
+        window.removeEventListener('resize', onResize);
+        el.removeEventListener('pointerdown', onDown);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+      };
+      place();
+    },
+    [place],
+  );
+
+  // No dependency list on purpose: the strip's contents change with things no
+  // observer reports — a tab appearing when a league connects, a word
+  // re-measuring when the font lands — and re-placing is two rect reads against
+  // two comparisons. `active` is in the signature so a caller cannot forget
+  // that this depends on which tab is current.
+  useLayoutEffect(() => place());
+  void active;
 
   return { stripRef, markRef };
 }

@@ -56,10 +56,46 @@ elsewhere on the same day.
 after the first measurement, so the mark appears under the tab it belongs to
 rather than flying in from the strip's left edge on boot. And it answers
 `prefers-reduced-motion` by jumping — a mark that jumps is still a mark.
+Verified: `0s` under the query, `0.26s, 0.26s` without it.
 
-Driven: at rest the mark is on the active tab to within 2px at both edges; 60ms
-into a press it is in transit (x=789 w=73 on the way from `Overview` 170/93 to
-`MLB` 972/58); no tab carries a coloured border any more.
+**260ms, and a curve that leaves at once.** 180 was too quick to read as travel
+— the mark arrived before the eye had found it, which is the same complaint as
+the fade from the other direction: a movement you cannot follow is not a
+movement. The curve matters as much as the number. `cubic-bezier(0.4, 0, 0.2,
+1)`, the standard ease, spends its first frames barely moving, which under a
+finger that has just gone down reads as nothing happening;
+`cubic-bezier(0.22, 0.9, 0.24, 1)` is steep out of the gate and settles at the
+end, so the time is spent arriving rather than leaving.
+
+**And the mark leaves on the press, not on the navigation.** A tab commits on
+the *click*, which is `pointerup` — the app's own rule that a press arms on
+`pointerdown` and decides on release, so a scroll that starts on a tab does not
+navigate. That rule is about the navigation, and it left the mark waiting for
+it: on a touch the finger is down, and nothing has moved, for as long as the
+finger stays down. A delegated `pointerdown` on the strip aims the mark at once
+and the navigation still waits for the release; an abandoned press restores it,
+because `place()` with no argument reads whichever tab is actually active.
+
+Driven, with the press **held** so nothing has navigated yet:
+
+| press | mark was | 80ms into the held press | target | page still on |
+| --- | --- | --- | --- | --- |
+| MLB | 170/93 | **797/66** | 972/58 | Overview |
+| Roster | 972/58 | **444/71** | 378/73 | MLB |
+| Fantasy | 378/73 | **706/80** | 774/82 | Roster |
+
+And abandoned — down on `MLB`, dragged 320px away, released: in transit at
+801/65 at 90ms, back at **170/93** after, page still on Overview.
+
+**The listener is attached by a callback ref, and that is not a detail.** The
+whole chrome is behind `initialLoadSettled`, so on the first render the strip
+does not exist and an effect reading its ref wires nothing up — and its
+dependencies do not change when the strip mounts, so it never runs again.
+Measured before the fix: **the first press of the session did not move the
+mark**, and every press after it did, because the first navigation changed
+`active` and re-ran the effect. That is the second time this exact shape has
+cost something (see `OverviewView::useOnVisible`, where two of three blocks were
+never observed at all).
 
 #### What was left, and how much of it went
 
