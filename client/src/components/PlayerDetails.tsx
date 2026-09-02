@@ -1040,7 +1040,10 @@ export function PlayerDetails({
   const xwobaWait = useDelayedFlag(xwobaLoading);
   const gameLogWait = useDelayedFlag(gameLogLoading);
   const arsenalWait = useDelayedFlag(arsenalLoading);
-  const dayWait = useDelayedFlag(dayLoading);
+  /* The Overview tab had a `dayWait` of its own and no longer does: its blocks
+     are drawn from the first render and shimmer, which is a wait that claims
+     nothing and so wants no `WAIT_DELAY` in front of it. Every flag above is
+     still a spinner over an empty pane and still delayed. */
 
   /**
    * **The card at the density this reader asked for**, and the other one beside
@@ -1549,13 +1552,31 @@ export function PlayerDetails({
       }
     >
 
-      {tab === 'overview' && dayWait && <LoadingBlock>Reading today&rsquo;s game</LoadingBlock>}
+      {/**
+        * **The tab is drawn before its read has answered**, which is the whole
+        * of what changed here.
+        *
+        * This was `dayWait && <LoadingBlock>` over an empty box, then the whole
+        * tab at once — the page-wide gate the app's own Overview removed for
+        * the same reason. Measured opening a pitcher's page on a cold local
+        * server: the overlay appeared at **767ms** holding nothing and its
+        * content landed at **920ms**; on a genuinely cold read (day, splits and
+        * game log all behind one Savant fetch) that gap is **5.7 seconds**. And
+        * every block inside already had a wait of its own that could never
+        * appear, because the curtain was above all five.
+        *
+        * `day` is now handed down as `null` and the blocks shimmer. The error
+        * branch still replaces the tab outright: a page that could not read his
+        * day has nothing to say in the two blocks that matter and should not
+        * pretend to be loading them.
+        */}
       {tab === 'overview' && dayError && !dayLoading && (
         <div className="details-status details-error">Couldn&rsquo;t load today: {dayError}</div>
       )}
-      {tab === 'overview' && day && !dayLoading && (
+      {tab === 'overview' && !dayError && (
         <OverviewTab
           report={day}
+          kindIsPitcher={isPitcher}
           playerId={playerId}
           name={name}
           /* His club's next game rides on the page read now — see

@@ -73,7 +73,7 @@ import {
 // is one place for it to be decided.
 import { formatTrend, trendDirection } from './researchColumns';
 import { rankFill } from './columnRanks';
-import { LoadingBlock } from './Loading';
+import { LoadingBlock, SkBar } from './Loading';
 import { Modal } from './Modal';
 import { useOverflowArrows } from './TabStrip';
 import { MatchupCard, TeamLogo, categoryGroups, fmtValue } from './LeagueView';
@@ -2407,10 +2407,6 @@ function centerCard(
     box.getBoundingClientRect().left -
     (box.clientWidth - card.clientWidth) / 2;
   box.scrollTo({ left: box.scrollLeft + delta, behavior });
-}
-
-function SkBar({ w, h }: { w: string; h?: number }) {
-  return <span className="sk-bar" style={{ width: w, ...(h === undefined ? null : { height: h }) }} />;
 }
 
 /**

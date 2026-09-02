@@ -108,6 +108,33 @@ export function SpinningBaseball({ size = 'sm' }: { size?: BallSize }) {
 }
 
 /**
+ * **One bar of a skeleton** — a line of type that has not arrived, drawn where
+ * the value will be.
+ *
+ * The paint is `.sk-bar`'s and the measurement behind its ink is in the
+ * stylesheet: a translucent ink at 16% rather than a token, because a bar has
+ * to clear both ends of a card's gradient and every token tried collapsed at
+ * one end or the other on the pale schemes.
+ *
+ * **It carries no geometry, which is the rule rather than an omission.** A
+ * skeleton is built out of the real component's own classes so its boxes are
+ * the page's by construction — the app's standing rule that a box is reserved
+ * by laying it out rather than by declaring a height. `w` is a width along a
+ * line the page has already laid out; `h` is for the rare bar standing in for
+ * something that is not type at all (a crest, a face).
+ *
+ * It lives here rather than in a view because two surfaces draw skeletons now —
+ * the Overview's day cards and the player page's Overview tab — and one bar
+ * with one paint is the difference between those agreeing by construction and
+ * agreeing today.
+ */
+export function SkBar({ w, h }: { w: string; h?: number }) {
+  return (
+    <span className="sk-bar" style={{ width: w, ...(h === undefined ? null : { height: h }) }} />
+  );
+}
+
+/**
  * A wait that sits *beside* what it is about rather than in place of it: the
  * ball at `sm` with a line of text after it.
  *
