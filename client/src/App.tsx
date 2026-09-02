@@ -320,10 +320,12 @@ function useTabSlider(active: string) {
     // element's style invalidates it, this runs on every render and on every
     // resize the observer reports, and the numbers are the same on nearly all
     // of them.
-    const nextX = `translateX(${x}px)`;
-    const nextW = `${w}px`;
-    if (mark.style.transform !== nextX) mark.style.transform = nextX;
-    if (mark.style.width !== nextW) mark.style.width = nextW;
+    // **One property, both numbers.** The element is 1px wide and `scaleX` is
+    // its width — see `.main-tab-mark`, where the reason is recorded: `width`
+    // is not compositor-animatable, so animating it beside a `transform` ran
+    // the two halves of one movement on two threads at two speeds.
+    const next = `translateX(${x}px) scaleX(${w})`;
+    if (mark.style.transform !== next) mark.style.transform = next;
     if (mark.style.opacity !== '1') mark.style.opacity = '1';
     if (!placed.current) {
       placed.current = true;

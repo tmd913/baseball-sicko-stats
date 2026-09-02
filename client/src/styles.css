@@ -8370,13 +8370,51 @@ button.start-line:focus-visible {
   left: 0;
   bottom: 0;
   height: 2px;
-  width: 0;
-  border-radius: 1px;
+  /* **One pixel wide, and the width is a `scaleX`.** See the transition below:
+     this is what keeps the whole animation off the main thread. `transform-
+     origin` at the left edge so the scale grows rightward from the translated
+     position rather than from its own middle. */
+  width: 1px;
+  transform-origin: left center;
   background: var(--accent);
   opacity: 0;
   pointer-events: none;
 }
-/* **260ms, and a curve that leaves at once.**
+/* **The whole animation is one `transform`, and that is the bug fix.**
+ *
+ * It was `transform` for the position and `width` for the size, and the note
+ * beside it said a translated box is composited where a `left` is laid out —
+ * which is true of the half it described and missed the other half. **`width`
+ * is not compositor-animatable.** It needs layout, then paint, on every frame,
+ * on the main thread — the same main thread that is busy mounting the research
+ * board while the mark is crossing to it.
+ *
+ * So the two halves of one movement ran on two threads at two speeds. Isolated
+ * and measured off **presented frames**, two bars animating the same distance
+ * with the main thread jammed for 220ms in the middle of it:
+ *
+ * | | left edge | width |
+ * | --- | --- | --- |
+ * | `width` | glides 198 → 467 | **frozen at 147 for ~190ms**, then **+83 in one frame** |
+ * | `scaleX` | glides 198 → 467 | 157 → 233, +3/+4/+7 every frame |
+ *
+ * A bar whose left edge travels while its right edge stands still for a fifth
+ * of a second and then snaps 83px is not a mark that moves — it is a mark that
+ * stretches and jerks. On the strip the jam is the research board mounting,
+ * which is 60–90ms of main thread arriving in the middle of a 260ms slide.
+ *
+ * **The first attempt at this measurement proved nothing and is worth the
+ * warning**: the jam ran *before* the transition started, because a style
+ * change does not begin animating until the frame after the handler returns.
+ * Both bars then ran on an idle main thread and looked identical. The jam has
+ * to be scheduled *into* the animation.
+ *
+ * `scaleX` is the width now — the element is 1px wide and scaled to the tab's
+ * — so position and size are one composited property and cannot come apart.
+ * A 2px bar has no detail to distort, and the `border-radius` went with the
+ * width because a scaled radius is an ellipse.
+ *
+ * **260ms, and a curve that leaves at once.**
  *
  * 180 was too quick to read as travel — the mark arrived before the eye had
  * found it, which is the same complaint as the fade from the other direction:
@@ -8390,9 +8428,7 @@ button.start-line:focus-visible {
  * the gate and settles at the end: the mark is already travelling in the frame
  * after the press, and the time is spent arriving rather than leaving. */
 .main-tab-mark.is-placed {
-  transition:
-    transform 0.26s cubic-bezier(0.22, 0.9, 0.24, 1),
-    width 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
+  transition: transform 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
 }
 /* Motion is a preference, and a mark that jumps is still a mark — the shape it
    points at is the whole of what it says. Same rule the spinning ball and the

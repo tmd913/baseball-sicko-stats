@@ -42,8 +42,37 @@ from where it was to where it is going, so **180ms of travel reads as fast where
 Position and width both animate, because the tabs are the width of their own
 words: `Overview` is 93px and `MLB` is 58, measured.
 
-**`transform` and `width`, not `left`.** A translated box is composited; a `left`
-is laid out, and this strip sits over the whole app.
+**One `transform`, and that took two goes to get right.** The first version was
+`transform` for the position and `width` for the size, with a note saying a
+translated box is composited where a `left` is laid out — true of the half it
+described, and it missed the other half. **`width` is not compositor-animatable
+either.** It needs layout and paint every frame, on the same main thread that is
+busy mounting the research board while the mark is crossing to it, so the two
+halves of one movement ran on two threads at two speeds.
+
+Measured off **presented frames**, two bars animating the same distance with the
+main thread jammed for 220ms in the middle:
+
+| | left edge | width |
+| --- | --- | --- |
+| `width` | glides 198 → 467 | **frozen at 147 for ~190ms**, then **+83 in one frame** |
+| `scaleX` | glides 198 → 467 | 157 → 233, +3/+4/+7 every frame |
+
+A bar whose left edge travels while its right edge stands still for a fifth of a
+second and then snaps 83px is not a mark that moves; it is a mark that stretches
+and jerks. So the element is 1px wide and `scaleX` is its width — position and
+size are one composited property and cannot come apart. The `border-radius` went
+with the width, a scaled radius being an ellipse, and a 2px bar has none to lose.
+
+Confirmed in the app off presented frames, with the main thread jammed 140ms
+mid-slide: `170/93 → 972/58` with **both edges interpolating every frame**
+(93, 88, 84, 79, 72, 70, 67, 66, 63, 62, 61, 59, 58).
+
+*(And a warning about measuring it: the first attempt jammed the main thread
+**before** the transition started, because a style change does not begin
+animating until the frame after the handler returns. Both bars then ran on an
+idle thread and looked identical, which reads as "no bug here". The jam has to
+be scheduled* into *the animation.)*
 
 **Measured rather than declared**, which is this app's rule for anything whose
 worst case is a function of the width or of a font it does not choose — the
