@@ -8330,6 +8330,49 @@ button.start-line:focus-visible {
    the three are one band and a band has one center line. Below 860 nothing
    changes at all: `max-width` on a `width: 100%` box is a ceiling, so every
    phone and tablet width draws exactly the strip it drew before. */
+/* **The tab row gets its own ground, so it is not the header's second line.**
+   The chrome holds two different kinds of thing — the app's identity and its
+   controls above, the page's five destinations below — and painted on one
+   color they read as one tall bar with words scattered through it. A band under
+   the strip says *these five are a set, and a different kind of thing from the
+   gear beside the title*.
+
+   **A wrapper, because `.main-tabs` is centered at 860px.** A background on the
+   strip itself would be an 860px stripe floating in the middle of the chrome
+   rather than a band across it — so the ground is the wrapper's and the 860 is
+   still the strip's.
+
+   **It gives back the chrome's own gutter** (`--app-gutter`, the same trick
+   `.ov-days` plays with `--table-bleed`) so the band runs to the window's
+   edges, and it sits flush at the bottom because `.app-chrome` has no bottom
+   padding — the strip was already the last thing in it. The hairline above is
+   the seam between the two rows; the chrome's own `border-bottom` is still the
+   seam between the chrome and the page. */
+.main-tabs-band {
+  /* **`width: 100%` first, and it is the whole of the fix.** `.view-bar` is a
+     flex row, so the band came out the width of its own five words — 443px in a
+     1200px window, a stripe rather than a band. Claiming the line is what gives
+     the negative margins something to bleed *out of*: 1156 inside the chrome's
+     two 22px gutters, plus 44 back, is the window. Measured at 1200 and at 390,
+     the band's left edge is 0 and its width the window's.
+
+     **And the width has to add the gutters back, not just shift left.** A
+     negative inline margin on a flex item moves its edges; it does not grow the
+     box. `width: 100%` with `-22px` either side came out 1156px starting at 0 —
+     the right edge 44px short of the window. */
+  width: calc(100% + 2 * var(--app-gutter));
+  margin-inline: calc(-1 * var(--app-gutter));
+  padding-inline: var(--app-gutter);
+  /* **Ink at a fixed alpha, not a token, and for the reason the skeleton bars
+     take one.** `--panel` is the obvious ground and it is `#fff` on both pale
+     schemes, where `--bg` is `#fff` too — measured, contrast **1.00**, a band
+     that does not exist. Every other surface token has the same shape somewhere
+     in the six. A translucent ink steps away from whatever the chrome is
+     painted, in whichever direction that scheme goes, so one value works for
+     all of them. */
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-top: 1px solid var(--border);
+}
 .main-tabs {
   display: flex;
   justify-content: space-between;
@@ -8387,9 +8430,41 @@ button.start-line:focus-visible {
 .main-tab:hover {
   color: var(--text);
 }
+/**
+ * **Selection is instant; only the release eases.**
+ *
+ * The strip carries `transition: color 0.14s, border-color 0.14s`, which is
+ * right for a hover and wrong for a press: the tab a reader has just pressed
+ * spent **140ms — eight frames at 60Hz** — easing its underline and its word
+ * into the accent, and that is what "clicking a tab feels laggy" is. It reads
+ * as the app thinking about it, and it happens on every tab whatever is behind
+ * it, which is why the slow feeling did not track the heavy view.
+ *
+ * `transition: none` on the *incoming* state is what snaps it. Losing the class
+ * still eases, because the rule that transitions is the base one — so the tab
+ * being left releases gently while the tab being pressed answers at once, which
+ * is the right way round.
+ */
 .main-tab.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+  transition: none;
+}
+/**
+ * **And the press is acknowledged before anything renders.**
+ *
+ * There was no `:active` rule at all — measured, zero in the stylesheet — so
+ * between the finger going down and React committing the new view the control
+ * said nothing. Everything else pressable in this app answers on press; the
+ * app's own rule is that `:active` is never scoped away, and the tab strip had
+ * simply never been given one.
+ *
+ * `transition: none` for the same reason as above: an acknowledgement that
+ * fades in is not an acknowledgement.
+ */
+.main-tab:active {
+  color: var(--text);
+  transition: none;
 }
 .main-tab:focus-visible {
   outline: 2px solid var(--accent);

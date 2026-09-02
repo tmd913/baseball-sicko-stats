@@ -1210,6 +1210,66 @@ const HEAT_WORD: Record<Heat, string> = { hot: 'hot', neutral: 'neutral', cold: 
  * category line and its states are four mornings, none of which this has.
  */
 /**
+ * The matchup card with its figures missing.
+ *
+ * **The one skeleton that mirrors another component's markup**, and it is worth
+ * saying why the rule was bent. Everywhere else the placeholder is built from
+ * the real element's own classes, so the geometry cannot drift; here the real
+ * card is `LeagueView`'s `MatchupCard` and the classes are its. A second copy
+ * of `.lg-matchup`'s structure is a thing that will one day disagree with the
+ * first.
+ *
+ * What bought the risk is the measurement: without a card in this slot the page
+ * went **1089px to 2117** when the board landed, because the card, the
+ * opponent's carousel and the leaders block all appeared together. A card that
+ * is 20px out is a much smaller fault than a page that doubles.
+ *
+ * **Two sides and one category row per group**, which is the card's own shape —
+ * a crest, a name, a record and a score down each side, then the categories in
+ * the same two blocks `CategoryLine` draws them in.
+ */
+function SkeletonMatchup({ categories }: { categories: EspnCategory[] }) {
+  const groups = categoryGroups(categories);
+  return (
+    <div className="lg-matchup">
+      {[0, 1].map((i) => (
+        <div className="lg-side" key={i}>
+          <span className="lg-logo sk-bar sk-crest" />
+          <span className="lg-side-id">
+            <SkBar w={i === 0 ? '120px' : '160px'} />
+          </span>
+          <span className="lg-side-score">
+            <SkBar w="46px" />
+          </span>
+        </div>
+      ))}
+      <div className="lg-cat-groups">
+        {groups.map((g) => (
+          <div className="lg-cats" key={g.side}>
+            <div className="lg-cat-row lg-cat-head">
+              <span className="lg-cat-side">{g.label}</span>
+              {g.categories.map((c) => (
+                <span key={c.statId}>{c.label}</span>
+              ))}
+            </div>
+            {[0, 1].map((i) => (
+              <div className="lg-cat-row" key={i}>
+                <span className="lg-cat-side" aria-hidden="true" />
+                {g.categories.map((c) => (
+                  <span className="ov-cat-val" key={c.statId}>
+                    <SkBar w="70%" />
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * One manager's half of `Matchup leaders`, with its figures missing.
  *
  * Same rule as `SkeletonDay`: built from `.ov-leader-side`'s own classes so the
@@ -2706,6 +2766,7 @@ export default function OverviewView({
   onSeeDay,
   onSeeOppDay,
   connected,
+  boardPending,
   have,
   onNeed,
 }: {
@@ -2822,6 +2883,14 @@ export default function OverviewView({
    */
   onSeeOppDay: ((date: string) => void) | null;
   connected: boolean;
+  /**
+   * **The board has not answered, so the page assumes it will have an
+   * opponent.** See `App.tsx`, where the term is worked out and the measurement
+   * that forced it is recorded: without this the view went 1089px to 2117 mid
+   * load, because the matchup card, `Their days` and `Matchup leaders` all
+   * appeared at once when the scoreboard landed.
+   */
+  boardPending: boolean;
   /**
    * **Which slices have answered** — `mine.today`, `theirs.span`. A block whose
    * slice is in here draws itself; one whose slice is not draws bars.
@@ -3257,7 +3326,12 @@ export default function OverviewView({
    * draw the same matchup differently.
    */
   const matchupBlock =
-    connected && mine ? (
+    connected && !mine && boardPending ? (
+      <section className="ov-matchup">
+        <h2 className="ov-heading">Your matchup</h2>
+        <SkeletonMatchup categories={categories} />
+      </section>
+    ) : connected && mine ? (
       <section className="ov-matchup">
         <h2 className="ov-heading">
           Your matchup
@@ -3459,11 +3533,16 @@ export default function OverviewView({
           it lands (`onSeeOppDay`), and its `title`, which names him rather than
           the categories — the categories being the more useful fact on your own
           cards and the *whose* being the one here. */}
-      {opponentName !== null && (
+      {(opponentName !== null || (connected && boardPending)) && (
         <>
           <h2 className="ov-heading">
             Their days
-            <span className="ov-heading-note">{opponentName}</span>
+            {/* Unknown until the board lands. A bar rather than a guess, and
+                rather than nothing: the note's box is part of the heading's
+                height. */}
+            <span className="ov-heading-note">
+              {opponentName ?? <SkBar w="110px" />}
+            </span>
           </h2>
           <DayCarousel
             dates={dates}
@@ -3480,8 +3559,12 @@ export default function OverviewView({
             /* `possessive`, not `+ "’s"`: half this league's names end in an
                `s` and `Baldy's Bozos’s` reads as a typo — the same rule and the
                same function a slot chip's title on his page already takes. */
-            seeDayTitle={`Read ${possessive(opponentName)} roster over this day`}
-            label={`${opponentName} — yesterday, today and tomorrow`}
+            seeDayTitle={
+              opponentName === null
+                ? undefined
+                : `Read ${possessive(opponentName)} roster over this day`
+            }
+            label={`${opponentName ?? 'Your opponent'} — yesterday, today and tomorrow`}
           />
         </>
       )}
@@ -3502,7 +3585,7 @@ export default function OverviewView({
           which is the same three-way absence `Their days` above it already
           takes, plus the two reads' own. A heading over a message saying there
           is nothing to compare is chrome for a week that has not got one. */}
-      {opponentName !== null && spanDays !== null && (
+      {((opponentName !== null && spanDays !== null) || (connected && boardPending)) && (
         <>
           <h2 className="ov-heading">
             Matchup leaders
@@ -3513,9 +3596,16 @@ export default function OverviewView({
                 which is the other half of why the note is here rather than in
                 the card. Same shape as `Your days`' own span note. */}
             <span className="ov-heading-note">
-              {showProjected && projSpan
-                ? `through ${prettyDate(projSpan.end)}`
-                : `${prettyDate(spanDays[0])} – ${prettyDate(spanDays[spanDays.length - 1])}`}
+              {showProjected && projSpan ? (
+                `through ${prettyDate(projSpan.end)}`
+              ) : spanDays === null ? (
+                // The board decides which days this block is over, so until it
+                // lands the note is a bar — the heading's height is the same
+                // either way, which is the point of drawing the block at all.
+                <SkBar w="96px" />
+              ) : (
+                `${prettyDate(spanDays[0])} – ${prettyDate(spanDays[spanDays.length - 1])}`
+              )}
             </span>
             {/* **The switch sits in the heading**, where the spotlight's sits
                 under its own: this block is one card and a control inside it
@@ -3568,7 +3658,7 @@ export default function OverviewView({
             />
             <LeaderSide
               settled={leadersSettled[1]}
-              name={opponentName}
+              name={opponentName ?? ''}
               team={oppTeamId != null ? teams.get(oppTeamId) : undefined}
               performers={oppLeaders}
               loading={leadersLoading}

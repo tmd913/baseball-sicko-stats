@@ -463,6 +463,51 @@ copies are gone, and the one thing that is this label's alone and not the rail's
 `.date-row .date-presets` and the narrow-screen blocks already record, arrived at
 from a third direction.
 
+### The whole frame, before the board says what is in it
+
+**The page doubled in height mid-load**, and lazy reading did not cause it —
+lazy reading made it visible, by removing the curtain that used to hide it.
+Measured with 800ms on every read and 2.5s on the overview:
+
+| | `.overview-view` | cards | headings | matchup | leaders |
+| --- | --- | --- | --- | --- | --- |
+| +1680ms | **1089** | 3 | 1 | 0 | 0 |
+| +2040ms | **2117** | 6 | 3 | 1 | 1 |
+
+Three blocks arrived together — the matchup card, `Their days` and `Matchup
+leaders` — because all three are gated on the **scoreboard**, which is a round
+trip after the frame is drawn. Whether the page has them at all is a fact only
+that read knows.
+
+**So a connected reader gets the whole frame and it shimmers until the board
+says who it is about.** `boardPending` is the term `overviewSettled` already
+used — a board is coming when one is needed and neither it nor its error has
+arrived — and while it holds, the three blocks are drawn on the assumption that
+there will be an opponent. If the board comes back with no matchup, or a bye,
+they collapse: **one shrink in the rare case against a jump on every load**.
+
+| | `.overview-view` | matchup | carousels | leaders |
+| --- | --- | --- | --- | --- |
+| first paint | **2117** | 273 | 362, 362 | 275 |
+| settled | **2138** | 273 | 381, 362 | 276 |
+
+**1028px of jump becomes 21**, and the 21 is the day card's wrapped-line growth
+the skeleton already records — `ol.ov-perfs` is 128px where a performer's line
+wraps and 115 where none does, so the placeholder reserves the no-wrap floor
+rather than over-reserving and making the page *shrink*.
+
+**The matchup skeleton is the one placeholder that mirrors another component's
+markup**, and the rule is bent knowingly. Every other one is built from the real
+element's own classes so the geometry cannot drift; here the real card is
+`LeagueView`'s `MatchupCard`. What bought the risk is that slot being 273px —
+the same as the real card, measured — where leaving it empty was a third of the
+1028.
+
+**Three things had to survive not knowing the opponent's name**: the `Their
+days` heading note (a bar), the carousel's `seeDayTitle` (absent rather than
+`Read 's roster`), and `Matchup leaders`' span note, which names days the board
+has not yet given.
+
 ### The page reads what is on screen, and shimmers the rest
 
 **Ten reads, of which a reader can see two.** The carousel opens on Today and
