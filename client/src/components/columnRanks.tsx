@@ -408,11 +408,39 @@ export function pctFill(pct: number | null): CSSProperties | undefined {
  *  not by being a washed-out something. */
 function fillAt(t: number): CSSProperties {
   const d = Math.abs(t - 0.5) * 2;
-  const pct = Math.round(d * BADGE_MAX * 10) / 10;
-  return {
+  const pct = Math.round(d * BADGE_MAX);
+  const key = t < 0.5 ? `h${pct}` : `c${pct}`;
+  const hit = FILL_CACHE.get(key);
+  if (hit) return hit;
+  const style = {
     '--rank-bg': `color-mix(in srgb, var(${t < 0.5 ? '--rank-hot' : '--rank-cold'}) ${pct}%, var(--panel-2))`,
   } as CSSProperties;
+  FILL_CACHE.set(key, style);
+  return style;
 }
+
+/**
+ * **Whole percents, and one object per percent.**
+ *
+ * Every rank badge on the board carries this as an inline custom property, and
+ * the board carries a lot of badges: measured on one press of the `Research`
+ * tab, **1,238 `setProperty` calls**, every one of them a `color-mix()` string
+ * the engine has to parse and resolve. At a tenth of a percent that is up to
+ * ~900 distinct strings for ~620 badges; at whole percents it is at most
+ * `BADGE_MAX + 1` per end of the scale, so the same handful of strings repeat
+ * and the parsed value is reused.
+ *
+ * **A tenth of a percent of a colour mix is not a reading.** The scale runs to
+ * `BADGE_MAX`, and one step of one percent along it is far under what an eye
+ * resolves against a chip 22px wide — where the *rank* it stands for is a whole
+ * position and never a fraction of one.
+ *
+ * The cache is on the style object as well as the string, so two badges at the
+ * same strength hand React the *same object* and it has nothing to diff. It is
+ * bounded by construction — two ends, `BADGE_MAX + 1` steps each — so there is
+ * nothing to evict and no key that can grow with the data.
+ */
+const FILL_CACHE = new Map<string, CSSProperties>();
 
 /**
  * What the population is called in a tooltip. Plural, because it always is.

@@ -266,6 +266,94 @@ const EMPTY_REPORTS: PlayerReport[] = [];
  */
 const BOOT_SLICES: OverviewSliceKey[] = ['mine.today'];
 
+/**
+ * **One underline that slides, rather than five that fade in place.**
+ *
+ * The mark used to be a `border-bottom` on each tab, transparent until that tab
+ * was the page you were on — so a switch was one border fading out and another
+ * fading in, two marks and no motion between them. Measured, that fade was
+ * **143–157ms on every tab** and it read as lag rather than as movement.
+ *
+ * A single element that travels is the opposite reading: the mark is the same
+ * object throughout, so the eye follows it from the tab it left to the tab it
+ * arrived at, and 180ms of *travel* reads as fast where 140ms of *fade* read as
+ * slow. The tab's own color still snaps — see `.main-tab.is-active`.
+ *
+ * **Measured rather than declared**, which is the app's rule for anything whose
+ * worst case is a function of the width or of a font it does not choose: the
+ * tabs are the width of their own words, the strip is `space-between`, and the
+ * gaps are whatever a window leaves over. So the slider reads the active tab's
+ * own rect on every layout that could move it and writes two numbers.
+ *
+ * **`transform` and `width`, not `left`.** A translated box is composited; a
+ * `left` is laid out, and a 180ms animation of layout on a strip that sits over
+ * the whole app is the kind of thing this repo measures once and never does
+ * again.
+ */
+function useTabSlider(active: string) {
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const markRef = useRef<HTMLSpanElement | null>(null);
+  /** Whether the mark has ever been placed. The first placement must not
+   *  animate — a slider that flies in from x=0 on boot is a page announcing
+   *  itself — so the transition is off until it has a position. */
+  const placed = useRef(false);
+
+  const place = useCallback(() => {
+    const strip = stripRef.current;
+    const mark = markRef.current;
+    if (!strip || !mark) return;
+    const tab = strip.querySelector<HTMLElement>('.main-tab.is-active');
+    if (!tab) {
+      // No tab is active — the mark has nothing to point at, so it goes rather
+      // than parking under whichever tab it last visited.
+      if (mark.style.opacity !== '0') mark.style.opacity = '0';
+      return;
+    }
+    const t = tab.getBoundingClientRect();
+    const s = strip.getBoundingClientRect();
+    const x = Math.round(t.left - s.left);
+    const w = Math.round(t.width);
+    // **Guarded, and this app has just paid to learn why**: a write to an
+    // element's style invalidates it, this runs on every render and on every
+    // resize the observer reports, and the numbers are the same on nearly all
+    // of them.
+    const nextX = `translateX(${x}px)`;
+    const nextW = `${w}px`;
+    if (mark.style.transform !== nextX) mark.style.transform = nextX;
+    if (mark.style.width !== nextW) mark.style.width = nextW;
+    if (mark.style.opacity !== '1') mark.style.opacity = '1';
+    if (!placed.current) {
+      placed.current = true;
+      // Next frame, so the first placement has been painted before the
+      // transition is allowed to apply to the second.
+      requestAnimationFrame(() => mark?.classList.add('is-placed'));
+    }
+  }, []);
+
+  // A layout effect, and with no dependency list: the strip's contents change
+  // with things no observer reports — a tab appearing when a league connects,
+  // a word re-measuring when the font lands — and re-placing is two rect reads
+  // against two comparisons.
+  useLayoutEffect(place);
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const ro = new ResizeObserver(place);
+    ro.observe(strip);
+    // The strip's own box can hold still while a tab inside it moves — the
+    // window narrowing changes `--tab-pad` at a breakpoint, which re-flows the
+    // words without resizing the row.
+    for (const tab of strip.querySelectorAll('.main-tab')) ro.observe(tab);
+    window.addEventListener('resize', place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', place);
+    };
+  }, [place, active]);
+
+  return { stripRef, markRef };
+}
+
 type View = 'overview' | 'summary' | 'feed' | 'news' | 'research' | 'league' | 'mlb';
 
 /** The three *readings* of the Roster page that are a page's worth apart — the
@@ -4577,6 +4665,24 @@ export default function App() {
    */
   const [compareSel, setCompareSel] = useState<string[]>([]);
   /**
+   * **A stable callback, because the board is memoised on its props.**
+   *
+   * This was an inline arrow, so it was a new function on every render of
+   * `App` — and measured, that was a whole wasted render of the research
+   * board: pressing `Research` re-rendered it at +6ms (the mount), again at
+   * **+138ms with `onOpenCompare` as the only changed prop**, and again at
+   * +194 when the data actually arrived. The middle one restyled ~5,700
+   * elements to redraw exactly what was already on screen.
+   *
+   * `compareSel` is state rather than a derived array, so it is stable between
+   * selections and this is stable with it.
+   */
+  const openCompare = useCallback(() => {
+    if (compareSel.length < 2) return;
+    setCompareKeys(compareSel);
+  }, [compareSel]);
+
+  /**
    * **Whether the board is in compare mode** — whether the ticks are drawn at
    * all.
    *
@@ -6522,6 +6628,11 @@ export default function App() {
    * this is the most expensive route in the app and each spare copy is another
    * cold container asking every upstream from scratch.
    */
+  /** The main strip's sliding underline — see `useTabSlider`. Keyed on the
+   *  main tab rather than on `view`, since `summary`, `feed` and `news` are
+   *  three readings of one tab and the mark does not move between them. */
+  const tabStrip = useTabSlider(mainTab(view));
+
   const ovRosterKey = usingFantasy ? '' : roster.map(playerKey).join(',');
   /**
    * **The gate as one boolean, which is what `reportReady` above already is.**
@@ -10647,7 +10758,12 @@ export default function App() {
                exists because `.main-tabs` is centered at 860px: a background on
                the strip itself would be an 860px stripe rather than a band. */
             <div className="main-tabs-band">
-            <div className="main-tabs" role="tablist" aria-label="Page">
+            <div className="main-tabs" role="tablist" aria-label="Page" ref={tabStrip.stripRef}>
+              {/* The mark, and there is one of it — see `useTabSlider`. Outside
+                  the tablist's own children in reading order it would be a
+                  sibling of the tabs; inside it and `aria-hidden`, it is a
+                  decoration of the strip, which is what it is. */}
+              <span className="main-tab-mark" aria-hidden="true" ref={tabStrip.markRef} />
               {/* **The Overview leads**, and it leads because it is the only
                   tab that answers a question rather than offering a reading:
                   the other three are *your players*, *the league's season* and
@@ -11415,10 +11531,7 @@ export default function App() {
           maxCompare={MAX_COMPARE}
           /* Commit the ticked set: the board narrows to it. No page is
              opened — see `compareKeys`, which is why. */
-          onOpenCompare={() => {
-            if (compareSel.length < 2) return;
-            setCompareKeys(compareSel);
-          }}
+          onOpenCompare={openCompare}
           compareKeys={compareKeys}
           onClearCompare={clearCompare}
           watchlistKeys={boardWatchlistKeys}
