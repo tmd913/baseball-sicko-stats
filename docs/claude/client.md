@@ -187,10 +187,46 @@ so two badges at one strength hand React the same object. Recalc sum **63.2 →
 56.8ms**. A tenth of a percent of a colour mix is not a reading — the rank it
 stands for is a whole position and never a fraction of one.
 
-**Wall time is not the number to quote here.** Click-to-paint on that tab
-measured 78, 82, 84, 92, 102 and 146ms across runs of the same build; the render
-count and the recalc sum are what hold still. The remaining pair of non-render
-restyles is the next piece of work.
+#### And the non-render restyles were six wasted writes on `:root`
+
+The pair that renders could not explain turned out to be `usePublishedHeight`,
+which wrote to `document.documentElement.style` **unguarded**. A custom property
+set on the root invalidates style for the **whole document** — every element,
+whether or not anything under it reads the property — and that hook fires a
+great deal: a layout effect with no dependency list (so, every render), a
+`ResizeObserver`, a `resize` listener, and a `0px` write on each of the
+mount-with-nothing and cleanup paths.
+
+Measured on one press of the tab: **four writes of `--research-head-h=31px` and
+four of `--research-cond-h=0px`** — eight full-document restyles for two
+numbers, and **neither number ever changed**. Its `--chrome-h` sibling has had
+`if (h === height.current) return` since it was written; this hook simply never
+got it.
+
+| | before | after |
+| --- | --- | --- |
+| root writes per switch | 8 | **2** |
+| redundant ones | 6 | **0** |
+| board-sized recalc, summed | **63.2ms** | **~40ms** (37.4 / 39.2 / 44.3 over three runs) |
+| slowest single recalc | 17.9ms | 12.6ms |
+
+**The count is still four, and that is the honest result.** What is left is one
+recalc per distinct thing that genuinely changed, each traced to its own write:
+the view's class on `.app` (+33ms), `--research-head-h` (+53), `--research-cond-h`
+with the board's own two (+64), and `--chrome-h`/`--chrome-space` (+74, the
+chrome being a different height on this view). None is a repeat. Coalescing them
+would mean making four components' layout effects publish in one pass, which is
+a restructure rather than a guard.
+
+**Wall time is still not the number to quote.** Click-to-paint on that tab
+measured 78, 82, 84, 88, 92, 102 and 146ms across runs of two builds; the write
+counts and the recalc sum are what hold still.
+
+**And the probe that first said "writes on `<html>`: 0" was wrong**, which cost
+a round of looking in the wrong place. It tested `this === document.documentElement.style`
+— and `.style` hands back a fresh wrapper on each access, so the identity never
+matched. The probe that works tags the owning element onto the declaration in a
+`style` getter override and reads it back in the patched `setProperty`.
 
 ### The tab row has its own ground
 

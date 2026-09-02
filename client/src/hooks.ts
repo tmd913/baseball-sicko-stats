@@ -711,6 +711,37 @@ export function usePublishedHeight(
   prop: string,
   enabled = true,
 ) {
+  /**
+   * **Write only when the number changes, and this is a performance fix rather
+   * than tidiness.**
+   *
+   * A custom property set on `document.documentElement` invalidates style for
+   * **the whole document** — every element, whether or not anything under it
+   * reads the property. And this fires a great deal: a layout effect with no
+   * dependency list (every render), a `ResizeObserver`, a `resize` listener,
+   * and two `0px` writes on the mount-with-nothing and cleanup paths.
+   *
+   * Measured on one press of the `Research` tab, before this: **four writes of
+   * `--research-head-h=31px` and four of `--research-cond-h=0px`** — eight
+   * full-document restyles for two numbers, neither of which ever changed. That
+   * is six of them wasted, and they are the two extra `UpdateLayoutTree` events
+   * that the board's render count could not explain.
+   *
+   * `--chrome-h` next door has had this guard since it was written
+   * (`if (h === height.current) return`); this hook simply never got it.
+   *
+   * The prop is part of the comparison because it is an argument: a caller that
+   * changes it is publishing a different number, and the last value written
+   * under the old name says nothing about the new one.
+   */
+  const published = useRef<{ prop: string; px: number } | null>(null);
+  const publish = useCallback((p: string, px: number) => {
+    const last = published.current;
+    if (last && last.prop === p && last.px === px) return;
+    published.current = { prop: p, px };
+    document.documentElement.style.setProperty(p, `${px}px`);
+  }, []);
+
   const sync = useCallback(() => {
     const el = enabled ? ref.current : null;
     // **`floor`, not `round`, and that is a bug fix rather than a preference.**
@@ -732,12 +763,12 @@ export function usePublishedHeight(
     // does not choose, which is exactly the case the measure-don't-declare rule
     // exists for, and the rounding is the other half of it.
     const h = el ? Math.floor(el.getBoundingClientRect().height) : 0;
-    document.documentElement.style.setProperty(prop, `${h}px`);
-  }, [ref, prop, enabled]);
+    publish(prop, h);
+  }, [ref, prop, enabled, publish]);
   useLayoutEffect(() => {
     const el = enabled ? ref.current : null;
     if (!el) {
-      document.documentElement.style.setProperty(prop, '0px');
+      publish(prop, 0);
       return;
     }
     const ro = new ResizeObserver(sync);
@@ -746,9 +777,9 @@ export function usePublishedHeight(
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', sync);
-      document.documentElement.style.setProperty(prop, '0px');
+      publish(prop, 0);
     };
-  }, [sync, enabled, prop, ref]);
+  }, [sync, enabled, prop, ref, publish]);
   useLayoutEffect(sync);
 }
 
