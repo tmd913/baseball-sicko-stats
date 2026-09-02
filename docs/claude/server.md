@@ -300,6 +300,56 @@ each half makes behind `fantasyWatchlist`'s cache. That was true of the call and
 false of the arguments — the halves asked for one day and it asked for the
 period, which is a different `getTeamRosters` range. It is true as written now.
 
+#### The board is started, not awaited
+
+**Two live ESPN round trips stood in front of every wave, and the day cards use
+neither.** `overviewBoard` — `getScoreboard`, which awaits `leagueMeta`'s own two
+`leagueGet` calls, then `getMatchupWindow` — was the first thing the route did,
+because it decides *who* the second half of the page is about. Probed on a cold
+process, live league, 2026-09-02: **700–830ms** in that block, **522ms** in
+`getOwnership` (which the parse set pays a phase later, and 0–1ms on every
+subsequent call in the same request), 200–580ms in the slices. Over half of a
+`want=mine.today` request was ESPN, serially, before any of the reader's own
+data was asked for.
+
+The reader's own days need none of it: `fantasyWatchlist` takes his team off his
+own record, and the day is MLB's. What the board answers is the **opponent**
+(`theirs.*`), the **span** (`mine.span` / `theirs.span`) and the three fields
+every payload echoes — `myTeamId`, `opponent`, `span`. So the route starts the
+read, and `boardFirst` decides whether to await it before the parse set or
+alongside the slices:
+
+| wave | before | after |
+| --- | --- | --- |
+| `want=mine.today` | 1.50s | **1.01s** |
+| `want=mine.tomorrow,mine.yesterday` | 1.24s | **0.80s** |
+| `want=mine.span,theirs.*` | 2.02s | 2.11s |
+| no `want` (whole page) | 2.07s | 1.89s |
+
+Medians of three to four cold runs. **A third off both day-card waves**, and
+nothing on the two that ask for a span or an opponent — those wait exactly as
+they did, which is the design rather than a shortfall: they need the answer
+before they can name what to read.
+
+Two things this must not do, and does not. The promise is **settled rather than
+left to reject** (`{ value, err }`), because it is deliberately not awaited on
+every path and a floating rejection would take the process down instead of the
+request; the error is re-raised at whichever await first needs the answer, so a
+rejected cookie still keeps its 409. And **the wire shape does not move**: a
+deferred wave would have answered `theirs: null` where it used to answer a side
+of five nulls, so `EMPTY_SIDE` stands in — deferring only ever happens with
+`wanted.theirs` empty, which is exactly the side `readOverviewSide` would have
+returned. Checked across all four of the client's waves and the no-`want` page:
+the only field that differs is `fetchedAt`.
+
+**What is left is the 522ms `getOwnership` and the boards behind the
+projection**, neither of which this touches. `leagueMeta`, `ownershipCache` and
+the rest are **memory-only** — no blob tier — so a cold Lambda container still
+asks ESPN from scratch; giving them one is a separate change with a real hazard
+in it (`leagueMeta` derives `myTeamId` from the reader's own `swid` while its
+cache is keyed by league alone, so a durable blob would make a per-user field
+durable too).
+
 The client's side of this — the waves, the visibility observers, and why the
 page-wide loading gate had to go for any of it to work — is in *The Overview*,
 under *The page reads what is on screen*.

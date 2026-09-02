@@ -1325,6 +1325,110 @@ async function overviewParseSet(
   }
 }
 
+/** What one read of the league board settles for the whole page. Every field
+ *  is nullable and null is a real answer: no league, no matchup this period, a
+ *  bye, or a board that could not be read at all. */
+interface OverviewBoard {
+  opponent: { teamId: number; name: string } | null;
+  myTeamId: number | null;
+  span: { start: string; end: string } | null;
+}
+
+/** A side that was never asked for anything — the five-null object
+ *  `readOverviewSide` answers with when its `want` is empty. */
+const EMPTY_SIDE: OverviewSide = {
+  today: null,
+  yesterday: null,
+  tomorrow: null,
+  todayProjection: null,
+  span: null,
+};
+
+/** The answer for a page with no league behind it — and the stand-in a failed
+ *  board read carries, so the reader's own days are drawn either way. */
+const NO_BOARD: OverviewBoard = { opponent: null, myTeamId: null, span: null };
+
+/**
+ * **What the league board decides about this page**: whose it is, who the
+ * second half is about, and the span `Matchup leaders` is scored over.
+ *
+ * **Two live ESPN round trips, and they used to be the first thing the route
+ * did.** `getScoreboard` awaits `leagueMeta`, which is two `leagueGet` calls of
+ * its own, and neither has a blob tier — `metaCache` is memory, so every cold
+ * container asks ESPN again. Measured on the live league, 2026-09-02, a cold
+ * process: **700–830ms** for this block, against 520ms for `getOwnership`
+ * (which the parse set pays a phase later) and 200–580ms for the slices
+ * themselves. Over half of a `want=mine.today` request was two ESPN reads the
+ * day cards do not use.
+ *
+ * They do not use them because the reader's own roster comes off his own record
+ * (`fantasyWatchlist` reads `espn.teamId`, not the board), and his day is MLB's.
+ * What the board answers is the **opponent** (`theirs.*`), the **span**
+ * (`mine.span`/`theirs.span`) and the three fields every payload echoes. So the
+ * caller starts this and awaits it beside the slices rather than before them —
+ * `boardFirst` is the test — and a wave that needs neither pays the longer of
+ * the two rather than their sum.
+ *
+ * **A league that cannot be read costs the opponent and the matchup card and
+ * nothing else**, which is what the page already did with a dead board: both
+ * upstream reads catch to null and the reader's own three days stand.
+ */
+async function overviewBoard(
+  user: string,
+  period: number | null,
+  today: string,
+): Promise<OverviewBoard> {
+  const creds = await getEspnCreds(user);
+  if (!creds) return NO_BOARD;
+
+  const board = await getScoreboard(creds, period).catch(() => null);
+  const myTeamId = board?.myTeamId ?? null;
+  let opponent: OverviewBoard['opponent'] = null;
+  if (board && myTeamId != null) {
+    const mine = board.matchups.find(
+      (m) => m.home.teamId === myTeamId || m.away?.teamId === myTeamId,
+    );
+    // A bye has no `away` side, and is one of the three ways this page has no
+    // opponent — the other two being no league and no matchup this period. All
+    // three answer null here and the client draws no `Their days` section
+    // rather than an empty one.
+    if (mine?.away) {
+      const otherId = mine.home.teamId === myTeamId ? mine.away.teamId : mine.home.teamId;
+      const team = board.teams.find((t) => t.id === otherId);
+      opponent = { teamId: otherId, name: team?.name ?? `Team ${otherId}` };
+    }
+  }
+
+  // The same clamp `App.tsx::matchupDays` applies: the window runs to the end
+  // of the period and a report cannot be asked for days that have not happened,
+  // so it stops at today. A window wholly in the future is no span at all.
+  let span: OverviewBoard['span'] = null;
+  const w = await getMatchupWindow(creds).catch(() => null);
+  if (w) {
+    const end = w.end < today ? w.end : today;
+    if (w.start <= end) span = { start: w.start, end };
+  }
+
+  // **A tighter cap than `MAX_RANGE_DAYS`, because batching concentrates ten
+  // responses into one.** Measured on a real league at an 8-day period: the
+  // whole payload is 3.98 MB raw and 0.58 MB gzipped (6.8x), and **3.26 MB of
+  // that 3.98 is the two span reports** — 82%, for two managers' rosters over
+  // every day of the period. Lambda caps a response at 6 MB and the cap applies
+  // to what `compression()` produces, base64-encoded by `lambda.ts` (~4/3), so
+  // 0.58 MB lands at roughly 0.78 MB and there is real headroom.
+  //
+  // At `MAX_RANGE_DAYS` (62) there would not be: the same arithmetic scales to
+  // roughly 25 MB raw and ~4.9 MB encoded, which is close enough to the cap to
+  // be a 502 nobody could reproduce. 21 days is past any matchup period ESPN
+  // actually runs (a week or two) while bounding the payload to about a third
+  // of the cap. A period longer than that answers `null` and costs the `Matchup
+  // leaders` block alone — its own column, not the page.
+  const OVERVIEW_SPAN_MAX_DAYS = 21;
+  if (span && dayCount(span.start, span.end) > OVERVIEW_SPAN_MAX_DAYS) span = null;
+
+  return { opponent, myTeamId, span };
+}
+
 app.get(
   '/api/overview',
   requireUser,
@@ -1359,74 +1463,47 @@ app.get(
       period = Number(periodParam);
     }
 
-    // ---- The board, and the opponent that falls out of it ----------------
+    // ---- The board, started rather than awaited --------------------------
     //
-    // Read before anything is fetched, because it decides *who* the second
-    // half of the page is about. A league that cannot be read costs the
-    // opponent and the matchup card and nothing else — the reader's own three
-    // days stand, which is what the page already did with a dead board.
-    let opponent: { teamId: number; name: string } | null = null;
-    let myTeamId: number | null = null;
-    let span: { start: string; end: string } | null = null;
-    if (fantasy) {
-      try {
-        const creds = await getEspnCreds(userId(req));
-        if (creds) {
-          const board = await getScoreboard(creds, period).catch(() => null);
-          myTeamId = board?.myTeamId ?? null;
-          if (board && myTeamId != null) {
-            const mine = board.matchups.find(
-              (m) => m.home.teamId === myTeamId || m.away?.teamId === myTeamId,
-            );
-            // A bye has no `away` side, and is one of the three ways this page
-            // has no opponent — the other two being no league and no matchup
-            // this period. All three answer null here and the client draws no
-            // `Their days` section rather than an empty one.
-            if (mine?.away) {
-              const otherId =
-                mine.home.teamId === myTeamId ? mine.away.teamId : mine.home.teamId;
-              const team = board.teams.find((t) => t.id === otherId);
-              opponent = { teamId: otherId, name: team?.name ?? `Team ${otherId}` };
-            }
-          }
-          // The same clamp `App.tsx::matchupDays` applies: the window runs to
-          // the end of the period and a report cannot be asked for days that
-          // have not happened, so it stops at today. A window wholly in the
-          // future is no span at all.
-          const w = await getMatchupWindow(creds).catch(() => null);
-          if (w) {
-            const end = w.end < today ? w.end : today;
-            if (w.start <= end) span = { start: w.start, end };
-          }
-        }
-      } catch (err) {
-        // A rejected cookie is the reader's to fix and the client offers the
-        // way to, so it keeps its own 409 rather than becoming a 502 — but
-        // only where it is the *whole* answer. Here the reader's own days do
-        // not need ESPN at all when the source is saved, so this branch is
-        // reached only with `source=fantasy`, where a dead league genuinely is
-        // the page.
-        if (espnError(err, res)) return;
-        throw err;
-      }
-    }
+    // It decides *who* the second half of the page is about, and it used to be
+    // read before anything else on those grounds. But it is **two live ESPN
+    // round trips** and the reader's own day cards need neither of them: the
+    // roster comes off his own record, and the only things the board answers
+    // that a `mine.*` wave uses are the three fields echoed on the payload. So
+    // it is started here and awaited at the two places that genuinely need it —
+    // see `overviewBoard` for the measurement.
+    const boardJob = (
+      fantasy ? overviewBoard(userId(req), period, today) : Promise.resolve(NO_BOARD)
+    ).then(
+      (value) => ({ value, err: null as unknown }),
+      // Settled rather than left to reject: this promise is deliberately not
+      // awaited on every path, and a floating rejection would take the process
+      // down instead of the request. The error is carried and re-raised at
+      // whichever `await` first needs the answer.
+      (err: unknown) => ({ value: NO_BOARD, err: err as unknown }),
+    );
 
-    // **A tighter cap than `MAX_RANGE_DAYS`, because batching concentrates ten
-    // responses into one.** Measured on a real league at an 8-day period: the
-    // whole payload is 3.98 MB raw and 0.58 MB gzipped (6.8x), and **3.26 MB of
-    // that 3.98 is the two span reports** — 82%, for two managers' rosters over
-    // every day of the period. Lambda caps a response at 6 MB and the cap
-    // applies to what `compression()` produces, base64-encoded by `lambda.ts`
-    // (~4/3), so 0.58 MB lands at roughly 0.78 MB and there is real headroom.
-    //
-    // At `MAX_RANGE_DAYS` (62) there would not be: the same arithmetic scales
-    // to roughly 25 MB raw and ~4.9 MB encoded, which is close enough to the
-    // cap to be a 502 nobody could reproduce. 21 days is past any matchup
-    // period ESPN actually runs (a week or two) while bounding the payload to
-    // about a third of the cap. A period longer than that answers `null` and
-    // costs the `Matchup leaders` block alone — its own column, not the page.
-    const OVERVIEW_SPAN_MAX_DAYS = 21;
-    if (span && dayCount(span.start, span.end) > OVERVIEW_SPAN_MAX_DAYS) span = null;
+    /**
+     * **Which waves have to wait for it.** A slice needs the board only if it
+     * needs the span (`span`) or the opponent (`theirs.*`); the reader's own
+     * three days need neither, so the boot wave asks for its roster and parses
+     * its day while ESPN is still answering.
+     */
+    const boardFirst = wanted.mine.has('span') || wanted.theirs.size > 0;
+    let board = NO_BOARD;
+    if (boardFirst) {
+      const settled = await boardJob;
+      // A rejected cookie is the reader's to fix and the client offers the way
+      // to, so it keeps its own 409 rather than becoming a 502 — but only
+      // where it is the *whole* answer. Here the reader's own days do not need
+      // ESPN at all when the source is saved, so this is reached only with
+      // `source=fantasy`, where a dead league genuinely is the page.
+      if (settled.err) {
+        if (espnError(settled.err, res)) return;
+        throw settled.err;
+      }
+      board = settled.value;
+    }
 
     // ---- One parse set for this wave -------------------------------------
     //
@@ -1443,11 +1520,13 @@ app.get(
     // being a projection) now reads nothing here rather than ten days of
     // rosters. An empty want answers null, so neither side needs a size test of
     // its own.
-    const mineRange = overviewParseRange(wanted.mine, dates, span);
-    const theirsRange = opponent ? overviewParseRange(wanted.theirs, dates, span) : null;
+    const mineRange = overviewParseRange(wanted.mine, dates, board.span);
+    const theirsRange = board.opponent
+      ? overviewParseRange(wanted.theirs, dates, board.span)
+      : null;
     const parseSides: (number | null)[] = [];
     if (mineRange) parseSides.push(null);
-    if (theirsRange && opponent) parseSides.push(opponent.teamId);
+    if (theirsRange && board.opponent) parseSides.push(board.opponent.teamId);
     // The union of the sides being read, which is a superset of either — a
     // side read over a day it did not ask about costs a wider filter and
     // nothing else, where a side read over one day too few is a missing row.
@@ -1463,22 +1542,55 @@ app.get(
             parseFrom.reduce((a, r) => (r.end > a ? r.end : a), parseFrom[0].end),
           );
 
-    // ---- Both halves, in one flight --------------------------------------
-    const [mine, theirs] = await Promise.all([
-      readOverviewSide(userId(req), fantasy, null, dates, span, 'mine', parseWith, wanted.mine),
-      opponent
+    // ---- Both halves, in one flight, and the board alongside them --------
+    //
+    // `boardJob` is in that flight rather than before it: on a wave that did
+    // not have to wait for it, the two ESPN round trips overlap the reader's
+    // own reads instead of preceding them, and the request costs the longer of
+    // the two rather than their sum. On a wave that did wait, it has already
+    // settled and this await is free.
+    const [mine, theirs, settled] = await Promise.all([
+      readOverviewSide(
+        userId(req),
+        fantasy,
+        null,
+        dates,
+        board.span,
+        'mine',
+        parseWith,
+        wanted.mine,
+      ),
+      board.opponent
         ? readOverviewSide(
             userId(req),
             fantasy,
-            opponent.teamId,
+            board.opponent.teamId,
             dates,
-            span,
+            board.span,
             'theirs',
             parseWith,
             wanted.theirs,
           )
         : Promise.resolve(null),
+      boardJob,
     ]);
+    // The three fields the payload carries whatever the wave asked for, which
+    // is why the board is awaited even where no slice needed it.
+    if (settled.err) {
+      if (espnError(settled.err, res)) return;
+      throw settled.err;
+    }
+    const { opponent, myTeamId, span } = settled.value;
+    // **The wire shape does not move with the flight.** A wave that deferred the
+    // board read the opponent's side as `null` because it did not yet know
+    // there was an opponent — where before it read a side of five nulls, the
+    // board having answered first. Deferring only ever happens with
+    // `wanted.theirs` empty, which is exactly the side `readOverviewSide` would
+    // have returned, so the constant stands in for a read whose answer is known
+    // without making it. The client is indifferent (it reads `theirs` only
+    // under `asked.has('theirs.*')`); the payload is byte-identical, which is
+    // the point.
+    const theirsSide = opponent && theirs === null ? EMPTY_SIDE : theirs;
 
     // **What was computed, echoed back.** Every field of a side is nullable for
     // two reasons now — the read failed, or it was never asked for — and only
@@ -1497,7 +1609,7 @@ app.get(
       span,
       want,
       mine,
-      theirs,
+      theirs: theirsSide,
     });
   }),
 );
