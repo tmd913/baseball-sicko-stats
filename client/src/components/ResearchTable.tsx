@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import type { CSSProperties, ReactNode } from 'react';
 import { ScrollRow } from './TabStrip';
 import { ListsPanel, SavedButton, SearchesPanel, SharedNotice } from './ResearchLists';
+import { SlidingTabs } from './TabSlider';
 /* The measured contrast cap the park board's heat is capped at — imported
    rather than repeated, so a palette change is re-measured once. */
 import { MAX_TINT } from './ParkFactors';
@@ -5211,7 +5212,7 @@ function ResearchTableInner({
       {projectedOpen && (
         <div className="research-panel research-proj-panel">
           <div className="research-proj-spans">
-            <div className="proj-span view-switch" role="group" aria-label="Days to project">
+            <SlidingTabs className="proj-span view-switch" label="Days to project" role="group">
               {projSpans.map((sp) => {
                 const on =
                   projected && !projCustomOpen && projSpan.start === sp.start && projSpan.end === sp.end;
@@ -5255,7 +5256,7 @@ function ResearchTableInner({
               >
                 Custom
               </button>
-            </div>
+            </SlidingTabs>
             {/* **The app's own date field, revealed by `Custom`** — the glyph
                 alone while there is nothing picked, the days themselves once
                 there are. It is what makes the reopened panel say which days

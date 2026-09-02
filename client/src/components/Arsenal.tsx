@@ -1,5 +1,6 @@
 import type { PitchMix } from '../types';
 import { deltaVs, fmt, pitchStyle } from '../lib';
+import { SlidingTabs } from './TabSlider';
 
 /*
  * The arsenal table, shared by the pitcher card (one game, measured against the
@@ -280,7 +281,7 @@ export function SplitTabs({
   if (hasLeft) opts.push({ key: 'L', label: 'vs LHB' });
   if (opts.length < 2) return null;
   return (
-    <div className="split-switch" role="tablist" aria-label="Batter handedness">
+    <SlidingTabs className="split-switch" label="Batter handedness" tab="split-tab">
       {opts.map((o) => (
         <button
           key={o.key}
@@ -293,6 +294,6 @@ export function SplitTabs({
           {o.label}
         </button>
       ))}
-    </div>
+    </SlidingTabs>
   );
 }

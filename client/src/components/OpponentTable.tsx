@@ -13,6 +13,7 @@ import type {
   TeamHittingWindow,
   TeamSplitSide,
 } from '../types';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * How a club's plate appearances have gone, whole and by the other man's hand,
@@ -292,7 +293,7 @@ function OpponentBody({
   return (
     <div className="opp-block">
       <div className="opp-controls">
-        <div className="view-switch opp-windows" role="tablist" aria-label="Span">
+        <SlidingTabs className="view-switch opp-windows" label="Span">
           {TEAM_HITTING_WINDOWS.map((w) => (
             <button
               key={String(w)}
@@ -308,8 +309,8 @@ function OpponentBody({
               {WINDOW_LABEL[String(w)]}
             </button>
           ))}
-        </div>
-        <div className="view-switch opp-venues" role="tablist" aria-label="Games">
+        </SlidingTabs>
+        <SlidingTabs className="view-switch opp-venues" label="Games">
           {VENUES.map((v) => (
             <button
               key={v.key}
@@ -323,7 +324,7 @@ function OpponentBody({
               {v.label}
             </button>
           ))}
-        </div>
+        </SlidingTabs>
       </div>
 
       {!split ? (

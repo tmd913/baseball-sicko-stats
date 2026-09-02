@@ -25,6 +25,7 @@ import type {
   PlayerReport,
   SeasonPlayer,
 } from '../types';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * **A game's own page** — the line score, both clubs' box scores and rosters,
@@ -934,7 +935,7 @@ function GameBox({
   return (
     <div className="details-overview">
       <div className="game-box-tools">
-        <div className="view-switch" role="tablist" aria-label="Which club">
+        <SlidingTabs className="view-switch" label="Which club">
           {(['away', 'home'] as const).map((which) => (
             <button
               key={which}
@@ -948,7 +949,7 @@ function GameBox({
               {game[which].abbr}
             </button>
           ))}
-        </div>
+        </SlidingTabs>
       </div>
       {/* The lineup is the cause, and it is named rather than the game being
           called empty: clubs post one an hour or two out, so before that this
@@ -1561,7 +1562,7 @@ function GamePlays({
             block is the summary; this is the same stream cut down, which is
             what lets a reader who has found the inning they want widen back out
             to it in place. */}
-        <div className="view-switch" role="tablist" aria-label="Which plays">
+        <SlidingTabs className="view-switch" label="Which plays">
           {([false, true] as const).map((only) => (
             <button
               key={String(only)}
@@ -1574,7 +1575,7 @@ function GamePlays({
               {only ? 'Scoring' : 'All'}
             </button>
           ))}
-        </div>
+        </SlidingTabs>
         {/* **And which innings of it** — a `<select>` rather than a run of
             pills, which is the one control shape a nine-to-twelve-value choice
             can take on a page this narrow. It is the app's own select

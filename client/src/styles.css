@@ -2617,6 +2617,8 @@ body {
    track, just a tinted active pill, so it reads as a filter on the section
    below rather than another level of navigation. */
 .split-switch {
+  /* The mark's containing block — see `.tab-mark`. */
+  position: relative;
   display: inline-flex;
   gap: 2px;
   margin-bottom: 9px;
@@ -6947,6 +6949,12 @@ button.start-line:focus-visible {
   margin-inline: calc((100% - var(--tabstrip-w)) / 2);
 }
 .details-tabs {
+  /* **The mark rides inside the scroller**, which is what makes it the strip's
+     own containing block: an absolutely positioned child of a scroll container
+     is placed against its padding box and travels with its content, so the mark
+     stays under its tab through a sideways flick without a `scroll` listener.
+     `useTabSlider` writes its `left` in the same content coordinates. */
+  position: relative;
   display: flex;
   gap: 6px;
   /* It takes the wrapper's width and gives its overflow up to it: `min-width:
@@ -8349,94 +8357,199 @@ button.start-line:focus-visible {
   padding-inline: var(--app-gutter);
 }
 /**
- * **The mark, and there is one of it.**
+ * **The mark, and there is one of it — per strip, and one rule for all of them.**
  *
  * It was a `border-bottom` per tab, transparent until that tab was the page you
  * were on — so a switch was one border fading out and another fading in, and
  * the fade measured **143–157ms on every tab**, which read as lag. One element
  * that travels is the opposite reading: the eye follows the same object from
- * where it was to where it is going, and 180ms of travel reads as fast where
- * 140ms of fade read as slow.
+ * where it was to where it is going, and travel reads as fast where a fade of
+ * half the duration read as slow.
  *
- * `transform` and `width`, not `left`: a translated box is composited where a
- * `left` is laid out, and this strip sits over the whole app.
+ * **`.main-tab-mark` is `.tab-mark` now**, because the argument above was never
+ * about the app's top row: every other strip in the app was still fading a mark
+ * in place — the player and team pages' nine tabs, the outing's four, the
+ * League and MLB rows, and every segmented switch in the app. One class, two
+ * shapes (`.tab-mark-fill` is the pill; bare is the underline), one hook
+ * (`useTabSlider`), and the families below say only what their own mark is made
+ * of.
  *
  * **No transition until it has been placed once.** `.is-placed` is added a
  * frame after the first measurement, so the mark appears under the tab it
  * belongs to rather than flying in from the strip's left edge on boot.
+ *
+ * **Under the labels, and out of the way of everything else.** `z-index: 0`
+ * against the tabs' own `1` below is what lets a pill be a *background* the
+ * words sit on without either needing a stacking context; `pointer-events:
+ * none` because the mark is a statement and the tab under it is the target.
  */
-.main-tab-mark {
+.tab-mark {
   position: absolute;
   left: 0;
-  bottom: 0;
-  height: 2px;
-  /* **One pixel wide, and the width is a `scaleX`.** See the transition below:
-     this is what keeps the whole animation off the main thread. `transform-
-     origin` at the left edge so the scale grows rightward from the translated
-     position rather than from its own middle. */
-  width: 1px;
-  transform-origin: left center;
-  background: var(--accent);
-  opacity: 0;
+  top: 0;
+  z-index: 0;
   pointer-events: none;
+  opacity: 0;
+  /* The flight is a `transform` that maps the mark's new box back onto its old
+     one and is released to identity — see `useTabSlider`. From the top left,
+     because that is the corner both boxes' `left`/`top` are written against. */
+  transform-origin: 0 0;
 }
-/* **The whole animation is one `transform`, and that is the bug fix.**
+/* **The whole flight is one `transform`, and that is a bug fix this file has
+ * already paid for once.**
  *
- * It was `transform` for the position and `width` for the size, and the note
- * beside it said a translated box is composited where a `left` is laid out —
- * which is true of the half it described and missed the other half. **`width`
- * is not compositor-animatable.** It needs layout, then paint, on every frame,
- * on the main thread — the same main thread that is busy mounting the research
- * board while the mark is crossing to it.
+ * The first version animated `transform` for the position and `width` for the
+ * size, with a note saying a translated box is composited where a `left` is
+ * laid out — true of the half it described, and it missed the other half.
+ * **`width` is not compositor-animatable.** It needs layout, then paint, on
+ * every frame, on the same main thread that is busy mounting the research board
+ * while the mark is crossing to it.
  *
- * So the two halves of one movement ran on two threads at two speeds. Isolated
- * and measured off **presented frames**, two bars animating the same distance
- * with the main thread jammed for 220ms in the middle of it:
+ * Isolated and measured off **presented frames**, two bars animating the same
+ * distance with the main thread jammed for 220ms in the middle of it:
  *
  * | | left edge | width |
  * | --- | --- | --- |
  * | `width` | glides 198 → 467 | **frozen at 147 for ~190ms**, then **+83 in one frame** |
  * | `scaleX` | glides 198 → 467 | 157 → 233, +3/+4/+7 every frame |
  *
- * A bar whose left edge travels while its right edge stands still for a fifth
- * of a second and then snaps 83px is not a mark that moves — it is a mark that
- * stretches and jerks. On the strip the jam is the research board mounting,
- * which is 60–90ms of main thread arriving in the middle of a 260ms slide.
- *
- * **The first attempt at this measurement proved nothing and is worth the
+ * **The first attempt at that measurement proved nothing and is worth the
  * warning**: the jam ran *before* the transition started, because a style
  * change does not begin animating until the frame after the handler returns.
- * Both bars then ran on an idle main thread and looked identical. The jam has
- * to be scheduled *into* the animation.
+ * The jam has to be scheduled *into* the animation.
  *
- * `scaleX` is the width now — the element is 1px wide and scaled to the tab's
- * — so position and size are one composited property and cannot come apart.
- * A 2px bar has no detail to distort, and the `border-radius` went with the
- * width because a scaled radius is an ellipse.
+ * The answer then was a 1px box with `scaleX` for its width, and it cost the
+ * mark its `border-radius` — a scaled radius is an ellipse, which a 2px
+ * underline can afford and a **pill cannot**. So the mark is laid out at its
+ * real size now and only the *flight* is a scale (FLIP, in `useTabSlider`):
+ * one composited property in motion, exact geometry at rest, and a distortion
+ * that lasts the flight rather than forever.
  *
- * **260ms, and a curve that leaves at once.**
- *
- * 180 was too quick to read as travel — the mark arrived before the eye had
- * found it, which is the same complaint as the fade from the other direction:
- * a movement you cannot follow is not a movement. The strip is up to 860px
- * wide and the far pair of tabs are most of that apart, so the longest journey
- * is a real distance and wants a real duration.
- *
- * The curve matters as much as the number. `cubic-bezier(0.4, 0, 0.2, 1)` — the
- * standard ease — spends its first frames barely moving, which under a finger
- * that has just gone down reads as nothing happening. This one is steep out of
- * the gate and settles at the end: the mark is already travelling in the frame
- * after the press, and the time is spent arriving rather than leaving. */
-.main-tab-mark.is-placed {
-  transition: transform 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
+ * **360ms, and a curve that leaves at once.** It has been 180 (too quick to
+ * read as travel — the mark arrived before the eye had found it, which is the
+ * fade's complaint from the other side) and then 260, which was still read as
+ * *too fast*. The strip is up to 860px wide and the far pair of tabs are most
+ * of that apart, so the longest journey is a real distance and wants a real
+ * duration. `cubic-bezier(0.4, 0, 0.2, 1)` — the standard ease — spends its
+ * first frames barely moving, which under a finger that has just gone down
+ * reads as nothing happening; and the 0.22/0.9 curve it replaced was steep
+ * enough to be a snap with a tail. This one leaves promptly and spends its
+ * length arriving. */
+.tab-mark.is-placed {
+  transition: transform 0.36s cubic-bezier(0.32, 0.78, 0.22, 1);
 }
 /* Motion is a preference, and a mark that jumps is still a mark — the shape it
    points at is the whole of what it says. Same rule the spinning ball and the
-   skeleton's sweep take. */
+   skeleton's sweep take. (`useTabSlider` reads this duration back off the
+   element, so the ink that follows a pill answers the preference too, without
+   the script knowing the query exists.) */
 @media (prefers-reduced-motion: reduce) {
-  .main-tab-mark.is-placed {
+  .tab-mark.is-placed {
     transition: none;
   }
+}
+/* **The underline strips**: the app's own row and the two details pages'. The
+   mark is the 2px rule the tabs used to carry one each of, so it takes the
+   bottom of the strip and its height is the stylesheet's rather than the
+   measured tab's. */
+.main-tabs .tab-mark,
+.details-tabs .tab-mark {
+  top: auto;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+}
+/* **The pill strips**: every segmented switch in the app. Here the mark *is*
+   the fill the active tab used to paint on itself, so it takes the whole
+   measured box — and the radius is the inner one, which is what a tab inside a
+   3px track has always worn. */
+.tab-mark-fill {
+  background: var(--accent);
+  border-radius: var(--control-radius-inner);
+}
+/* The quietest of the three tiers keeps its own fill: a tinted chip rather than
+   a saturated one, so the section filter does not read as another level of
+   navigation. See `.split-switch`. */
+.split-switch .tab-mark {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+/* **The labels sit above the mark**, which is the whole of what a pill needs to
+   be a background rather than a lid. `.lg-tab` already declared `position:
+   relative` for its unread dot and is folded in here rather than left to agree
+   by accident. */
+.main-tab,
+.details-tab,
+.view-tab,
+.lg-tab,
+.split-tab {
+  position: relative;
+  z-index: 1;
+}
+/* **A strip with no mark keeps the paint it always had**, which is what makes
+   the mark safe to adopt one strip at a time and what keeps the how-to page's
+   painted-on mock strips looking like the real thing. `:has()` on the strip
+   asks the only question that matters — *is something else drawing this?* */
+.details-tabs:has(> .tab-mark) .details-tab.is-active {
+  border-bottom-color: transparent;
+}
+/* **The pressed tab takes the color it is about to have, not white.**
+ *
+ * `:hover` and the `:active` that used to sit under it both painted the word
+ * `--text`, so a press read as *white, then accent* — a flash on the way to the
+ * selection rather than the selection. `is-aimed` is the tab the mark is flying
+ * to, written on `pointerdown` by `useTabSlider` and gone when the page catches
+ * up, and it wears the accent from the first frame.
+ *
+ * **Underline strips only.** A pill's lit ink is `--on-accent`, which is ink
+ * for a saturated fill and is white on two of the six schemes — over the track
+ * it would be a label that vanishes. Its answer is `--tab-ink-in` below: the
+ * ink waits for the fill instead of preceding it.
+ *
+ * Scoped to the strip so it cannot depend on where in this file it sits: an
+ * `.is-active` beside it is two classes deep, and a rule that has to be *later*
+ * than another to win is the fault this stylesheet has recorded five times. */
+.main-tabs .main-tab.is-aimed,
+.details-tabs .details-tab.is-aimed {
+  color: var(--accent);
+  transition: none;
+}
+/* **And on a pill, the aim takes the hover *off*.**
+ *
+ * A touch device has no pointer to move away, so a tap applies `:hover` and
+ * holds it: the label goes `--text` — white on four of the six schemes — for
+ * the length of the press, and then to `--on-accent` as the fill lands under
+ * it. That is the reported flash again, on the strips one tier down, and it is
+ * why the aim has to say something here even though it cannot say *lit*: the
+ * lit ink belongs to the pill and arrives with it (see `--tab-ink-in`).
+ *
+ * So the aimed pill wears its **resting** ink — the color it had before the
+ * finger arrived — and the tab reads muted → lit rather than muted → white →
+ * lit. A pointer's hover is untouched everywhere else, which is the app's own
+ * rule about small aimed targets: this is a press, not a hover. */
+.view-switch .view-tab.is-aimed,
+.lg-tabs .lg-tab.is-aimed {
+  color: var(--muted);
+}
+.split-switch .split-tab.is-aimed {
+  color: var(--faint);
+}
+/* **The fill is the mark's, and the lit ink arrives with it.**
+ *
+ * The pill was the active tab's own `background` and is the travelling mark's
+ * now, so the tab gives it up wherever a mark is drawing one.
+ *
+ * The delay is the flight still to run, published on the strip by
+ * `useTabSlider` and `0s` whenever nothing is travelling — a first paint, a
+ * mark appearing, `prefers-reduced-motion`. Without it the incoming label wears
+ * `--on-accent` — ink for a saturated fill, white on Light and Powder Blue —
+ * over the track rather than over the pill, for the whole length of the flight.
+ * The outgoing label takes the base transition and no delay, because the pill
+ * leaves it at once. */
+.view-switch:has(> .tab-mark) .view-tab.active,
+.lg-tabs:has(> .tab-mark) .lg-tab.active,
+.split-switch:has(> .tab-mark) .split-tab.active {
+  background: none;
+  transition: color 0.12s linear var(--tab-ink-in, 0s);
 }
 
 .main-tabs {
@@ -8479,8 +8592,8 @@ button.start-line:focus-visible {
   padding: 9px var(--tab-pad);
   background: none;
   border: none;
-  /* **The underline is `.main-tab-mark`'s now**, one element for the strip
-     rather than a border per tab — see that rule. The 2px is kept here as
+  /* **The underline is `.tab-mark`'s now** (`.main-tab-mark` as was), one
+     element for the strip rather than a border per tab — see that rule. The 2px is kept here as
      transparent padding so every tab still reserves the mark's height and the
      row does not change height when it arrives. */
   border-bottom: 2px solid transparent;
@@ -8519,7 +8632,8 @@ button.start-line:focus-visible {
   transition: none;
 }
 /**
- * **And the press is acknowledged before anything renders.**
+ * **And the press is acknowledged before anything renders — in the color it is
+ * going to, not in white.**
  *
  * There was no `:active` rule at all — measured, zero in the stylesheet — so
  * between the finger going down and React committing the new view the control
@@ -8527,11 +8641,24 @@ button.start-line:focus-visible {
  * app's own rule is that `:active` is never scoped away, and the tab strip had
  * simply never been given one.
  *
+ * It was given `--text`, the hover's own color, and that was the wrong ink for
+ * a press on a *tab*: reported as *"the tabs flash white before going to the
+ * primary color"*, which is exactly what it was — a press held the word at
+ * `--text` and the release dropped it to `--accent`, so every switch was two
+ * colors where one was being asked for. A hover is a pointer resting on
+ * something it has not chosen; a press **is** the choosing, so it wears the
+ * selection's ink.
+ *
+ * (`.is-aimed` up beside the mark says the same thing for the window between
+ * the release and the commit, which `:active` does not cover. Both are
+ * `--accent`, so the word takes one color from `pointerdown` to the page
+ * landing.)
+ *
  * `transition: none` for the same reason as above: an acknowledgement that
  * fades in is not an acknowledgement.
  */
 .main-tab:active {
-  color: var(--text);
+  color: var(--accent);
   transition: none;
 }
 .main-tab:focus-visible {
@@ -14854,6 +14981,9 @@ button.start-line:focus-visible {
    `docs/claude/client-league.md`. (`.lg-span-row`, the Rankings tab's five
    spans, was folded on here too and is gone with the strip itself.) */
 .lg-tabs {
+  /* The mark is absolutely positioned against the track, so its `left`/`top`
+     are measured from the track's own padding box — see `.tab-mark`. */
+  position: relative;
   display: inline-flex;
   align-items: center;
   min-height: var(--control-h);

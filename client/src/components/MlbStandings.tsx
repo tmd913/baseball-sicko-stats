@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { MlbStandings, StandingsRecord, StandingsTeam } from '../types';
 import { teamLogoUrl } from '../lib';
 import { LoadingBlock } from './Loading';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * # Where the thirty clubs stand
@@ -320,7 +321,7 @@ export default function MlbStandingsTab({
           gutters leave at 320, so there is no `<select>` fallback and no width
           at which this row is anything but one line. */}
       <div className="mlb-standings-tools">
-        <div className="view-switch" role="tablist" aria-label="Standings grouping">
+        <SlidingTabs className="view-switch" label="Standings grouping">
           {STANDINGS_GROUPS.map((g) => (
             <button
               key={g.key}
@@ -334,7 +335,7 @@ export default function MlbStandingsTab({
               {g.label}
             </button>
           ))}
-        </div>
+        </SlidingTabs>
       </div>
       <Body
         data={data}

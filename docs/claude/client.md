@@ -1,5 +1,12 @@
 ### A tab answers the press, it does not ease into it
 
+*(Two things in this section have since moved on and are recorded further down,
+under **The flash on the way to the selection**: `.main-tab-mark` is `.tab-mark`
+and every strip in the app wears one, and the press ink is the accent rather
+than `--text`. The measurements below are what put the mark there and are left
+as they were written; the durations and the class name are the parts to read
+forward from.)*
+
 **"Clicking a tab feels laggy", and it was not the loading.** Measured every way
 the app could be measured: the highlight's class changed in 2–26ms, the switch
 survived every read being hung indefinitely, and 2s of latency on every request
@@ -227,6 +234,171 @@ a round of looking in the wrong place. It tested `this === document.documentElem
 — and `.style` hands back a fresh wrapper on each access, so the identity never
 matched. The probe that works tags the owning element onto the declaration in a
 `style` getter override and reads it back in the patched `setProperty`.
+
+### The flash on the way to the selection, and the mark every other strip did not have
+
+Reported together: *"the tabs should not have their text color flash white
+before going to the primary color"*, and *"the other tabs throughout the app
+should also have sliding animations"* — then, of the mark itself, *"make the
+animation a bit slower and smoother, it's too fast"*. Three complaints about one
+control, and the first of them is a rule written above coming back around.
+
+#### The white was the press, and the press is not a hover
+
+`.main-tab:active` was given `--text` when the strip was given an `:active` at
+all — the hover's own ink, on the reasoning that a press should say *something*
+before React commits. Measured, `--text` is `#e8eefc`: so a press held the word
+at near-white and the release dropped it to `--accent`, and every switch was two
+colors where one was being asked for.
+
+A hover is a pointer resting on something it has not chosen; a press **is** the
+choosing, so it wears the selection's ink. `.main-tab:active` is `--accent` now.
+
+**And `:active` is not the whole window**, which is why there is a class beside
+it. The gap between the release and the commit belongs to neither pseudo-class —
+`:active` has already gone, `.is-active` has not yet arrived — so `useTabSlider`
+writes `.is-aimed` onto the tab it is flying to, from `pointerdown` until the
+page agrees with it. Driven, pressing each of four tabs and reading the pressed
+tab's computed color while the finger is still down: `rgb(56, 189, 248)` — the
+accent — on all four, where before it was `#e8eefc` on all four.
+
+#### One mark, nineteen strips
+
+`useTabSlider` served the five main tabs and nothing else, so every other strip
+in the app was still doing the thing that row stopped doing: a mark fading in
+place, or a fill appearing under a word with no motion between the two. The hook
+moved to `components/TabSlider.tsx` and took a component with it (`SlidingTabs`),
+and the strips are a call each:
+
+| family | mark | strips |
+| --- | --- | --- |
+| `.main-tabs` | underline | the app's own row |
+| `.details-tabs` | underline | the player page's nine, the team page's six, the outing's four, the game page's three |
+| `.lg-tabs` | pill | League, MLB |
+| `.view-switch` | pill | the Overview's three, the leaders' reading, the game page's two, the matchup's sides, the standings grouping, the park hands, the schedule spans, the opponent table's two, the player page's kind switch, the team page's side switch, the board's projected spans |
+| `.split-switch` | pill | the arsenal's handedness, the percentile card's density |
+
+Audited by walking the DOM on each page and comparing the mark's rect to the
+active tab's: `dx` and `dw` **0 on every strip**, on the Overview, the roster,
+the research board, the League and MLB views, the player page (through four tab
+presses), the team page (through the Park tab), and a game page (through Box
+Score and Plays).
+
+**A strip with no mark keeps the paint it always had.** The per-tab fill is
+suppressed by `:has(> .tab-mark)` on the strip rather than deleted, so the
+how-to page's painted-on mock strips are unchanged and any strip not yet adopted
+draws exactly what it drew before.
+
+#### The mark is laid out and only the flight is a transform
+
+The 1px box with `scaleX` for its width could not be shared, and the note that
+put it there says why without noticing: a scaled `border-radius` is an ellipse,
+which a 2px underline can afford to lose and **a pill is made of**.
+
+So the mark is FLIP now. `left`/`width` — and, for a pill, `top`/`height` — are
+written as real layout, and the *flight* is a single `transform` mapping the new
+box back onto the old one and released to identity. The measurement that killed
+animating `width` still holds and is still obeyed: nothing about the size is
+interpolated by the engine except through that one composited property. What
+changes is that the distortion is temporary and proportional — the ratio between
+two adjacent tabs' widths — instead of permanent and total.
+
+Driven on the main row, sampling the mark's rect every frame through four
+presses (`x`, `w`):
+
+| press | from | to | frames | reversals |
+| --- | --- | --- | --- | --- |
+| MLB | 170/93 | 972/58 | 82 | **0** |
+| Roster | 972/58 | 378/73 | 73 | **0** |
+| Fantasy | 378/73 | 774/82 | 80 | **0** |
+| Overview | 774/82 | 170/93 | 70 | **0** |
+
+Both edges move on every frame (`170/93 → 263/89 → 361/85 → 464/80 → 617/73 →`
+…), which is the property the `scaleX` version bought and this one keeps.
+
+**Two decimals, not whole pixels.** The old code rounded to integers, which is
+free for an underline whose vertical position is the stylesheet's and is not free
+for a pill: a `.lg-tab` measures `top: 121.5` in a strip whose top is `116`, so
+the rounded pill sat **half a pixel low** against its own word (`dy: 1` in the
+audit, before → after `1 → 0`). The rounding exists to keep the guard from seeing
+a new number every render, and two decimals do that just as well.
+
+**A resize no longer animates**, which the old mark did without anyone naming
+it: its transition applied to every transform change, so dragging a window slid
+the mark about. A flight here is a change of *tab*; a tab that merely moved is
+re-laid-out. Measured, resizing 1200 → 900 with a `MutationObserver` on the
+mark's `style`: **one write**, `transform` `''` throughout, and `dx`/`dw` 0
+after.
+
+**And it rides inside a scroller.** `.details-tabs` is the strip's own
+containing block, so the mark's `left` is in the strip's content coordinates and
+it travels with a sideways flick for free. Measured at 390 on the player page,
+`scrollLeft` 200: mark and tab both at `-200`, and a press of a tab *while*
+scrolled lands at `dx: 0`.
+
+#### 360ms, because 260 was still read as too fast
+
+The duration has been 180 (too quick to read as travel), then 260, and 260 is
+what *"it's too fast"* was about. It is 360ms now, on
+`cubic-bezier(0.32, 0.78, 0.22, 1)` — steep enough to be moving in the frame
+after the press, and spending its length arriving rather than leaving. The
+number lives in the stylesheet alone: `useTabSlider` reads it back off the
+element, so `prefers-reduced-motion` turns the flight *and* everything timed
+against it to zero without the script knowing the query exists. Verified: `0s`
+under the query and the mark at its target 30ms after a press, `0.36s` without.
+
+#### The lit ink arrives with the pill, and that is not a nicety
+
+A pill's lit ink is `--on-accent`, which is ink for a *saturated fill* and
+nothing else. Read off the switch in all six schemes:
+
+| | lit ink | the track it would sit on |
+| --- | --- | --- |
+| Light | `rgb(234, 235, 236)` | `rgb(255, 255, 255)` |
+| Powder Blue | `rgb(255, 255, 255)` | `rgb(255, 255, 255)` |
+| Lavender | `rgb(50, 49, 55)` | `rgb(42, 40, 51)` |
+| Maroon | `rgb(29, 19, 25)` | `rgb(43, 29, 38)` |
+| Midnight | `rgb(12, 18, 32)` | `rgb(22, 33, 58)` |
+| Dark | `rgb(18, 19, 20)` | `rgb(32, 33, 34)` |
+
+So a segmented control whose fill slides and whose ink snaps spends the whole
+flight with its incoming label **invisible** on two schemes and near it on two
+more — the reported flash again, one step further along and worse.
+
+The ink is therefore delayed by exactly the flight that is *still to run*
+(`--tab-ink-in`, published on the strip by the hook and `0s` whenever nothing is
+travelling). It is the remaining flight rather than the duration because the
+mark leaves on the press and the commit lands a hundred milliseconds or so
+later. Sampled every frame through a press of `Standings`, the incoming label's
+color against the mark's `x`:
+
+| t | mark `x` | outgoing ink | incoming ink |
+| --- | --- | --- | --- |
+| 0 | 507 | on-accent | **resting** |
+| 43 | 531 | on-accent | **resting** |
+| 98 | 562 | leaving | on its way |
+| 151 | 591 | nearly muted | nearly lit |
+| **193** | **606 (arrived)** | muted | **lit** |
+
+**And the aim takes the hover off a pill**, which is the same complaint one tier
+down: a touch device has no pointer to move away, so a tap applies `:hover` and
+holds it, and the label goes `--text` for the length of the press before the
+fill lands under it. The aimed pill wears its *resting* ink instead — muted →
+lit, never muted → white → lit. Measured before and after on the same press: the
+incoming label read `146,163,198 → 190,201,226` (on its way to `--text`) in the
+first three frames, and reads a flat `142,160,196` through the press now.
+
+#### What it cost
+
+| | before | after |
+| --- | --- | --- |
+| JS | 814,268 (gzip 237,267) | 815,997 (gzip **237,936**) |
+| CSS | 213,678 (gzip 37,755) | 214,509 (gzip **37,933**) |
+
++669 bytes of JS and +178 of CSS gzipped, for one hook and one component in
+place of a rule that had been written once and was about to be written eighteen
+more times.
+
 
 ### The tab row has its own ground
 

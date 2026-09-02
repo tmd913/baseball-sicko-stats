@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
+import { useTabSlider } from './TabSlider';
 
 /** What one `deltaMode: 1` line is worth to a row that scrolls sideways — the
  *  app's own control height, since a "line" of one of these rows is a button. */
@@ -316,7 +317,13 @@ export function TabStrip({
      thing this strip needs that a plain scroller does not, which is why it
      rides in as a callback rather than living in the hook. */
   const publish = useCallback((box: HTMLElement, wrap: HTMLElement) => {
-    const tabs = Array.from(box.children) as HTMLElement[];
+    /* The tabs, and **only** the tabs: the sliding mark is a child of this box
+       too (it has to be, to travel with the strip's own scroll), and it is
+       absolutely positioned, so counting it would add its width to a sum that
+       decides how wide the strip is allowed to grow. */
+    const tabs = (Array.from(box.children) as HTMLElement[]).filter((el) =>
+      el.classList.contains('details-tab'),
+    );
     const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
     const natural = tabs.reduce(
       (w, el, i) => w + el.getBoundingClientRect().width + (i ? gap : 0),
@@ -325,6 +332,11 @@ export function TabStrip({
     wrap.style.setProperty('--tabstrip-grow', `${Math.ceil(natural)}px`);
   }, []);
   const { state, measure, nudge } = useOverflowArrows(boxRef, wrapRef, publish);
+  /* **The same mark the app's own row wears**, one tier down — see
+     `useTabSlider`. It rides *inside* the scroller rather than over it, so a
+     strip flicked sideways carries its mark with it without a `scroll`
+     listener; `.details-tabs` is its containing block for exactly that. */
+  const { stripRef, markRef } = useTabSlider({ tab: 'details-tab', on: 'is-active' });
 
   return (
     <div ref={wrapRef} className={`details-tabstrip${className ? ` ${className}` : ''}`}>
@@ -338,9 +350,11 @@ export function TabStrip({
         ref={(el) => {
           boxRef.current = el;
           if (paneRef) paneRef.current = el;
+          stripRef(el);
         }}
         onScroll={measure}
       >
+        <span className="tab-mark" aria-hidden="true" ref={markRef} />
         {children}
       </div>
       {state.over && (
