@@ -8430,9 +8430,41 @@ button.start-line:focus-visible {
 .main-tab:hover {
   color: var(--text);
 }
+/**
+ * **Selection is instant; only the release eases.**
+ *
+ * The strip carries `transition: color 0.14s, border-color 0.14s`, which is
+ * right for a hover and wrong for a press: the tab a reader has just pressed
+ * spent **140ms — eight frames at 60Hz** — easing its underline and its word
+ * into the accent, and that is what "clicking a tab feels laggy" is. It reads
+ * as the app thinking about it, and it happens on every tab whatever is behind
+ * it, which is why the slow feeling did not track the heavy view.
+ *
+ * `transition: none` on the *incoming* state is what snaps it. Losing the class
+ * still eases, because the rule that transitions is the base one — so the tab
+ * being left releases gently while the tab being pressed answers at once, which
+ * is the right way round.
+ */
 .main-tab.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+  transition: none;
+}
+/**
+ * **And the press is acknowledged before anything renders.**
+ *
+ * There was no `:active` rule at all — measured, zero in the stylesheet — so
+ * between the finger going down and React committing the new view the control
+ * said nothing. Everything else pressable in this app answers on press; the
+ * app's own rule is that `:active` is never scoped away, and the tab strip had
+ * simply never been given one.
+ *
+ * `transition: none` for the same reason as above: an acknowledgement that
+ * fades in is not an acknowledgement.
+ */
+.main-tab:active {
+  color: var(--text);
+  transition: none;
 }
 .main-tab:focus-visible {
   outline: 2px solid var(--accent);

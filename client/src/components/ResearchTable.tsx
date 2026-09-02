@@ -1596,6 +1596,24 @@ function WatchStar({
   );
 }
 
+/**
+ * Set a custom property on an element, **only if it is not already that**.
+ *
+ * A custom property write invalidates style for the element's whole subtree,
+ * and the subtrees this app writes them on are its biggest tables. Chrome does
+ * not short-circuit a write of an identical value — the invalidation is on the
+ * write, not on the change — so the guard has to be here.
+ *
+ * `getPropertyValue` reads back the inline value, which is the same string this
+ * wrote, so the comparison is exact rather than a round trip through computed
+ * style.
+ */
+function setBoxVar(el: HTMLElement, prop: string, px: number): void {
+  const next = `${Math.round(px)}px`;
+  if (el.style.getPropertyValue(prop) === next) return;
+  el.style.setProperty(prop, next);
+}
+
 export function ResearchTable({
   rows: measuredRows,
   kind,
@@ -2937,8 +2955,23 @@ export function ResearchTable({
       // Published before the pin that reads it, though both are one style
       // recalculation either way: `offsetWidth` is a width, and a width does not
       // move when the `left` beside it does.
-      box.style.setProperty('--research-cmp-w', `${cmpW}px`);
-      box.style.setProperty('--research-pin-left', `${pin}px`);
+      // **Written only when the number changes.** A custom property set on
+      // `box` invalidates style for everything under it, and everything under
+      // it is the board — ~5,700 elements. This effect has no dependency array
+      // (it re-measures on every render, deliberately) and the `ResizeObserver`
+      // below watches the very box the write can reflow, so an unguarded
+      // `setProperty` restyled the whole subtree for a value that had not moved.
+      //
+      // **And it is not what made the `Research` tab slow, which is worth
+      // recording.** Tracing a press showed four `UpdateLayoutTree` events of
+      // **5,713 / 5,748 / 5,748 / 5,961** elements, 10–18ms each; the guard did
+      // not remove one of them. The counts *differ*, so those are four renders
+      // producing four different trees rather than four restyles of one — the
+      // board renders several times as its data and effects settle, and cutting
+      // that count is the real work. The guard stays because the write was
+      // genuinely unguarded, not because it fixed this.
+      setBoxVar(box, '--research-cmp-w', cmpW);
+      setBoxVar(box, '--research-pin-left', pin);
     };
     measure();
     const ro = new ResizeObserver(measure);

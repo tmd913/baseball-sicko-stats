@@ -1,3 +1,40 @@
+### A tab answers the press, it does not ease into it
+
+**"Clicking a tab feels laggy", and it was not the loading.** Measured every way
+the app could be measured: the highlight's class changed in 2–26ms, the switch
+survived every read being hung indefinitely, and 2s of latency on every request
+moved nothing. What none of that caught is that the class changing is not the
+tab *looking* selected.
+
+`.main-tab` carries `transition: color 0.14s, border-color 0.14s`, which is
+right for a hover and wrong for a press: the tab just pressed spent **140ms —
+eight frames at 60Hz** — easing its underline and its word into the accent.
+Measured, click to the underline reaching full accent:
+
+| | with the 0.14s ease | snapping |
+| --- | --- | --- |
+| Roster | **157ms** | 22ms |
+| Research | **153ms** | 75ms |
+| Fantasy | **143ms** | 10ms |
+| Overview | **155ms** | 9ms |
+
+**Every tab was ~150ms regardless of what was behind it**, which is exactly why
+the slow feeling did not track the heavy view and why it was there locally with
+every read warm. `transition: none` on `.main-tab.is-active` snaps it; losing
+the class still eases, because the rule that transitions is the base one, so the
+tab being left releases gently while the tab being pressed answers at once.
+
+**And there was no `:active` rule at all** — zero in the stylesheet, measured —
+so between the finger going down and React committing the new view the control
+said nothing. The app's own rule is that `:active` is never scoped away; the
+strip had simply never been given one.
+
+**What is left is Research's 75ms**, and it is real work rather than a
+transition: tracing a press shows four `UpdateLayoutTree` events of **5,713 /
+5,748 / 5,748 / 5,961** elements. The counts differ, so they are four *renders*
+of the board producing four different trees, not four restyles of one. Cutting
+that render count is the next thing, and it is a separate piece of work.
+
 ### The tab row has its own ground
 
 **The chrome holds two different kinds of thing** — the app's identity and its
