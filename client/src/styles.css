@@ -8492,7 +8492,8 @@ button.start-line:focus-visible {
 .details-tabs:has(> .tab-mark) .details-tab.is-active {
   border-bottom-color: transparent;
 }
-/* **The pressed tab takes the color it is about to have, not white.**
+/* **The pressed tab takes the color it is about to have, not white — and on
+ * every strip, which took two goes.**
  *
  * `:hover` and the `:active` that used to sit under it both painted the word
  * `--text`, so a press read as *white, then accent* — a flash on the way to the
@@ -8500,38 +8501,61 @@ button.start-line:focus-visible {
  * to, written on `pointerdown` by `useTabSlider` and gone when the page catches
  * up, and it wears the accent from the first frame.
  *
- * **Underline strips only.** A pill's lit ink is `--on-accent`, which is ink
- * for a saturated fill and is white on two of the six schemes — over the track
- * it would be a label that vanishes. Its answer is `--tab-ink-in` below: the
- * ink waits for the fill instead of preceding it.
+ * **The underline strips took that at once and the pills did not**, because two
+ * things had to be true at once there. A touch device has no pointer to move
+ * away, so a tap applies `:hover` and holds it: the label went `--text` — white
+ * on four of the six schemes — for the length of the press and then to
+ * `--on-accent` as the fill landed under it, which is the reported flash one
+ * tier down. And the lit ink cannot simply be brought forward, because
+ * `--on-accent` is ink for a saturated fill and the label is over the **track**
+ * until the pill arrives.
+ *
+ * That second constraint was first answered by parking the aimed pill on its
+ * **resting** ink, so the tab read muted → lit rather than muted → white → lit.
+ * It is a press that leaves the word looking exactly as it did, and read as the
+ * color waiting for the animation — which is what it was.
+ *
+ * **Measured, `--on-accent` against `--panel`** — the ink over the ground it
+ * would actually sit on for the length of a flight:
+ *
+ * | scheme | track | lit ink | contrast |
+ * | --- | --- | --- | --- |
+ * | Dark (default) | `#16213a` | `#0b1220` | **1.17** |
+ * | Lavender | `#2a2833` | `#1c1b22` | **1.18** |
+ * | Maroon | `#2b1d26` | `#1d1319` | **1.13** |
+ * | Dark (VS) | `#202122` | `#121314` | **1.15** |
+ * | Powder Blue | `#ffffff` | `#ffffff` | **1.00** |
+ * | Light | `#ffffff` | `#ffffff` | **1.00** |
+ *
+ * So bringing the lit ink forward is not a contrast this app would ship on two
+ * schemes — it is an **invisible label on all six**, and the note above this one
+ * used to say "white on two of the six", which counted the two that vanish
+ * outright and missed the four that merely cannot be read.
+ *
+ * `--accent` over the same track is **6.27–8.93** across the six, so the aim
+ * takes that: the word changes color under the finger, on the frame of the
+ * press, and settles onto `--on-accent` as the pill arrives beneath it
+ * (`--tab-ink-in` below is what holds that last step to the fill). muted →
+ * accent → lit, with nothing waiting on the flight to say the press landed.
+ *
+ * Which makes the two families **one rule** rather than two that agree: an
+ * aimed tab is an aimed tab, in a strip whose mark is a rule or a chip alike,
+ * and `.is-aimed` means *the mark is coming here* in both. A pointer's hover is
+ * untouched everywhere else — this is a press, not a hover.
  *
  * Scoped to the strip so it cannot depend on where in this file it sits: an
  * `.is-active` beside it is two classes deep, and a rule that has to be *later*
- * than another to win is the fault this stylesheet has recorded five times. */
+ * than another to win is the fault this stylesheet has recorded five times. The
+ * lit `.active` rule below outranks this one on specificity alone (its
+ * `:has()` carries its argument's), which is what hands the word over to
+ * `--on-accent` when the class lands rather than when the aim clears. */
 .main-tabs .main-tab.is-aimed,
-.details-tabs .details-tab.is-aimed {
+.details-tabs .details-tab.is-aimed,
+.view-switch .view-tab.is-aimed,
+.lg-tabs .lg-tab.is-aimed,
+.split-switch .split-tab.is-aimed {
   color: var(--accent);
   transition: none;
-}
-/* **And on a pill, the aim takes the hover *off*.**
- *
- * A touch device has no pointer to move away, so a tap applies `:hover` and
- * holds it: the label goes `--text` — white on four of the six schemes — for
- * the length of the press, and then to `--on-accent` as the fill lands under
- * it. That is the reported flash again, on the strips one tier down, and it is
- * why the aim has to say something here even though it cannot say *lit*: the
- * lit ink belongs to the pill and arrives with it (see `--tab-ink-in`).
- *
- * So the aimed pill wears its **resting** ink — the color it had before the
- * finger arrived — and the tab reads muted → lit rather than muted → white →
- * lit. A pointer's hover is untouched everywhere else, which is the app's own
- * rule about small aimed targets: this is a press, not a hover. */
-.view-switch .view-tab.is-aimed,
-.lg-tabs .lg-tab.is-aimed {
-  color: var(--muted);
-}
-.split-switch .split-tab.is-aimed {
-  color: var(--faint);
 }
 /* **The fill is the mark's, and the lit ink arrives with it.**
  *
