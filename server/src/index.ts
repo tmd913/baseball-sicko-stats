@@ -1213,6 +1213,72 @@ async function readOverviewSide(
 }
 
 /**
+ * **The dates a side's wanted slices actually parse a day for**, or null where
+ * none of them do.
+ *
+ * The parse set has to be a **superset** of every read that will use it —
+ * `getReport`'s filter is `parseWith ?? players`, so a set narrower than a
+ * read's own roster is a day parsed without a man who is on it, and games
+ * silently missing from his row. That is why the range was the widest the page
+ * covers. But the widest the *page* covers is not the widest the *wave* covers,
+ * and the four slices do not all parse a day: `tomorrow` is a projection and
+ * reads no day at all, `today` and `yesterday` read one apiece, and only `span`
+ * reads the period.
+ *
+ * **It buys less than it looks like it should, and that is the honest result.**
+ * Measured on the live league, 2026-09-02, a cold process with warm blobs
+ * against a 10-day period, three runs a side:
+ *
+ * | wave | dates asked of `getTeamRosters` | `overviewParseSet` | whole request |
+ * | --- | --- | --- | --- |
+ * | `mine.today` | 12 → **3** | 457ms → 426ms | 1.65s → 1.53s |
+ * | `mine.yesterday` | 11 → **2** | 482ms → 358ms | 1.39s → 1.36s |
+ * | `mine.tomorrow` | 10 → **0** | 430ms → **not called** | 1.38s → 1.29s |
+ *
+ * The two day waves move **inside the run-to-run spread** — `mine.today` was
+ * 1.51/1.65/1.76 before and 1.52/1.73/1.53 after — because ESPN's roster is
+ * cached per **scoring period** (`getTeamRoster`'s key is
+ * `leagueId:teamId:period`), so ten dates inside one period were always one
+ * fetch and nine `lineupPeriodFor` lookups off a cached calendar. What the
+ * parse set actually costs is `getOwnership`: probed inside the same request,
+ * **522ms on the first call and 0–1ms on every later one**, which is a fixed
+ * price per request and not a function of the range at all.
+ *
+ * So what this removes is nine or ten date lookups and, on a projection-only
+ * wave, one whole roster read. The wave that gains is `mine.tomorrow`, and even
+ * there the ownership read does not vanish — the projection pays it a moment
+ * later, which is why 430ms off one phase is 90ms off the request.
+ *
+ * **The comment this replaces said the parse set "costs no upstream read of its
+ * own", on the grounds that `overviewRoster` is the same call each half makes
+ * behind `fantasyWatchlist`'s cache. That was true of the call and false of the
+ * arguments** — the halves asked for one day and this asked for the period,
+ * which is a different `getTeamRosters` range. It is true as written now: a
+ * `mine.today` wave asks `overviewRoster(today, today)` here and the day read
+ * asks for exactly that again, off the same cache.
+ *
+ * **The answers are identical**, checked as JSON across all four of the
+ * client's waves and the no-`want` whole page: the only field that differs
+ * between a before and an after payload is `fetchedAt`.
+ */
+function overviewParseRange(
+  want: SliceWant,
+  dates: { yesterday: string; today: string },
+  span: { start: string; end: string } | null,
+): { start: string; end: string } | null {
+  let start: string | null = null;
+  let end: string | null = null;
+  const cover = (from: string, to: string) => {
+    start = start === null || from < start ? from : start;
+    end = end === null || to > end ? to : end;
+  };
+  if (want.has('yesterday')) cover(dates.yesterday, dates.yesterday);
+  if (want.has('today')) cover(dates.today, dates.today);
+  if (span && want.has('span')) cover(span.start, span.end);
+  return start === null || end === null ? null : { start, end };
+}
+
+/**
  * **Every player either manager's page could be about, as one set.**
  *
  * The page makes up to eight day-reads across two managers and an overlapping
@@ -1362,31 +1428,40 @@ app.get(
     const OVERVIEW_SPAN_MAX_DAYS = 21;
     if (span && dayCount(span.start, span.end) > OVERVIEW_SPAN_MAX_DAYS) span = null;
 
-    // ---- One parse set for the whole page --------------------------------
+    // ---- One parse set for this wave -------------------------------------
     //
     // Read before the halves rather than inside them, which is the whole of
     // what it is for: the eight day-reads below have to be asking the *same*
-    // question of a day before `getDay` can answer it once. The range is the
-    // widest the page covers — the span where there is one, and yesterday
-    // through today where there is not, tomorrow being a projection and never a
-    // day parse. Costs no upstream read of its own: `overviewRoster` is the
-    // same call each half makes, behind `fantasyWatchlist`'s per-container
-    // cache.
+    // question of a day before `getDay` can answer it once.
     //
-    // **Only the sides that were actually asked for.** A wave that wants
-    // `mine.today` alone has no business reading the opponent's roster to widen
-    // a filter nobody will use — and on the boot wave that is the difference
-    // between one roster read and two.
+    // **Only the sides that were actually asked for, and only the dates they
+    // read.** A wave that wants `mine.today` alone has no business reading the
+    // opponent's roster to widen a filter nobody will use — and no business
+    // reading its own over the whole matchup period either, which is what the
+    // range used to be whatever the wave asked for. See `overviewParseRange`
+    // for the measurement; a wave that parses no day at all (`mine.tomorrow`
+    // being a projection) now reads nothing here rather than ten days of
+    // rosters. An empty want answers null, so neither side needs a size test of
+    // its own.
+    const mineRange = overviewParseRange(wanted.mine, dates, span);
+    const theirsRange = opponent ? overviewParseRange(wanted.theirs, dates, span) : null;
     const parseSides: (number | null)[] = [];
-    if (wanted.mine.size > 0) parseSides.push(null);
-    if (opponent && wanted.theirs.size > 0) parseSides.push(opponent.teamId);
-    const parseWith = await overviewParseSet(
-      userId(req),
-      fantasy,
-      parseSides,
-      span?.start ?? dates.yesterday,
-      dates.today,
-    );
+    if (mineRange) parseSides.push(null);
+    if (theirsRange && opponent) parseSides.push(opponent.teamId);
+    // The union of the sides being read, which is a superset of either — a
+    // side read over a day it did not ask about costs a wider filter and
+    // nothing else, where a side read over one day too few is a missing row.
+    const parseFrom = [mineRange, theirsRange].filter((r) => r !== null);
+    const parseWith =
+      parseFrom.length === 0
+        ? undefined
+        : await overviewParseSet(
+            userId(req),
+            fantasy,
+            parseSides,
+            parseFrom.reduce((a, r) => (r.start < a ? r.start : a), parseFrom[0].start),
+            parseFrom.reduce((a, r) => (r.end > a ? r.end : a), parseFrom[0].end),
+          );
 
     // ---- Both halves, in one flight --------------------------------------
     const [mine, theirs] = await Promise.all([

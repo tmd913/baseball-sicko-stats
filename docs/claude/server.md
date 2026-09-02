@@ -258,6 +258,48 @@ roster read and two. And the response **echoes `want` back**: every field of a
 side is nullable for two reasons now, the read having failed or never been asked
 for, and only the caller can otherwise tell them apart.
 
+##### …and only the dates it parses, which buys less than it looks like
+
+**The same argument applied to the range, and the measurement says most of it
+was already free.** `overviewParseSet` read the roster from `span.start` to
+today whatever the wave asked for, so a `want=mine.today` boot wave asked ESPN
+for **twelve** date-rosters to build a filter for one date, and a
+`want=mine.tomorrow` wave — a projection, which parses no day at all — asked for
+**ten** to build a filter nobody reads. `overviewParseRange` narrows it to the
+dates the wanted slices actually parse: `yesterday` and `today` a day apiece,
+`span` its window, `tomorrow` nothing, and a wave that parses no day skips the
+read entirely.
+
+Measured on the live league, 2026-09-02, a cold process against a 10-day period,
+three runs a side:
+
+| wave | dates asked | `overviewParseSet` | whole request |
+| --- | --- | --- | --- |
+| `mine.today` | 12 → **3** | 457ms → 426ms | 1.65s → 1.53s |
+| `mine.yesterday` | 11 → **2** | 482ms → 358ms | 1.39s → 1.36s |
+| `mine.tomorrow` | 10 → **0** | 430ms → **not called** | 1.38s → 1.29s |
+
+**The two day waves move inside the run-to-run spread** (`mine.today` was
+1.51/1.65/1.76s before and 1.52/1.73/1.53s after), and the reason is worth
+writing down because it is not obvious from the call: `getTeamRoster`'s cache
+key is `leagueId:teamId:period`, so ten dates **inside one scoring period were
+always one fetch** plus nine `lineupPeriodFor` lookups off a cached calendar.
+What the parse set actually costs is `getOwnership` — probed inside the request,
+**522ms on the first call and 0–1ms on every later one**, a fixed price per
+request rather than a function of the range.
+
+So the win is one whole roster read on a projection-only wave, and even there
+the ownership read does not vanish: the projection pays it a moment later, which
+is why 430ms off one phase is 90ms off the request. The answers are identical,
+checked as JSON across all four of the client's waves and the no-`want` page —
+the only field that differs is `fetchedAt`.
+
+**What this does correct is a comment.** The parse set said it "costs no
+upstream read of its own", on the grounds that `overviewRoster` is the same call
+each half makes behind `fantasyWatchlist`'s cache. That was true of the call and
+false of the arguments — the halves asked for one day and it asked for the
+period, which is a different `getTeamRosters` range. It is true as written now.
+
 The client's side of this — the waves, the visibility observers, and why the
 page-wide loading gate had to go for any of it to work — is in *The Overview*,
 under *The page reads what is on screen*.
