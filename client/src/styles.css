@@ -8330,50 +8330,83 @@ button.start-line:focus-visible {
    the three are one band and a band has one center line. Below 860 nothing
    changes at all: `max-width` on a `width: 100%` box is a ceiling, so every
    phone and tablet width draws exactly the strip it drew before. */
-/* **The tab row gets its own ground, so it is not the header's second line.**
-   The chrome holds two different kinds of thing — the app's identity and its
-   controls above, the page's five destinations below — and painted on one
-   color they read as one tall bar with words scattered through it. A band under
-   the strip says *these five are a set, and a different kind of thing from the
-   gear beside the title*.
+/* **The band is a wrapper with no paint on it, and that is deliberate.**
+   It had its own ground for a while — a translucent ink, measured at 1.16–1.21
+   against the header in all six schemes — and the two-tone chrome was not
+   wanted. What the wrapper is still for is the slider below: `.main-tabs` is
+   centered at 860px and the underline is positioned against *the strip*, so
+   the strip needs a box around it that spans the chrome. Keeping it also keeps
+   the bleed arithmetic in one place if a ground is ever wanted again.
 
-   **A wrapper, because `.main-tabs` is centered at 860px.** A background on the
-   strip itself would be an 860px stripe floating in the middle of the chrome
-   rather than a band across it — so the ground is the wrapper's and the 860 is
-   still the strip's.
-
-   **It gives back the chrome's own gutter** (`--app-gutter`, the same trick
-   `.ov-days` plays with `--table-bleed`) so the band runs to the window's
-   edges, and it sits flush at the bottom because `.app-chrome` has no bottom
-   padding — the strip was already the last thing in it. The hairline above is
-   the seam between the two rows; the chrome's own `border-bottom` is still the
-   seam between the chrome and the page. */
+   The two numbers are still load-bearing and still measured. `.view-bar` is a
+   flex row, so the band came out **443px in a 1200px window** until it claimed
+   the line with `width: 100%`; and a negative inline margin *moves* a flex
+   item's edges without growing the box, so `width: 100%` with `-22px` either
+   side was 1156px starting at 0 — the right edge 44px short. */
 .main-tabs-band {
-  /* **`width: 100%` first, and it is the whole of the fix.** `.view-bar` is a
-     flex row, so the band came out the width of its own five words — 443px in a
-     1200px window, a stripe rather than a band. Claiming the line is what gives
-     the negative margins something to bleed *out of*: 1156 inside the chrome's
-     two 22px gutters, plus 44 back, is the window. Measured at 1200 and at 390,
-     the band's left edge is 0 and its width the window's.
-
-     **And the width has to add the gutters back, not just shift left.** A
-     negative inline margin on a flex item moves its edges; it does not grow the
-     box. `width: 100%` with `-22px` either side came out 1156px starting at 0 —
-     the right edge 44px short of the window. */
   width: calc(100% + 2 * var(--app-gutter));
   margin-inline: calc(-1 * var(--app-gutter));
   padding-inline: var(--app-gutter);
-  /* **Ink at a fixed alpha, not a token, and for the reason the skeleton bars
-     take one.** `--panel` is the obvious ground and it is `#fff` on both pale
-     schemes, where `--bg` is `#fff` too — measured, contrast **1.00**, a band
-     that does not exist. Every other surface token has the same shape somewhere
-     in the six. A translucent ink steps away from whatever the chrome is
-     painted, in whichever direction that scheme goes, so one value works for
-     all of them. */
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-  border-top: 1px solid var(--border);
 }
+/**
+ * **The mark, and there is one of it.**
+ *
+ * It was a `border-bottom` per tab, transparent until that tab was the page you
+ * were on — so a switch was one border fading out and another fading in, and
+ * the fade measured **143–157ms on every tab**, which read as lag. One element
+ * that travels is the opposite reading: the eye follows the same object from
+ * where it was to where it is going, and 180ms of travel reads as fast where
+ * 140ms of fade read as slow.
+ *
+ * `transform` and `width`, not `left`: a translated box is composited where a
+ * `left` is laid out, and this strip sits over the whole app.
+ *
+ * **No transition until it has been placed once.** `.is-placed` is added a
+ * frame after the first measurement, so the mark appears under the tab it
+ * belongs to rather than flying in from the strip's left edge on boot.
+ */
+.main-tab-mark {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+/* **260ms, and a curve that leaves at once.**
+ *
+ * 180 was too quick to read as travel — the mark arrived before the eye had
+ * found it, which is the same complaint as the fade from the other direction:
+ * a movement you cannot follow is not a movement. The strip is up to 860px
+ * wide and the far pair of tabs are most of that apart, so the longest journey
+ * is a real distance and wants a real duration.
+ *
+ * The curve matters as much as the number. `cubic-bezier(0.4, 0, 0.2, 1)` — the
+ * standard ease — spends its first frames barely moving, which under a finger
+ * that has just gone down reads as nothing happening. This one is steep out of
+ * the gate and settles at the end: the mark is already travelling in the frame
+ * after the press, and the time is spent arriving rather than leaving. */
+.main-tab-mark.is-placed {
+  transition:
+    transform 0.26s cubic-bezier(0.22, 0.9, 0.24, 1),
+    width 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+/* Motion is a preference, and a mark that jumps is still a mark — the shape it
+   points at is the whole of what it says. Same rule the spinning ball and the
+   skeleton's sweep take. */
+@media (prefers-reduced-motion: reduce) {
+  .main-tab-mark.is-placed {
+    transition: none;
+  }
+}
+
 .main-tabs {
+  /* The mark is absolutely positioned against this box, so its `translateX` is
+     measured from the strip's own left edge. */
+  position: relative;
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -8410,10 +8443,10 @@ button.start-line:focus-visible {
   padding: 9px var(--tab-pad);
   background: none;
   border: none;
-  /* The underline, transparent until it is the page you are on. A border on the
-     tab rather than a rule on the strip with a mark over it: the strip's foot
-     *is* the chrome's hairline, so one 2px border is the whole mark and there
-     is nothing for it to have to overlap. */
+  /* **The underline is `.main-tab-mark`'s now**, one element for the strip
+     rather than a border per tab — see that rule. The 2px is kept here as
+     transparent padding so every tab still reserves the mark's height and the
+     row does not change height when it arrives. */
   border-bottom: 2px solid transparent;
   /* `font: inherit` is a shorthand and would reset the size — see the rule at
      the top of this file. */
@@ -8447,7 +8480,6 @@ button.start-line:focus-visible {
  */
 .main-tab.is-active {
   color: var(--accent);
-  border-bottom-color: var(--accent);
   transition: none;
 }
 /**

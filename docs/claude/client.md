@@ -29,11 +29,107 @@ so between the finger going down and React committing the new view the control
 said nothing. The app's own rule is that `:active` is never scoped away; the
 strip had simply never been given one.
 
-**What is left is Research's 75ms**, and it is real work rather than a
-transition: tracing a press shows four `UpdateLayoutTree` events of **5,713 /
-5,748 / 5,748 / 5,961** elements. The counts differ, so they are four *renders*
-of the board producing four different trees, not four restyles of one. Cutting
-that render count is the next thing, and it is a separate piece of work.
+#### And the mark slides rather than fading
+
+Snapping was the fix for the lag and it is not the whole of what a tab strip
+should do. The mark was a `border-bottom` on **each** tab, transparent until
+that tab was the page you were on — so a switch was one border going out and
+another coming in, two marks and no motion between them.
+
+`.main-tab-mark` is one element that travels. The eye follows the same object
+from where it was to where it is going, so **180ms of travel reads as fast where
+140ms of fade read as slow** — the duration is not the thing, the continuity is.
+Position and width both animate, because the tabs are the width of their own
+words: `Overview` is 93px and `MLB` is 58, measured.
+
+**`transform` and `width`, not `left`.** A translated box is composited; a `left`
+is laid out, and this strip sits over the whole app.
+
+**Measured rather than declared**, which is this app's rule for anything whose
+worst case is a function of the width or of a font it does not choose — the
+strip is `space-between` and the gaps are whatever a window leaves over. So
+`useTabSlider` reads the active tab's own rect and writes two numbers, **guarded
+against writing the same one twice**, which is a lesson this file paid for
+elsewhere on the same day.
+
+**No transition until it has been placed once.** `.is-placed` is added a frame
+after the first measurement, so the mark appears under the tab it belongs to
+rather than flying in from the strip's left edge on boot. And it answers
+`prefers-reduced-motion` by jumping — a mark that jumps is still a mark.
+Verified: `0s` under the query, `0.26s, 0.26s` without it.
+
+**260ms, and a curve that leaves at once.** 180 was too quick to read as travel
+— the mark arrived before the eye had found it, which is the same complaint as
+the fade from the other direction: a movement you cannot follow is not a
+movement. The curve matters as much as the number. `cubic-bezier(0.4, 0, 0.2,
+1)`, the standard ease, spends its first frames barely moving, which under a
+finger that has just gone down reads as nothing happening;
+`cubic-bezier(0.22, 0.9, 0.24, 1)` is steep out of the gate and settles at the
+end, so the time is spent arriving rather than leaving.
+
+**And the mark leaves on the press, not on the navigation.** A tab commits on
+the *click*, which is `pointerup` — the app's own rule that a press arms on
+`pointerdown` and decides on release, so a scroll that starts on a tab does not
+navigate. That rule is about the navigation, and it left the mark waiting for
+it: on a touch the finger is down, and nothing has moved, for as long as the
+finger stays down. A delegated `pointerdown` on the strip aims the mark at once
+and the navigation still waits for the release; an abandoned press restores it,
+because `place()` with no argument reads whichever tab is actually active.
+
+Driven, with the press **held** so nothing has navigated yet:
+
+| press | mark was | 80ms into the held press | target | page still on |
+| --- | --- | --- | --- | --- |
+| MLB | 170/93 | **797/66** | 972/58 | Overview |
+| Roster | 972/58 | **444/71** | 378/73 | MLB |
+| Fantasy | 378/73 | **706/80** | 774/82 | Roster |
+
+And abandoned — down on `MLB`, dragged 320px away, released: in transit at
+801/65 at 90ms, back at **170/93** after, page still on Overview.
+
+**The listener is attached by a callback ref, and that is not a detail.** The
+whole chrome is behind `initialLoadSettled`, so on the first render the strip
+does not exist and an effect reading its ref wires nothing up — and its
+dependencies do not change when the strip mounts, so it never runs again.
+Measured before the fix: **the first press of the session did not move the
+mark**, and every press after it did, because the first navigation changed
+`active` and re-ran the effect. That is the second time this exact shape has
+cost something (see `OverviewView::useOnVisible`, where two of three blocks were
+never observed at all).
+
+#### What was left, and how much of it went
+
+**Research's 75ms was real work rather than a transition.** Two things about it
+turned out to be true and one thing I had said about it was wrong.
+
+Instrumenting the board's own renders: **four on a tab switch**, at +6ms, +138,
++194 and +302. Diffing the props across them named the fault at a stroke — the
+render at **+138ms changed exactly one prop, `onOpenCompare`, and it was an
+inline arrow**: a new function on every render of `App`, redrawing the whole
+board to show what was already on screen. A `useCallback` plus `memo` on the
+board removes it. **Measured after: two renders, the mount and the one where the
+data lands.**
+
+**The four style recalcs did not halve with the renders**, and that is the thing
+I had wrong: I had called them "four renders producing four different trees".
+Two renders against four board-sized `UpdateLayoutTree` events means two of them
+are **not renders at all** — they are the DOM being written after a render, by a
+layout effect that measures and then sets something. A render and a restyle are
+different things.
+
+One of those writes was found and is worth its own note: a press of the tab made
+**1,238 `setProperty` calls**, every one a `--rank-bg` on a rank badge carrying a
+distinct `color-mix()` string for the engine to parse. At a tenth of a percent
+that is ~900 distinct strings for ~620 badges; rounded to whole percents it is
+at most `BADGE_MAX + 1` per end of the scale, and the style objects are cached
+so two badges at one strength hand React the same object. Recalc sum **63.2 →
+56.8ms**. A tenth of a percent of a colour mix is not a reading — the rank it
+stands for is a whole position and never a fraction of one.
+
+**Wall time is not the number to quote here.** Click-to-paint on that tab
+measured 78, 82, 84, 92, 102 and 146ms across runs of the same build; the render
+count and the recalc sum are what hold still. The remaining pair of non-render
+restyles is the next piece of work.
 
 ### The tab row has its own ground
 
@@ -56,11 +152,18 @@ edges without growing the box, so `width: 100%` with `-22px` either side was
 var(--app-gutter))` is what actually spans it. Measured after: left edge 0 and
 width the window's, at 1200 and at 390.
 
-**The ground is a translucent ink**, the same mechanism the Overview's skeleton
-bars take and for the same reason. `--panel` is the obvious token and it is
-`#fff` on Light and Powder Blue where `--bg` is `#fff` too — a band with
-contrast **1.00**, which is no band. Read off rendered pixels in the chrome's
-own gutter, where both rows are bare:
+**The ground is gone again**, and the paragraph below is kept as the record of
+what it was: a two-tone chrome was not wanted, so the wrapper carries no paint
+and the strip sits on the header's own ground. What the wrapper is still for is
+the sliding mark, which is positioned against the strip and needs a box round it
+that spans the chrome — and the two bleed numbers above, which were the hard
+part, stay where they are.
+
+*(It was a translucent ink, the same mechanism the Overview's skeleton bars
+take. `--panel` is the obvious token and it is `#fff` on Light and Powder Blue
+where `--bg` is `#fff` too — a band with contrast **1.00**, which is no band.
+Read off rendered pixels in the chrome's own gutter, where both rows are
+bare:)*
 
 | | header | band | contrast |
 | --- | --- | --- | --- |

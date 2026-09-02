@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { ScrollRow } from './TabStrip';
 import { ListsPanel, SavedButton, SearchesPanel, SharedNotice } from './ResearchLists';
@@ -1614,7 +1614,42 @@ function setBoxVar(el: HTMLElement, prop: string, px: number): void {
   el.style.setProperty(prop, next);
 }
 
-export function ResearchTable({
+/**
+ * **Memoised, and the measurement is why.**
+ *
+ * This component renders the widest table in the app — ~5,700 elements — and it
+ * re-rendered on every render of `App`, because nothing stopped it. Traced on a
+ * press of the `Research` tab: **four renders**, at +6ms, +138, +194 and +302,
+ * each one a full `UpdateLayoutTree` of 5,713 / 5,748 / 5,748 / 5,961 elements
+ * at 10–18ms apiece. That was the 67ms long task that was the whole of the
+ * tab switch.
+ *
+ * Diffing the props across those renders is what named the fault: the render at
+ * **+138ms changed exactly one prop — `onOpenCompare` — and it was an inline
+ * arrow**, a new function every time `App` rendered. A whole board redrawn to
+ * show what was already on screen.
+ *
+ * **`memo` is what makes a stable prop worth having.** Without it a stable
+ * callback changes nothing, because the board re-renders on the parent's render
+ * whatever its props say. With it, the diff above becomes the test: the +138ms
+ * render had *one* changed prop, so all forty of the others were already
+ * stable, and blocking that render costs nothing but the comparison.
+ *
+ * **Measured after: two renders, not four** — the mount, and the one where the
+ * data lands (`rows trendWindows ownedIds ownedElsewhere`). The wasted middle
+ * one is gone.
+ *
+ * **And the style recalcs did not halve with them, which is worth writing
+ * down.** The trace still shows four `UpdateLayoutTree` events of board size
+ * against two renders, so two of them are not renders at all — they are the
+ * DOM being written *after* a render, by a layout effect that measures and then
+ * sets something. A render and a restyle are different things and this note
+ * conflated them for a while. What is left is that pair, and finding them is
+ * the next piece of work rather than this one.
+ */
+export const ResearchTable = memo(ResearchTableInner);
+
+function ResearchTableInner({
   rows: measuredRows,
   kind,
   teams,

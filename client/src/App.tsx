@@ -266,6 +266,161 @@ const EMPTY_REPORTS: PlayerReport[] = [];
  */
 const BOOT_SLICES: OverviewSliceKey[] = ['mine.today'];
 
+/**
+ * **One underline that slides, rather than five that fade in place.**
+ *
+ * The mark used to be a `border-bottom` on each tab, transparent until that tab
+ * was the page you were on — so a switch was one border fading out and another
+ * fading in, two marks and no motion between them. Measured, that fade was
+ * **143–157ms on every tab** and it read as lag rather than as movement.
+ *
+ * A single element that travels is the opposite reading: the mark is the same
+ * object throughout, so the eye follows it from the tab it left to the tab it
+ * arrived at, and 180ms of *travel* reads as fast where 140ms of *fade* read as
+ * slow. The tab's own color still snaps — see `.main-tab.is-active`.
+ *
+ * **Measured rather than declared**, which is the app's rule for anything whose
+ * worst case is a function of the width or of a font it does not choose: the
+ * tabs are the width of their own words, the strip is `space-between`, and the
+ * gaps are whatever a window leaves over. So the slider reads the active tab's
+ * own rect on every layout that could move it and writes two numbers.
+ *
+ * **`transform` and `width`, not `left`.** A translated box is composited; a
+ * `left` is laid out, and a 180ms animation of layout on a strip that sits over
+ * the whole app is the kind of thing this repo measures once and never does
+ * again.
+ */
+function useTabSlider(active: string) {
+  const stripEl = useRef<HTMLDivElement | null>(null);
+  const markRef = useRef<HTMLSpanElement | null>(null);
+  /** Whether the mark has ever been placed. The first placement must not
+   *  animate — a slider that flies in from x=0 on boot is a page announcing
+   *  itself — so the transition is off until it has a position. */
+  const placed = useRef(false);
+
+  const place = useCallback((aimAt?: HTMLElement) => {
+    const strip = stripEl.current;
+    const mark = markRef.current;
+    if (!strip || !mark) return;
+    // `aimAt` is a tab being *pressed*, which the mark follows before anything
+    // has navigated — see the pointerdown listener below. Without one it goes
+    // where the page actually is.
+    const tab = aimAt ?? strip.querySelector<HTMLElement>('.main-tab.is-active');
+    if (!tab) {
+      // No tab is active — the mark has nothing to point at, so it goes rather
+      // than parking under whichever tab it last visited.
+      if (mark.style.opacity !== '0') mark.style.opacity = '0';
+      return;
+    }
+    const t = tab.getBoundingClientRect();
+    const s = strip.getBoundingClientRect();
+    const x = Math.round(t.left - s.left);
+    const w = Math.round(t.width);
+    // **Guarded, and this app has just paid to learn why**: a write to an
+    // element's style invalidates it, this runs on every render and on every
+    // resize the observer reports, and the numbers are the same on nearly all
+    // of them.
+    const nextX = `translateX(${x}px)`;
+    const nextW = `${w}px`;
+    if (mark.style.transform !== nextX) mark.style.transform = nextX;
+    if (mark.style.width !== nextW) mark.style.width = nextW;
+    if (mark.style.opacity !== '1') mark.style.opacity = '1';
+    if (!placed.current) {
+      placed.current = true;
+      // Next frame, so the first placement has been painted before the
+      // transition is allowed to apply to the second.
+      requestAnimationFrame(() => mark?.classList.add('is-placed'));
+    }
+  }, []);
+
+  /**
+   * **A callback ref, because the strip does not exist on the render that would
+   * attach the listeners.**
+   *
+   * The whole chrome is behind `initialLoadSettled`, so on the first render
+   * `stripEl.current` is null and an effect reading it wires nothing up. Its
+   * dependencies do not change when the strip finally mounts, so it never runs
+   * again — and the listeners are never attached at all. Measured: **the first
+   * press of the session did not move the mark**, and every press after it did,
+   * because the first navigation changed `active` and re-ran the effect.
+   *
+   * That is the second time this exact shape has cost something today (see
+   * `OverviewView::useOnVisible`, where two of three blocks were never
+   * observed). A callback ref fires when the element actually arrives, which is
+   * the only version of this that cannot be wrong.
+   */
+  const teardown = useRef<(() => void) | null>(null);
+  const stripRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      teardown.current?.();
+      teardown.current = null;
+      stripEl.current = el;
+      if (!el) return;
+
+      const onResize = () => place();
+      // The strip's own box can hold still while a tab inside it moves — a
+      // narrower window changes `--tab-pad` at a breakpoint, which re-flows the
+      // words without resizing the row.
+      const ro = new ResizeObserver(onResize);
+      ro.observe(el);
+      for (const tab of el.querySelectorAll('.main-tab')) ro.observe(tab);
+      window.addEventListener('resize', onResize);
+
+      /**
+       * **The mark leaves on the press, not on the navigation.**
+       *
+       * A tab commits on the *click*, which is `pointerup` — the app's own rule
+       * that a press arms on `pointerdown` and decides on release, so a scroll
+       * that starts on a tab does not navigate. That rule is about the
+       * navigation, and it left the mark waiting for it: on a touch the finger
+       * is down, and nothing has moved, for as long as the finger stays down.
+       *
+       * So the mark follows the finger at once and the navigation still waits
+       * for the release. If the press is abandoned — cancelled by a scroll, or
+       * lifted somewhere else — the mark goes back, because `place()` with no
+       * argument reads whichever tab is actually active.
+       *
+       * **Delegated on the strip** rather than five `onPointerDown` props: the
+       * mark is the strip's, and a tab that appears later (the fantasy tab,
+       * when a league connects) is covered without being told.
+       */
+      const onDown = (e: PointerEvent) => {
+        const tab = (e.target as HTMLElement | null)?.closest<HTMLElement>('.main-tab');
+        if (tab) place(tab);
+      };
+      // **After the click has been handled**, so this is a restore and never a
+      // fight: by then React has committed whatever the press did, so `place()`
+      // either agrees with where the mark already is (the press navigated) or
+      // takes it back (it did not). A frame is not enough — the commit and this
+      // listener are both discrete work on the same tick.
+      const onUp = () => setTimeout(() => place(), 0);
+      el.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+
+      teardown.current = () => {
+        ro.disconnect();
+        window.removeEventListener('resize', onResize);
+        el.removeEventListener('pointerdown', onDown);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+      };
+      place();
+    },
+    [place],
+  );
+
+  // No dependency list on purpose: the strip's contents change with things no
+  // observer reports — a tab appearing when a league connects, a word
+  // re-measuring when the font lands — and re-placing is two rect reads against
+  // two comparisons. `active` is in the signature so a caller cannot forget
+  // that this depends on which tab is current.
+  useLayoutEffect(() => place());
+  void active;
+
+  return { stripRef, markRef };
+}
+
 type View = 'overview' | 'summary' | 'feed' | 'news' | 'research' | 'league' | 'mlb';
 
 /** The three *readings* of the Roster page that are a page's worth apart — the
@@ -4577,6 +4732,24 @@ export default function App() {
    */
   const [compareSel, setCompareSel] = useState<string[]>([]);
   /**
+   * **A stable callback, because the board is memoised on its props.**
+   *
+   * This was an inline arrow, so it was a new function on every render of
+   * `App` — and measured, that was a whole wasted render of the research
+   * board: pressing `Research` re-rendered it at +6ms (the mount), again at
+   * **+138ms with `onOpenCompare` as the only changed prop**, and again at
+   * +194 when the data actually arrived. The middle one restyled ~5,700
+   * elements to redraw exactly what was already on screen.
+   *
+   * `compareSel` is state rather than a derived array, so it is stable between
+   * selections and this is stable with it.
+   */
+  const openCompare = useCallback(() => {
+    if (compareSel.length < 2) return;
+    setCompareKeys(compareSel);
+  }, [compareSel]);
+
+  /**
    * **Whether the board is in compare mode** — whether the ticks are drawn at
    * all.
    *
@@ -6522,6 +6695,11 @@ export default function App() {
    * this is the most expensive route in the app and each spare copy is another
    * cold container asking every upstream from scratch.
    */
+  /** The main strip's sliding underline — see `useTabSlider`. Keyed on the
+   *  main tab rather than on `view`, since `summary`, `feed` and `news` are
+   *  three readings of one tab and the mark does not move between them. */
+  const tabStrip = useTabSlider(mainTab(view));
+
   const ovRosterKey = usingFantasy ? '' : roster.map(playerKey).join(',');
   /**
    * **The gate as one boolean, which is what `reportReady` above already is.**
@@ -10647,7 +10825,12 @@ export default function App() {
                exists because `.main-tabs` is centered at 860px: a background on
                the strip itself would be an 860px stripe rather than a band. */
             <div className="main-tabs-band">
-            <div className="main-tabs" role="tablist" aria-label="Page">
+            <div className="main-tabs" role="tablist" aria-label="Page" ref={tabStrip.stripRef}>
+              {/* The mark, and there is one of it — see `useTabSlider`. Outside
+                  the tablist's own children in reading order it would be a
+                  sibling of the tabs; inside it and `aria-hidden`, it is a
+                  decoration of the strip, which is what it is. */}
+              <span className="main-tab-mark" aria-hidden="true" ref={tabStrip.markRef} />
               {/* **The Overview leads**, and it leads because it is the only
                   tab that answers a question rather than offering a reading:
                   the other three are *your players*, *the league's season* and
@@ -11415,10 +11598,7 @@ export default function App() {
           maxCompare={MAX_COMPARE}
           /* Commit the ticked set: the board narrows to it. No page is
              opened — see `compareKeys`, which is why. */
-          onOpenCompare={() => {
-            if (compareSel.length < 2) return;
-            setCompareKeys(compareSel);
-          }}
+          onOpenCompare={openCompare}
           compareKeys={compareKeys}
           onClearCompare={clearCompare}
           watchlistKeys={boardWatchlistKeys}
