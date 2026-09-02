@@ -59,6 +59,7 @@ import {
 import { OverviewTab } from './PlayerOverview';
 import { PlayerScheduleTab } from './PlayerSchedule';
 import type { PitcherLookup } from './schedule';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral gray
@@ -1420,7 +1421,7 @@ export function PlayerDetails({
                   A `group` of `aria-pressed` toggles was the alternative and would
                   have made this the one segmented control announcing itself
                   differently from the rest. */}
-              <div className="view-switch" role="tablist" aria-label="Which half of this player">
+              <SlidingTabs className="view-switch" label="Which half of this player">
                 {(['batter', 'pitcher'] as const).map((k) => (
                   <button
                     key={k}
@@ -1440,7 +1441,7 @@ export function PlayerDetails({
                     {k === 'batter' ? 'Batting' : 'Pitching'}
                   </button>
                 ))}
-              </div>
+              </SlidingTabs>
             </div>
           )}
 
@@ -1790,7 +1791,7 @@ export function PlayerDetails({
           {/* **How much of the card**, and it is the whole of this row now. It
               read first when there were cuts under it, on the argument that it
               is the coarser question — true of every cut. There is one row. */}
-          <div className="split-switch pct-density" role="tablist" aria-label="Density">
+          <SlidingTabs className="split-switch pct-density" label="Density" tab="split-tab">
             {PERCENTILE_DENSITIES.map((d) => (
               <button
                 key={d}
@@ -1808,7 +1809,7 @@ export function PlayerDetails({
                 {d === 'summary' ? 'Summary' : 'Detailed'}
               </button>
             ))}
-          </div>
+          </SlidingTabs>
 
           <span
             className={`pct-updating${pctBusy ? '' : ' is-idle'}`}

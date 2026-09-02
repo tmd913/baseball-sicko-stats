@@ -76,7 +76,7 @@ what it is, and most of them are not recoverable from the code.
 | `index.ts` (routes) `etDate.ts` `schedule.ts` `rotations.ts` `gameLog.ts` `stints.ts` `nextGame.ts` `news.ts` `recentNews.ts` `rotowire.ts` `cbs.ts` `projectedStarts.ts` `warmer.ts` `revisions.ts` `mlbScoreboard.ts` `mlbStandings.ts` | `sicko-server` |
 | `store.ts` `storage.ts` `auth.ts` `cognito.ts` `auth.tsx` `invite.ts` `upstream.ts` `deadline.ts` | `sicko-server` |
 | `espn.ts` `projection.ts` `EspnSettings.tsx` `LeagueOnboarding.tsx` | `sicko-espn` |
-| `App.tsx` `hooks.ts` `lib.ts` `api.ts` `resource.ts` `PlayerAdder.tsx` `Loading.tsx` `DateControls.tsx` `DateRangePicker.tsx` `simulate.ts` | `sicko-client` |
+| `App.tsx` `hooks.ts` `lib.ts` `api.ts` `resource.ts` `PlayerAdder.tsx` `Loading.tsx` `DateControls.tsx` `DateRangePicker.tsx` `simulate.ts` `TabSlider.tsx` `TabStrip.tsx` | `sicko-client` |
 | `OverviewView.tsx` `categoryValue.ts` | `sicko-overview` |
 | `SummaryTable.tsx` `PlayerIdentity.tsx` `PhotoStatus.tsx` `schedule.tsx` `ScheduleControl.tsx` `ExpandButton.tsx` `RosterNews.tsx` | `sicko-roster` |
 | `ResearchTable.tsx` `ResearchLayout.tsx` `researchColumns.tsx` `ColumnPicker.tsx` `columnRanks.tsx` `TurnPicker.tsx` `ResearchLists.tsx` `WatchStar` `LockMark.tsx` `NewsMark.tsx` | `sicko-research` |

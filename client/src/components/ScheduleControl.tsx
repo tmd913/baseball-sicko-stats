@@ -2,6 +2,7 @@ import { SpinningBaseball } from './Loading';
 import { effectiveSpan, scheduleSpans, spanLabel, toScheduleSpan } from './schedule';
 import type { ScheduleSpan } from './schedule';
 import type { MatchupWindow } from '../types';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * The Schedule view's one control, drawn in two places.
@@ -140,7 +141,7 @@ export function ScheduleSpanTabs({
   const active = effectiveSpan(span, matchup);
   return (
     <>
-      <div className="schedule-span view-switch" role="tablist" aria-label="How far ahead">
+      <SlidingTabs className="schedule-span view-switch" label="How far ahead">
         {spans.map((s) => {
           const { label, title } = spanLabel(s, matchup);
           return (
@@ -157,7 +158,7 @@ export function ScheduleSpanTabs({
             </button>
           );
         })}
-      </div>
+      </SlidingTabs>
       <select
         className="schedule-span-select"
         aria-label="How far ahead"

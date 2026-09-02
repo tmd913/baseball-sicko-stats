@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { InfoKey } from './InfoKey';
 import { useParkFactor, useParkFactors, useTeamDoor } from '../hooks';
 import type { ParkFactor, ParkHand, ParkIndexes } from '../types';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * **The ballpark as a number, and what a park factor actually says.**
@@ -548,7 +549,7 @@ export function ParkTable({ teamId, teamName }: { teamId: number; teamName: stri
         </InfoKey>
       </div>
 
-      <div className="view-switch pf-hands" role="tablist" aria-label="Which hitters">
+      <SlidingTabs className="view-switch pf-hands" label="Which hitters">
         {(['all', 'L', 'R'] as const).map((h) => (
           <button
             key={h}
@@ -562,7 +563,7 @@ export function ParkTable({ teamId, teamName }: { teamId: number; teamName: stri
             {HAND_SHORT[h]}
           </button>
         ))}
-      </div>
+      </SlidingTabs>
 
       {!indexes ? (
         <p className="ovw-none">Savant publishes no {HAND_LABEL[hand].toLowerCase()} cut for this park.</p>

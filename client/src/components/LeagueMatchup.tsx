@@ -38,6 +38,7 @@ import type {
   RosterProjection,
   ScheduleWindow,
 } from '../types';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * One matchup, as a **full-screen page over the League view** rather than a tab
@@ -1254,7 +1255,7 @@ export default function LeagueMatchupView({
    */
   const nav =
     sides.length > 1 ? (
-      <div className="view-switch mup-sides" role="tablist" aria-label="Matchup">
+      <SlidingTabs className="view-switch mup-sides" label="Matchup">
         {sides.map((s) => (
           <button
             key={s.tab}
@@ -1274,7 +1275,7 @@ export default function LeagueMatchupView({
             <span className="mup-side-label">{s.label}</span>
           </button>
         ))}
-      </div>
+      </SlidingTabs>
     ) : (
       <div className="mup-team-head">
         <TeamLogo team={homeTeam} />

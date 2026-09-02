@@ -30,6 +30,7 @@ import type {
   TeamGameResult,
   TeamInfo,
 } from '../types';
+import { SlidingTabs } from './TabSlider';
 
 /**
  * **A club's page**, and the second thing in this app to be one.
@@ -365,7 +366,7 @@ export function TeamDetails({
            page, because a club is always both halves at once and nobody would
            call the Brewers' pitching a different club. */
         <div className="details-kind-row">
-          <div className="view-switch" role="tablist" aria-label="Which side of the ball">
+          <SlidingTabs className="view-switch" label="Which side of the ball">
             {(['batter', 'pitcher'] as const).map((k) => (
               <button
                 key={k}
@@ -383,7 +384,7 @@ export function TeamDetails({
                 {k === 'batter' ? 'Batting' : 'Pitching'}
               </button>
             ))}
-          </div>
+          </SlidingTabs>
         </div>
       }
       tabs={

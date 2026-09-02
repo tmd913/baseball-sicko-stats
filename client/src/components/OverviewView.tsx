@@ -78,6 +78,7 @@ import { Modal } from './Modal';
 import { useOverflowArrows } from './TabStrip';
 import { MatchupCard, TeamLogo, categoryGroups, fmtValue } from './LeagueView';
 import { ProjectedGlyph } from './Projection';
+import { SlidingTabs } from './TabSlider';
 
 /** How many men a day block names. Three, and the number is the block's own
  *  height rather than a taste: a day card carries a head, two category rows and
@@ -2178,7 +2179,7 @@ function SpotlightSection({
                 is the reading itself rather than a control that cannot be
                 pressed. */}
             {tabs.length > 1 && (
-              <div className="view-switch" role="tablist" aria-label="Player spotlight">
+              <SlidingTabs className="view-switch" label="Player spotlight">
                 {tabs.map((t) => (
                   <button
                     key={t.key}
@@ -2192,7 +2193,7 @@ function SpotlightSection({
                     {t.label}
                   </button>
                 ))}
-              </div>
+              </SlidingTabs>
             )}
             {active.key === 'value' && highValue && (
               // **The readings' switch is the value rail's alone**, drawn where
@@ -2207,7 +2208,7 @@ function SpotlightSection({
               // when the ownership read has one baseline. This one always has
               // exactly two, and both are always answerable off the figures the
               // rail is already built from.
-              <div className="view-switch" role="tablist" aria-label="Value reading">
+              <SlidingTabs className="view-switch" label="Value reading">
                 {(
                   [
                     ['total', 'Total', 'Rank on the whole span added up — who will give me the most over these days'],
@@ -2226,7 +2227,7 @@ function SpotlightSection({
                     {label}
                   </button>
                 ))}
-              </div>
+              </SlidingTabs>
             )}
             {active.key === 'trending' && trending && trending.windows.length > 1 && (
               // **The windows' switch is the trending rail's alone**, which is
@@ -2235,7 +2236,7 @@ function SpotlightSection({
               // control that stayed on screen naming a span the value rail is
               // not ranked over would be a lens the page says is in force when
               // it is not.
-              <div className="view-switch" role="tablist" aria-label="Trend window">
+              <SlidingTabs className="view-switch" label="Trend window">
                 {trending.windows.map((w) => (
                   <button
                     key={w}
@@ -2249,7 +2250,7 @@ function SpotlightSection({
                     {w}D
                   </button>
                 ))}
-              </div>
+              </SlidingTabs>
             )}
           </div>
         )}
@@ -3614,7 +3615,7 @@ export default function OverviewView({
                 the same one the spotlight's two readings take. */}
             {canProject && (
               <span className="ov-heading-switch">
-                <span className="view-switch" role="tablist" aria-label="Matchup leaders reading">
+                <SlidingTabs className="view-switch" label="Matchup leaders reading" as="span">
                   {(
                     [
                       ['summary', 'Summary', 'Who has won this matchup so far — the days it has had'],
@@ -3633,7 +3634,7 @@ export default function OverviewView({
                       {label}
                     </button>
                   ))}
-                </span>
+                </SlidingTabs>
               </span>
             )}
           </h2>
