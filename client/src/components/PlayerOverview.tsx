@@ -120,23 +120,37 @@ function DaySkeleton({ head }: { head: string }) {
   return (
     <section className="ovw-block ovw-day">
       <h2 className="ovw-head">{head}</h2>
-      {/* Three lines. Measured on a starter with no game today, the real block
-          is **68px** and two lines drew 43, so the frame settled taller than it
-          reserved; three draw 52. It is not closed further because there is no
-          one number to close it to — a day with a game in it is a whole
-          `PlayerDay` and several times this tall — so the floor is the sentence
-          case and a played day grows past it. */}
-      <p className="ovw-next-line">
-        <SkBar w="132px" />
-        <SkBar w="88px" />
-        <SkBar w="150px" />
-      </p>
-      <p className="ovw-next-line">
-        <SkBar w="196px" />
-      </p>
-      <p className="ovw-next-line">
-        <SkBar w="164px" />
-      </p>
+      {/* **One game row, which is what this block almost always holds.**
+          It drew five bars across three `.ovw-next-line`s to begin with, and
+          that is a wrapping flex row — so they stacked 14px apart and the block
+          read as a paragraph of redacted text rather than as one fact not yet
+          arrived.
+          What replaced it was a single bar on `.ovw-none`, the block's
+          no-game sentence, and **that was the wrong fact to reserve**: read off
+          the settled DOM, the day block on a starter's page holds
+          `.player-day > .pday-game.static` — a date, a line and the fixture —
+          at **44px**, where the sentence is 15. `.ovw-none` is what a man whose
+          club is not playing gets, which is the uncommon day.
+          So the skeleton is the row, in the row's own classes: 68px against the
+          real 68, and one line of bars rather than three. */}
+      <div className="player-day">
+        <div className="pday-game static">
+          <span className="feed-game-date">
+            <SkBar w="46px" />
+          </span>
+          <span className="feed-game-line pday-none">
+            <SkBar w="128px" />
+          </span>
+          <span className="game-status scheduled">
+            <span className="game-status-detail">
+              <SkBar w="58px" />
+            </span>
+            <span className="game-matchup">
+              <SkBar w="48px" />
+            </span>
+          </span>
+        </div>
+      </div>
     </section>
   );
 }

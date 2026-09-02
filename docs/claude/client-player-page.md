@@ -1335,7 +1335,7 @@ since what is being compared is the client's paint sequence):
 | | frame appears | height then | height settled | jump |
 | --- | --- | --- | --- | --- |
 | before | **~2930ms** — all five blocks at once | 900 (an empty box, spinner from 715ms) | 1111 | **211px** |
-| after | **~150ms** | 1080 | 1111 | **31px** |
+| after | **~150ms** | 1096 | 1111 | **15px** |
 
 Unheld, against a cold local server, the same shape: the overlay used to appear
 at 767ms holding nothing and fill at 920, and a genuinely cold pitcher — whose
@@ -1357,8 +1357,19 @@ w=1068** against the real block's **x=150 w=800**. `.ovw-day, .ovw-starts,
 skeleton had missed `ovw-starts` — so the box slid 134px sideways and shed a
 third of its width as the read landed, a worse jump than the one it existed to
 remove. With it, every block's `x` and `width` are exact on both a batter's page
-and a pitcher's, and what is left is height: Today 52 → 68, the other four
-within 5px, 107 → 107 exact on the season strip.
+and a pitcher's.
+
+**The same rule then settled the day block, which took three goes.** It drew
+five bars across three `.ovw-next-line`s — a wrapping flex row, so they stacked
+14px apart and the block read as a paragraph of redacted text rather than as one
+fact not yet arrived. Consolidating them onto `.ovw-none`, the block's no-game
+sentence, was tidier and reserved the **wrong fact**: read off the settled DOM,
+the day block on a starter's page holds `.player-day > .pday-game.static` — a
+date, a line and the fixture — at **44px**, where that sentence is 15.
+`.ovw-none` is what a man whose club is not playing gets, which is the uncommon
+day. Drawn as the row, in the row's own classes, the block is **68px against the
+real 68**. What is left across the tab is 5px each on three blocks, and the
+season strip exact at 107.
 
 **Two of the five blocks cannot be drawn for real without the day**, and they
 are the two at the top. The day block is one; the slot under it is the other,
