@@ -7000,8 +7000,36 @@ button.start-line:focus-visible {
   color: var(--muted);
   cursor: pointer;
 }
-.details-tab:hover {
-  color: var(--text);
+/* **The one tab strip whose hover is scoped, because it is the one a finger
+   crosses rather than aims at.**
+ *
+ * This stylesheet's standing rule is that a *surface* scopes its hover to
+ * `(hover: hover)` and a **small aimed target — a button, a tab, a pill —
+ * keeps it**, on the grounds that a tint stuck to something you pressed on
+ * purpose does not read as a selection. That reasoning assumes the touch was
+ * aimed. `.details-tabs` is a **scroller**: nine tabs on a 390px phone, so a
+ * sideways flick has to begin with a finger on whichever tab happens to be
+ * under it, and both engines apply `:hover` to that tab for the beginning of
+ * the gesture — a device with no pointer having nowhere to move it to. On a
+ * strip where one tab is the accent and the rest are muted, a second tab
+ * turning `--text` is the app saying *this one* about a tab nobody chose, which
+ * is the same reported weirdness `useTabSlider`'s aim was the other half of:
+ * *"the highlighting is weird when I scroll horizontally since it activates on
+ * touch"*.
+ *
+ * A pointer loses nothing — this rule is the whole of what hover does here, and
+ * `(hover: hover)` is exactly the device that has one. Measured with the state
+ * forced on `Percentile Rankings`, by whether the window has a pointer: at
+ * 1200×900 (`hover: hover`) `#8ea0c4` → **`#e8eefc`** as before, and at 390×844
+ * (`hover: none`) it stays `#8ea0c4`. `:active` and
+ * `:focus-visible` are never scoped, and `.is-aimed` — the press, which *is* a
+ * choice — is untouched. The arrows beside the strip keep their hover: they are
+ * the aimed target the carve-out was written for, and a flick cannot start on
+ * one without pressing it. */
+@media (hover: hover) {
+  .details-tab:hover {
+    color: var(--text);
+  }
 }
 .details-tab.is-active {
   color: var(--accent);
@@ -7043,6 +7071,36 @@ button.start-line:focus-visible {
   position: absolute;
   top: 0;
   bottom: 0;
+  /* **Over the run, which is what "drawn over the strip's ends" needs and did
+     not have.** Reported: *"I can see through the arrow on the player details
+     page tabs"* — and you could, because the tabs were painting on top of it.
+     `.details-tab` carries `z-index: 1` so a label sits above the sliding mark
+     (see there), the arrow carried `auto`, and the two are in one stacking
+     context — `.details-chrome`, the nearest ancestor with a `z-index` — so the
+     later number won wherever they overlapped. Measured at 390×844 on Ohtani's
+     page: eight tabs, every one at `z-index: 1`, both arrows at `auto`, and the
+     right arrow's chevron drawn *through* the word `Stats` at x=346.
+
+     **And a press went through it too**, which is the half of the fault the
+     report did not have to mention: hit-testing follows the same order.
+     `elementFromPoint` down the right arrow's band — 346, 350, 368 — answered
+     `details-tab` at every one, and a tap at its center *switched to `Stats`*
+     rather than scrolling the strip. Fixed, the same three points answer
+     `tabstrip-arrow-r`, 344 (one pixel outside it) still answers `details-tab`,
+     and the tap takes `scrollLeft` 0 → 312 with the tab unchanged.
+
+     The fade cannot answer it, and this is why the fault is a painting order
+     rather than a color: 30px of solid `--bg` under a label that paints after
+     it is 30px of solid nothing. 2 rather than 1 so it clears the tabs outright
+     — the mark below them is at `auto` and the run holds nothing else
+     positioned, so this is the only pair that had to be ordered.
+
+     It is the same statement for `ScrollRow`'s rows, where it happens to be
+     satisfied already: those runs hold plain static buttons, which a positioned
+     box outranks without a number. Declaring it on the shared class is what
+     keeps that an argument rather than a coincidence — a pill with a `z-index`
+     of its own on the board's bar would otherwise reopen this. */
+  z-index: 2;
   width: var(--tabstrip-arrow-w);
   display: flex;
   align-items: center;
