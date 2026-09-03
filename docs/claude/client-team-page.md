@@ -143,10 +143,21 @@ The **name in full**, and under it two things:
 **`chromeExtra`'s one caller on this page**, in the player page's own row and
 classes (`.details-kind-row`, `.view-switch`). The two controls are the same
 control — *which half of this subject am I reading* — and what differs is only
-what a press does. On a player it is **navigation**: a two-way man is two pages
-under one id, and the switch opens the other one. Here it is a **reading** of one
-page, because a club is always both halves at once and nobody would call the
-Brewers' pitching a different club.
+how far a press reaches. On a player it changes the **subject**: a two-way man is
+two pages under one id, so his tab resets and every read on his page re-keys.
+Here nothing resets, because a club is always both halves at once and nobody
+would call the Brewers' pitching a different club.
+
+**Neither of them is a page opened over the page.** That half used to differ
+too — this paragraph called the player's switch *navigation* against this one's
+*reading*, and his went through `openPlayer` on exactly that reading, putting a
+step on `App`'s route stack for every press. Measured on Ohtani: `Batting`,
+`Pitching`, then **three** presses of `Back` to leave one page. He presses
+`App.tsx::crossKind` now, which writes `player=` and leaves the stack alone. The
+distinction this paragraph draws is real; what it does not decide is what `Back`
+means, and reading it as though it did is what cost the player page its back
+button. See **A two-way player has two pages, and a switch between them** in
+*The player page*.
 
 It rides in the URL as **`tside=pitching`**, written only off the default, and
 scoped to `team=` — a side with no club to be a side *of* would name a reading

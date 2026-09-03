@@ -67,10 +67,17 @@ export function DetailsShell({
   /** What the tablist is a list of, for a screen reader. */
   tabsLabel: string;
   /**
-   * Anything else pinned between the head and the strip. One caller has one —
-   * the player page's Batting/Pitching switch, which is neither identity (it is
-   * a control) nor a tab of this page (it navigates to *another* page) and so
-   * sits on a row of its own inside the same pinned box.
+   * Anything else pinned between the head and the strip. Both callers have one
+   * and it is the same control — which half of this subject am I reading — and
+   * it is neither identity (it is a control) nor a tab of this page (it changes
+   * the *subject*, where a tab is a reading of one), so it sits on a row of its
+   * own inside the same pinned box.
+   *
+   * This said the player's half "navigates to another page", which it did, and
+   * it put a step on `App`'s route stack for it — see `PlayerDetails`, where the
+   * report that took the step back out is written down. It changes `player=`
+   * and nothing else now, so neither caller's switch is a page opened over the
+   * page and `Back` means the same thing on both.
    */
   chromeExtra?: ReactNode;
   /** The `role="tab"` buttons themselves. */
