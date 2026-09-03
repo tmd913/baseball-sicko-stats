@@ -1090,11 +1090,11 @@ function Scoreboard({
 
       {board.format === 'unknown' ? (
         <div className="empty-state">
-          <h3>This league's scoring isn't supported yet</h3>
+          <h3>This league’s scoring isn’t supported yet</h3>
           <p>
             ESPN reports it as <code>{board.scoringType}</code>, which this page has never been
             read against — so it shows nothing here rather than guessing at a scoreboard shape
-            the league may not have. The Rankings tab still draws the league's own totals.
+            the league may not have. The Rankings tab still draws the league’s own totals.
           </p>
         </div>
       ) : board.format === 'standings' ? (
@@ -1169,7 +1169,7 @@ export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
   // view now, opened from the card that names it (`LeagueMatchup.tsx`), so
   // `lt=` goes back to omitting `scoreboard` and `lt=matchup` in an older link
   // is read as the board the matchup was always a row of.
-  { tab: 'scoreboard', label: 'Scoreboard', title: "This period's matchups" },
+  { tab: 'scoreboard', label: 'Scoreboard', title: "This period’s matchups" },
   { tab: 'rankings', label: 'Rankings', title: 'Where every team stands in each category' },
   { tab: 'transactions', label: 'Transactions', title: 'Who has added, dropped and traded whom' },
 ];
@@ -1263,7 +1263,7 @@ export default function LeagueView({
       <div className="empty-state">
         <h3>No fantasy league connected</h3>
         <p>
-          The League page reads your ESPN league's matchups, rankings and transactions, so it
+          The League page reads your ESPN league’s matchups, rankings and transactions, so it
           needs one connected.
         </p>
         <div className="empty-actions">
@@ -1306,14 +1306,14 @@ export default function LeagueView({
         />
       ) : error && !board ? (
         <div className="empty-state">
-          <h3>Couldn't read your league</h3>
+          <h3>Couldn’t read your league</h3>
           <p>{error}</p>
         </div>
       ) : !board ? (
         // Never over data: a re-read leaves what is on screen standing, and the
         // block wait is only for a pane with nothing in it yet.
         loading ? (
-          <LoadingBlock>Reading your league's scoreboard</LoadingBlock>
+          <LoadingBlock>Reading your league’s scoreboard</LoadingBlock>
         ) : null
       ) : (
         <Scoreboard

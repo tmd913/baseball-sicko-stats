@@ -70,13 +70,13 @@ function friendly(code: string, message: string): string {
         ? 'Incorrect email or password.'
         : message;
     case 'UserNotFoundException':
-      return "We couldn't find an account with that email.";
+      return "We couldn’t find an account with that email.";
     case 'UsernameExistsException':
       return 'An account with that email already exists. Try signing in.';
     case 'UserNotConfirmedException':
       return 'This email still needs confirming.';
     case 'CodeMismatchException':
-      return "That code isn't right. Check it and try again.";
+      return "That code isn’t right. Check it and try again.";
     case 'ExpiredCodeException':
       return 'That code has expired — send yourself a new one.';
     case 'LimitExceededException':
@@ -84,12 +84,12 @@ function friendly(code: string, message: string): string {
     case 'TooManyFailedAttemptsException':
       return 'Too many attempts. Wait a minute and try again.';
     case 'CodeDeliveryFailureException':
-      return "We couldn't send the email. Check the address and try again.";
+      return "We couldn’t send the email. Check the address and try again.";
     case 'InvalidPasswordException':
     case 'InvalidParameterException':
       return message;
     case 'NetworkError':
-      return "Couldn't reach the sign-in service. Check your connection.";
+      return "Couldn’t reach the sign-in service. Check your connection.";
     default:
       return message || 'Something went wrong. Try again.';
   }
@@ -155,7 +155,7 @@ function toTokens(res: AuthResponse): Tokens {
     // rather than that the user did something wrong.
     throw new CognitoError(
       'ChallengeRequired',
-      `This account needs a step this app can't do yet (${res.ChallengeName ?? 'unknown'}).`,
+      `This account needs a step this app can’t do yet (${res.ChallengeName ?? 'unknown'}).`,
     );
   }
   return {
@@ -362,9 +362,9 @@ function friendlyOAuth(error: string, description: string): string {
     case 'invalid_request':
     case 'server_error':
     case 'temporarily_unavailable':
-      return "Google sign-in didn't finish. Try it again.";
+      return "Google sign-in didn’t finish. Try it again.";
     default:
-      return description || "Google sign-in didn't finish. Try it again.";
+      return description || "Google sign-in didn’t finish. Try it again.";
   }
 }
 
@@ -391,7 +391,7 @@ export async function exchangeCode(config: CognitoConfig): Promise<Tokens | null
   if (!stashed) {
     throw new CognitoError(
       'SignInInterrupted',
-      "Sign-in couldn't be completed in this tab. Try signing in again.",
+      "Sign-in couldn’t be completed in this tab. Try signing in again.",
     );
   }
   const { verifier, state: expected } = JSON.parse(stashed) as {

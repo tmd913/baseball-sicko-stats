@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { NewsItem, PlayerNews } from '../types';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 
 /**
  * A player's news, in **one** list drawn two ways.
@@ -221,7 +222,7 @@ export function NewsTab({
   const wait = useDelayedFlag(loading);
   if (wait) return <LoadingBlock>Reading the latest news</LoadingBlock>;
   if (loading) return null;
-  if (error) return <div className="details-status details-error">Couldn&rsquo;t read the news: {error}</div>;
+  if (error) return <ErrorLine detail={error}>Couldn’t read the news</ErrorLine>;
   if (!news || news.items.length === 0) {
     return (
       <div className="news-empty">

@@ -216,7 +216,7 @@ export function positionCell(
     ? `Eligible in ESPN at ${ordered.join(', ')}`
     : input.kind === 'pitcher'
       ? `${ordered[0]} — ${input.starterSource}; ESPN has no eligibility for him`
-      : `${ordered.join(', ')} — MLB's listed position; ESPN has no eligibility for him`;
+      : `${ordered.join(', ')} — MLB’s listed position; ESPN has no eligibility for him`;
   return { text: ordered.join('/'), title };
 }
 
@@ -308,8 +308,8 @@ const EVENT_LABELS: Record<string, string> = {
   sac_fly: 'Sac Fly',
   sac_bunt: 'Sac Bunt',
   field_error: 'Reached On Error',
-  fielders_choice: "Fielder's Choice",
-  fielders_choice_out: "Fielder's Choice",
+  fielders_choice: "Fielder’s Choice",
+  fielders_choice_out: "Fielder’s Choice",
   catcher_interf: 'Catcher Interference',
 };
 
@@ -633,6 +633,27 @@ export function deltaVs(value: number | null, ref: number | null, flatBand = 0):
 export function fmt(n: number | null, digits = 0, suffix = ''): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return `${n.toFixed(digits)}${suffix}`;
+}
+
+/** The text a thrown value has to offer: an `Error`'s message, anything else
+ * stringified, and a stock phrase where there is nothing at all. One
+ * implementation where there were nine `err instanceof Error ? err.message :
+ * '…'` ternaries, each choosing its own stock phrase. */
+export function errorText(e: unknown): string {
+  if (e instanceof Error) return e.message || 'Unknown error';
+  if (typeof e === 'string' && e !== '') return e;
+  if (e === null || e === undefined) return 'Unknown error';
+  const s = String(e);
+  return s === '' || s === '[object Object]' ? 'Unknown error' : s;
+}
+
+/** A failed read in the app's own voice: `text` names what was being read the
+ * way a wait does ("Couldn’t read the outing" beside "Reading the outing"), and
+ * `detail` carries whatever the failure had to say, for a `title` rather than
+ * the line itself — a fetch's message ("HTTP 502", "Failed to fetch") is a fact
+ * for whoever is debugging it and reads as noise to everyone else. */
+export function describeError(e: unknown, what: string): { text: string; detail: string } {
+  return { text: `Couldn’t read ${what}`, detail: errorText(e) };
 }
 
 /** Baseball Savant's pitch-type color + abbreviation, keyed by the full pitch

@@ -10,6 +10,7 @@ import { BaseballMark } from './BaseballMark';
 import { LockGlyph, LockMark } from './LockMark';
 import { PlayerNewsMark } from './NewsMark';
 import { LoadingBlock, LoadingLine, PaneBusy } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { PageMore, usePagedRows } from './paging';
 import { ExpandButton } from './ExpandButton';
 import { PhotoSpot, PhotoStatus, useStatusBadge } from './PhotoStatus';
@@ -435,13 +436,13 @@ const TEAM_SIDES: PositionOption[] = [
   {
     key: 'batters',
     label: 'Hitting',
-    title: "How each club has hit — the whole roster's line",
+    title: "How each club has hit — the whole roster’s line",
     kind: 'batter',
   },
   {
     key: 'pitchers',
     label: 'Pitching',
-    title: "How each club has pitched — the whole staff's line",
+    title: "How each club has pitched — the whole staff’s line",
     kind: 'pitcher',
   },
 ];
@@ -605,7 +606,7 @@ const INCLUDE_META: Record<ResearchIncludeKey, IncludeWording & { solo?: Include
     full: 'Other Rosters',
     abbr: 'Others',
     code: 'lock',
-    title: "Players on somebody else's roster in your ESPN fantasy league",
+    title: "Players on somebody else’s roster in your ESPN fantasy league",
   },
   fa: {
     full: 'Free Agents',
@@ -3447,7 +3448,7 @@ function ResearchTableInner({
         <div className="empty-state">
           <p className="empty-title">No {noun} on your watchlist</p>
           <p>
-            The star beside a player's name adds him to it — it is a list of who
+            The star beside a player’s name adds him to it — it is a list of who
             you are keeping an eye on, and nothing to do with your roster. Turn
             on{' '}
             <button
@@ -3469,8 +3470,8 @@ function ResearchTableInner({
          is the one wrong thing this state must never flash. */
       return espnError ? (
         <div className="empty-state">
-          <p className="empty-title">Couldn't read your league</p>
-          <p>{espnError}</p>
+          <p className="empty-title">Couldn’t read your league</p>
+          <p title={espnError}>That is the read failing rather than anything about the league.</p>
           <div className="empty-actions">
             <button type="button" className="empty-help" onClick={onConnectEspn}>
               Fantasy league settings
@@ -3494,7 +3495,7 @@ function ResearchTableInner({
           <p className="empty-title">No fantasy league connected</p>
           <p>
             Connect an ESPN fantasy baseball league and the board can tell who is
-            on a leaguemate's roster from who is free to pick up.
+            on a leaguemate’s roster from who is free to pick up.
           </p>
           <div className="empty-actions">
             <button type="button" className="empty-help" onClick={onConnectEspn}>
@@ -3670,7 +3671,7 @@ function ResearchTableInner({
       title={
         teams
           ? 'Back to the players'
-          : "Read the board as thirty clubs instead — each row a club's aggregate over the span on screen"
+          : "Read the board as thirty clubs instead — each row a club’s aggregate over the span on screen"
       }
     >
       {/* A crest: the one shape in this run that says *club* rather than
@@ -4482,7 +4483,7 @@ function ResearchTableInner({
                           statWindow,
                         )} board (${qualifiedCount} of ${population.length} ${
                           kind === 'pitcher' ? 'pitchers' : 'batters'
-                        }, Savant's bar of ${
+                        }, Savant’s bar of ${
                           QUALIFIER_WORDS[kind]
                         }), whatever you have narrowed it to`
                   }
@@ -5594,8 +5595,8 @@ function ResearchTableInner({
                 <ScrollRow
                   label={
                     barRows.filter((r) => r.length).length > 1
-                      ? `row ${i + 1} of the board's controls`
-                      : "the board's controls"
+                      ? `row ${i + 1} of the board’s controls`
+                      : "the board’s controls"
                   }
                   className="research-row"
                 >
@@ -5983,7 +5984,7 @@ function ResearchTableInner({
                 a control turned off keeps its place for when it comes back. The
                 gear is the one that cannot be turned off, being the only way
                 back to the controls from a scrolled board. */}
-            <ScrollRow label="the board's controls" className="research-row research-condensed">
+            <ScrollRow label="the board’s controls" className="research-row research-condensed">
               {condensedRun.map(slotOf)}
             </ScrollRow>
             </div>
@@ -6000,7 +6001,7 @@ function ResearchTableInner({
             stays under the controls rather than traveling up into the chrome
             with them: a board that failed to load is news about the table, the
             same argument that keeps App's own error banner outside the chrome. */}
-        {error && <div className="error-banner">⚠ {error}</div>}
+        {error && <ErrorLine kind="banner">{error}</ErrorLine>}
 
         {/* **The head of the table**: what the board is set to, and how much of
             it survived — the two things the reader needs on screen at row 400,

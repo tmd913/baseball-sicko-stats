@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { combineLines, combinePitchingLines, prettyGameDate } from '../lib';
+import { combineLines, combinePitchingLines, errorText, prettyGameDate } from '../lib';
 import { lineSummary as battingLineSummary } from '../lib';
 import type { PlayerGame, PlayerReport } from '../types';
 import { GameStatusBadge } from './PlayerCard';
@@ -17,6 +17,7 @@ import {
 import type { FeedEntry } from './LiveFeed';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { Modal } from './Modal';
 import { OutingPage } from './OutingPage';
 
@@ -414,7 +415,7 @@ export function PlayerDayModal({
         if (live) setReport(d.player);
       })
       .catch((e: unknown) => {
-        if (live) setError(e instanceof Error ? e.message : 'Failed to load');
+        if (live) setError(errorText(e));
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -431,7 +432,7 @@ export function PlayerDayModal({
       onClose={onClose}
     >
       {wait && <LoadingBlock>Reading the game</LoadingBlock>}
-      {error && !loading && <div className="details-status details-error">⚠ {error}</div>}
+      {error && !loading && <ErrorLine detail={error}>Couldn’t read the game</ErrorLine>}
       {report && !loading && <PlayerDay report={report} gamePk={gamePk} />}
     </Modal>
   );

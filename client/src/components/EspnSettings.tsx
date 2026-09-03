@@ -348,11 +348,11 @@ export function EspnSettings({
           <p className="tut-lede">
             Connect your ESPN fantasy baseball league and the app can do two more
             things: the research board gains a <strong>Free Agents</strong> filter
-            — every player in the majors who isn't on a roster in your league —
+            — every player in the majors who isn’t on a roster in your league —
             and the Summary, Games and Feed views can read{' '}
             <strong>your own team</strong>{' '}
             instead of the list you built here, each player marked with the slot
-            he's in today.
+            he’s in today.
           </p>
         </div>
       </div>
@@ -399,7 +399,7 @@ export function EspnSettings({
 
         {connected && status.connected && (
           <p className="espn-note espn-refresh-note">
-            The app holds ESPN's answer for ten minutes, so a move made over
+            The app holds ESPN’s answer for ten minutes, so a move made over
             there lands here within that. The <strong>refresh button in the
             header</strong> reads it now and reloads the page with it — the
             rosters, the lineup slots and who is a free agent.
@@ -410,9 +410,9 @@ export function EspnSettings({
           <section className="espn-section espn-team-section">
             <h2 className="espn-h2">Your team</h2>
             <p className="espn-note">
-              Which team in the league is yours. It's worked out from your SWID
+              Which team in the league is yours. It’s worked out from your SWID
               where that identifies one, so this is usually already right — pick
-              from the list if it isn't, or if you're reading a public league
+              from the list if it isn’t, or if you’re reading a public league
               nobody signed you into.
             </p>
             <label className="espn-field">
@@ -442,11 +442,11 @@ export function EspnSettings({
               Choosing one for the first time turns on{' '}
               <strong>Use my fantasy team</strong>: the Summary, Games and Feed
               views switch to reading your fantasy team instead of the roster you
-              built here, and each player carries the slot he's in today — his
-              position if he's in the lineup, <code>BE</code> or <code>IL</code>{' '}
-              if he isn't. The roster you built here is untouched, and the
+              built here, and each player carries the slot he’s in today — his
+              position if he’s in the lineup, <code>BE</code> or <code>IL</code>{' '}
+              if he isn’t. The roster you built here is untouched, and the
               fantasy button in the header switches back to it whenever you
-              like — so if you've already told the app which of the two you
+              like — so if you’ve already told the app which of the two you
               want, changing teams here leaves that alone.
             </p>
           </section>
@@ -467,7 +467,7 @@ export function EspnSettings({
               is stored with — the app only ever uses it to read this league, and
               the cookie itself is never in the link and never leaves the server.
               And <strong>anyone holding the link can join</strong>: ESPN gives us
-              no way to check that they're really in your league, so treat it like
+              no way to check that they’re really in your league, so treat it like
               a door key and hand it to the people you mean to.
             </p>
 
@@ -503,7 +503,7 @@ export function EspnSettings({
 
             {!status.credentialMine && (
               <p className="espn-note espn-warn">
-                This league is currently being read with a leaguemate's ESPN
+                This league is currently being read with a leaguemate’s ESPN
                 session, not yours. Nothing to do — but if it ever stops working,
                 you can fix it for everyone by pasting your own{' '}
                 <code>SWID</code> and <code>espn_s2</code> below.
@@ -528,7 +528,7 @@ export function EspnSettings({
           <p className="espn-note">
             Open your league on <code>fantasy.espn.com</code> and paste the whole
             address into the first field below — the app reads the ids out of it.
-            The bare number works too, if you'd rather.
+            The bare number works too, if you’d rather.
           </p>
           <pre className="espn-code">
             https://fantasy.espn.com/baseball/team?leagueId=<b>123456</b>&amp;teamId=<b>6</b>
@@ -538,20 +538,20 @@ export function EspnSettings({
           <p className="espn-note">
             <strong>Try connecting without these first.</strong> If your league is
             public, ESPN will serve it to anyone and nothing else is needed — the
-            app stores no credential for you at all. If it's private you'll be
+            app stores no credential for you at all. If it’s private you’ll be
             told so, and these two are what get you in.
           </p>
           <p className="espn-note">
-            They're cookies, which is why they aren't in the address bar: a cookie
+            They’re cookies, which is why they aren’t in the address bar: a cookie
             belongs to the site that set it, and no other page can read it. You
             have to copy them across by hand, and for that you need a{' '}
             <strong>laptop or desktop</strong> — no mobile browser has a cookie
-            viewer, so this step can't be done from a phone.
+            viewer, so this step can’t be done from a phone.
           </p>
           <p className="espn-note">
             <strong>You only have to do it once.</strong> This connection is saved
             to your account rather than to a device, so set it up here on a
-            computer and your phone has it too — there's nothing to repeat there.
+            computer and your phone has it too — there’s nothing to repeat there.
           </p>
           <p className="espn-note">
             With your league open in a browser on that computer, in the same tab:
@@ -570,17 +570,17 @@ export function EspnSettings({
             </li>
             <li>
               Find the rows named <code>SWID</code> and <code>espn_s2</code>, and
-              copy each one's <strong>value</strong>.
+              copy each one’s <strong>value</strong>.
             </li>
           </ol>
           <p className="espn-note">
             <code>SWID</code> looks like <code>{'{ABCD1234-…}'}</code> — braces
-            included, though it's fine if you leave them off. <code>espn_s2</code>{' '}
+            included, though it’s fine if you leave them off. <code>espn_s2</code>{' '}
             is a long string with plenty of <code>%</code> signs in it; paste it
             exactly as it appears, without decoding it.
           </p>
           <p className="espn-note">
-            You can paste the <strong>name and the value together</strong> if that's
+            You can paste the <strong>name and the value together</strong> if that’s
             what your browser copied — <code>espn_s2:"AEB…"</code>,{' '}
             <code>SWID={'{ABCD…}'}</code>, or the whole{' '}
             <code>SWID=…; espn_s2=…</code> line — into either box. The fields read
@@ -593,7 +593,7 @@ export function EspnSettings({
             your ESPN account. It expires every so often, and when it does the
             board will say so — come back here and paste a fresh one. The box
             below shows it rather than masking it, so you can see the whole thing
-            arrived; that does mean not doing this over someone's shoulder.
+            arrived; that does mean not doing this over someone’s shoulder.
           </p>
         </section>
 
@@ -679,7 +679,7 @@ export function EspnSettings({
                 the league is worth rejecting while the form is still on screen. */}
             <span className="espn-hint">
               {cookiesGiven
-                ? "Your credentials are checked against ESPN before they're saved."
+                ? "Your credentials are checked against ESPN before they’re saved."
                 : 'Checked against ESPN before saving — a private league will say so.'}
             </span>
           </div>

@@ -1257,12 +1257,27 @@ body {
 
 /* ---- States ---- */
 .error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   background: color-mix(in srgb, var(--strikeout) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--strikeout) 40%, transparent);
   color: var(--error-ink);
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--control-radius);
   margin-bottom: 18px;
+}
+/* The mark every failed read leads with — `ErrorLine`'s triangle, in the three
+   boxes it is drawn in. It never shrinks against a long line in the banner's
+   flex row, and inline (`.opp-status`, a one-line status inside a card) it sits
+   on the text's baseline the way a glyph beside words does rather than riding
+   on the line box's bottom. */
+.error-mark {
+  flex: none;
+}
+.opp-status .error-mark {
+  vertical-align: -2px;
+  margin-right: 6px;
 }
 .empty-state {
   background: var(--panel);

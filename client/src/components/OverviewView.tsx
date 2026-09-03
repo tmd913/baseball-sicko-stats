@@ -2974,7 +2974,7 @@ export default function OverviewView({
    */
   const own = board?.categories?.length ? board.categories.length : 0;
   const categoriesTitle = `Ranked over ${
-    own > 0 ? `your league's ${own} categories` : 'the standard 5×5'
+    own > 0 ? `your league’s ${own} categories` : 'the standard 5×5'
   } — ${categories.map((c) => c.label).join(' · ')}`;
 
   const nameOf = useMemo(() => {

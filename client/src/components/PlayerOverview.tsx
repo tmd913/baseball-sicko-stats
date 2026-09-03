@@ -1025,9 +1025,9 @@ function headNote(
   // are worth — so the phrase names the source. `estimated` wins where the list
   // holds both, being the weaker.
   const estimated = guesses.some((s) => s.tier === 'estimated');
-  const whose = estimated ? "his club's rotation" : 'his own pace this season';
+  const whose = estimated ? "his club’s rotation" : 'his own pace this season';
   return {
-    text: estimated ? `his club's turn: every ${games}` : `a turn every ${games}`,
+    text: estimated ? `his club’s turn: every ${games}` : `a turn every ${games}`,
     title:
       `${guesses.length === 1 ? 'One start is' : `${guesses.length} starts are`} projected from ` +
       `his last one, at a turn every ${games} — ${whose}. Nobody has named them yet.`,
@@ -1087,7 +1087,7 @@ const TIER_LEAD: Record<StartTier, string> = {
   announced: 'Announced by his club',
   projected: 'Projected from his rotation slot at his own pace this season — nobody has named it yet',
   estimated:
-    "Estimated from his club's rotation, his own record being too thin to read one off — nobody has named it yet",
+    "Estimated from his club’s rotation, his own record being too thin to read one off — nobody has named it yet",
 };
 
 /**
