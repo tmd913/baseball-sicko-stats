@@ -60,7 +60,7 @@ import {
 import { takeInvite } from './invite';
 import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, toThemeId } from './theme';
 import type { ThemeId } from './theme';
-import { BaseballMark } from './components/BaseballMark';
+import { BaseballMark, BrandBall } from './components/BaseballMark';
 import { ScrollRow } from './components/TabStrip';
 import { SlidingTabs, useTabSlider } from './components/TabSlider';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -10224,7 +10224,7 @@ export default function App() {
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            ⚾
+            <BrandBall />
           </div>
           <h1>
             Statcast <span className="brand-sicko">Sicko</span>

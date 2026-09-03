@@ -165,6 +165,13 @@
      `--brand-2` stays: it is the second stop of the brand *mark*, which is a
      16px logo rather than a page. */
   --brand-2: #a855f7;
+  /* The ball on that tile — `BrandBall`'s disc. A white no theme moves, as the
+     favicon's is not: the tile is the same cyan-to-purple on every palette and
+     the ball is the same white on it, which is the tab's icon and the header's
+     agreeing. It is not `--on-accent` (ink on a fill, the page's near-black on
+     the four dark themes) and not `--panel` or `--text` (each white on three
+     themes and dark on the other three). The seams are `--strikeout`. */
+  --brand-ball: #f8fafc;
 
   /* pitch dot colors */
   --inplay: #34d399;
@@ -754,9 +761,11 @@ body {
   gap: 11px;
 }
 /* A small tilted baseball on a vibrant tile. It used to take a full spin on
-   hover; the tilt is the look, the spin was decoration. */
+   hover; the tilt is the look, the spin was decoration. The ball is `BrandBall`
+   (`components/BaseballMark.tsx`), an SVG sized by its own prop, so the tile
+   declares no font size: the ⚾ emoji it replaced was set at 19px, and what a
+   platform drew in that box was the platform's to decide. */
 .brand-mark {
-  font-size: 19px;
   width: 34px;
   height: 34px;
   display: grid;
