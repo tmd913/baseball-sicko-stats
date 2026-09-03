@@ -23590,6 +23590,23 @@ html[data-theme='light'] .league-table thead th {
   margin-left: 7px;
   color: var(--faint);
 }
+/* **Every day card's head reserves this tag, and only a projected one shows
+   it.** The tag is an `inline-flex` with a 12px glyph inside a 10.5px line, so
+   drawing it only where it applies made the lead's line box **12 → 14px** and
+   moved the date — and the card's whole height — down 2px. Measured at 390×844
+   on `TODAY`: lead 12 → 14, the date's top within the head 13 → 15, the card
+   368 → 370. The cards are a snapping carousel, so that 2px was a jump on every
+   swipe between a projected day and a measured one, and the skeleton drew no tag
+   at all so it was a second jump when the figures landed.
+
+   `visibility` and not `display`, which is the whole mechanism: the box keeps
+   its line and leaves the accessibility tree, so the head is the same height on
+   every card and no reader is told about an estimate nobody is making. *Reserve
+   the box, don't move the page* — laid out rather than declared, the height
+   being a function of a font this app does not choose. See `DayHead`. */
+.ov-day-proj-tag.is-ghost {
+  visibility: hidden;
+}
 .ov-day-date {
   font-size: 15px;
   font-weight: 800;

@@ -1333,6 +1333,43 @@ hold them apart — `PROJECTED` *qualifies* `TODAY`, where the roster face's own
 `SCHEDULE · WEEK 19` really is two. What holds them apart is 7px and the glyph,
 which is what a qualifier gets.
 
+**And the tag is laid out on every card, not only on the cards that wear it.**
+The tag is an `inline-flex` carrying a 12px glyph inside a 10.5px line, so it
+grows the line box it sits on. Measured at 390×844 on `TODAY`:
+
+| | without the tag | with it |
+| --- | --- | --- |
+| `.ov-day-lead` height | 12 | **14** |
+| the date's top within the head | 13 | **15** |
+| the card | 368 | **370** |
+
+Two pixels, in the two places this page can least afford them. The days are a
+**snapping carousel**, so a projected card beside a measured one moved the date
+and every row under it as the reader swiped — reported as *"the 'Projected' text
+next to the date causes the date text to get pushed down slightly, which causes a
+slight jump when swiping between cards"*. And `SkeletonDay` drew **no tag at
+all** on a card it already knew would arrive with one, so the swap from shimmer
+to figures moved the same 2px — which is the one thing that component exists to
+prevent, its own note above saying the swap must be figures appearing in boxes
+that were already the right size. The skeleton knew: it has taken a `projected`
+prop since it was written, and spent it on the dashed border alone.
+
+So the head is **one component drawn twice** (`DayHead`) and the tag is in it
+unconditionally, `visibility: hidden` on a day that is not an estimate. That is
+*reserve the box, don't move the page*, reserved the way this page already
+reserves everything else — by laying the worst case out rather than declaring a
+height, the height being a function of a font the app does not choose.
+`visibility` and not `display` is the mechanism: a hidden box keeps its line and
+leaves the accessibility tree with it, so no reader is told about a projection
+nobody is making. Measured after: `.ov-day-lead` **14** and the date's top **15**
+on every card, projected and measured alike, and un-hiding a ghost changes the
+head's height by **0**.
+
+The head was written out longhand in both places before this, which is how the
+two came to disagree about the tag in the first place — the rule `DetailsShell`
+and `OpponentSection` state: two things that merely resemble each other are two
+things that will one day differ.
+
 **The two headings set the page's rhythm and are the only things that do.**
 `Your matchup` sat hard against the chrome seam above it and read as a caption
 on the bar rather than as the title of the block under it, so the view takes

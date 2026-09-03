@@ -622,17 +622,7 @@ function DayBlock({
 
   return (
     <section ref={watch} className={projected ? 'ov-day ov-day-proj' : 'ov-day'}>
-      <header className="ov-day-head">
-        <span className="ov-day-lead">
-          {lead}
-          {projected ? (
-            <span className="ov-day-proj-tag">
-              <ProjectedGlyph size={12} /> PROJECTED
-            </span>
-          ) : null}
-        </span>
-        <span className="ov-day-date">{prettyGameDate(date)}</span>
-      </header>
+      <DayHead lead={lead} date={date} projected={projected} />
 
       {performers === null ? (
         loading ? (
@@ -2410,6 +2400,69 @@ function centerCard(
 }
 
 /**
+ * **A day card's head, and the one place the `PROJECTED` tag is laid out.**
+ *
+ * The head was written out twice — once in `DayCard`, once in `SkeletonDay` —
+ * and the tag was drawn in neither of them the same way: the card added it only
+ * when the day was projected, and the skeleton did not draw it at all. Both of
+ * those cost the same 2px, in the two places this page can least afford them.
+ *
+ * **The tag grows the line it sits on.** It is an `inline-flex` carrying a 12px
+ * glyph inside a 10.5px line, so the lead's line box goes **12 → 14px** and the
+ * date under it — and the whole card with it — moves **down 2px**. Measured at
+ * 390×844 on the `TODAY` card: `.ov-day-lead` 12 → 14, the date's top within the
+ * head 13 → 15, the card 368 → 370.
+ *
+ * Which is a jump twice over. Reported as *"the 'Projected' text next to the
+ * date causes the date text to get pushed down slightly, which causes a slight
+ * jump when swiping between cards"* — the carousel puts a projected card beside
+ * a measured one and snaps between them, so the date and every row under it
+ * shift 2px as the reader swipes. And the **skeleton** drew no tag on a card it
+ * knew would arrive with one, so the swap from shimmer to figures moved the same
+ * 2px — which is precisely what `SkeletonDay` exists to prevent, its own note
+ * saying the swap must be figures appearing in boxes that were already the right
+ * size.
+ *
+ * **So the tag is laid out on every head and only shown on a projected one** —
+ * *reserve the box, don't move the page*, and reserved by laying the worst case
+ * out rather than declaring a height, because that height is a function of a
+ * font this app does not choose. `visibility: hidden` rather than
+ * `display: none`, which is the whole point: a hidden box still occupies its
+ * line, and it leaves the accessibility tree with it, so a reader is not told
+ * about a projection that is not being made.
+ *
+ * Extracted rather than copied, which is the rule `DetailsShell` and
+ * `OpponentSection` follow: two heads that merely resemble each other are two
+ * heads that will one day differ — as these two already had.
+ */
+function DayHead({
+  lead,
+  date,
+  projected,
+}: {
+  lead: string;
+  date: string;
+  /** Whether this day is an estimate. Decides only whether the reserved tag is
+   *  *shown*; the space it takes is the same either way. */
+  projected: boolean;
+}) {
+  return (
+    <header className="ov-day-head">
+      <span className="ov-day-lead">
+        {lead}
+        <span
+          className={`ov-day-proj-tag${projected ? '' : ' is-ghost'}`}
+          aria-hidden={projected ? undefined : true}
+        >
+          <ProjectedGlyph size={12} /> PROJECTED
+        </span>
+      </span>
+      <span className="ov-day-date">{prettyGameDate(date)}</span>
+    </header>
+  );
+}
+
+/**
  * A day card with its chrome and none of its figures.
  *
  * **Everything the app already knows is drawn for real.** The lead
@@ -2450,10 +2503,7 @@ function SkeletonDay({
   const groups = categoryGroups(categories);
   return (
     <section ref={sectionRef} className={`ov-day sk-day${projected ? ' ov-day-proj' : ''}`}>
-      <header className="ov-day-head">
-        <span className="ov-day-lead">{lead}</span>
-        <span className="ov-day-date">{prettyGameDate(date)}</span>
-      </header>
+      <DayHead lead={lead} date={date} projected={projected} />
       <div className="lg-cats">
         {groups.map((g) => (
           <div className="ov-cat-block" key={g.side}>
