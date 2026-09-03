@@ -368,10 +368,50 @@ reading column and the gap under it. Fold, don't restyle.
 
 **It changes `player=`, and it has to.** The two halves are two keys and a link
 that named the wrong one would describe a different page, which is the rule
-every view in this app follows; so the press goes through the same
+every view in this app follows.
+
+**It went through `onOpenDetails` for that, and does not now.** The paragraph
+that stood here is worth quoting rather than deleting, because the mistake in it
+is invisible until you press `Back`: *"so the press goes through the same
 `onOpenDetails` the Overview's scheduled game uses to open the opposing starter.
 One door into a player page however it is reached — and the Back button then
-behaves afterwards exactly as it does on any other page opened over this one.
+behaves afterwards exactly as it does on any other page opened over this one."*
+
+Every word of that is true and the conclusion is wrong, because **a door does
+two things and this control needs one of them**. `App.tsx::openPlayer` writes
+`player=` *and* pushes the page it was pressed on onto the route stack, so the
+stack filled with the man himself and `Back` walked out through the presses
+instead of leaving. Reported as *"something weird is going on here when I switch
+between batting and pitching and then try to go back, it seems tied to the tabs
+somehow"* — it was tied to a control that looks like tabs and was wired like a
+link.
+
+**Measured at 390×844**, opened on `?player=pitcher-660271`, pressing `Batting`
+then `Pitching` and then `Back` three times:
+
+| | `player=` after |
+| --- | --- |
+| `Back` | `batter-660271` |
+| `Back` | `pitcher-660271` |
+| `Back` | *gone* |
+
+**Three presses of `Back` to leave one page.** It presses `App.tsx::crossKind`
+now — `openPlayer` with the push taken out, `showPage` and nothing else — and
+the same sequence leaves on the first press. The stack under it is untouched, so
+`Back` from either half returns to the row he was opened from: measured by
+opening the Dodgers' page, its **Roster** tab, Ohtani from it, crossing the
+switch three times and pressing `Back` once — the Dodgers' page, on **Roster**,
+which is `teamTabRef` doing its own job through all of it.
+
+**Nothing the switch does *inside* the page changed**, and that is the
+distinction the fix rests on: a kind is still a new page for the reset effect
+below, for `resetKey`, and for the eleven reads keyed `${kind}-${playerId}` —
+crossing from a pitcher's `Arsenal` still lands on `Overview` with the batting
+day under it and the Arsenal tab gone from the strip (measured after the change).
+What a kind is *not* is a page opened **over** the one the reader opened. That is
+the reading `TeamDetails`' identical side switch has always had; its comment drew
+the line between navigation and a reading *of* one page and put this control on
+the wrong side of it, and both comments now say so.
 
 **Drawn for a two-way player alone**, off `App.tsx`'s `twoWayIds`: the ids the
 season roster lists under two kinds, which is MLB's own `Y` primary-position

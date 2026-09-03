@@ -571,6 +571,7 @@ export function PlayerDetails({
   rankPopulations,
   onNeedRankPopulations,
   onOpenDetails,
+  onCrossKind,
   onOpenTeam,
   onClose,
   scheduleWindow,
@@ -683,6 +684,19 @@ export function PlayerDetails({
    * starter, which renders either way.
    */
   onOpenDetails: (key: string) => void;
+  /**
+   * **Cross to his other half** — what the Batting/Pitching switch presses, and
+   * the one route out of this page that is not a page being opened.
+   *
+   * It is `onOpenDetails` with the route stack left alone. The switch used the
+   * door itself, on the argument written beside it, and the report that ended
+   * that argument is in `App.tsx::crossKind`: three presses of `Back` to leave
+   * a page a reader had crossed the switch twice on. Everything *inside* this
+   * page still treats a kind as a new page — the tab reset below, the eleven
+   * reads keyed on `${kind}-${playerId}`, `resetKey` — because it is one; what
+   * it is not is a page **over** the one the reader opened.
+   */
+  onCrossKind: (key: string) => void;
   /** …and his **club's** page, from the chip under the portrait — the one fact
    *  the day report has always carried and could not act on. See `TeamDoor`. */
   onOpenTeam: (teamId: number) => void;
@@ -1411,11 +1425,30 @@ export function PlayerDetails({
             * `player=${kind}-${id}` and the two halves are two keys, so a switch
             * that left the parameter alone would leave a link describing the page
             * the reader started on rather than the one in front of them — the
-            * rule every other view in this app follows. So it goes through the
-            * same `onOpenDetails` the Overview's scheduled game uses to open the
-            * opposing starter: one door into a player page, however it is
-            * reached, and the Back button behaves afterwards exactly as it does
-            * on any other page opened over this one.
+            * rule every other view in this app follows.
+            *
+            * **It went through `onOpenDetails` for that, and the last sentence
+            * of this paragraph used to be the reason it should**: one door into
+            * a player page however it is reached, and the Back button behaving
+            * afterwards exactly as it does on any other page opened over this
+            * one. That is the part that was wrong, and it is left standing here
+            * because it reads so plausibly. A door is two things at once — it
+            * writes `player=` *and* it puts a step on the route stack — and only
+            * the first of them is what this control needs. Crossing the switch
+            * is not arriving at a page over this one; it is this page, read on
+            * the other side of the ball. Reported as *"something weird is going
+            * on here when I switch between batting and pitching and then try to
+            * go back"*, and measured: `Batting`, `Pitching`, then **three**
+            * presses of `Back` to leave one page.
+            *
+            * So it presses `onCrossKind`, which is that door with the push taken
+            * out (`App.tsx::crossKind`). The parameter still moves, so a link
+            * still describes the page in front of the reader; the stack under it
+            * does not, so `Back` returns to the row he was opened from from
+            * either half. It is the reading the club page's identical switch has
+            * always had — see `TeamDetails`, whose comment beside this one's twin
+            * drew the distinction between navigation and a reading *of* one page
+            * and put this control on the wrong side of it.
             */}
           {twoWay && (
             <div className="details-kind-row">
@@ -1435,7 +1468,7 @@ export function PlayerDetails({
                     className={`view-tab${kind === k ? ' active' : ''}`}
                     aria-selected={kind === k}
                     onClick={() => {
-                      if (kind !== k) onOpenDetails(`${k}-${playerId}`);
+                      if (kind !== k) onCrossKind(`${k}-${playerId}`);
                     }}
                     title={
                       k === 'batter'

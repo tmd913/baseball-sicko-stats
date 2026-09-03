@@ -898,6 +898,34 @@ export default function App() {
     },
     [closePage, openPage],
   );
+  /**
+   * **Crossing the Batting/Pitching switch** — the same man's other half, which
+   * changes `player=` exactly as a door does and is deliberately *not* one.
+   *
+   * It was `openPlayer` until this was reported: *"something weird is going on
+   * here when I switch between batting and pitching and then try to go back, it
+   * seems tied to the tabs somehow"*. It was. Every press of that switch was a
+   * page opened over the page, so the stack filled with the man himself and
+   * `Back` walked out through the presses instead of leaving. Measured at
+   * 390×844 on Ohtani, opened at `?player=pitcher-660271`, pressing `Batting`
+   * then `Pitching` and then `Back` three times: `player=batter-660271` →
+   * `player=pitcher-660271` → gone. **Three presses of `Back` to leave one
+   * page**, each one of them a step the reader would have to recognize as an
+   * undo of a control they crossed rather than of a page they opened.
+   *
+   * So it **replaces** the step rather than pushing one, and the stack under it
+   * is untouched: `Back` from either half returns to the row that opened him.
+   * That is the reading `TeamDetails`' side switch has always had — the two
+   * controls are the same control, in the same classes, on the same row — and
+   * the page's own answer to the switch is unchanged, `PlayerDetails` still
+   * treating a kind as a new page for everything *inside* it (the tab resets,
+   * the eleven reads re-key). What was wrong was only which stack a control
+   * that is not a door writes to.
+   */
+  const crossKind = useCallback(
+    (key: string) => showPage({ kind: 'player', key }),
+    [showPage],
+  );
   /** **The one door into a club's page** — the board's team rows, a player's
    *  head, the header search, a game's crest. */
   const openTeam = useCallback<TeamDoor>(
@@ -11831,6 +11859,10 @@ export default function App() {
              same `openPlayer` every other route in uses, so one man's page
              is reached the one way however it was arrived at. */
           onOpenDetails={openPlayer}
+          /* …and the switch in his chrome, which is the same man and so is the
+             one route in here that does **not** open a page. See `crossKind`,
+             which is `openPlayer` with the push taken out. */
+          onCrossKind={crossKind}
           /* …and his club's page, off the chip under his portrait. `openTeam`
              puts his page away as it opens — one page at one layer — and
              remembers him, so the club's `Back` comes back here. */

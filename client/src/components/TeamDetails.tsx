@@ -362,10 +362,20 @@ export function TeamDetails({
         /* **The side switch, on the player page's own row and in its own
            classes** (`.details-kind-row`, `view-switch`) — the two controls are
            the same control: *which half of this subject am I reading*. What
-           differs is only what a press does. On a player it is navigation, a
-           two-way man being two pages under one id; here it is a reading of one
-           page, because a club is always both halves at once and nobody would
-           call the Brewers' pitching a different club. */
+           differs is only how far a press reaches. On a player it changes the
+           subject — a two-way man is two pages under one id, so his tab resets
+           and every read on his page re-keys; here nothing resets, because a
+           club is always both halves at once and nobody would call the Brewers'
+           pitching a different club.
+
+           **Neither of them is a page opened over the page**, and that half
+           used to differ too: this said the player's switch was *navigation*
+           where this one was a reading, and his went through `openPlayer` on
+           that reading and put a step on the route stack — three presses of
+           `Back` to leave a page a reader had crossed it twice on. It presses
+           `crossKind` now, which writes `player=` and leaves the stack alone.
+           The distinction this paragraph draws is real; what it does not decide
+           is what `Back` means. */
         <div className="details-kind-row">
           <SlidingTabs className="view-switch" label="Which side of the ball">
             {(['batter', 'pitcher'] as const).map((k) => (
