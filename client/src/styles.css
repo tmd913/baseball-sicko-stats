@@ -1325,6 +1325,16 @@ body {
 .empty-state.is-compact .empty-title {
   font-size: 15px;
 }
+/* Inside a details page the compact box takes the reading width the lines it
+   replaced had: `.details-status` and the old `.news-empty` both capped at
+   680px and centered, and without it the box ran the overlay's whole width —
+   1,248px at a 1,280 window, measured on a pitcher's News tab — a dashed frame
+   around three lines of centered prose. The overlay's own gutter is what
+   keeps it off the edges below 680. */
+.details-view .empty-state.is-compact {
+  max-width: 680px;
+  margin-inline: auto;
+}
 /* The second line of an emptied pane — which control emptied it, and the way
    out. A step quieter than the sentence above it, that one being the finding
    and this the remedy. It was the feed's alone (`.feed-empty-how`); the
