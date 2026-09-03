@@ -887,7 +887,7 @@ function RowIdentity({ r, children }: { r: PlayerReport; children: ReactNode }) 
     position: r.position,
     starter: r.kind === 'pitcher' && isRotationStarter(r),
     starterSource: 'off his appearances this season',
-    unknownTitle: (p) => `${p} — MLB's listed position`,
+    unknownTitle: (p) => `${p} — MLB’s listed position`,
   });
   return (
     <PlayerIdentity teamId={r.teamId} team={r.team ?? ''} pos={pos} playerId={r.id} kind={r.kind}>

@@ -721,7 +721,7 @@ export function RanksButton({
       onClick={onToggle}
       title={
         asRank
-          ? `Show each club's rank under every value — 1st to 30th, with 1st always the good end, among ${population}.`
+          ? `Show each club’s rank under every value — 1st to 30th, with 1st always the good end, among ${population}.`
           : `Show a percentile rank under every value — 0 to 100, with 100 always the good end, against ${population}. Anyone short of the bar is still placed on that scale, with a dashed underline under the badge.`
       }
     >

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatStartTime, handThrows, prettyGameDate } from '../lib';
 import { useDelayedFlag, useHandedness } from '../hooks';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
 import type { OppRead } from './OpponentTable';
@@ -651,14 +652,14 @@ function SplitsBody({
   if (read.splits) return card(read.splits.vsLeft, read.splits.vsRight);
   if (read.error) {
     return (
-      <div className="details-error opp-status">
-        Couldn&rsquo;t read his splits.{' '}
+      <ErrorLine kind="line">
+        Couldn’t read his splits.{' '}
         {onRetry && (
           <button type="button" className="ovw-link" onClick={onRetry}>
             Try again
           </button>
         )}
-      </div>
+      </ErrorLine>
     );
   }
   return waiting ? <LoadingBlock>Reading his platoon splits</LoadingBlock> : null;

@@ -12,6 +12,7 @@ import { useDelayedFlag, useTeamDoor } from '../hooks';
 import type { GamePageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { Modal } from './Modal';
 import { byPlayOrder, entryKey, FeedItem, playerDayEntries } from './LiveFeed';
 import type { FeedEntry } from './LiveFeed';
@@ -339,7 +340,7 @@ export function GamePage({
            costs its own column because there is a table around it still
            standing. Here the answer *is* the page. */
         <div className="details-overview">
-          <div className="details-status details-error">Couldn&rsquo;t read the game: {error}</div>
+          <ErrorLine detail={error}>Couldn’t read the game</ErrorLine>
         </div>
       ) : wait ? (
         <LoadingBlock>Reading the game</LoadingBlock>
@@ -1535,7 +1536,7 @@ function GamePlays({
     if (error) {
       return (
         <div className="details-overview">
-          <div className="details-status details-error">Couldn&rsquo;t read the plays: {error}</div>
+          <ErrorLine detail={error}>Couldn’t read the plays</ErrorLine>
         </div>
       );
     }
@@ -1767,7 +1768,7 @@ function HalfInningDialog({
           ))}
         </div>
       ) : error ? (
-        <div className="details-status details-error">Couldn&rsquo;t read the plays: {error}</div>
+        <ErrorLine detail={error}>Couldn’t read the plays</ErrorLine>
       ) : reports === null ? (
         wait ? <LoadingBlock>Reading the plays</LoadingBlock> : null
       ) : (

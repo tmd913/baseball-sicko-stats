@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { InfoKey } from './InfoKey';
 import { LoadingBlock, SpinningBaseball } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { api } from '../api';
 import { useDelayedFlag } from '../hooks';
 import { eraOf, formatRate, lineOps, whipOf } from '../lib';
@@ -163,9 +164,9 @@ export function ProjectionNote({
         </p>
       )}
       <p>
-        <b>A player's rate is his season, pulled toward his last 30 days</b> — recent form counts
+        <b>A player’s rate is his season, pulled toward his last 30 days</b> — recent form counts
         for at most 40% of it, and less if he has hardly played lately. That rate is then applied
-        to the chances he has left: for a hitter, his club's remaining games and how often he is
+        to the chances he has left: for a hitter, his club’s remaining games and how often he is
         in the lineup for one; for a starter, the turns he is due; for a reliever, his usual
         workload. <b>Anybody on the injured list is projected at nothing</b>, and a stretch he
         spent there is left out of how often he plays rather than counted against him.
@@ -321,12 +322,12 @@ export function ProjectedGameLine({
 
   if (error) {
     return (
-      <div className="details-error opp-status">
-        Couldn&rsquo;t read his projection.{' '}
+      <ErrorLine kind="line">
+        Couldn’t read his projection.{' '}
         <button type="button" className="ovw-link" onClick={retry}>
           Try again
         </button>
-      </div>
+      </ErrorLine>
     );
   }
   if (!proj) {

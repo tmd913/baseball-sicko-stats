@@ -4,6 +4,7 @@ import { useDelayedFlag } from '../hooks';
 import { useResource } from '../resource';
 import type { NewsItem, PlayerReport } from '../types';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { NewsList } from './PlayerNews';
 import { EmptyState } from './EmptyState';
 
@@ -143,7 +144,7 @@ export function RosterNews({ reports }: {
      `WAIT_DELAY`. Rule 1 keeps the last stream standing through a re-read. */
   if (wait) return <LoadingBlock>Reading the roster&rsquo;s news</LoadingBlock>;
   if (error && !byPlayer) {
-    return <div className="details-status details-error">Couldn&rsquo;t load the news: {error}</div>;
+    return <ErrorLine detail={error}>Couldn’t read the roster’s news</ErrorLine>;
   }
   if (!byPlayer) return null;
   if (items.length === 0) {

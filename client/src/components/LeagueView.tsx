@@ -1167,7 +1167,7 @@ export const LEAGUE_TABS: { tab: LeagueTab; label: string; title: string }[] = [
   // view now, opened from the card that names it (`LeagueMatchup.tsx`), so
   // `lt=` goes back to omitting `scoreboard` and `lt=matchup` in an older link
   // is read as the board the matchup was always a row of.
-  { tab: 'scoreboard', label: 'Scoreboard', title: "This period's matchups" },
+  { tab: 'scoreboard', label: 'Scoreboard', title: "This period’s matchups" },
   { tab: 'rankings', label: 'Rankings', title: 'Where every team stands in each category' },
   { tab: 'transactions', label: 'Transactions', title: 'Who has added, dropped and traded whom' },
 ];
@@ -1311,7 +1311,7 @@ export default function LeagueView({
         // Never over data: a re-read leaves what is on screen standing, and the
         // block wait is only for a pane with nothing in it yet.
         loading ? (
-          <LoadingBlock>Reading your league's scoreboard</LoadingBlock>
+          <LoadingBlock>Reading your league’s scoreboard</LoadingBlock>
         ) : null
       ) : (
         <Scoreboard

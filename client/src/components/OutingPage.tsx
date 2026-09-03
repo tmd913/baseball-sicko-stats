@@ -2,11 +2,12 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
 import type { PlayerGame, PlayerReport } from '../types';
-import { gameStatusView, prettyGameDate } from '../lib';
+import { errorText, gameStatusView, prettyGameDate } from '../lib';
 import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { BackButton } from './BackButton';
 import { TabStrip } from './TabStrip';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { DialogLayerContext, DIALOG_LAYER } from './Modal';
 import { InningsList } from './Innings';
 import { GameLine, OpponentSection, outingBar } from './PitcherCard';
@@ -343,7 +344,7 @@ export function OutingPage({
               {active === 'arsenal' && <GameArsenalCharts pg={pg} hand={report.throws} />}
             </>
           ) : pending?.error ? (
-            <div className="details-status details-error">⚠ {pending.error}</div>
+            <ErrorLine detail={pending.error}>Couldn’t read the outing</ErrorLine>
           ) : (
             <LoadingBlock>Reading the outing</LoadingBlock>
           )}
@@ -422,7 +423,7 @@ export function OutingPageForGame({
         if (live) setReport(d.player);
       })
       .catch((e: unknown) => {
-        if (live) setError(e instanceof Error ? e.message : 'Failed to load');
+        if (live) setError(errorText(e));
       })
       .finally(() => {
         if (live) setLoading(false);

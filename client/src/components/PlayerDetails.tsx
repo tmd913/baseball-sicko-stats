@@ -50,6 +50,7 @@ import {
   PitcherSplitsTab,
 } from './PlatoonSplits';
 import { LoadingBlock, PaneBusy, SpinningBaseball } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import {
   TAP_SLOP,
   useDelayedFlag,
@@ -1237,7 +1238,7 @@ export function PlayerDetails({
               {rosterPct !== undefined && (
                 <p
                   className="details-rostered"
-                  title="Rostered in this share of all ESPN leagues — ESPN's own figure, not your league's"
+                  title="Rostered in this share of all ESPN leagues — ESPN’s own figure, not your league’s"
                 >
                   Rostered{' '}
                   <strong>{rosterPct === null ? '—' : `${rosterPct.toFixed(1)}%`}</strong>
@@ -1267,7 +1268,7 @@ export function PlayerDetails({
                           }`}
                           title={
                             t.change === null
-                              ? `No reading over the last ${t.days} day${t.days === 1 ? '' : 's'} — two ESPN players share this name, so the figure stored that far back is the other one's`
+                              ? `No reading over the last ${t.days} day${t.days === 1 ? '' : 's'} — two ESPN players share this name, so the figure stored that far back is the other one’s`
                               : `Change over the last ${t.days} day${t.days === 1 ? '' : 's'}`
                           }
                         >
@@ -1572,7 +1573,7 @@ export function PlayerDetails({
         * pretend to be loading them.
         */}
       {tab === 'overview' && dayError && !dayLoading && (
-        <div className="details-status details-error">Couldn&rsquo;t load today: {dayError}</div>
+        <ErrorLine detail={dayError}>Couldn’t read his day</ErrorLine>
       )}
       {tab === 'overview' && !dayError && (
         <OverviewTab
@@ -1637,7 +1638,7 @@ export function PlayerDetails({
 
       {tab === 'arsenal' && arsenalWait && <LoadingBlock>Reading the season arsenal</LoadingBlock>}
       {tab === 'arsenal' && arsenalError && !arsenalLoading && (
-        <div className="details-status details-error">⚠ {arsenalError}</div>
+        <ErrorLine detail={arsenalError}>Couldn’t read the season arsenal</ErrorLine>
       )}
       {tab === 'arsenal' && arsenal && !arsenalLoading && (
         <ArsenalTab arsenal={arsenal} />
@@ -1645,9 +1646,7 @@ export function PlayerDetails({
 
       {tab === 'gamelog' && gameLogWait && <LoadingBlock>Reading the game log</LoadingBlock>}
       {tab === 'gamelog' && gameLogError && !gameLogLoading && (
-        <div className="details-status details-error">
-          Couldn’t load the game log: {gameLogError}
-        </div>
+        <ErrorLine detail={gameLogError}>Couldn’t read the game log</ErrorLine>
       )}
       {tab === 'gamelog' && gameLog && !gameLogLoading && (
         <GameLog
@@ -1673,9 +1672,7 @@ export function PlayerDetails({
 
       {tab === 'charts' && xwobaWait && <LoadingBlock>Reading the season&rsquo;s plate appearances</LoadingBlock>}
       {tab === 'charts' && xwobaError && !xwobaLoading && (
-        <div className="details-status details-error">
-          Couldn’t load xwOBA: {xwobaError}
-        </div>
+        <ErrorLine detail={xwobaError}>Couldn’t read the season’s plate appearances</ErrorLine>
       )}
       {tab === 'charts' && xwoba && !xwobaLoading && (
         <RollingXwoba series={xwoba} name={name} />
@@ -1699,9 +1696,7 @@ export function PlayerDetails({
         <LoadingBlock>Reading the stat lines</LoadingBlock>
       )}
       {tab === 'stats' && windowsError && !windowsLoading && (
-        <div className="details-status details-error">
-          Couldn’t load stats: {windowsError}
-        </div>
+        <ErrorLine detail={windowsError}>Couldn’t read the stat lines</ErrorLine>
       )}
       {/* The table is a direct child of the view, as the game log is, so
           `--table-bleed` takes it out to the overlay's own edges rather than
@@ -1755,7 +1750,7 @@ export function PlayerDetails({
           waiting. */}
       {tab === 'splits' && splitsWait && <LoadingBlock>Reading his splits</LoadingBlock>}
       {tab === 'splits' && splitsError && !splitsLoading && (
-        <div className="details-status details-error">Couldn’t load splits: {splitsError}</div>
+        <ErrorLine detail={splitsError}>Couldn’t read his splits</ErrorLine>
       )}
       {tab === 'splits' && !splitsLoading && isPitcher && pitcherSplits && (
         <>
@@ -1876,10 +1871,10 @@ export function PlayerDetails({
           says so beside it rather than replacing it, which is the same rule the
           wait above follows: the reader has an answer worth keeping. */}
       {tab === 'percentiles' && error && !loading && (
-        <div className="details-status details-error">
-          Couldn’t read the percentile card: {error}. That is this read failing rather than
-          anything about {name} — leave the tab and come back to try it again.
-        </div>
+        <ErrorLine detail={error}>
+          Couldn’t read the percentile card. That is this read failing rather than anything
+          about {name} — leave the tab and come back to try it again.
+        </ErrorLine>
       )}
       {/* **And the unmissable half of the same statement.** The badge above is a
           20px slot beside a heading — a mark for somebody already looking for

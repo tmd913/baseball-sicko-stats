@@ -577,7 +577,7 @@ export const opponentColumn = (
   label: 'Opp',
   group: 'Today',
   title:
-    "Today's game — “@” away, “vs” at home, with the opposing starter before first pitch and the score from his side of it once there is one. Sorts alphabetically, which groups your players by tonight's game",
+    "Today’s game — “@” away, “vs” at home, with the opposing starter before first pitch and the score from his side of it once there is one. Sorts alphabetically, which groups your players by tonight’s game",
   format: (r) => <OpponentCell status={statuses?.get(r.id)} club={gameOf(r, clubs)} />,
   // The sort and the search read the same fallback the cell draws, or a row
   // would group under a club it is not showing.
@@ -644,7 +644,7 @@ export const ROSTER_PCT_COLUMN: Column = {
   key: 'rosterPct',
   label: 'Ros%',
   group: 'Fantasy',
-  title: "Rostered in this share of all ESPN leagues \u2014 ESPN's own figure, not your league's",
+  title: "Rostered in this share of all ESPN leagues \u2014 ESPN’s own figure, not your league’s",
   // The filter builder lists columns by their tooltip, which for every other one
   // is a short phrase ("Games played"). This one has to be a sentence, because
   // "roster %" invites the wrong reading and the header is the place to say so —
@@ -886,7 +886,7 @@ function ProjectedOpponentCell({ game }: { game: ProjectedFixture | null | undef
 const PROJ_TIER_TITLE: Record<'announced' | 'projected' | 'estimated', string> = {
   announced: 'his club has announced him to start',
   projected: 'projected to start — his own rotation slot, which nobody has announced yet',
-  estimated: "estimated to start — his club's rotation, his own record being too thin to read one off",
+  estimated: "estimated to start — his club’s rotation, his own record being too thin to read one off",
 };
 
 /**

@@ -443,7 +443,7 @@ const TITLES: Record<Mode, string> = {
   signin: 'Sign in to see your watchlist.',
   signup: 'Create an account to start a watchlist.',
   confirm: 'Check your email for a 6-digit code.',
-  forgot: "We'll email you a code to reset your password.",
+  forgot: "We’ll email you a code to reset your password.",
   reset: 'Enter the code we emailed you and a new password.',
 };
 
@@ -517,7 +517,7 @@ function AuthScreen({
             if (err instanceof CognitoError && err.code === 'UserNotConfirmedException') {
               const to = await resendCode(config, email.trim()).catch(() => null);
               setMode('confirm');
-              setNotice(`Your email isn't confirmed yet. We've sent a new code${suffix(to)}.`);
+              setNotice(`Your email isn’t confirmed yet. We’ve sent a new code${suffix(to)}.`);
               return;
             }
             throw err;

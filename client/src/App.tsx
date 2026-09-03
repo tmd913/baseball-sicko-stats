@@ -60,7 +60,7 @@ import {
 import { takeInvite } from './invite';
 import { applyTheme, DEFAULT_THEME, readStoredTheme, storeTheme, toThemeId } from './theme';
 import type { ThemeId } from './theme';
-import { BaseballMark } from './components/BaseballMark';
+import { BaseballMark, BrandBall } from './components/BaseballMark';
 import { ScrollRow } from './components/TabStrip';
 import { SlidingTabs, useTabSlider } from './components/TabSlider';
 import { PlayerAdder } from './components/PlayerAdder';
@@ -174,6 +174,7 @@ type PageStep =
  */
 type PageRef = PageStep & { scroll?: number };
 import { LoadingBlock, LoadingLine, PaneBusy, SpinningBaseball } from './components/Loading';
+import { ErrorLine } from './components/ErrorLine';
 import { ProjectedToggle, ProjectionKey } from './components/Projection';
 import {
   FeedFilterPills,
@@ -9359,7 +9360,7 @@ export default function App() {
         title={
           rosterMatchup
             ? 'Back to your own table'
-            : "This week's matchup — the two teams category by category, in place of the table"
+            : "This week’s matchup — the two teams category by category, in place of the table"
         }
       />
     ) : null;
@@ -10224,7 +10225,7 @@ export default function App() {
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            ⚾
+            <BrandBall />
           </div>
           <h1>
             Statcast <span className="brand-sicko">Sicko</span>
@@ -10308,7 +10309,7 @@ export default function App() {
                     role="menuitemcheckbox"
                     aria-checked={simulate}
                     onClick={() => setSimulate((v) => !v)}
-                    title="Simulate a live day of games — demo the live view when nothing's on"
+                    title="Simulate a live day of games — demo the live view when nothing’s on"
                   >
                     <span className="sim-dot" aria-hidden="true" />
                     {simulate ? 'Simulating live' : 'Simulate live'}
@@ -10890,7 +10891,7 @@ export default function App() {
           page rather than a control over it, and it would otherwise hold a
           permanent row against the top of the window — and be folded away by a
           menu button that has nothing to do with it. */}
-      {error && <div className="error-banner">⚠ {error}</div>}
+      {error && <ErrorLine kind="banner">{error}</ErrorLine>}
 
       {/* Its own line rather than folded into the one above: a failed schedule
           read is news about one *mode* and the report behind the page is
@@ -10898,7 +10899,9 @@ export default function App() {
           on and both tables go on drawing their stat columns, which is the same
           direction every read in this app fails in. */}
       {scheduleError && (
-        <div className="error-banner">⚠ Couldn’t read the schedule — {scheduleError}</div>
+        <ErrorLine kind="banner" detail={scheduleError}>
+          Couldn’t read the schedule
+        </ErrorLine>
       )}
 
       {/* The tools row and the dates, in the page — **except on the one page

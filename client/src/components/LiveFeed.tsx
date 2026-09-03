@@ -1142,7 +1142,7 @@ export function StarterLine({
           <span className="feed-player-name">{sp.name}</span>
         )}
         <span className="feed-context">
-          {handThrows(sp.hand)} · {viewerIsPitcher ? `${club}'s starter, his counterpart` : `starting for ${club}`}
+          {handThrows(sp.hand)} · {viewerIsPitcher ? `${club}’s starter, his counterpart` : `starting for ${club}`}
           {note ? ` · ${note}` : ''}
         </span>
       </div>

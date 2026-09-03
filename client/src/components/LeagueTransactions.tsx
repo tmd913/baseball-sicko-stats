@@ -182,7 +182,7 @@ function PlayerName({
       type="button"
       className="lg-tx-name"
       onClick={() => onOpenPlayer(player.mlbId as number)}
-      title={`Open ${player.name}'s page`}
+      title={`Open ${player.name}’s page`}
     >
       {player.name}
     </button>
@@ -251,8 +251,8 @@ function TxPhoto({
     <button
       type="button"
       className="lg-tx-photo-link"
-      title={`Open ${name}'s page`}
-      aria-label={`Open ${name}'s page`}
+      title={`Open ${name}’s page`}
+      aria-label={`Open ${name}’s page`}
       onClick={() => onOpenPlayer(id)}
     >
       {face}
@@ -332,7 +332,7 @@ function PlayerLine({
     position: mlb?.position ?? null,
     starter: false,
     starterSource: 'off his appearances this season',
-    unknownTitle: (p) => `${p} — MLB's listed position`,
+    unknownTitle: (p) => `${p} — MLB’s listed position`,
   });
 
   const name = (
@@ -422,7 +422,7 @@ function PlayerLine({
                   }`}
                   title={
                     t.change === null
-                      ? `No reading over ${t.days} day${t.days === 1 ? '' : 's'} — two ESPN players share this name, so the figure that far back is the other one's`
+                      ? `No reading over ${t.days} day${t.days === 1 ? '' : 's'} — two ESPN players share this name, so the figure that far back is the other one’s`
                       : `Rostered ${
                           t.change === 0
                             ? 'in the same share of leagues as'
@@ -556,7 +556,7 @@ export default function LeagueTransactions({
 
   // Never over data, and the block wait only for a pane with nothing in it yet.
   if (!data) {
-    return loading ? <LoadingBlock>Reading your league's transactions</LoadingBlock> : null;
+    return loading ? <LoadingBlock>Reading your league’s transactions</LoadingBlock> : null;
   }
 
   if (data.transactions.length === 0) {
@@ -609,7 +609,7 @@ export default function LeagueTransactions({
           the league was quiet in April. */}
       {rest <= 0 && data.capped && (
         <p className="lg-tx-cap">
-          The {data.transactions.length} most recent moves. ESPN's activity feed goes back
+          The {data.transactions.length} most recent moves. ESPN’s activity feed goes back
           further than this page reads it.
         </p>
       )}

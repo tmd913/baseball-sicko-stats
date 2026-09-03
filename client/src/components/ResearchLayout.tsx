@@ -912,7 +912,7 @@ export function ResearchLayoutEditor({
           <h3 className="rlay-head">Behind the gear</h3>
           <p className="rlay-note">
             These stay in this settings box instead of the bar. A control that
-            changes what the table says is worth a place on the bar — you can't
+            changes what the table says is worth a place on the bar — you can’t
             watch the board move behind a dialog.
           </p>
           <div className="rlay-slots">
@@ -945,7 +945,7 @@ export function ResearchLayoutEditor({
         <section className="rlay-row rlay-cond">
           <h3 className="rlay-head">Once the bar has scrolled away</h3>
           <p className="rlay-note">
-            The order this one line reads in, and which of the bar's controls
+            The order this one line reads in, and which of the bar’s controls
             are on it. Turning one off leaves it on the bar and keeps its place
             here, so putting it back puts it back where it was.
           </p>

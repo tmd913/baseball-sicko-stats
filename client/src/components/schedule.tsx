@@ -632,7 +632,7 @@ export function opposingStarter(
 export const VS_TITLE: Record<StartTier, string> = {
   announced: 'announced by his club',
   projected: 'projected from his own rotation slot — nobody has announced this one yet',
-  estimated: "estimated from his club's rotation, his own record being too thin to read one off",
+  estimated: "estimated from his club’s rotation, his own record being too thin to read one off",
 };
 
 /**
@@ -721,7 +721,7 @@ export function tallyWords(t: StartTally): string {
   const parts: string[] = [];
   if (t.announced) parts.push(`${t.announced} announced`);
   if (t.projected) parts.push(`${t.projected} projected from his own pace`);
-  if (t.estimated) parts.push(`${t.estimated} estimated from his club's rotation`);
+  if (t.estimated) parts.push(`${t.estimated} estimated from his club’s rotation`);
   return parts.join(' · ');
 }
 
@@ -814,7 +814,7 @@ export function dayText(
 export const TIER_TITLE: Record<StartTier, string> = {
   announced: 'his club has announced him to start',
   projected: 'projected to start — his own rotation slot, which nobody has announced yet',
-  estimated: "estimated to start — his club's rotation, his own record being too thin to read one off",
+  estimated: "estimated to start — his club’s rotation, his own record being too thin to read one off",
 };
 
 /** `SP`, the legend that breaks the bottom stroke of the box drawn around the
