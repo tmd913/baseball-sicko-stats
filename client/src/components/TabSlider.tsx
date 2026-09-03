@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { ReactNode, RefObject } from 'react';
+import { TAP_SLOP } from '../hooks';
 
 /**
  * **One mark that travels, for every strip of tabs in the app.**
@@ -106,6 +107,12 @@ export function useTabSlider(opts: {
    * abandoned (the timer on release).
    */
   const aim = useRef<HTMLElement | null>(null);
+
+  /**
+   * **The touch that might still turn out to be a scroll**, and where it
+   * started — see `onDown` below, which is the only thing that writes it.
+   */
+  const press = useRef<{ tab: HTMLElement; x: number; y: number } | null>(null);
 
   /** Which tab wears the pressed ink. Written onto the DOM rather than through
    *  React because the press is answered *before* anything renders — and read
@@ -289,10 +296,50 @@ export function useTabSlider(opts: {
        * **Delegated on the strip** rather than a prop per tab: the mark is the
        * strip's, and a tab that appears later — the fantasy tab when a league
        * connects, the Arsenal tab on a pitcher — is covered without being told.
+       *
+       * **A finger is not a press yet, and this shipped as though it were.**
+       * Reported: *"the highlighting is weird when I scroll horizontally since
+       * it activates on touch"* — the player page's nine tabs are a scroller, a
+       * sideways flick has to start with a `pointerdown` on whichever tab is
+       * under the finger, and that landed here. Measured at 390×844 on Ohtani's
+       * page, one flick that began on `Percentile Rankings`:
+       *
+       * | | mark `left`/`width` | `.is-aimed` |
+       * | --- | --- | --- |
+       * | at rest | 0 / 90.27 | — |
+       * | `touchStart` | **96.27 / 161.83** | **Percentile Rankings** |
+       * | mid-drag (`scrollLeft` 109) | 0 / 90.27 | — |
+       *
+       * So the underline shot two tabs to the right and the label lit, for the
+       * length of a flick nobody had aimed at anything — and then flew home
+       * when Chrome sent `pointercancel` as the scroll took the touch. The
+       * strip announced a selection it was then going to decline, which is the
+       * app's own *a press arms on `pointerdown` and decides on release* stated
+       * for a mark instead of a toggle.
+       *
+       * **So only a pointer that cannot scroll by dragging aims on the way
+       * down.** A mouse is that pointer; a touch and a pen are not, and theirs
+       * is remembered in `press` and aimed on release, if it stayed within
+       * `TAP_SLOP` of where it started. That is the earliest moment the gesture
+       * is *known* not to have been a scroll, and it keeps what this listener
+       * was written for: `pointerup` still runs before `click`, so the mark
+       * leaves ahead of the navigation rather than waiting for React to commit
+       * and the incoming tab to render.
+       *
+       * **Retracting a wrong aim mid-drag was the other candidate** — aim on
+       * the way down as before and cancel on the first `pointermove` past the
+       * slop. It answers the report and it costs a twitch: at 60fps the mark
+       * has a frame or two of flight before the move arrives, so a flick would
+       * start with the underline lurching a tab and snapping back. A press that
+       * has not been made yet is better off saying nothing.
        */
       const onDown = (e: PointerEvent) => {
         const t = (e.target as HTMLElement | null)?.closest<HTMLElement>(`.${tabClass}`);
         if (!t || !el.contains(t)) return;
+        if (e.pointerType !== 'mouse') {
+          press.current = { tab: t, x: e.clientX, y: e.clientY };
+          return;
+        }
         aim.current = t;
         showAim(t);
         place(t);
@@ -306,8 +353,29 @@ export function useTabSlider(opts: {
        * not moved yet and yanking the mark back before the navigation it was
        * waiting for even happened. 180ms is comfortably past a click without
        * being a pause a reader would notice on an abandoned press.
+       *
+       * **A touch's aim is made here rather than on the way down** — see
+       * `onDown`. `pointercancel` is bound to this handler too and `e.type`
+       * tells the two apart, which matters: a scroll that has taken the touch
+       * is precisely the gesture that must not aim, so only a `pointerup`
+       * within `TAP_SLOP` of where the finger landed counts as a press. The tab
+       * is the one the gesture *started* on rather than whatever is under the
+       * finger at the end of it, which is how the roster row's toggle and the
+       * arsenal charts' pin already read a gesture.
        */
-      const onUp = () => {
+      const onUp = (e: PointerEvent) => {
+        const p = press.current;
+        press.current = null;
+        if (
+          p &&
+          e.type === 'pointerup' &&
+          el.contains(p.tab) &&
+          Math.hypot(e.clientX - p.x, e.clientY - p.y) <= TAP_SLOP
+        ) {
+          aim.current = p.tab;
+          showAim(p.tab);
+          place(p.tab);
+        }
         // Nothing was aimed here, and a press lands on one strip while every
         // other strip in the app is listening on the same window — so this
         // leaves before it costs them a timer each.

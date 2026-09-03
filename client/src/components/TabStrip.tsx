@@ -291,6 +291,13 @@ export function ScrollRow({
  * appeared and disappeared at each end would do exactly that. Out of the flow
  * that holds by construction rather than by reservation, and a hidden box does
  * not hit-test, so the end a reader has reached is all tab and no dead band.
+ *
+ * **Drawn over takes two statements, and shipped with one.** Being positioned
+ * over the strip's ends is where the arrow *is*; a tab carries a `z-index` of
+ * its own (the label sits above the sliding mark), so it took a `z-index` on
+ * the arrow as well for the arrow to be what a reader sees and presses there.
+ * `.tabstrip-arrow` carries the measurement — a chevron drawn through the word
+ * `Stats`, and a tap on the arrow that switched tabs instead of scrolling.
  * They are small aimed targets, so they keep their hover: the `(hover: hover)`
  * scoping is for full-width pressable surfaces, which these are the opposite
  * of.
