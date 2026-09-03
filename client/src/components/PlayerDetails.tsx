@@ -60,6 +60,7 @@ import { OverviewTab } from './PlayerOverview';
 import { PlayerScheduleTab } from './PlayerSchedule';
 import type { PitcherLookup } from './schedule';
 import { SlidingTabs } from './TabSlider';
+import { EmptyState } from './EmptyState';
 
 /**
  * Savant's diverging percentile scale: deep blue (poor, 0) → neutral gray
@@ -393,7 +394,7 @@ function ArsenalTab({ arsenal }: { arsenal: SeasonArsenal }) {
   );
 
   if (arsenal.pitches.length === 0) {
-    return <div className="details-status">No Statcast pitches this season.</div>;
+    return <EmptyState compact title="No Statcast pitches this season" />;
   }
   return (
     <div className="details-arsenal">
@@ -1925,13 +1926,22 @@ export function PlayerDetails({
           sit under a heading reading `2026 MLB Percentile Rankings` — a title
           over a card with no rankings in it. */}
       {tab === 'percentiles' && data && !loading && shownSections.length === 0 && (
-        <div className="details-status">
-          {otherSections.length > 0
-            ? `Nothing of ${name}’s season lands in Savant’s own fifteen bars — switch to Detailed above for the rows he does have.`
-            : isPitcher
-              ? `${name} has not pitched in a major-league game this season, so there is nothing to rank him against.`
-              : `${name} has not appeared in a major-league game this season, so there is nothing to rank him against.`}
-        </div>
+        <EmptyState
+          compact
+          title={
+            otherSections.length > 0
+              ? `Nothing of ${name}’s season lands in Savant’s own fifteen bars`
+              : isPitcher
+                ? `${name} has not pitched in a major-league game this season`
+                : `${name} has not appeared in a major-league game this season`
+          }
+        >
+          <p className="empty-how">
+            {otherSections.length > 0
+              ? 'Switch to Detailed above for the rows he does have.'
+              : 'There is nothing to rank him against.'}
+          </p>
+        </EmptyState>
       )}
     </DetailsShell>
   );

@@ -1270,6 +1270,43 @@ body {
   margin: 0 0 8px;
   font-weight: 700;
 }
+/* **One component draws every one of these** — `components/EmptyState.tsx`,
+   which is where the rules are argued. What was `.feed-empty`, `.reel-empty`,
+   `.news-empty` and the `.details-status` lines a tab used as its whole answer
+   are the compact form of the same box: the feed's own 20px padding and 14px
+   text, a title a step under the full box's 18, and no mark unless asked for.
+   Folded rather than kept as four rules that agreed on the day they were
+   written. */
+.empty-state.is-compact {
+  padding: 20px 16px;
+  font-size: 14px;
+}
+/* The mark: the app's own ball, standing still and drawn in `--faint`. The
+   loader's ball turns because something is in flight; this one does not,
+   because nothing is — see the component for the argument. `inline-flex` so
+   the SVG's box is the span's and there is no descender gap under it. */
+.empty-mark {
+  display: inline-flex;
+  color: var(--faint);
+  margin-bottom: 10px;
+}
+.empty-state.is-compact .empty-title {
+  font-size: 15px;
+}
+/* The second line of an emptied pane — which control emptied it, and the way
+   out. A step quieter than the sentence above it, that one being the finding
+   and this the remedy. It was the feed's alone (`.feed-empty-how`); the
+   research board's filter empty and the player page's News tab say the same
+   kind of sentence, so it is the box's. */
+.empty-how {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--faint);
+  font-size: 13px;
+}
+.empty-how b {
+  color: var(--muted);
+}
 /* ---- Loading: the spinning baseball ------------------------------------ */
 
 /* The app has one loading indicator and this is it. It replaces a 13px CSS
@@ -3924,13 +3961,6 @@ body {
   opacity: 0.45;
   cursor: default;
 }
-.reel-empty {
-  max-width: 720px;
-  margin: 40px auto 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
 .pa-video-el {
   /* Size to the clip's own dimensions, bounded by the column width and a height
      cap. With width/height auto a replaced element keeps its intrinsic aspect
@@ -6196,22 +6226,6 @@ button.start-line:focus-visible {
 .news-summary-full {
   white-space: pre-wrap;
   color: var(--muted);
-}
-/* Nothing to show, which for a healthy player mid-season is the ordinary case
-   rather than a failure — so the tab says which two feeds were read and that
-   both were empty, the app's rule that an empty view names its cause. */
-.news-empty {
-  max-width: 680px;
-  margin: 18px auto 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.news-empty-note {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--faint);
 }
 /* His combined line for the day, over the sections. A `.details-note` because
    that is what it is — a caption on what is under it — with the tabular figures
@@ -16101,16 +16115,6 @@ button.start-line:focus-visible {
   color: var(--muted);
   font-size: 13px;
 }
-.feed-empty {
-  padding: 20px;
-  text-align: center;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  font-size: 14px;
-}
-
 /* **The red `N new plays` button** — news at the head of the list the news
    landed in, which is where it can also *do* something: pressing it turns the
    `New` filter on and puts the top of the stream back under the reader.
@@ -16227,19 +16231,6 @@ button.start-line:focus-visible {
   flex: none;
   border-radius: 50%;
   background: var(--strikeout);
-}
-
-/* The second line of the filtered empty state — which control emptied it. A
-   step quieter than the sentence above it, that one being the finding and this
-   the way out of it. */
-.feed-empty-how {
-  display: block;
-  margin-top: 4px;
-  color: var(--faint);
-  font-size: 13px;
-}
-.feed-empty-how b {
-  color: var(--muted);
 }
 
 /* **The feed's filter pills** — one row at the head of the stream they narrow,

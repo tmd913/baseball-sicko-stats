@@ -6,6 +6,7 @@ import { answersEscape, useLockBodyScroll, useOverlayFocus } from '../hooks';
 import { ClipVideo } from './ClipVideo';
 import { LoadingBlock, SpinningBaseball } from './Loading';
 import { BackButton } from './BackButton';
+import { EmptyState } from './EmptyState';
 
 /** A resolved clip in the reel: its playable URL plus the caption metadata. */
 interface ReelClip {
@@ -193,7 +194,7 @@ export function GameReel({
           Finding the clips — {attempted} of {pas.length} plays
         </LoadingBlock>
       ) : (
-        <div className="reel-empty">No video available for this game.</div>
+        <EmptyState compact title="No video available for this game" />
       )}
     </div>
   );

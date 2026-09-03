@@ -39,6 +39,7 @@ import type {
   ScheduleWindow,
 } from '../types';
 import { SlidingTabs } from './TabSlider';
+import { EmptyState } from './EmptyState';
 
 /**
  * One matchup, as a **full-screen page over the League view** rather than a tab
@@ -1130,13 +1131,12 @@ export default function LeagueMatchupView({
       <DialogLayerContext.Provider value={MATCHUP_LAYER}>
         <div ref={viewRef} tabIndex={-1} className="mup-view">
           {head(null)}
-          <div className="empty-state">
-            <h3>That matchup isn&rsquo;t in week {board.matchupPeriod}</h3>
+          <EmptyState title={<>That matchup isn’t in week {board.matchupPeriod}</>}>
             <p>
               ESPN has no row for it — the link may be for another week. Go back and pick one off
               the scoreboard.
             </p>
-          </div>
+          </EmptyState>
         </div>
       </DialogLayerContext.Provider>
     );

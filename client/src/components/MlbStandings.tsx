@@ -3,6 +3,7 @@ import type { MlbStandings, StandingsRecord, StandingsTeam } from '../types';
 import { teamLogoUrl } from '../lib';
 import { LoadingBlock } from './Loading';
 import { SlidingTabs } from './TabSlider';
+import { EmptyState } from './EmptyState';
 
 /**
  * # Where the thirty clubs stand
@@ -369,10 +370,9 @@ function Body({
   if (!data) {
     if (error) {
       return (
-        <div className="empty-state">
-          <h3>Couldn&rsquo;t read the standings</h3>
+        <EmptyState title="Couldn’t read the standings">
           <p>{error}</p>
-        </div>
+        </EmptyState>
       );
     }
     return loading ? <LoadingBlock>Reading the standings</LoadingBlock> : null;

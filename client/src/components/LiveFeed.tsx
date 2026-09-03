@@ -44,6 +44,7 @@ import { ProjectedGameLine } from './Projection';
 import { OpponentSection, PitchingTag, outingBar } from './PitcherCard';
 import { OutingPage } from './OutingPage';
 import type { PlayFilterKey } from './FeedFilters';
+import { EmptyState } from './EmptyState';
 
 /**
  * How many stream items the Recent section shows at a time — a day of at-bats
@@ -1995,18 +1996,22 @@ export function LiveFeed({
                went to a page of its own, and that page carries its own empty
                state naming its own way out (`NewPlaysPage`). What is left here
                is the lens, and the sentence it always had. */
-            <div className="feed-empty">
-              {playFilter === 'video'
-                ? // Its own sentence, because "of that kind" is not what this
-                  // lens selects and because the honest reason is a timing
-                  // one: MLB cuts a day's highlights as it goes, and Savant
-                  // has the rest of the plays a day later.
-                  'No plays with video yet — clips land through the day, and the rest arrive a day later.'
-                : 'No plays of that kind today.'}{' '}
-              <span className="feed-empty-how">
+            <EmptyState
+              compact
+              title={
+                playFilter === 'video'
+                  ? // Its own sentence, because "of that kind" is not what this
+                    // lens selects and because the honest reason is a timing
+                    // one: MLB cuts a day's highlights as it goes, and Savant
+                    // has the rest of the plays a day later.
+                    'No plays with video yet — clips land through the day, and the rest arrive a day later'
+                  : 'No plays of that kind today'
+              }
+            >
+              <p className="empty-how">
                 Change it with the pills above — <b>All</b> is every play of the day.
-              </span>
-            </div>
+              </p>
+            </EmptyState>
           )}
         </section>
       )}
@@ -2043,7 +2048,7 @@ export function LiveFeed({
         </section>
       )}
 
-      {isEmpty && <div className="feed-empty">No games for these players.</div>}
+      {isEmpty && <EmptyState compact title="No games for these players" />}
 
       {/* **The new plays, as a page over this one.** Rendered from inside the
           feed because this is where the stream's vocabulary is — the same
@@ -2295,13 +2300,17 @@ function NewPlaysPage({
           ) : (
             /* Emptied by the reader's own control, so it names it — and the
                control is on this page's own navbar, which is where it points. */
-            <div className="feed-empty">
-              {playFilter === 'video'
-                ? 'No new plays with video yet — clips land through the day, and the rest arrive a day later.'
-                : playFilter
-                  ? 'No new plays of that kind.'
-                  : 'Nothing new since you last marked the feed read.'}{' '}
-              <span className="feed-empty-how">
+            <EmptyState
+              compact
+              title={
+                playFilter === 'video'
+                  ? 'No new plays with video yet — clips land through the day, and the rest arrive a day later'
+                  : playFilter
+                    ? 'No new plays of that kind'
+                    : 'Nothing new since you last marked the feed read'
+              }
+            >
+              <p className="empty-how">
                 {playFilter ? (
                   <>
                     The pills above are narrowing this — <b>All</b> is every kind of
@@ -2312,8 +2321,8 @@ function NewPlaysPage({
                     <b>Back</b> is the whole day again.
                   </>
                 )}
-              </span>
-            </div>
+              </p>
+            </EmptyState>
           )}
         </div>
       </div>

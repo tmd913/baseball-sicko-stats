@@ -1,5 +1,6 @@
 import { InfoKey } from './InfoKey';
 import type { PitcherSeasonStats, SeasonStats } from '../types';
+import { EmptyState } from './EmptyState';
 
 /**
  * **The Splits tab: the two halves of the platoon, read against each other.**
@@ -961,7 +962,7 @@ function SplitCard<T, K extends string>({
 /** Nothing on either side — a call-up with no season yet. Named rather than
  *  blank, the way every emptied view in the app is. */
 function NoSplits({ what }: { what: string }) {
-  return <div className="details-status">No {what} against either hand this season.</div>;
+  return <EmptyState compact title={<>No {what} against either hand this season</>} />;
 }
 
 /**

@@ -5,6 +5,7 @@ import { useResource } from '../resource';
 import type { NewsItem, PlayerReport } from '../types';
 import { LoadingBlock } from './Loading';
 import { NewsList } from './PlayerNews';
+import { EmptyState } from './EmptyState';
 
 /**
  * **How many rows a page of this list is — the feed's own ten.**
@@ -136,7 +137,7 @@ export function RosterNews({ reports }: {
   }, [items, nameOf]);
 
   if (ids.length === 0) {
-    return <div className="details-status">No players on this roster to read the news for.</div>;
+    return <EmptyState compact title="No players on this roster to read the news for" />;
   }
   /* Rule 2: a block wait only while there is nothing to show, and only past
      `WAIT_DELAY`. Rule 1 keeps the last stream standing through a re-read. */
@@ -147,10 +148,17 @@ export function RosterNews({ reports }: {
   if (!byPlayer) return null;
   if (items.length === 0) {
     return (
-      <div className="details-status">
-        Nothing in MLB&rsquo;s transaction record or RotoWire&rsquo;s notes for any of these{' '}
-        {ids.length} players. That is an ordinary quiet week rather than a failed read.
-      </div>
+      <EmptyState
+        compact
+        title={
+          <>
+            Nothing in MLB’s transaction record or RotoWire’s notes for any of these{' '}
+            {ids.length} players
+          </>
+        }
+      >
+        <p className="empty-how">That is an ordinary quiet week rather than a failed read.</p>
+      </EmptyState>
     );
   }
   return (
