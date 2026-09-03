@@ -101,6 +101,7 @@ for what it is rather than for what it was:
 | `--video-chip` / `--video-chip-hover` | the mute chip over playing video |
 | `--scrim` | the dimmer behind a dialog |
 | `--page-glow` / `--brand-2` | the page's own radial glow, and the brand mark's second stop |
+| `--brand-ball` | the white disc of the ball on that mark, which no theme moves: the header's ball and the tab's are the same drawing, and the favicon cannot follow a theme. It replaced the ⚾ emoji, which each platform drew with its own font; the seams are `--strikeout`, so they are the one part of the mark that does follow |
 | `--shadow-bar` / `--shadow-pop` | the two lifts that are not `--shadow` |
 
 Two more were already tokens and simply started following one:
