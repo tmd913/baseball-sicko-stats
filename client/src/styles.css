@@ -279,6 +279,19 @@
      concentric with the few px of shell around it. */
   --control-radius: 12px;
   --control-radius-inner: 9px;
+  /* One clock and one curve for every control that answers a hover or a
+     press, and one ring for every control that takes keyboard focus. The
+     durations were 49 hand-written `0.14s ease` and eight `0.15s` (implicit
+     ease) before they were folded here; the ring was 77 copies of
+     `2px solid var(--accent)`. `--dur-slow` and `--ease-travel` are the tab
+     mark's slide — the one thing here that travels rather than fades — and
+     `TabSlider.tsx` reads the duration back off the computed style, so the
+     token is the only place it lives. */
+  --dur: 0.14s;
+  --dur-slow: 0.36s;
+  --ease: ease;
+  --ease-travel: cubic-bezier(0.32, 0.78, 0.22, 1);
+  --focus-ring: 2px solid var(--accent);
   /* The single vertical step between stacked rows on a narrow screen — see the
      media query at the end of the file. */
   --stack-gap: 12px;
@@ -940,8 +953,8 @@ body {
 }
 .research-pick-select:focus-visible,
 .game-inning-select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* On phones a pill row that would overflow off-screen gives way to a compact
    dropdown. The date presets were the first control here to do it and are gone
@@ -1092,18 +1105,13 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 12px;
+  border-radius: var(--control-radius);
   /* Slim field: minimal internal padding, with just enough room on the right for
      the clear (✕) button that appears while typing. */
   padding: 7px 34px 7px 12px;
   min-height: var(--control-h);
   font-size: 15px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.adder-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .adder-clear {
   position: absolute;
@@ -1835,11 +1843,13 @@ body {
   cursor: pointer;
 }
 .remove-btn:hover,
-.remove-btn:focus-visible {
+.remove-btn.armed {
   color: var(--strikeout);
   border-color: var(--strikeout);
 }
-.remove-btn.armed {
+.remove-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
   color: var(--strikeout);
   border-color: var(--strikeout);
 }
@@ -2012,7 +2022,7 @@ body {
   margin: -18px -20px 0;
   padding: 18px 20px;
   border-radius: var(--radius);
-  transition: background 0.14s ease;
+  transition: background var(--dur) var(--ease);
 }
 /* Scoped with the rest of the card surfaces: this is the widest press in the
    app, a whole card header. `PlayerCard` renders nowhere today and is kept for
@@ -2024,7 +2034,7 @@ body {
   }
 }
 .player-head-toggle:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 /* When expanded, square off the header's bottom corners against the body. */
@@ -2070,7 +2080,7 @@ body {
   border-color: var(--accent);
 }
 .player-photo-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* Live-role ring on the headshot, matching the nav avatar (red at bat, amber on
@@ -2497,7 +2507,7 @@ body {
   }
 }
 .game-sub-bar:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* Identity block — mirrors .player-id (name over meta). */
@@ -2637,7 +2647,7 @@ body {
   padding: 5px 11px;
   border-radius: var(--control-radius-inner);
   cursor: pointer;
-  transition: color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .split-tab:hover {
   color: var(--text);
@@ -2647,7 +2657,7 @@ body {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 .split-tab:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* Game line — the outing's totals, built from the arsenal row's parts so the
@@ -2963,7 +2973,7 @@ body {
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease;
+  transition: background var(--dur) var(--ease);
 }
 .inning-label {
   display: inline-flex;
@@ -3129,7 +3139,7 @@ body {
 }
 .faced-summary {
   cursor: pointer;
-  transition: background 0.14s ease;
+  transition: background var(--dur) var(--ease);
 }
 /* MLB's own line for a base-running play, under its row. It reads here rather
    than behind a press because a press onto one sentence is a rung of the Escape
@@ -3172,7 +3182,7 @@ body {
 }
 .inning-head:focus-visible,
 .faced-summary:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 .faced-pitches {
@@ -3291,7 +3301,7 @@ body {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease;
+  transition: background var(--dur) var(--ease);
 }
 /* The card is only ever this row now — the detail it used to unroll is a dialog
    (`PlateAppearanceCard`) — so the bottom padding is always the row's own, and
@@ -3308,9 +3318,9 @@ body {
   }
 }
 .pa-summary-row:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
-  border-radius: 12px;
+  border-radius: var(--control-radius);
 }
 /* The at-bat's detail, which is a dialog's contents now rather than the bottom
    half of a card. It carried a `border-top` to divide it from the summary row
@@ -3525,7 +3535,7 @@ body {
   }
 }
 .pa-mu-press:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 3px;
 }
@@ -3607,7 +3617,7 @@ body {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .pa-watch:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
@@ -3669,7 +3679,7 @@ body {
   color: #fff;
   cursor: pointer;
   opacity: 0.78;
-  transition: opacity 0.14s ease, background 0.14s ease;
+  transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .clip-audio:hover {
   opacity: 1;
@@ -3677,7 +3687,7 @@ body {
 }
 .clip-audio:focus-visible {
   opacity: 1;
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* No hover to reveal it on a phone, and on a phone it is the only control a
@@ -3766,7 +3776,7 @@ body {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .pa-hide:hover {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
@@ -3792,7 +3802,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: border-color 0.15s, filter 0.15s;
+  transition: border-color var(--dur) var(--ease), filter var(--dur) var(--ease);
 }
 .reel-open:hover {
   border-color: var(--accent);
@@ -3914,7 +3924,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .reel-nav:hover:not(:disabled) {
   border-color: var(--accent);
@@ -4211,7 +4221,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .float-btn {
     /* `visibility` keeps its delay here too — without it the box would vanish
-       on the first frame of a fade it is still in the middle of. */
+       on the first frame of a fade it is still in the middle of. `.float-badge`
+       is not listed here because it needs no entry: its `float-badge-in` is
+       180ms of opacity alone, which is exactly the fade this rule keeps. */
     transition: opacity 0.18s ease, visibility 0s linear 0.18s;
     transform: none;
   }
@@ -4498,8 +4510,8 @@ body {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .details-watch-star:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* The badge itself is the app's name-row chip — the same 12px/700 text in the
    same 6px box .player-pos and .roster-status take, so being watched reads as
@@ -4721,7 +4733,7 @@ body {
   }
 }
 .team-game-arm:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -4760,7 +4772,7 @@ body {
   }
 }
 .team-roster-name:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -5127,8 +5139,8 @@ body {
   }
 }
 .game-ls-door:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 /* **The inning being played**, marked on the header and both cells of its
    column.
@@ -5381,7 +5393,7 @@ body {
   }
 }
 .game-name:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -5890,7 +5902,7 @@ button.start-line {
   }
 }
 button.start-line:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 /* The dialog a start opens is the feed's own Upcoming detail — same box, same
@@ -6100,7 +6112,7 @@ button.start-line:focus-visible {
   }
 }
 .news-press:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
   border-radius: 6px;
 }
@@ -7150,7 +7162,7 @@ button.start-line:focus-visible {
   color: var(--text);
 }
 .tabstrip-arrow:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
   border-radius: var(--control-radius-inner);
 }
@@ -7293,7 +7305,7 @@ button.start-line:focus-visible {
   padding: 5px 11px;
   border-radius: var(--control-radius-inner);
   cursor: pointer;
-  transition: color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .roll-win:hover {
   color: var(--text);
@@ -8101,7 +8113,7 @@ button.start-line:focus-visible {
 }
 .pf-venue--door:focus-visible,
 .opp-door:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -8494,7 +8506,7 @@ button.start-line:focus-visible {
  * enough to be a snap with a tail. This one leaves promptly and spends its
  * length arriving. */
 .tab-mark.is-placed {
-  transition: transform 0.36s cubic-bezier(0.32, 0.78, 0.22, 1);
+  transition: transform var(--dur-slow) var(--ease-travel);
 }
 /* Motion is a preference, and a mark that jumps is still a mark — the shape it
    points at is the whole of what it says. Same rule the spinning ball and the
@@ -8689,7 +8701,7 @@ button.start-line:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .main-tab:hover {
   color: var(--text);
@@ -8744,8 +8756,53 @@ button.start-line:focus-visible {
   transition: none;
 }
 .main-tab:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
+}
+/* **A press is answered by the control that took it.** Every freestanding
+   button, tab and pill shrinks to 97% for as long as the finger is down —
+   small enough that a row of them does not visibly jostle, large enough to be
+   read as a press rather than a repaint. No `transition`, for the reason
+   above: an acknowledgement that fades in is not an acknowledgement. Each of
+   these already sits at `position: relative` (the tabs) or in normal flow, so
+   the scale creates no new stacking order over anything. Its popover, where a
+   control has one, is a sibling under `.settings-menu`/`.fantasy-menu`, not a
+   descendant, so a pressed opener does not shrink the box it opens.
+
+   Left out on purpose: anything inside a box that scrolls sideways, where a
+   `pointerdown` is as likely to be the start of a flick as a press and a
+   control that flinches under every flick reads as a control that is
+   refusing — `.ov-day-more` (inside `.ov-days`, which snaps), the feed's
+   `.feed-filter-pill` (a `.research-toggle` inside an `overflow-x: auto`
+   strip), `.lg-tab` and `.details-tab` (both strips scroll). `.float-btn`
+   animates its own transform and is left to it. */
+.main-tab:active,
+.view-tab:active,
+.split-tab:active,
+.sim-toggle:active,
+.settings-toggle:active,
+.help-btn:active,
+.theme-swatch:active,
+.settings-btn:active,
+.fantasy-btn:active,
+.header-refresh:active,
+.edit-order-btn:active,
+.search-toggle:active,
+.research-toggle:not(.feed-filter-pill):active,
+.schedule-toggle:active,
+.projected-toggle:active,
+.feed-toggle:active,
+.news-toggle:active,
+.summary-toggle:active,
+.matchup-open:active,
+.opponent-toggle:active,
+.date-step:not(:disabled):active,
+.empty-search:active,
+.empty-help:active,
+.espn-submit:not(:disabled):active,
+.auth-btn-primary:active,
+.remove-btn:active {
+  transform: scale(0.97);
 }
 
 /* ---- The tools row: which reading of the page ----------------------------
@@ -8979,7 +9036,7 @@ button.start-line:focus-visible {
   border: 1px solid var(--border);
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .settings-btn:hover,
 .fantasy-btn:hover,
@@ -8992,7 +9049,7 @@ button.start-line:focus-visible {
 .fantasy-btn:focus-visible,
 .edit-order-btn:focus-visible,
 .search-toggle:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* Open is open, whichever of them it is. The gear used to tint its outline
@@ -9800,14 +9857,14 @@ button.start-line:focus-visible {
   border: 1px solid var(--border);
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .date-step:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--accent);
 }
 .date-step:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* **Off rather than gone.** There is nowhere to step — the picker's own ceiling
@@ -9853,7 +9910,7 @@ button.start-line:focus-visible {
   font-family: inherit;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 /* Scoped, because this is a wide pressable *surface* rather than a small aimed
    target: a touch device has no pointer to move away, so the tint would stick
@@ -9871,7 +9928,7 @@ button.start-line:focus-visible {
   }
 }
 .date-face:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* Open. It sits *after* the hover rule because the two are the same specificity
@@ -10412,14 +10469,14 @@ button.start-line:focus-visible {
   background: var(--panel);
   color: var(--faint);
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .expand-btn:hover {
   color: var(--text);
   border-color: var(--accent);
 }
 .expand-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 .expand-btn.on {
@@ -11185,7 +11242,7 @@ button.start-line:focus-visible {
   border-color: var(--accent);
 }
 .sum-photo-wrap:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* Bigger than the other cells' content would allow: the headshot column trades
@@ -11448,7 +11505,7 @@ button.start-line:focus-visible {
   text-decoration: underline;
 }
 .sum-name-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -11561,7 +11618,7 @@ button.start-line:focus-visible {
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .sim-toggle:hover,
 .settings-toggle:hover,
@@ -11572,7 +11629,7 @@ button.start-line:focus-visible {
 .sim-toggle:focus-visible,
 .settings-toggle:focus-visible,
 .help-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* *(`.fantasy-refresh` stood here — `Refresh from ESPN` as a `.help-btn` row in
@@ -11954,7 +12011,7 @@ button.start-line:focus-visible {
   background: var(--accent);
 }
 .research-pos-tab:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 
@@ -12071,8 +12128,8 @@ button.start-line:focus-visible {
 .summary-toggle:focus-visible,
 .matchup-open:focus-visible,
 .opponent-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 .research-toggle-count {
   min-width: 17px;
@@ -12105,8 +12162,8 @@ button.start-line:focus-visible {
 }
 .research-panel input:focus-visible,
 .research-panel select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 .research-search {
   flex: 1 1 200px;
@@ -12256,8 +12313,8 @@ button.start-line:focus-visible {
   border-color: var(--accent);
 }
 .app-dialog-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* Every dialog holding a piece of the feed takes the width the feed itself is
    capped at — `--card-column`, which is set by what a card actually holds (a
@@ -12471,8 +12528,8 @@ button.start-line:focus-visible {
 }
 /* Focus lands on the hidden input, so the ring has to be drawn by the label. */
 .research-col-chip:has(input:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 .research-cols-reset {
   align-self: flex-start;
@@ -12548,8 +12605,8 @@ button.start-line:focus-visible {
   cursor: grab;
 }
 .research-order-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* Picked up and waiting for somewhere to go. Filled rather than tinted, which
    is the app's own way of saying a control is doing something. */
@@ -12862,7 +12919,7 @@ button.start-line:focus-visible {
   color: var(--accent);
 }
 .research-watch:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -12893,8 +12950,8 @@ button.start-line:focus-visible {
   color: var(--accent);
 }
 .research-tick:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* **Full, and it says so rather than going inert.** `aria-disabled` and not
    `disabled`, because a disabled button shows no `title` and the title is the
@@ -13327,8 +13384,8 @@ button.start-line:focus-visible {
   color: var(--text);
 }
 .turn-day:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 .turn-day-wk {
   font-size: 11px;
@@ -13771,7 +13828,7 @@ button.start-line:focus-visible {
   color: var(--muted);
 }
 .rlay-chip-main:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 /* Picked up and waiting for somewhere to go — filled, which is this app's way
@@ -13835,8 +13892,8 @@ button.start-line:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .rlay-mode:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 /* Where a picked-up control lands when there is no chip to put it in front of —
    the end of a row, and the whole of an empty one. Drawn **only while something
@@ -13855,8 +13912,8 @@ button.start-line:focus-visible {
   cursor: pointer;
 }
 .rlay-tail:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* What an empty row says with nothing in hand. It stands in the tail's place
    rather than beside it, so the box does not change height on the press that
@@ -14741,7 +14798,7 @@ button.start-line:focus-visible {
 .research-table th.research-sort button:focus-visible,
 .stats-table th.research-sort button:focus-visible,
 .league-table th.research-sort button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 /* ---- The one sort control on a column of words ----
@@ -15088,7 +15145,7 @@ button.start-line:focus-visible {
   padding: 5px 12px;
   border-radius: var(--control-radius-inner);
   cursor: pointer;
-  transition: color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .view-tab:hover,
 .lg-tab:hover {
@@ -15101,7 +15158,7 @@ button.start-line:focus-visible {
 }
 .view-tab:focus-visible,
 .lg-tab:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -15255,7 +15312,8 @@ button.start-line:focus-visible {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .feed-heading-dot {
+  .feed-heading-dot,
+  .sim-toggle.active .sim-dot {
     animation: none;
   }
 }
@@ -15382,7 +15440,7 @@ button.start-line:focus-visible {
 /* Clickable when there's a platoon split to reveal; static otherwise. */
 .upcoming-head:not(.static) {
   cursor: pointer;
-  transition: border-color 0.14s ease;
+  transition: border-color var(--dur) var(--ease);
 }
 /* Scoped: a full-width row in the feed, and the one this was reported against —
    tap it, close the split it opens, and the accent border was still lit. See
@@ -15393,7 +15451,7 @@ button.start-line:focus-visible {
   }
 }
 .upcoming-head:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* `.start-detail` is the player page's Projected Starts dialog, folded on rather
@@ -15619,7 +15677,7 @@ button.start-line:focus-visible {
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .feed-more:hover,
 .lg-tx-more:hover {
@@ -15628,7 +15686,7 @@ button.start-line:focus-visible {
 }
 .feed-more:focus-visible,
 .lg-tx-more:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -15805,7 +15863,7 @@ button.start-line:focus-visible {
 .feed-item-toggle,
 .pday-game:not(.static) {
   cursor: pointer;
-  transition: border-color 0.14s ease;
+  transition: border-color var(--dur) var(--ease);
 }
 /* Scoped: both are full-width cards in a list — the outing bar in the stream,
    the game card on the player page's Overview. See the top of the file. */
@@ -15817,7 +15875,7 @@ button.start-line:focus-visible {
 }
 .feed-item-toggle:focus-visible,
 .pday-game:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* The card's own line, when there is nothing to press through to. `.pday-none`
@@ -16076,7 +16134,7 @@ button.start-line:focus-visible {
   text-decoration: underline;
 }
 .feed-player-name-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -16176,7 +16234,7 @@ button.start-line:focus-visible {
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .feed-new {
   color: var(--strikeout);
@@ -16213,7 +16271,7 @@ button.start-line:focus-visible {
   outline-offset: 2px;
 }
 .feed-clear-new:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* The same dot the Live heading wears, in the same red and at the same size —
@@ -16470,7 +16528,7 @@ button.start-line:focus-visible {
 }
 .feed-photo-link:focus-visible,
 .pa-mu-photo-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 .feed-photo-link.role-at-bat .feed-photo {
@@ -16537,13 +16595,13 @@ button.start-line:focus-visible {
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .auth-btn:hover {
   border-color: var(--accent);
 }
 .auth-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 .auth-btn-primary {
@@ -16605,10 +16663,18 @@ button.start-line:focus-visible {
   font-size: 16px;
   font-family: inherit;
 }
+/* A text field keeps the glow rather than the ring. A field's ring and its
+   border are the same rectangle, so a 2px ring at offset 2 is a second border
+   a pixel out; the 3px soft glow is the field vocabulary, and the three fields
+   that carry it (`.adder-input`, `.espn-input`, this one) share the rule
+   rather than agreeing on it by accident. (`.rl-new > .rl-input` is the
+   exception — the shell draws its focus.) */
+.adder-input:focus-visible,
+.espn-input:focus-visible,
 .auth-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .auth-input:disabled {
   opacity: 0.6;
@@ -16660,7 +16726,7 @@ button.start-line:focus-visible {
   text-decoration: underline;
 }
 .auth-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -16703,14 +16769,14 @@ button.start-line:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .signout-btn:hover {
   color: var(--text);
   border-color: var(--strikeout);
 }
 .signout-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -16819,7 +16885,7 @@ button.start-line:focus-visible {
   border-bottom-color: var(--accent);
 }
 .tut-nav-chip:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 .tut-body {
@@ -17010,8 +17076,8 @@ button.start-line:focus-visible {
   filter: brightness(1.08);
 }
 .tut-done:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* The empty watchlist's two ways in — the one screen every new user lands on.
    `.empty-search` opens the header's search bar, which is an icon now and so a
@@ -17029,7 +17095,7 @@ button.start-line:focus-visible {
   font-weight: 700;
   padding: 8px 16px;
   cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .empty-search:hover,
 .empty-help:hover {
@@ -17038,7 +17104,7 @@ button.start-line:focus-visible {
 }
 .empty-search:focus-visible,
 .empty-help:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* .empty-state is centered block flow, so the two buttons would flow inline
@@ -17137,7 +17203,7 @@ button.start-line:focus-visible {
   padding: 8px 14px;
   min-height: var(--control-h);
   cursor: pointer;
-  transition: border-color 0.14s ease, color 0.14s ease;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .espn-disconnect:hover:not(:disabled) {
   border-color: var(--strikeout);
@@ -17250,12 +17316,7 @@ button.start-line:focus-visible {
   padding: 8px 12px;
   min-height: var(--control-h);
   font-size: 15px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.espn-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 /* "private leagues only" beside a field label. Sits on the label's line rather
    than under the input, so the pair reads as one heading and the form keeps its
@@ -17342,14 +17403,14 @@ button.start-line:focus-visible {
   padding: 0 14px;
   min-height: var(--control-h);
   cursor: pointer;
-  transition: border-color 0.14s ease, color 0.14s ease;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .espn-copy:hover {
   border-color: var(--accent);
   color: var(--text);
 }
 .espn-copy:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* A failed invite is the first thing on the page, above even the status panel:
@@ -17384,7 +17445,7 @@ button.start-line:focus-visible {
   padding: 9px 18px;
   min-height: var(--control-h);
   cursor: pointer;
-  transition: opacity 0.14s ease;
+  transition: opacity var(--dur) var(--ease);
 }
 .espn-submit:disabled {
   opacity: 0.45;
@@ -17411,7 +17472,7 @@ button.start-line:focus-visible {
   opacity: 1;
 }
 .espn-submit:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 .espn-hint {
@@ -17585,7 +17646,7 @@ button.start-line:focus-visible {
   font-weight: 700;
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.14s ease;
+  transition: color var(--dur) var(--ease);
 }
 .espn-skip:hover:not(:disabled) {
   color: var(--text);
@@ -17595,7 +17656,7 @@ button.start-line:focus-visible {
   cursor: default;
 }
 .espn-skip:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: var(--control-radius);
 }
@@ -18403,7 +18464,7 @@ button.start-line:focus-visible {
   }
 }
 .lg-week:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 /* The week the board is on. It sits after the hover rule, the two being equal
@@ -18841,8 +18902,8 @@ button.start-line:focus-visible {
   }
 }
 .lg-cat-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* **The whole card is the way through to that matchup's page.** It was a
@@ -18866,7 +18927,7 @@ button.start-line:focus-visible {
   }
 }
 .lg-matchup:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -19258,8 +19319,8 @@ button.start-line:focus-visible {
   }
 }
 .mup-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 /* The half-track either side of the label. Its full length is one side holding
    the lot, so a bar reaching the end of it is a category that is gone. */
@@ -19429,7 +19490,7 @@ button.start-line:focus-visible {
   text-decoration: underline;
 }
 .mup-move-name:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -20403,7 +20464,7 @@ span.mup-move-name:hover {
   line-height: 0;
 }
 .lg-team-press:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -20944,7 +21005,7 @@ span.mup-move-name:hover {
   border-color: var(--accent);
 }
 .lg-tx-photo-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 .lg-tx-photo-empty {
@@ -21073,7 +21134,7 @@ span.mup-move-name:hover {
   text-decoration: underline;
 }
 .lg-tx-name:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -22253,7 +22314,7 @@ html[data-theme='light'] .league-table thead th {
   opacity: 0.28;
 }
 .pu-row:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
   border-radius: 8px;
 }
@@ -22691,8 +22752,8 @@ html[data-theme='light'] .league-table thead th {
   opacity: 0.32;
 }
 .mv-legend-col:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 /* The abbreviation is one short line, so the row no longer has to hold two —
    which is most of what the legend gave back when the names shortened. */
@@ -22879,7 +22940,7 @@ html[data-theme='light'] .league-table thead th {
    its children — and where one doesn't, the panel opening on focus is the
    indication that matters, so nothing essential rides on it. */
 .mv-arm:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* The reveal is `.settings-popover` itself — the box the settings gear and every
@@ -23578,7 +23639,7 @@ html[data-theme='light'] .league-table thead th {
      than a box, since it takes no space in the row's own layout. */
   outline: 12px solid transparent;
   cursor: pointer;
-  transition: background 0.14s ease, transform 0.14s ease;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .ov-dot.is-on {
   background: var(--accent);
@@ -23596,8 +23657,8 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 .ov-dot:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* ---- The top performers ------------------------------------------------- */
@@ -23663,7 +23724,7 @@ html[data-theme='light'] .league-table thead th {
    `pointerdown` and decides on release*, because a scroll begins with a
    `pointerdown` on whatever is under the finger. */
 .ov-perf:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
 }
 .ov-perf-rank {
@@ -23791,7 +23852,7 @@ html[data-theme='light'] .league-table thead th {
   cursor: pointer;
   padding: 8px 10px;
   white-space: nowrap;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 @media (hover: hover) {
   .ov-day-more:hover {
@@ -23800,7 +23861,7 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 .ov-day-more:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -23988,7 +24049,7 @@ html[data-theme='light'] .league-table thead th {
   font-weight: inherit;
   color: inherit;
   cursor: pointer;
-  transition: border-color 0.14s ease, color 0.14s ease;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
   /* An emoji has its own metrics and sits a shade high against tabular digits;
      the line box is declared so the row's height cannot change with the font
      the platform hands it. */
@@ -24030,7 +24091,7 @@ html[data-theme='light'] .league-table thead th {
   color: var(--accent);
 }
 .ov-heat-cell:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -24371,7 +24432,7 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 .mlb-game:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 .mlb-game-head {
@@ -24846,7 +24907,7 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 .trend-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 /* ---- The `See more` card ----
@@ -25415,7 +25476,7 @@ html[data-theme='light'] .league-table thead th {
 }
 .rl-pick:focus-visible,
 .rl-more:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: -2px;
   border-radius: var(--control-radius-inner);
 }
@@ -25558,8 +25619,8 @@ html[data-theme='light'] .league-table thead th {
   }
 }
 .rl-icon:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 /* Its drawer is open — the same lit ground `.rl-more` used to take, on whichever
    of the two icons opened it. */
@@ -25664,8 +25725,8 @@ html[data-theme='light'] .league-table thead th {
   cursor: default;
 }
 .rl-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 /* The one that goes somewhere, in each strip. Tinted rather than filled: a
    filled chip in a drawer of four would out-shout the row it belongs to. */
@@ -25723,8 +25784,8 @@ html[data-theme='light'] .league-table thead th {
 }
 .rl-input:focus-visible,
 .rl-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 
 /* The footer: what you can add, and the sentence saying what the list is for.
