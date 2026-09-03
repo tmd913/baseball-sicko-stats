@@ -117,6 +117,73 @@ red "!" pip — wrote `#fff`. White on `--strikeout` measures **3.60:1** against
 near-black's **5.94:1**, so folding it in both unifies the rule and takes that
 pip from under the bar a 9px bold glyph owes a reader to comfortably over it.
 
+### The tokens that are not colors: one clock, one ring, and the press
+
+**The same fault, on the geometry side.** `:root` had named the control height
+and the two control radii and then spelled out everything else a control does
+wherever a control did it: **49** `transition: … 0.14s ease`, **8** more at
+`0.15s` with the easing left implicit, and **77** `outline: 2px solid
+var(--accent)` focus rings. Five tokens sit beside `--control-radius` now —
+`--dur: 0.14s`, `--dur-slow: 0.36s`, `--ease: ease`, `--ease-travel:
+cubic-bezier(0.32, 0.78, 0.22, 1)` and `--focus-ring: 2px solid var(--accent)`
+— and all 134 literals read them. The eight `0.15s` rules are 10ms faster than
+they were; a 10ms change is below anything a reader can see and one clock is
+the point. `--dur-slow`/`--ease-travel` are the tab mark's slide, the one
+transition in the file that travels rather than fades, and `TabSlider.tsx`
+reads that duration back off `getComputedStyle(mark).transitionDuration`,
+which resolves the var — measured **0.36s** and the cubic-bezier after the
+fold. Two 12px radii on things a reader acts on (`.adder-input`, the at-bat
+row's ring) read `--control-radius`; the fifteen 12px radii on cards, popovers,
+rows and the video frame keep the literal, because naming a card's corner
+"control" is a restyle by name.
+
+**Deliberately not folded:** `transition: none` (an acknowledgement that
+fades in is not one), `.float-btn`'s 0.18s pair with its `visibility` delay,
+the tab ink's `0.12s linear var(--tab-ink-in)`, the strike zone's 0.1s trio,
+the 0.12s opacity fades, the 0.18s widths, and every `animation:` duration.
+These are not "a control answering a hover" and giving them the control's
+clock would be the same mistake as the card's radius.
+
+**The ring's offset is a rule with two values.** `2px` outside for a
+freestanding control; `-2px` inset for a row, a cell, a list item, a carousel
+item, or anything inside an overflow clip, where an outside ring is clipped
+on one edge and reads as a broken box. Twelve 1px rings went out to 2px, two
+1px rings on cells (`.game-ls-door`, `.mup-row`) went in to -2px, four -1px
+went to -2px, and two 3px (`.tut-done`, `.ov-dot`) came in to 2px. **Text
+fields are the exception and keep the 3px soft glow** — a field's ring and its
+border are the same rectangle, so a 2px ring at offset 2 is a second border a
+pixel out. `.adder-input`, `.espn-input` and `.auth-input` share one
+`:focus-visible` rule for it (the first two were `:focus`, the third was a
+1px ring); `.rl-new > .rl-input` is untouched because the shell draws its
+focus. `.remove-btn` had its hover tint and its ring in one rule and has two.
+
+**A press is answered by the control that took it.** Twenty-six freestanding
+buttons, tabs and pills take `transform: scale(0.97)` on `:active`, with no
+transition, right after `.main-tab:focus-visible`. Left out: anything inside
+a box that scrolls sideways — `.ov-day-more` in the snapping `.ov-days`,
+`.feed-filter-pill` (a `.research-toggle` in an `overflow-x: auto` strip),
+`.lg-tab` and `.details-tab` — where a `pointerdown` is as likely the start
+of a flick, and a control that flinches under every flick reads as one
+refusing; and `.float-btn`, which animates its own transform. The tabs are
+already `position: relative`, so the scale adds no stacking change, and the
+settings and fantasy popovers are siblings of their openers under
+`.settings-menu`/`.fantasy-menu`, not descendants, so a pressed opener does
+not shrink what it opens. Under `prefers-reduced-motion`, the sim toggle's
+live dot stops pulsing alongside the feed heading's; `.float-badge` is not a
+gap there, its entry being the 180ms opacity fade that block keeps.
+
+**Measured**, headless Chromium at 1280 × 900 on the built client: `.main-tab`
+and `.date-step` report `transitionDuration` **0.14s** and
+`transitionTimingFunction` `ease`; a focused `.main-tab` reports `outline`
+`rgb(56, 189, 248) solid 2px` at `-2px`; every reassigned selector reads back
+its new offset off the stylesheet; `.tab-mark` reports **0.36s** and
+`cubic-bezier(0.32, 0.78, 0.22, 1)`; a real mouse press on a `.main-tab` and
+on the Overview's `.view-tab` reads `matrix(0.97, 0, 0, 0.97, 0, 0)` while
+down and `none` on release. The roster at 1280 and 390 is pixel-for-pixel the
+page it was. JS unchanged at 819,217 / 238,616 gz; CSS 214,503 → 215,978 raw,
+37,933 → 38,132 gz, the press rule's selector list and the tokens themselves
+less the shorter ring.
+
 ### The Lavender palette
 
 The measured figures live in the stylesheet beside the block that declares them,
