@@ -191,7 +191,7 @@ function columnsFor(group: StandingsGroup): Column[] {
     {
       key: 'xwl',
       label: 'xW-L',
-      title: "MLB's Pythagorean record — what the runs say the record should be",
+      title: "MLB’s Pythagorean record — what the runs say the record should be",
       value: (t) => rec(t.expected),
     },
   );
@@ -428,7 +428,7 @@ function StandingsTable({
           <thead>
             <tr>
               <th scope="col" className="glog-date">
-                Team
+                TEAM
               </th>
               {columns.map((c) => (
                 <th
@@ -460,7 +460,7 @@ function StandingsTable({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`${t.name}, ${t.wins}-${t.losses}. Open the club's page.`}
+                aria-label={`${t.name}, ${t.wins}-${t.losses}. Open the club’s page.`}
               >
                 {/* **The flex box is a `<span>` inside the cell, not the cell
                     itself**, and that is the fix for a reported fault rather

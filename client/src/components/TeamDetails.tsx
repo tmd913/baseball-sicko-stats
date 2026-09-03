@@ -15,6 +15,7 @@ import { RecentNewsContext, useDelayedFlag, useGameDoor } from '../hooks';
 import type { GameDoor, TeamPageTab } from '../hooks';
 import { DetailsShell, DetailsTabButton } from './DetailsShell';
 import { LoadingBlock, LoadingLine, PaneBusy } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { OpponentSection } from './OpponentTable';
 import { ParkTable } from './ParkFactors';
 import { PlayerWindowTable } from './PlayerWindowTable';
@@ -592,9 +593,7 @@ export function TeamDetails({
               title={side === 'pitcher' ? 'Pitching' : 'Hitting'}
             />
           ) : splitsError ? (
-            <div className="details-status details-error">
-              Couldn&rsquo;t read {team.name}&rsquo;s splits.
-            </div>
+            <ErrorLine>Couldn’t read {team.name}’s splits</ErrorLine>
           ) : splitsWait ? (
             <LoadingBlock>Reading {team.name}&rsquo;s splits</LoadingBlock>
           ) : splitsLoading ? null : (
@@ -638,9 +637,7 @@ export function TeamDetails({
         <LoadingBlock>Reading {team.name}&rsquo;s board</LoadingBlock>
       )}
       {tab === 'stats' && !windows && windowsError && (
-        <div className="details-status details-error">
-          Couldn&rsquo;t read {team.name}&rsquo;s board: {windowsError}
-        </div>
+        <ErrorLine detail={windowsError}>Couldn’t read {team.name}’s board</ErrorLine>
       )}
     </DetailsShell>
   );

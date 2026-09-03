@@ -426,7 +426,7 @@ export function PlayerWindowTable({
         <RanksButton
           on={showRanks}
           onToggle={() => onShowRanksChange(!showRanks)}
-          population={`the qualified players on the research board for that span (Savant's bar of ${QUALIFIER_WORDS[kind]})`}
+          population={`the qualified players on the research board for that span (Savant’s bar of ${QUALIFIER_WORDS[kind]})`}
         />
       </div>
       {pickerOpen && (

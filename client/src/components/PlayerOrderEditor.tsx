@@ -165,7 +165,7 @@ export function PlayerOrderEditor({
       <p className="order-hint">
         {players.length === 0
           ? 'Nothing left to order — press Done to go back.'
-          : "Drag ⠿ to change a player's order, or ✕ to remove them."}
+          : "Drag ⠿ to change a player’s order, or ✕ to remove them."}
       </p>
       <ul className="order-list">
         {players.map((p, i) => {

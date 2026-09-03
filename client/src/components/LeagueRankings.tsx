@@ -153,7 +153,7 @@ function spanDetail(info: EspnRankSpanInfo | undefined): string {
         ? `Week ${info.periods[0]}`
         : `Weeks ${info.periods[0]}–${info.periods[1]}`;
   const parts = [weeks, days].filter(Boolean) as string[];
-  if (info.span === 'season' && parts.length === 0) parts.push("ESPN's own season line");
+  if (info.span === 'season' && parts.length === 0) parts.push("ESPN’s own season line");
   if (info.live) parts.push('so far');
   return parts.join(' · ');
 }
@@ -221,7 +221,7 @@ export function rankFace(
   /* ESPN's own season line has no dates of its own — it is a running total
      rather than a span — so the lower line says what it is instead of going
      blank, both lines being always filled being what keeps this bar one height. */
-  const base = days ?? (info?.span === 'season' ? "ESPN's own season line" : '—');
+  const base = days ?? (info?.span === 'season' ? "ESPN’s own season line" : '—');
   return { lead: name, range: info?.live ? `${base} · so far` : base };
 }
 
@@ -441,7 +441,7 @@ function RankTable({
             <th scope="col" className="lg-logo-col" aria-label="Team badge">
               {corner}
             </th>
-            {head({ kind: 'team' }, 'Team', 'The league standing', 'lg-name-col')}
+            {head({ kind: 'team' }, 'TEAM', 'The league standing', 'lg-name-col')}
             {/* **The whole row in one column, leading the two halves it is made
                 of.** It is what a manager wants first — where he stands, full
                 stop — and putting it before `BAT` and `PIT` reads as the
@@ -505,8 +505,8 @@ function RankTable({
              */
             const matchupId = matchupTeams?.get(r.teamId);
             const open = matchupId == null ? null : () => onOpenTeamMatchup(r.teamId, matchupId);
-            const pressLabel = `${name} — open this week's matchup on his page`;
-            const pressTitle = `${identity} · open this week's matchup on his page`;
+            const pressLabel = `${name} — open this week’s matchup on his page`;
+            const pressTitle = `${identity} · open this week’s matchup on his page`;
             /**
              * A real `<button>` inside the cell rather than `role="button"` on
              * the cell itself, which is the reverse of the Game Log's rows and
@@ -796,7 +796,7 @@ export default function LeagueRankings({
       <>
         {paneChrome}
         <div className="empty-state">
-          <h3>Couldn't read your league</h3>
+          <h3>Couldn’t read your league</h3>
           <p>{error}</p>
         </div>
       </>
@@ -809,7 +809,7 @@ export default function LeagueRankings({
     return (
       <>
         {paneChrome}
-        {loading ? <LoadingBlock>Reading your league's rankings</LoadingBlock> : null}
+        {loading ? <LoadingBlock>Reading your league’s rankings</LoadingBlock> : null}
       </>
     );
   }

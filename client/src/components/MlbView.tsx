@@ -54,7 +54,7 @@ export type MlbTab = 'scoreboard' | 'standings';
  * the first reads as a different kind of control rather than as one tier down
  * of the same one. `App` draws it there and this file keeps the vocabulary. */
 export const MLB_TABS: { tab: MlbTab; label: string; title: string }[] = [
-  { tab: 'scoreboard', label: 'Scoreboard', title: "One day's games, and a door into each" },
+  { tab: 'scoreboard', label: 'Scoreboard', title: "One day’s games, and a door into each" },
   { tab: 'standings', label: 'Standings', title: 'Where the thirty clubs stand' },
 ];
 

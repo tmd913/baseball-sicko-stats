@@ -213,7 +213,7 @@ export function ArsenalRow({ m, split = 'all' }: { m: PitchMix; split?: SplitKey
           pct={share}
           color={color}
           counts={`${m.count} P`}
-          title={`${m.count} of the game's pitches`}
+          title={`${m.count} of the game’s pitches`}
         />
         <RateBar
           label="Strike"

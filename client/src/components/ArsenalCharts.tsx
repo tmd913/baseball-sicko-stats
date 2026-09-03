@@ -488,7 +488,7 @@ export function PitchUsageChart({
               type="button"
               className={`pu-row${on ? ' on' : ''}${dim ? ' dim' : ''}`}
               {...pitchButtonProps(p.pitchType, selection)}
-              title={`${p.pitchType} — ${pctText(p.share)} of his season's pitches${
+              title={`${p.pitchType} — ${pctText(p.share)} of his season’s pitches${
                 l === null ? '' : `, ${pctText(l)} vs LHH`
               }${r === null ? '' : `, ${pctText(r)} vs RHH`}`}
             >
@@ -1147,7 +1147,7 @@ export function MovementChart({
     blob: (
       <>
         The hatched blob behind each color is where the average of that pitch sits for
-        pitchers of <b>his own hand</b>, drawn as wide as the league's own spread —
+        pitchers of <b>his own hand</b>, drawn as wide as the league’s own spread —
         average is a cloud too, so daylight narrower than the blob is not a difference.
         (A right-hander throws about two miles an hour harder than a left-hander at
         every pitch type, which is why the comparison is split.)

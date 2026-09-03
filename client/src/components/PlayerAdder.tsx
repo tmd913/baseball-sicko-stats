@@ -350,7 +350,7 @@ export function PlayerAdder({
       <button
         className="adder-option adder-team"
         onMouseDown={() => openTeam(t)}
-        title={`View ${t.name}'s page`}
+        title={`View ${t.name}’s page`}
       >
         <TeamMark teamId={t.id} team={t.abbreviation} />
         <span className="adder-team-text">
@@ -385,7 +385,7 @@ export function PlayerAdder({
         <button
           className="adder-option"
           onMouseDown={() => openDetails(p)}
-          title={`View ${p.name}'s details`}
+          title={`View ${p.name}’s details`}
         >
           <span className="opt-name">{p.name}</span>
           <span className="opt-meta">

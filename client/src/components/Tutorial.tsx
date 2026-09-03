@@ -288,7 +288,7 @@ const CHAPTERS: Chapter[] = [
         </ul>
         <p className="tut-note">
           The face says what <em>kind</em> of days these are, so a link you share is
-          about the reader's own day rather than yours: <Ui>Yesterday</Ui> where the
+          about the reader’s own day rather than yours: <Ui>Yesterday</Ui> where the
           days are exactly that, <Ui>Custom range</Ui> where you picked them, and{' '}
           <Ui>Schedule · Week 19</Ui> or <Ui>Projected</Ui> in the two readings that
           are not simply a range. The Feed keeps a range of its own.
@@ -343,7 +343,7 @@ const CHAPTERS: Chapter[] = [
           </dt>
           <dd>
             The days <em>ahead</em> in place of the stats: a column per day naming that
-            day's opponent, a count of the games in the span, and the days a pitcher is
+            day’s opponent, a count of the games in the span, and the days a pitcher is
             announced to start. How far ahead is in the date bar.
           </dd>
           <dt>
@@ -374,14 +374,14 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          <Ui>Feed</Ui> is your roster's day as one stream, newest first:{' '}
+          <Ui>Feed</Ui> is your roster’s day as one stream, newest first:{' '}
           <strong>Live</strong> pinned at the top, then <strong>Recent plays</strong>,{' '}
           <strong>Recent outings</strong> and <strong>Upcoming</strong>.
         </p>
         <ul className="tut-list">
           <li>
             <strong>A plate appearance</strong> gives the outcome, the pitcher and the
-            contact. Press it for MLB's description, the pitch-by-pitch table and a
+            contact. Press it for MLB’s description, the pitch-by-pitch table and a
             strike-zone plot — hover or tap a pitch and it lights in both. A clip plays
             in place where there is film.
           </li>
@@ -390,11 +390,11 @@ const CHAPTERS: Chapter[] = [
             under the man they happened to.
           </li>
           <li>
-            <strong>A pitcher's outing</strong> is one bar, and the bar opens his outing
+            <strong>A pitcher’s outing</strong> is one bar, and the bar opens his outing
             page.
           </li>
           <li>
-            <strong>An upcoming game</strong> opens a batter's platoon splits, or the
+            <strong>An upcoming game</strong> opens a batter’s platoon splits, or the
             lineup a pitcher is about to face.
           </li>
         </ul>
@@ -478,7 +478,7 @@ const CHAPTERS: Chapter[] = [
           </dd>
           <dt>Sorting</dt>
           <dd>
-            Press a header, press again to reverse. ERA, WHIP and a batter's K open
+            Press a header, press again to reverse. ERA, WHIP and a batter’s K open
             small-first on their own, and a blank never outranks a real number.
           </dd>
         </dl>
@@ -497,7 +497,7 @@ const CHAPTERS: Chapter[] = [
   {
     id: 'tut-player',
     tab: 'Player page',
-    title: "A player's page",
+    title: "A player’s page",
     body: (
       <>
         <p>
@@ -536,22 +536,22 @@ const CHAPTERS: Chapter[] = [
           <dt>News</dt>
           <dd>
             Beat reports — a lineup he is out of, a bullpen session, a job changing
-            hands — interleaved with MLB's own IL placements, recalls and trades.
+            hands — interleaved with MLB’s own IL placements, recalls and trades.
           </dd>
           <dt>Stats</dt>
           <dd>
             The research board turned on its side: season, then the last 7, 15, 30 and
-            60 days down the page, under the board's own columns.
+            60 days down the page, under the board’s own columns.
           </dd>
           <dt>Game Log</dt>
           <dd>
             Every game, newest first. Columns marked <strong>Szn</strong> are
-            season-to-date <em>through</em> that game rather than the game's own. Press
+            season-to-date <em>through</em> that game rather than the game’s own. Press
             a row to open that afternoon.
           </dd>
           <dt>Schedule · Charts</dt>
           <dd>
-            His club's next fortnight, or a starter's next turns; and a rolling average
+            His club’s next fortnight, or a starter’s next turns; and a rolling average
             over the last 50, 100 or 250 plate appearances.
           </dd>
         </dl>
@@ -565,7 +565,7 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          A pitcher's game opens as a page of its own — from his bar in the Feed, from
+          A pitcher’s game opens as a page of its own — from his bar in the Feed, from
           his Overview, or from a row of his Game Log — in four sections.
         </p>
         <dl className="tut-defs">
@@ -591,7 +591,7 @@ const CHAPTERS: Chapter[] = [
           <dt>Opponent</dt>
           <dd>
             How the lineup he is facing hits — overall and against his hand — with each
-            number's league rank beneath it, over a span and a home/away cut you pick.
+            number’s league rank beneath it, over a span and a home/away cut you pick.
             On a pitcher who has not taken the ball yet, this <em>is</em> the page.
           </dd>
         </dl>
@@ -617,7 +617,7 @@ const CHAPTERS: Chapter[] = [
           button beside the gear is everything fantasy. With nothing connected it opens
           the league page: paste a <Ui>League URL or ID</Ui>, press{' '}
           <Ui>Connect league</Ui>, and say which team is yours. A private league also
-          wants ESPN's <Ui>SWID</Ui> and <Ui>espn_s2</Ui> cookies, and the page walks
+          wants ESPN’s <Ui>SWID</Ui> and <Ui>espn_s2</Ui> cookies, and the page walks
           through where they are — a laptop errand, once.
         </p>
         <p className="tut-note">
@@ -639,7 +639,7 @@ const CHAPTERS: Chapter[] = [
             <Ui>League</Ui>
           </dt>
           <dd>
-            <strong>Scoreboard</strong> is the week's matchups as cards;{' '}
+            <strong>Scoreboard</strong> is the week’s matchups as cards;{' '}
             <strong>Rankings</strong> is every team against every category over a span
             you pick; <strong>Transactions</strong> is who has added, dropped and traded
             whom, with a dot for moves you have not seen.
@@ -649,7 +649,7 @@ const CHAPTERS: Chapter[] = [
           </dt>
           <dd>
             Swaps the Roster readings over to your ESPN roster, each player carrying
-            today's slot — his position if he is starting, <Ui>BE</Ui> or <Ui>IL</Ui> if
+            today’s slot — his position if he is starting, <Ui>BE</Ui> or <Ui>IL</Ui> if
             not. The roster you built here is untouched and comes back when you switch
             off.
           </dd>
@@ -657,7 +657,7 @@ const CHAPTERS: Chapter[] = [
         <p>
           A league also fills in <Ui>Free Agents</Ui> and <Ui>Other Rosters</Ui> on the
           research board and adds <Ui>Ros%</Ui> — the share of all ESPN leagues a man is
-          rostered in — with <Ui>Δ7d</Ui> beside it. Sort by it once for the week's
+          rostered in — with <Ui>Δ7d</Ui> beside it. Sort by it once for the week’s
           biggest adds, twice for the drops.
         </p>
         <p className="tut-note">
@@ -706,7 +706,7 @@ const CHAPTERS: Chapter[] = [
           </li>
           <li>
             <strong>The address bar is your state</strong> — the dates, the page, the
-            reading, the player you have open, the board's whole setup. Reload and you
+            reading, the player you have open, the board’s whole setup. Reload and you
             are where you left off; send the link and someone else lands on the same
             screen. A link saved under <Ui>Today</Ui> opens on the new today.
           </li>
@@ -828,7 +828,7 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
           </h1>
           <p className="tut-lede">
             Follow a handful of players, pick a stretch of days, and read them four
-            ways — as a stat table, as the day's plays, as the fixtures ahead, or as
+            ways — as a stat table, as the day’s plays, as the fixtures ahead, or as
             what those fixtures are worth. Here is the whole app in nine short
             chapters.
           </p>

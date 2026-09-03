@@ -5,6 +5,7 @@ import { ordinal } from '../lib';
 import { rankFill } from './columnRanks';
 import { CardSection } from './PitcherCard';
 import { LoadingBlock } from './Loading';
+import { ErrorLine } from './ErrorLine';
 import { TEAM_HITTING_WINDOWS } from '../types';
 import type {
   TeamHitting,
@@ -338,9 +339,9 @@ function OpponentBody({
         waiting ? (
           <LoadingBlock>Reading {opponent}&rsquo;s line</LoadingBlock>
         ) : error ? (
-          <div className="details-error opp-status">
-            Couldn&rsquo;t read {opponent}&rsquo;s line — press the span again to retry.
-          </div>
+          <ErrorLine kind="line">
+            Couldn’t read {opponent}’s line — press the span again to retry.
+          </ErrorLine>
         ) : loading ? null : (
           /* Named by the club rather than as "the opponent", which was true of
              the one caller this had and is false on a club's own page — the
@@ -590,12 +591,12 @@ export function OpponentRead({
   }
   if (opp?.error) {
     return (
-      <div className="details-error opp-status">
-        Couldn&rsquo;t read the opponent&rsquo;s line.{' '}
+      <ErrorLine kind="line">
+        Couldn’t read the opponent’s line.{' '}
         <button type="button" className="ovw-link" onClick={() => onRetry(opponentId)}>
           Try again
         </button>
-      </div>
+      </ErrorLine>
     );
   }
   // A board that came back `null` — the server has no row for that club. The row

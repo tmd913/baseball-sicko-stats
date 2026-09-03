@@ -3,6 +3,7 @@ import { answersEscape, useDelayedFlag, useLockBodyScroll, useOverlayFocus } fro
 import { api } from '../api';
 import type { EspnStatus, EspnTeam } from '../types';
 import type { ThemeId } from '../theme';
+import { errorText } from '../lib';
 import { LoadingBlock } from './Loading';
 import { ThemeSwatches } from './ThemePicker';
 
@@ -173,7 +174,7 @@ export function LeagueOnboarding({
     try {
       await onConfirm(Number(picked));
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Could not set the team');
+      setSaveError(errorText(err));
       setSaving(false);
     }
     // Deliberately no `finally`: on the way through the tab reloads, and
@@ -210,7 +211,15 @@ export function LeagueOnboarding({
           <LoadingBlock>Reading your league&rsquo;s teams</LoadingBlock>
         )}
 
-        {phase === 'error' && <p className="espn-error">{readError}</p>}
+        {/* The voice every failed read in this app speaks in, with the server's
+            own words one hover away: "No ESPN league connected" is a fact for
+            whoever is debugging it, and the page is for somebody who has just
+            joined. */}
+        {phase === 'error' && (
+          <p className="espn-error" role="alert" title={readError ?? undefined}>
+            Couldn’t read your league’s teams
+          </p>
+        )}
 
         {phase === 'ready' && teams && (
           <label className="espn-field onboard-field">
@@ -264,7 +273,9 @@ export function LeagueOnboarding({
         )}
 
         {phase === 'ready' && saveError !== null && (
-          <p className="espn-error">{saveError}</p>
+          <p className="espn-error" role="alert" title={saveError}>
+            Couldn’t set the team
+          </p>
         )}
 
         {/* One row, whichever of the two answerable states we are in — and the
