@@ -65,6 +65,7 @@ export { prettyDate };
 import { ProjectedGlyph, ProjectionKey } from './Projection';
 import LeagueRankings from './LeagueRankings';
 import LeagueTransactions, { type TrendDeltas } from './LeagueTransactions';
+import { EmptyState } from './EmptyState';
 
 /* ---- Formatting ---------------------------------------------------------
  *
@@ -1089,28 +1090,25 @@ function Scoreboard({
       />
 
       {board.format === 'unknown' ? (
-        <div className="empty-state">
-          <h3>This league’s scoring isn’t supported yet</h3>
+        <EmptyState title="This league’s scoring isn’t supported yet">
           <p>
             ESPN reports it as <code>{board.scoringType}</code>, which this page has never been
             read against — so it shows nothing here rather than guessing at a scoreboard shape
             the league may not have. The Rankings tab still draws the league’s own totals.
           </p>
-        </div>
+        </EmptyState>
       ) : board.format === 'standings' ? (
-        <div className="empty-state">
-          <h3>No matchups in this league</h3>
+        <EmptyState title="No matchups in this league">
           <p>
             ESPN scores it as <code>{board.scoringType}</code> — a season-long league rather than
             head to head, so there is nothing to draw a scoreboard from. The Rankings tab is the
             league.
           </p>
-        </div>
+        </EmptyState>
       ) : matchups.length === 0 ? (
-        <div className="empty-state">
-          <h3>No matchups in week {board.matchupPeriod}</h3>
+        <EmptyState title={<>No matchups in week {board.matchupPeriod}</>}>
           <p>ESPN has no schedule for this period yet.</p>
-        </div>
+        </EmptyState>
       ) : (
         /* `.lg-board` and nothing else: the class this carried while the lens
            lived here (`lg-board-proj`) never had a rule in the stylesheet, so it
@@ -1260,18 +1258,19 @@ export default function LeagueView({
   // be chrome for a feature the reader hasn't got.
   if (!connected) {
     return (
-      <div className="empty-state">
-        <h3>No fantasy league connected</h3>
+      <EmptyState
+        title="No fantasy league connected"
+        action={
+          <button type="button" className="empty-help" onClick={onConnect}>
+            Connect a league
+          </button>
+        }
+      >
         <p>
           The League page reads your ESPN league’s matchups, rankings and transactions, so it
           needs one connected.
         </p>
-        <div className="empty-actions">
-          <button type="button" className="empty-help" onClick={onConnect}>
-            Connect a league
-          </button>
-        </div>
-      </div>
+      </EmptyState>
     );
   }
 
@@ -1305,10 +1304,9 @@ export default function LeagueView({
           onOpenPlayer={onOpenPlayer}
         />
       ) : error && !board ? (
-        <div className="empty-state">
-          <h3>Couldn’t read your league</h3>
+        <EmptyState title="Couldn’t read your league">
           <p>{error}</p>
-        </div>
+        </EmptyState>
       ) : !board ? (
         // Never over data: a re-read leaves what is on screen standing, and the
         // block wait is only for a pane with nothing in it yet.

@@ -21,6 +21,7 @@ import {
 import { OutingPageForGame } from './OutingPage';
 import { PlayerDayModal } from './PlayerDay';
 import { PageMore, usePagedRows } from './paging';
+import { EmptyState } from './EmptyState';
 
 /**
  * A row of the log is a press, and this is what makes it one.
@@ -928,7 +929,7 @@ export function GameLog(
     onShown: setShown,
   });
   if (log.games.length === 0) {
-    return <div className="details-status">No games played this season.</div>;
+    return <EmptyState compact title="No games played this season" />;
   }
   return (
     <div ref={fullRef} className={`details-gamelog${isFull ? ' is-expanded' : ''}`}>

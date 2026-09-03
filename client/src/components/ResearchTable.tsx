@@ -98,6 +98,7 @@ import {
   trendKey,
 } from './researchColumns';
 import type { Column } from './researchColumns';
+import { EmptyState } from './EmptyState';
 // Re-exported so every existing importer of these three (App, and any `cols=`
 // link handling that grows later) goes on naming this file: the *selection* is
 // a board setting, and the board is what App is configuring, even though the
@@ -3406,8 +3407,7 @@ function ResearchTableInner({
        that can get a table back. */
     if (teams) {
       return (
-        <div className="empty-state">
-          <p className="empty-title">No clubs to show</p>
+        <EmptyState title="No clubs to show">
           <p>
             The team board came back empty, which is a read that failed rather
             than a filter you set — nothing here narrows the thirty. Try another
@@ -3421,13 +3421,12 @@ function ResearchTableInner({
             </button>
             .
           </p>
-        </div>
+        </EmptyState>
       );
     }
     if (nothingIncluded) {
       return (
-        <div className="empty-state">
-          <p className="empty-title">No players included</p>
+        <EmptyState title="No players included">
           <p>
             Every one of the buttons up top is off, so the board has nobody to
             draw. Turn on{' '}
@@ -3440,13 +3439,12 @@ function ResearchTableInner({
             </button>{' '}
             — or any of the others — to put players back on it.
           </p>
-        </div>
+        </EmptyState>
       );
     }
     if (watchlistAlone && watchlistCount === 0) {
       return (
-        <div className="empty-state">
-          <p className="empty-title">No {noun} on your watchlist</p>
+        <EmptyState title={<>No {noun} on your watchlist</>}>
           <p>
             The star beside a player’s name adds him to it — it is a list of who
             you are keeping an eye on, and nothing to do with your roster. Turn
@@ -3460,7 +3458,7 @@ function ResearchTableInner({
             </button>{' '}
             to read the league and find somebody to star.
           </p>
-        </div>
+        </EmptyState>
       );
     }
     if (espnConnected && (include.others || include.fa) && !ownedIds) {
@@ -3469,15 +3467,16 @@ function ResearchTableInner({
          "nothing has landed yet" rather than a flag — and "nobody is available"
          is the one wrong thing this state must never flash. */
       return espnError ? (
-        <div className="empty-state">
-          <p className="empty-title">Couldn’t read your league</p>
-          <p title={espnError}>That is the read failing rather than anything about the league.</p>
-          <div className="empty-actions">
+        <EmptyState
+          title="Couldn’t read your league"
+          action={
             <button type="button" className="empty-help" onClick={onConnectEspn}>
               Fantasy league settings
             </button>
-          </div>
-        </div>
+          }
+        >
+          <p title={espnError}>That is the read failing rather than anything about the league.</p>
+        </EmptyState>
       ) : (
         /* Not an `.empty-state`, which is the app's box for a finding: "there
            is nobody here" is precisely what this must not say while the league
@@ -3491,24 +3490,24 @@ function ResearchTableInner({
          league — and it is then the only thing turned on, or one of the others
          would have filled the table. */
       return (
-        <div className="empty-state">
-          <p className="empty-title">No fantasy league connected</p>
+        <EmptyState
+          title="No fantasy league connected"
+          action={
+            <button type="button" className="empty-help" onClick={onConnectEspn}>
+              Connect a league
+            </button>
+          }
+        >
           <p>
             Connect an ESPN fantasy baseball league and the board can tell who is
             on a leaguemate’s roster from who is free to pick up.
           </p>
-          <div className="empty-actions">
-            <button type="button" className="empty-help" onClick={onConnectEspn}>
-              Connect a league
-            </button>
-          </div>
-        </div>
+        </EmptyState>
       );
     }
     if (onlyMine) {
       return (
-        <div className="empty-state">
-          <p className="empty-title">No {noun} on your roster</p>
+        <EmptyState title={<>No {noun} on your roster</>}>
           <p>
             Turn on{' '}
             <button
@@ -3520,7 +3519,7 @@ function ResearchTableInner({
             </button>{' '}
             to read the rest of the league, and open a player to add him.
           </p>
-        </div>
+        </EmptyState>
       );
     }
     /* The closing case names every set that *is* on, the watchlist among them
@@ -3536,13 +3535,12 @@ function ResearchTableInner({
       ...(includeWatchlist ? ['on your watchlist'] : []),
     ];
     return (
-      <div className="empty-state">
-        <p className="empty-title">No {noun} to show</p>
+      <EmptyState title={<>No {noun} to show</>}>
         <p>
           Nobody on this board is {onLabels.join(' or ')}. Turn on another of the
           buttons up top, or pick a different position.
         </p>
-      </div>
+      </EmptyState>
     );
   }
 
@@ -6142,7 +6140,15 @@ function ResearchTableInner({
         </div>
 
         {!loading && !error && visible.length === 0 && boardRows.length > 0 && (
-          <div className="empty-state">
+          <EmptyState
+            title={
+              turnChip && narrowed.length > 0 ? (
+                <>Nobody here starts {turnChip}</>
+              ) : (
+                <>No {teams ? 'clubs' : 'players'} match these filters</>
+              )
+            }
+          >
             {/* **The days are named where they are what emptied it**, which is
                 this board's own rule about an empty state: it names its own
                 cause and the control that caused it. `narrowed` is everything
@@ -6152,18 +6158,12 @@ function ResearchTableInner({
                 ordinary case rather than a corner, most days having nobody on
                 a board of forty men. The general message would send the reader
                 to loosen a threshold that is not what took the rows. */}
-            {turnChip && narrowed.length > 0 ? (
-              <>
-                <p className="empty-title">Nobody here starts {turnChip}</p>
-                <p>Pick other days under Starting, or clear it.</p>
-              </>
-            ) : (
-              <>
-                <p className="empty-title">No {teams ? 'clubs' : 'players'} match these filters</p>
-                <p>Loosen a threshold or clear a filter above.</p>
-              </>
-            )}
-          </div>
+            <p className="empty-how">
+              {turnChip && narrowed.length > 0
+                ? 'Pick other days under Starting, or clear it.'
+                : 'Loosen a threshold or clear a filter above.'}
+            </p>
+          </EmptyState>
         )}
 
         {/* Every reason the board can be empty, each naming its own cause and

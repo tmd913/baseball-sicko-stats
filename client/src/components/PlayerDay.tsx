@@ -20,6 +20,7 @@ import { LoadingBlock } from './Loading';
 import { ErrorLine } from './ErrorLine';
 import { Modal } from './Modal';
 import { OutingPage } from './OutingPage';
+import { EmptyState } from './EmptyState';
 
 /**
  * One player's day, drawn from the feed's own items.
@@ -147,7 +148,7 @@ export function PlayerDay({
   const nothing =
     !live && liveEvents.length === 0 && sections.length === 0 && upcoming.length === 0;
   if (nothing) {
-    return <div className="feed-empty">No game for {report.name} on this day.</div>;
+    return <EmptyState compact title={<>No game for {report.name} on this day</>} />;
   }
 
   return (

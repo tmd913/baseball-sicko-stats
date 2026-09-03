@@ -5,6 +5,7 @@ import { BaseDiamond } from './BaseDiamond';
 import { LoadingBlock } from './Loading';
 import { DateBar, DateCalendar, stepRange, stepTitle } from './DateControls';
 import type { DatePreset } from './DateControls';
+import { EmptyState } from './EmptyState';
 
 /**
  * # The day's games, as thirty clubs played them
@@ -155,10 +156,9 @@ function Body({
   if (!board) {
     if (error) {
       return (
-        <div className="empty-state">
-          <h3>Couldn&rsquo;t read the day&rsquo;s games</h3>
+        <EmptyState title="Couldn’t read the day’s games">
           <p>{error}</p>
-        </div>
+        </EmptyState>
       );
     }
     return loading ? <LoadingBlock>Reading the day&rsquo;s games</LoadingBlock> : null;
@@ -167,13 +167,12 @@ function Body({
     // An empty state names its own cause and the control that caused it. The
     // cause here is the date, and the control is the bar directly above.
     return (
-      <div className="empty-state">
-        <h3>No games on this day</h3>
+      <EmptyState title="No games on this day">
         <p>
           MLB has nothing scheduled for it &mdash; an off day, the All-Star break, or a
           date the season has not reached. Step the date above to a day that has some.
         </p>
-      </div>
+      </EmptyState>
     );
   }
   return (

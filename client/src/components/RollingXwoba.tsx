@@ -3,6 +3,7 @@ import { InfoKey } from './InfoKey';
 import { ScrubCross, ScrubTip, useChartScrub } from './chartScrub';
 import { formatRate } from '../lib';
 import type { XwobaSeries } from '../types';
+import { EmptyState } from './EmptyState';
 
 const WINDOWS = [50, 100, 250] as const;
 type Win = (typeof WINDOWS)[number];
@@ -300,10 +301,12 @@ export function RollingXwoba({ series, name }: { series: XwobaSeries; name: stri
       </div>
 
       {points.length === 0 ? (
-        <div className="details-status">
-          {name} has {series.pas.length} plate appearance{series.pas.length === 1 ? '' : 's'} this
-          season — not enough for a {win}-PA rolling window.
-        </div>
+        <EmptyState compact title={<>Not enough for a {win}-PA rolling window</>}>
+          <p className="empty-how">
+            {name} has {series.pas.length} plate appearance{series.pas.length === 1 ? '' : 's'} this
+            season.
+          </p>
+        </EmptyState>
       ) : (
         <>
           <div className="roll-chart-wrap" ref={setWrapEl}>

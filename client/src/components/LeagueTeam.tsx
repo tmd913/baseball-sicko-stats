@@ -21,6 +21,7 @@ import { SummaryTable } from './SummaryTable';
 import type { ScheduleIndex } from './schedule';
 import { playerKey } from '../types';
 import type { EspnStandingsTeam, RosterProjection } from '../types';
+import { EmptyState } from './EmptyState';
 
 /**
  * One manager's team over a span the reader picks — **the app's own Roster and
@@ -429,10 +430,9 @@ export default function LeagueTeam({
     return (
       <>
         {chrome}
-        <div className="empty-state">
-          <h3>Couldn&rsquo;t read this team</h3>
+        <EmptyState title="Couldn’t read this team">
           <p>{error}</p>
-        </div>
+        </EmptyState>
       </>
     );
   }
@@ -442,13 +442,12 @@ export default function LeagueTeam({
     return (
       <>
         {chrome}
-        <div className="empty-state">
-          <h3>Nobody on this team over these days</h3>
+        <EmptyState title="Nobody on this team over these days">
           <p>
             {who} had nobody on the roster over the days in view. The date control above is what
             changes them.
           </p>
-        </div>
+        </EmptyState>
       </>
     );
   }
@@ -469,13 +468,12 @@ export default function LeagueTeam({
     return (
       <>
         {chrome}
-        <div className="empty-state">
-          <h3>Nobody in this lineup over these days</h3>
+        <EmptyState title="Nobody in this lineup over these days">
           <p>
             {who} started nobody over the days in view, so there is nothing for this matchup to
             have counted. <strong>Roster</strong> above has the whole team, bench included.
           </p>
-        </div>
+        </EmptyState>
       </>
     );
   }

@@ -39,6 +39,7 @@ import { eligibleForKind, headshotUrl, positionCell } from '../lib';
 import { LoadingBlock } from './Loading';
 import { PlayerIdentity } from './PlayerIdentity';
 import { TeamLogo } from './LeagueView';
+import { EmptyState } from './EmptyState';
 
 const PAGE_SIZE = 25;
 
@@ -547,10 +548,9 @@ export default function LeagueTransactions({
 
   if (error && !data) {
     return (
-      <div className="empty-state">
-        <h3>Couldn’t read your league</h3>
+      <EmptyState title="Couldn’t read your league">
         <p>{error}</p>
-      </div>
+      </EmptyState>
     );
   }
 
@@ -561,13 +561,12 @@ export default function LeagueTransactions({
 
   if (data.transactions.length === 0) {
     return (
-      <div className="empty-state">
-        <h3>No moves in this league yet</h3>
+      <EmptyState title="No moves in this league yet">
         <p>
           ESPN’s activity feed has nothing in it — nobody has added, dropped or traded a player
           since the draft.
         </p>
-      </div>
+      </EmptyState>
     );
   }
 

@@ -48,6 +48,7 @@ import {
 } from './LeagueView';
 import { DateBar } from './DateControls';
 import { rankFill } from './columnRanks';
+import { EmptyState } from './EmptyState';
 
 /**
  * What the overall column is called in a header of two- and three-letter
@@ -795,10 +796,9 @@ export default function LeagueRankings({
     return (
       <>
         {paneChrome}
-        <div className="empty-state">
-          <h3>Couldn’t read your league</h3>
+        <EmptyState title="Couldn’t read your league">
           <p>{error}</p>
-        </div>
+        </EmptyState>
       </>
     );
   }
@@ -1003,19 +1003,17 @@ export default function LeagueRankings({
 
   const empty =
     rankings.categories.length === 0 ? (
-      <div className="empty-state">
-        <h3>No scoring categories</h3>
+      <EmptyState title="No scoring categories">
         <p>
           ESPN scores this league as <code>{rankings.scoringType}</code>, which has no
           categories to rank teams in — so there is nothing for this tab to draw. The
           Scoreboard tab is what the league has.
         </p>
-      </div>
+      </EmptyState>
     ) : rankings.rows.every((r) => Object.keys(r.values).length === 0) ? (
-      <div className="empty-state">
-        <h3>Nothing played in {info?.label.toLowerCase() ?? 'this span'} yet</h3>
+      <EmptyState title={<>Nothing played in {info?.label.toLowerCase() ?? 'this span'} yet</>}>
         <p>ESPN has no category totals for these weeks, so there is nothing to rank.</p>
-      </div>
+      </EmptyState>
     ) : null;
 
   if (empty) {

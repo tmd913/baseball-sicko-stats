@@ -221,6 +221,7 @@ import type { LeagueTab } from './components/LeagueView';
 import MlbView, { MLB_TABS } from './components/MlbView';
 import type { MlbTab } from './components/MlbView';
 import type { StandingsGroup } from './components/MlbStandings';
+import { EmptyState } from './components/EmptyState';
 
 /** The report before the first one lands. A module constant rather than a fresh
  *  `[]` per render: `reports` feeds a dozen `useMemo`s and a new empty array
@@ -10972,43 +10973,46 @@ export default function App() {
         !error &&
         isRosterView(view) &&
         !editMode && (
-        <div className="empty-state">
-          <p className="empty-title">Your roster is empty</p>
+        <EmptyState
+          title="Your roster is empty"
+          action={
+            <>
+              {/* The search is an icon in the header now, which is a small target
+                  to hand someone with nothing on screen — so the one page a new
+                  user is guaranteed to land on opens it for them. */}
+              <button
+                type="button"
+                className="empty-search"
+                onClick={openSearch}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m15.4 15.4 4.1 4.1" />
+                </svg>
+                Search for a player
+              </button>
+              {/* The one place a first-time user is guaranteed to land, so the
+                  guide is offered here rather than only from the settings menu. */}
+              <button type="button" className="empty-help" onClick={() => setHelpOpen(true)}>
+                How does this work?
+              </button>
+            </>
+          }
+        >
           <p>
             Search for a player to start tracking their plate appearances, pitch
             sequences, and Statcast contact quality.
           </p>
-          <div className="empty-actions">
-            {/* The search is an icon in the header now, which is a small target
-                to hand someone with nothing on screen — so the one page a new
-                user is guaranteed to land on opens it for them. */}
-            <button
-              type="button"
-              className="empty-search"
-              onClick={openSearch}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="15"
-                height="15"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <circle cx="10.5" cy="10.5" r="6.5" />
-                <path d="m15.4 15.4 4.1 4.1" />
-              </svg>
-              Search for a player
-            </button>
-            {/* The one place a first-time user is guaranteed to land, so the
-                guide is offered here rather than only from the settings menu. */}
-            <button type="button" className="empty-help" onClick={() => setHelpOpen(true)}>
-              How does this work?
-            </button>
-          </div>
-        </div>
+        </EmptyState>
       )}
 
       {/* And the fantasy half of it, which names its own cause the way every
@@ -11038,14 +11042,13 @@ export default function App() {
         reports.length === 0 &&
         !error &&
         isRosterView(view) && (
-          <div className="empty-state">
-            <p className="empty-title">Your fantasy team is empty</p>
+          <EmptyState title="Your fantasy team is empty">
             <p>
               Add players to it on ESPN, then press the refresh button in the header — or
               turn off “Use my fantasy team” in the fantasy menu to go back to your own
               roster.
             </p>
-          </div>
+          </EmptyState>
         )}
 
       {/* The two halves of the same read, and which one shows turns on whether
@@ -11097,10 +11100,9 @@ export default function App() {
           toggle is the only thing that can empty a view this way, where the
           summary table used to drop them whatever it said. */}
       {isRosterView(view) && displayReports.length > 0 && viewCards.length === 0 && !editMode && (
-        <div className="empty-state">
-          <p className="empty-title">Nothing to show — everyone here is on the IL</p>
+        <EmptyState title="Nothing to show — everyone here is on the IL">
           <p>Turn off “Hide injured players” in settings (the gear by the title) to see them.</p>
-        </div>
+        </EmptyState>
       )}
 
 

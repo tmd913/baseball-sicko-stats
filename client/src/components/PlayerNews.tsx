@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { NewsItem, PlayerNews } from '../types';
 import { useDelayedFlag } from '../hooks';
 import { LoadingBlock } from './Loading';
+import { EmptyState } from './EmptyState';
 import { ErrorLine } from './ErrorLine';
 
 /**
@@ -225,15 +226,18 @@ export function NewsTab({
   if (error) return <ErrorLine detail={error}>Couldn’t read the news</ErrorLine>;
   if (!news || news.items.length === 0) {
     return (
-      <div className="news-empty">
-        <p className="ovw-none">No recent news for {name}.</p>
-        <p className="news-empty-note">
-          This reads RotoWire&rsquo;s notes on him and MLB&rsquo;s own transaction log.
-          Nothing has landed in either lately &mdash; which for a man RotoWire has never
+      <EmptyState compact title={<>No recent news for {name}</>}>
+        {/* Nothing to show, which for a healthy player mid-season is the
+            ordinary case rather than a failure — so the tab says which two
+            feeds were read and that both were empty, the app's rule that an
+            empty view names its cause. */}
+        <p className="empty-how">
+          This reads RotoWire’s notes on him and MLB’s own transaction log.
+          Nothing has landed in either lately — which for a man RotoWire has never
           written up, or one nobody has moved in four months, is the ordinary case rather
           than a read that broke.
         </p>
-      </div>
+      </EmptyState>
     );
   }
   return (
