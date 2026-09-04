@@ -849,6 +849,77 @@ export function useOverlayChromeOffset<T extends HTMLElement>(
 }
 
 /**
+ * **How many overlays are holding the page frozen, and the page as it was when
+ * the first of them arrived.**
+ *
+ * A count and one snapshot, rather than a snapshot per caller — and that is the
+ * whole of a bug this shipped. The hook used to save `body.style.cssText` into
+ * its own closure and write it back on the way out, which is correct only while
+ * the locks release in the exact reverse of the order they were taken. They do
+ * not: an overlay and a dialog **inside** it are two locks, and when the pair
+ * goes together React destroys the parent's effects before the child's, so the
+ * outer lock — which snapshotted the *unpinned* page — restored first and the
+ * inner one wrote `position: fixed` back over it. Nothing was left on screen to
+ * release it, so the body stayed pinned for the life of the tab: the document
+ * collapsed to the window's own height and **the app stopped scrolling
+ * vertically on every view**, a tab switch included, until a reload.
+ *
+ * Measured on the live app at 390×844, before. A reader 700px down the MLB
+ * scoreboard presses a game (the page locks), presses a line-score cell for its
+ * half-inning dialog (a second lock), then presses a batter's name in that
+ * dialog — which opens the player page and **puts the game page away as it
+ * opens**, so the page and the dialog inside it unmount in one commit. Two
+ * presses of `Back` then left no overlay on screen at all with `body.style`
+ * reading `position: fixed; top: -700px; left: 0px; right: 0px; width: 100%;`,
+ * `document.documentElement.scrollHeight` **844** against an `innerHeight` of
+ * 844, `scrollTo(0, 300)` moving nothing, and the reader — who was at 700 — at
+ * **0**. Pressing `Overview` carried all of it across, which is the half of the
+ * report that says it is a global rather than a view's own bug. Counted, the
+ * same drive ends with `body.style` empty, the scroll live and the reader back
+ * at exactly 700.
+ *
+ * The count is the app's own answer to this shape of question, one level down:
+ * `inertHolds` counts holders of `inert` for the same reason, so that two
+ * overlays wanting `#root` inert are one hold each and the first release does
+ * not undo the second. This is that rule applied to the one global the
+ * overlays share.
+ *
+ * **Only the first lock reads the page and only the last writes it back**,
+ * which fixes a second thing the per-caller snapshot got wrong even in order:
+ * an inner lock measured `window.scrollY` while the body was *already* pinned,
+ * so it captured 0 and its release scrolled the reader to the top of a document
+ * the outer lock then restored an offset for.
+ */
+let bodyLocks = 0;
+/** The page as the first lock found it — its inline style and the scroll the
+ *  pin is about to throw away. Null whenever nothing is holding. */
+let bodyLockWas: { css: string; y: number } | null = null;
+
+function lockBody() {
+  if (bodyLocks++ > 0) return;
+  const { body } = document;
+  const y = window.scrollY;
+  bodyLockWas = { css: body.style.cssText, y };
+  body.style.position = 'fixed';
+  body.style.top = `-${y}px`;
+  body.style.left = '0';
+  body.style.right = '0';
+  body.style.width = '100%';
+}
+
+function unlockBody() {
+  // Never below zero: a release without a matching hold would otherwise leave
+  // the count negative and the *next* real lock a no-op.
+  if (bodyLocks === 0) return;
+  if (--bodyLocks > 0) return;
+  const was = bodyLockWas;
+  bodyLockWas = null;
+  if (!was) return;
+  document.body.style.cssText = was.css;
+  window.scrollTo(0, was.y);
+}
+
+/**
  * Freezes the page behind a full-screen overlay for as long as the caller is
  * mounted, then puts it back exactly where it was.
  *
@@ -864,22 +935,18 @@ export function useOverlayChromeOffset<T extends HTMLElement>(
  * technique that stops touch scrolling everywhere. That offset is why the
  * scroll has to be restored by hand on unlock: pinning the body resets the
  * window to 0.
+ *
+ * **The pin itself is counted and lives above**, so a dialog opened inside an
+ * overlay is a second holder rather than a second snapshot, and the two may be
+ * released in either order — see `bodyLocks`, which carries the measurement.
+ * A caller mounting while another already holds costs one increment and writes
+ * nothing.
  */
 export function useLockBodyScroll(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
-    const { body } = document;
-    const y = window.scrollY;
-    const prev = body.style.cssText;
-    body.style.position = 'fixed';
-    body.style.top = `-${y}px`;
-    body.style.left = '0';
-    body.style.right = '0';
-    body.style.width = '100%';
-    return () => {
-      body.style.cssText = prev;
-      window.scrollTo(0, y);
-    };
+    lockBody();
+    return unlockBody;
     // **The flag is a dependency and the hook is otherwise untouched.** It
     // exists for the one box in the app that is a *page* in one place and an
     // overlay in another — the matchup, which is a tab of its own and also a
