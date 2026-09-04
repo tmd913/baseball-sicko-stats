@@ -23280,9 +23280,17 @@ html[data-theme='light'] .league-table thead th {
   vertical-align: middle;
   /* Enough to read as a line of type at the size it stands in for, and it
      inherits the line box, so a bar inside `.ov-perf-name` is a name's height
-     and one inside `.ov-perf-line` is a line's. */
-  height: 0.72em;
-  min-height: 8px;
+     and one inside `.ov-perf-line` is a line's.
+
+     **0.72em and a 8px floor until the bars were thinned out.** With a bar in
+     every cell of a table the size was doing a second job — keeping 45 of them
+     from reading as a solid block — and a bar now stands for a whole row, so it
+     can be the weight of the thing it replaces. Measured on the player page's
+     Overview tab: the three distinct bar heights go 8.6 / 9.4 / 11.5 → 12 /
+     13 / 16, and no block it sits in changes height, the line box it rides in
+     being taller than the bar at every one of them. */
+  height: 1em;
+  min-height: 12px;
   border-radius: 999px;
   /* **Ink at a fixed alpha, not a token, and the reason is the card's
      gradient.** A day card is painted `linear-gradient(180deg, --panel,
@@ -23304,40 +23312,61 @@ html[data-theme='light'] .league-table thead th {
      alpha of a near-black ink over near-white moves less; both still read as a
      bar, and one value for all six beats six blocks that will drift.
 
-     The light travelling across is the accent at a fifth, over the top of it. */
+     **The travelling light is gone and the bar breathes instead.** There was an
+     accent gradient at a fifth swept across each bar on a 1.5s clock, with
+     negative delays by column so the page carried one diagonal wave rather than
+     sixty phases. It is replaced app-wide, on the reader's call: *"it should be
+     a smooth pulsing effect instead of the current shimmer (across the whole
+     app)"*.
+
+     It is also the cheaper animation of the two, which is worth writing down
+     rather than claiming as the reason. A sweep animates `background-position`,
+     which is a paint on every frame of every bar — 75 of them on the player
+     page's Overview tab alone. `opacity` is a composited property, so the pulse
+     is one layer property per bar and no paint at all.
+
+     **And the pulse was already in the file**, as the `prefers-reduced-motion`
+     fallback, with the argument for it written beside it: a still bar is still a
+     bar, so the light could go and a slow fade take its place, a fade not being
+     the kind of motion that preference asks to be spared. That block is gone
+     with the sweep — there is nothing left for it to substitute, every reader
+     now getting what only the reduced-motion reader got. The spinning ball keeps
+     its own query; this one no longer needs one. */
   background-color: color-mix(in srgb, var(--text) 16%, transparent);
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--accent) 20%, transparent) 45%,
-    color-mix(in srgb, var(--accent) 20%, transparent) 55%,
-    transparent 100%
-  );
-  /* 220% so the light is a sweep across the bar rather than a wash over it,
-     whatever the bar's width. */
-  background-size: 220% 100%;
-  background-repeat: no-repeat;
-  animation: sk-sweep 1.5s ease-in-out infinite;
+  animation: sk-pulse 1.6s ease-in-out infinite;
 }
-/* **One clock for the whole page, not one per bar.** Sixty bars each starting
-   their own 1.5s at the moment they mount is sixty lights crossing at sixty
-   phases, which reads as static. Negative delays by column put the sweep on a
-   diagonal instead, so the page has one wave passing over it. */
-.ov-day:nth-child(2) .sk-bar {
-  animation-delay: -0.25s;
-}
-.ov-day:nth-child(3) .sk-bar {
-  animation-delay: -0.5s;
-}
-@keyframes sk-sweep {
-  0% {
-    background-position: 150% 0;
-  }
+/* **One clock for the whole page, and now literally one.** The sweep needed
+   staggering because a light crossing sixty bars at sixty phases reads as
+   static; a pulse is the opposite — bars breathing together read as one surface
+   waiting, and staggered they read as sixty things blinking. So the per-column
+   delays that put the sweep on a diagonal are gone with it, and every bar in the
+   app shares a phase. */
+@keyframes sk-pulse {
+  0%,
   100% {
-    background-position: -50% 0;
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
   }
 }
 
+/* **A bar standing in for a whole line of a flex row, and why it needs a box of
+   its own.** `.start-line` is `display: flex; align-items: baseline` over 13px
+   type, so a bar dropped straight into it is a flex item — a block of exactly
+   its own height, with none of the line box the text it replaces would have
+   brought. Measured when the slot's three bars a row became one: each row lost
+   3px and the block came in at **171 against the real 186**, which is the jump
+   the skeleton exists to remove, reintroduced by tidying it.
+
+   Wrapped in a line, the 13px strut is back and the row is its own height again
+   — 186. `flex: 1` is the other half: a shrink-to-fit span would resolve the
+   bar's percentage width against its own content, which is the bar, which is the
+   trap `.sk-leader-name` records from the other side. */
+.sk-line {
+  flex: 1;
+  min-width: 0;
+}
 /* The headshot's circle, which is the one placeholder that is not a bar —
    `.ov-perf-face` is 26px square with a 50% radius and the class is already on
    the element, so this only has to stop the pill radius overriding it. */
@@ -23402,27 +23431,6 @@ html[data-theme='light'] .league-table thead th {
    160 is the middle of that range and the bar takes the whole of it. */
 .sk-leader-name {
   width: 160px;
-}
-
-/* **The sweep is motion, and motion is a preference.** A still bar is still a
-   bar — the shape it reserves is the whole of what it says — so the light goes
-   and a slow pulse takes its place, which is exactly what the spinning ball
-   does under the same query and for the reason stated there: a fade is not the
-   kind of motion this preference is asking to be spared. */
-@media (prefers-reduced-motion: reduce) {
-  .sk-bar {
-    background-image: none;
-    animation: sk-fade 2.2s ease-in-out infinite;
-  }
-  @keyframes sk-fade {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
-  }
 }
 
 /* **`width: 100%` beside the auto margins, and it is load-bearing.** An auto

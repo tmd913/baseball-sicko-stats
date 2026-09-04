@@ -183,15 +183,17 @@ function NextSlotSkeleton({ head }: { head: string }) {
       <ol className="start-list">
         {[0, 1, 2, 3, 4].map((i) => (
           <li className="start-row" key={i}>
+            {/* **One bar a row, where there were three.** A fixture row is a
+                when, an opponent and a probable, and drawing all three as
+                separate bars made five rows into fifteen marks a reader counts
+                instead of a list waiting to fill. The row is still `.start-line
+                .static`, so it is still the real row's box — only the bar inside
+                it is one. Widths still vary down the list: an even column of
+                identical bars reads as a table rule, and these are lines of type
+                of different lengths. */}
             <div className="start-line static">
-              <span className="ovw-next-when">
-                <SkBar w={['104px', '96px', '110px', '92px', '100px'][i]} />
-              </span>
-              <span className="ovw-next-opp">
-                <SkBar w="62px" />
-              </span>
-              <span className="ovw-next-vs">
-                <SkBar w={['118px', '104px', '112px', '98px', '108px'][i]} />
+              <span className="sk-line">
+                <SkBar w={['84%', '76%', '88%', '72%', '80%'][i]} />
               </span>
             </div>
           </li>
@@ -211,6 +213,10 @@ function NewsSkeleton() {
           <span className="news-meta">
             <SkBar w="150px" />
           </span>
+          {/* The headline and the standfirst under it, which is two facts and
+              so is two bars; the meta line above is the third. It was three
+              bars for three lines and stays close to that, this block being the
+              one on the tab that was never dense. */}
           <span className="news-headline">
             <SkBar w="72%" />
           </span>
@@ -240,13 +246,23 @@ function StatStripSkeleton({ labels }: { labels: string[] }) {
             ))}
           </tr>
         </thead>
+        {/* **One bar across the row, not one per column.** This drew a bar in
+            every cell — eight on a batter, seven on a pitcher — and a row of
+            short bars under a row of real labels reads as a second header rather
+            than as one line of figures that has not arrived. The row is the
+            thing being waited for, so the row is what is reserved.
+
+            `colSpan` keeps the row's own box: the height comes from
+            `.glog-num`'s line box, which one cell has exactly as nine did —
+            measured, the strip is 107px before and after. The column *widths*
+            were never the skeleton's to hold anyway; they are set by the header
+            plus whatever lands, and a bar at 80% of a cell was never the width
+            of the figure replacing it. */}
         <tbody>
           <tr>
-            {labels.map((label) => (
-              <td key={label} className="glog-num">
-                <SkBar w="80%" />
-              </td>
-            ))}
+            <td className="glog-num" colSpan={labels.length}>
+              <SkBar w="100%" />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -272,14 +288,21 @@ function GameLogSkeleton({ isPitcher }: { isPitcher: boolean }) {
             ))}
           </tr>
         </thead>
+        {/* **Five bars, where this drew forty-five.** A bar in every cell of
+            five rows by nine columns was the single densest thing on the tab and
+            the reason the whole skeleton read as noise — forty-five of the
+            seventy-five bars on the page were in this one table. A game is a
+            row; the row is what has not arrived, so the row is one bar.
+
+            Same `colSpan` reasoning as the season strip above: the row keeps its
+            own height off `.glog-num`'s line box, and the widths were never
+            being held. Measured, the block is 258px before and after. */}
         <tbody>
           {[0, 1, 2, 3, 4].map((row) => (
             <tr key={row}>
-              {labels.map((label) => (
-                <td key={label} className="glog-num">
-                  <SkBar w={label === 'DATE' ? '86%' : label === 'OPP' ? '70%' : '58%'} />
-                </td>
-              ))}
+              <td className="glog-num" colSpan={labels.length}>
+                <SkBar w="100%" />
+              </td>
             </tr>
           ))}
         </tbody>

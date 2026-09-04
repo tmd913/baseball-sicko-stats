@@ -1422,6 +1422,64 @@ open**, and the block is five rows and 186px either way. The day block's heading
 takes `Today` for the same reason, settling to `Next game` only for a man with
 neither a game nor a turn.
 
+**Seventy-five bars was too many, and most of them were in two tables.** The
+tab drew a bar in every cell of both: eight or nine columns by five rows in the
+Recent Games log, plus a row of them under the season strip's labels — **45 and
+8 of the 75**. Reported as *"the shimmer effect has too many bars on the player
+overview page, consolidate them and make them bigger"*, and the count is the
+whole of why: a bar is meant to read as *one value not yet arrived*, and forty-five
+of them in a grid read as a redacted table — the same fault the day block was
+already fixed for, one block along.
+
+**A game is a row, so the row is one bar.** Both tables take a single
+`colSpan={labels.length}` cell per row, and the fixture slot's three bars a row
+(a when, an opponent, a probable) become one. The labels above them are still
+real — `seasonLabels` and the log's own list — so what a reader sees is the
+table's own header over lines that have not filled in.
+
+| | bars |
+| --- | --- |
+| Recent Games | 45 → **5** |
+| Season strip | 8 → **1** |
+| Next slot | 15 → **5** |
+| Day block, news | 7 → 7 |
+| **the tab** | **75 → 18** |
+
+The day block keeps its four and the news its three: they are the two blocks
+that were never dense, and the day block's four bars are *structural* — each sits
+in one of the row's spans and each span's line box is part of the 68px this
+block was measured to.
+
+**Which is the trap the consolidation walked into.** `.start-line` is
+`display: flex; align-items: baseline` over 13px type, so a bar dropped straight
+into it is a flex item — a block of its own height, bringing none of the line box
+the text it replaces would have. Measured the moment the slot's three bars became
+one: every row lost 3px and the block came in at **171 against the real 186**,
+which is the jump the skeleton exists to remove, reintroduced by tidying it. A
+`.sk-line` wrapper (`flex: 1; min-width: 0`) puts the 13px strut back and the
+block is 186 again. `flex: 1` is the other half of that rule: a shrink-to-fit
+span resolves the bar's percentage width against its own content, which is the
+bar — the trap `.sk-leader-name` records from the other side.
+
+**Measured across the tab, skeleton against settled**, at 1100×1200 with the
+page read held:
+
+| block | skeleton | settled |
+| --- | --- | --- |
+| day | 68 | 72 |
+| next slot | **186** | 186 |
+| news | **105** | 105 |
+| season strip | **107** | 107 |
+| game log | **258** | 263 |
+
+The news block *improved* on the way through — 100 → 105, exact — the taller bars
+being nearer the height of the type they stand for. Nothing else moved, and the
+bars themselves went 8.6 / 9.4 / 11.5 → **12 / 13 / 16**, the `.sk-bar` height
+going `0.72em`/8px → `1em`/12px now that a bar stands for a line rather than a
+cell. The Overview's own day cards were checked for the same reason, the bar
+being app-wide: a real card and a skeleton card side by side in the carousel are
+**383 and 383**.
+
 **And a skeleton wants no `WAIT_DELAY` in front of it**, which is the one place
 this departs from the app's loading rules rather than applying them.
 `useDelayedFlag` exists so a spinner that would appear and vanish inside a tenth
