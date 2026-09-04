@@ -23534,8 +23534,12 @@ html[data-theme='light'] .league-table thead th {
   /* **Stretch, so the three cards are one height.** With the neighbors peeking
      into the gutters, three different bottom edges an inch apart read as three
      boxes that failed to line up rather than as three days of different
-     lengths. Above the breakpoint it goes back to `start`, where all three are
-     fully in view and each being its own height is the honest drawing. */
+     lengths. **At every width**: this used to say it went back to `start` above
+     the breakpoint, where all three are fully in view and each being its own
+     height is the honest drawing. Three bottom edges a line apart read no
+     better side by side than they do peeking, and the difference is never a
+     fact about the day — see the note in the 900px block, which carries the
+     measurement. */
   align-items: stretch;
   overflow-x: auto;
   overflow-y: hidden;
@@ -23977,7 +23981,23 @@ html[data-theme='light'] .league-table thead th {
        edge*, and above this width there is not. */
     overflow: visible;
     scroll-snap-type: none;
-    align-items: start;
+    /* **The cards keep the carousel's one height here too**, which this block
+       used to undo with `align-items: start`. The argument for that was that
+       above this width all three are fully in view, so each being its own
+       height is the honest drawing — and it is, of the *days*; what it draws of
+       the **cards** is three boxes whose bottom edges miss each other by a line.
+       Which is the same reading the base rule already rejected one breakpoint
+       down, and for the same reason: the difference is never a fact about the
+       day, it is one performer's stat line wrapping. Measured at 2000×1200 on
+       the live league, `Rogers 6.2 IP, 6 H, 0 BB, 11 K, 2.70 ERA, 0.90 WHIP`
+       wrapped to two lines and made its card **383 against its neighbours'
+       370** — a 13px step that says nothing about Yesterday.
+
+       Nothing else was needed: `.ov-day` is a column flex and `.ov-day-foot`
+       already carries `margin-top: auto` for exactly this, put there when the
+       carousel's stretch made it necessary, so the doors sit on the bottom edge
+       of a card that has grown rather than floating under the last performer.
+       Reported as *"these cards should all be the same height"*. */
     margin-inline: 0;
     padding-inline: 0;
   }

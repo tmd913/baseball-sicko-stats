@@ -450,6 +450,26 @@ gap below **8** unchanged and page-body overflow 0. The card grows by the 14 —
 **354 → 368px at 1200**, and 370 at 390, where the carousel stretches its three
 to one height and the tallest of them sets it.
 
+**And it stretches them at every width now, which took a second pass.** The
+900px block undid it — `align-items: start` — on the argument that above that
+width all three cards are fully in view, so each being its own height is the
+honest drawing. It is honest about the *days* and it is not what it draws of the
+**cards**: three boxes whose bottom edges miss each other by a line, which is the
+reading the base rule had already rejected one breakpoint down and for the same
+reason. The difference is never a fact about the day. Measured at 2000×1200 on
+the live league, the one card holding `Rogers · 6.2 IP, 6 H, 0 BB, 11 K, 2.70
+ERA, 0.90 WHIP` wrapped that line to two and came out **383 against its
+neighbours' 370** — a 13px step that says nothing except that one man's stat line
+is long. Reported as *"these cards should all be the same height"*.
+
+Removing the override was the whole change: `.ov-day` is a column flex and
+`.ov-day-foot` already carries `margin-top: auto`, put there when the carousel's
+stretch first made it necessary, so a card that has grown keeps its two doors on
+its bottom edge rather than floating them under the last performer. Measured
+after, at 2000, 1200 and 950: all three cards in a row are **383 / 383 / 409**
+respectively — one height each time, with both rows' bottom edges flush and the
+foot a constant **11px** off the card's bottom in every one of the six.
+
 **The rule was written three times and only the third one was doing anything.**
 `.ov-perfs-head`'s six declarations appeared **twice** in the top-performers
 section — byte-identical, each under its own copy of the same comment — and a
