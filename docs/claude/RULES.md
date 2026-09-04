@@ -293,6 +293,17 @@ box opening *inside* a subtree an older mark is holding must free it.
 `useOverlayFocus` reads the opener before inerting and releases before restoring
 — focus cannot land inside an inert subtree.
 
+**A global two overlays can hold at once is counted, never snapshotted per
+holder.** `inertHolds` counts holders of `inert` and `bodyLocks` counts holders
+of the body pin: the **first** takes it and reads the page, the **last** puts
+the page back. A per-holder save-and-restore is correct only under strictly
+LIFO release, and overlays are not — React destroys a deleted subtree
+*parent-first*, so a page and a dialog inside it that go together release
+outer-then-inner and the inner one writes the outer's pin back over the
+restore. Shipped once, as `position: fixed` left on the body with nothing on
+screen: the whole app stopped scrolling vertically, on every view, until a
+reload.
+
 **A dismissal spends the gesture.** A modal backdrop arms on `pointerdown` and
 dismisses on the `click`; a popover closing on an outside press swallows the
 ensuing click (`swallowNextClick`), or the press does two things.
