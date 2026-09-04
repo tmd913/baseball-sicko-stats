@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { Pitch } from '../types';
+import { Fragment, useState } from 'react';
+import type { Pitch, PlayAction } from '../types';
 import { describePitch, isSwing, pitchAbbr } from '../lib';
 import { StrikeZone } from './StrikeZone';
 
@@ -47,15 +47,35 @@ function PitchRow({
  * a sibling `StrikeZone` can share the hover/tap highlight. */
 export function PitchTable({
   pitches,
+  actions = [],
   activePitch,
   onHover,
   onTap,
 }: {
   pitches: Pitch[];
+  /**
+   * **The non-pitch events of the at-bat, in their place in it** — a mound
+   * visit, a pitching change, a runner going. Each is drawn as a muted row
+   * after the pitch it followed (`afterPitch`, the number of pitches thrown
+   * when it happened; 0 puts it ahead of the first), so the table reads as
+   * the at-bat did rather than as the pitches with the interruptions listed
+   * underneath. The game page's Live tab is the caller; the feed's card
+   * carries none, its at-bats being finished.
+   */
+  actions?: PlayAction[];
   activePitch: number | null;
   onHover: (pitchNumber: number | null) => void;
   onTap: (pitchNumber: number) => void;
 }) {
+  const after = (n: number) =>
+    actions
+      .filter((a) => a.afterPitch === n)
+      .map((a, i) => (
+        <div className="pitch-row pitch-action" key={`${n}-${i}`}>
+          <span className="pitch-num" aria-hidden="true" />
+          <span className="pitch-action-text">{a.description}</span>
+        </div>
+      ));
   return (
     <div className="pa-pitches">
       <div className="pitch-row pitch-head">
@@ -65,14 +85,17 @@ export function PitchTable({
         <span className="pitch-velo">MPH</span>
         <span className="pitch-desc">Result</span>
       </div>
-      {pitches.map((p) => (
-        <PitchRow
-          key={p.pitchNumber}
-          pitch={p}
-          active={activePitch === p.pitchNumber}
-          onHover={onHover}
-          onTap={onTap}
-        />
+      {after(0)}
+      {pitches.map((p, i) => (
+        <Fragment key={p.pitchNumber}>
+          <PitchRow
+            pitch={p}
+            active={activePitch === p.pitchNumber}
+            onHover={onHover}
+            onTap={onTap}
+          />
+          {after(i + 1)}
+        </Fragment>
       ))}
     </div>
   );

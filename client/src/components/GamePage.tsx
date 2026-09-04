@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useResource, useResourcePoll } from '../resource';
 import {
+  eventLabel,
   formatStartTime,
   inningLabel,
   LIVE_POLL_MS,
+  outcomeKind,
   prettyGameDate,
   SEASON_STALE_MS,
 } from '../lib';
@@ -17,12 +19,20 @@ import { Modal } from './Modal';
 import { byPlayOrder, entryKey, FeedItem, playerDayEntries } from './LiveFeed';
 import type { FeedEntry } from './LiveFeed';
 import { TeamPhoto } from './PlayerIdentity';
+import { BaseDiamond } from './BaseDiamond';
+import { PlayMatchup } from './PlateAppearanceCard';
+import type { MatchupMan } from './PlateAppearanceCard';
+import { PitchTable } from './PitchSequence';
+import { StrikeZone } from './StrikeZone';
 import type {
   GameBatterLine,
+  GameLive,
   GamePitcherLine,
   GameReport,
   GameRosterMan,
   GameTeamLine,
+  LiveMan,
+  LivePlay,
   PlayerReport,
   SeasonPlayer,
 } from '../types';
@@ -49,10 +59,11 @@ import { SlidingTabs } from './TabSlider';
  * different subject and several screens of table — the same argument
  * `OutingPage` makes for itself one level down.
  *
- * ## Three tabs
+ * ## Three tabs, and a fourth while the game is on
  *
  * **Overview · Box Score · Plays**, and the order is the order a reader asks
- * for them.
+ * for them. **Live** stands ahead of all three while the game is being played
+ * and is where the page opens then — see `GameLiveTab`.
  *
  * - **Overview** is the answer: the line score, who won it, and the runs as
  *   they were scored. A reader who opened a finished game from an opponent cell
@@ -165,7 +176,30 @@ export function GamePage({
   onClose: () => void;
   onOpenPlayer: (key: string) => void;
 }) {
-  const [tab, setTab] = useState<GameTab>(initialTab ?? 'overview');
+  /**
+   * **The page opens on `Live`, and `Live` reads as `Overview` on a game that
+   * is not being played.** The one default serves both: a live game opens on
+   * the tab that says where it is, and a finished one — which has no Live tab
+   * to be on — opens on the answer, exactly as it always did. A game that ends
+   * while the reader is on Live falls through to Overview the same way, with
+   * no effect chasing the state change: the app's standing rule for an
+   * unrecognized value is to fall back rather than empty the view, and here
+   * it is applied to a value that *was* recognized a moment ago.
+   *
+   * `isLive` is the game's own block rather than its state alone: MLB calls a
+   * game Live at Warmup, and there is nothing to draw until first pitch.
+   */
+  const [tabRaw, setTab] = useState<GameTab>(initialTab ?? 'live');
+  const gameRes = useResource(`game:${gamePk}`, () => api.game(gamePk), {
+    keepPrevious: false,
+    staleMs: 0,
+  });
+  const game = gameRes.value ?? null;
+  // `Boolean` rather than `!== null`: a report frozen before the field existed
+  // deserializes without it, and that is a final game, which is never live —
+  // but the test should not have to know that.
+  const isLive = game?.status.state === 'live' && Boolean(game.live);
+  const tab: GameTab = tabRaw === 'live' && game !== null && !isLive ? 'overview' : tabRaw;
   useEffect(() => {
     onTabChange?.(tab);
   }, [tab, onTabChange]);
@@ -199,22 +233,18 @@ export function GamePage({
    */
   const gameKey = `game:${gamePk}`;
   /**
-   * **`staleMs: 0` — every mount still issues its read**, which is what the
-   * paragraph above the old module caches promised and what a page about a game
-   * being played has to do. What the store changes is only what is on screen
-   * while that read is in flight: the answer it already has, drawn at full
-   * height in the first commit, rather than an empty box. That is rule 1 and it
-   * is also what `initialScroll` needs to land where the reader left.
+   * **`staleMs: 0` — every mount still issues its read** (the `useResource`
+   * above, beside the tab that reads its answer), which is what the paragraph
+   * above the old module caches promised and what a page about a game being
+   * played has to do. What the store changes is only what is on screen while
+   * that read is in flight: the answer it already has, drawn at full height in
+   * the first commit, rather than an empty box. That is rule 1 and it is also
+   * what `initialScroll` needs to land where the reader left.
    *
    * **`keepPrevious: false`**, because the key changes only when the *game*
    * does, and one game's line score under another's heading is not a stale
    * answer to the question on screen — it is an answer to a different one.
    */
-  const gameRes = useResource(gameKey, () => api.game(gamePk), {
-    keepPrevious: false,
-    staleMs: 0,
-  });
-  const game = gameRes.value ?? null;
   /* **This page 502s honestly** and the banner is drawn only where `game` is
      null, so a failed *poll* costs nothing: the last answer stands, which is the
      loading rule in its own words. */
@@ -261,7 +291,8 @@ export function GamePage({
    * would have taken away. A game being played re-reads on the poll below,
    * which is the case that actually moves.
    */
-  const playsKey = tab === 'plays' || halfOpen !== null ? `gamePlays:${gamePk}` : null;
+  const playsKey =
+    tab === 'plays' || tab === 'live' || halfOpen !== null ? `gamePlays:${gamePk}` : null;
   const playsRes = useResource(playsKey, () => api.gamePlays(gamePk), {
     keepPrevious: false,
     staleMs: SEASON_STALE_MS,
@@ -301,6 +332,15 @@ export function GamePage({
       head={<GameHead game={game} onOpenTeam={teamDoor} />}
       tabs={
         <>
+          {/* **First, and only while the game is on.** A tab that says where
+              the game is has nothing to say about a game that has stopped, and
+              a reader who comes back to a finished game finds the strip it
+              always had. */}
+          {isLive && (
+            <DetailsTabButton id="live" tab={tab} onPick={setTab}>
+              Live
+            </DetailsTabButton>
+          )}
           <DetailsTabButton id="overview" tab={tab} onPick={setTab}>
             Overview
           </DetailsTabButton>
@@ -315,6 +355,15 @@ export function GamePage({
     >
       {game ? (
         <>
+          {tab === 'live' && game.live && (
+            <GameLiveTab
+              game={game}
+              live={game.live}
+              reports={plays}
+              openable={openable}
+              onOpenPlayer={onOpenPlayer}
+            />
+          )}
           {tab === 'overview' && (
             <GameOverview
               game={game}
@@ -374,9 +423,10 @@ interface HalfRef {
  *  `inningState`, so the test is the prefix rather than any one of them. */
 const isBottom = (half: string) => half.toLowerCase().startsWith('bot');
 
-/** The three, written in strip order for the reason every tab union in this app
+/** The four, written in strip order for the reason every tab union in this app
  *  is: a tab is a key and never an index, so the order is the order the buttons
- *  are written in and nothing stores a position.
+ *  are written in and nothing stores a position. `live` is offered only while
+ *  the game is on and reads as `overview` otherwise — see the page's own note.
  *
  *  **Not in the URL**, which is where both other details pages keep their tab:
  *  it is which reading of one game is on screen, where `game=` is which game.
@@ -1353,6 +1403,336 @@ function handToken(hand: string | null, kind: 'batter' | 'pitcher'): string {
   if (kind === 'pitcher') return hand === 'L' || hand === 'R' ? `${hand}HP` : '';
   if (hand === 'S') return 'SH';
   return hand === 'L' || hand === 'R' ? `${hand}HB` : '';
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Live
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * **Where the game is, right now** — the tab a live game opens on.
+ *
+ * Every other tab on this page is a record: the line score so far, the box
+ * score so far, the plays so far. None of them answers the question a reader
+ * with a game on has — *who is up, what is the count, where was that pitch* —
+ * and the head's `Top 7` chip is the whole of what the page said about it. So
+ * this tab is that answer and nothing else, in three blocks, each a reading
+ * the app already draws elsewhere put to the present tense:
+ *
+ * - **The situation.** The batter and the pitcher as the feed's own matchup
+ *   head draws them (`PlayMatchup`, two faces either side of a `vs`), with the
+ *   count and the base diamond ahead of them where the plate-appearance dialog
+ *   puts the half-inning. Under each man his line for the game, as MLB writes
+ *   it. Under the pair, the two men behind him. **Between halves** the same
+ *   block is *Due up*: the three men, and the pitcher they will face — which
+ *   MLB has already turned round in the linescore by then (see the server's
+ *   `buildLive`), so the block is the same five fields read with a flag.
+ * - **The at-bat.** The pitch table and the strike zone the feed's card draws
+ *   for a finished plate appearance, here for the one being thrown, with the
+ *   mound visits and pitching changes in their place in the sequence. When the
+ *   at-bat has just ended and the next man is not yet in the box — or the half
+ *   is over — it is the **last** at-bat, headed by its result, which is what
+ *   the reader has just watched.
+ * - **This half-inning.** The half's finished plays as feed items, **newest
+ *   first**: the Plays tab reads a half forwards because a game is a narrative,
+ *   and this tab reads it backwards because the play the reader wants next to
+ *   the at-bat is the one before it. The at-bat in progress is not among them —
+ *   the block above is it — and the read is the Plays tab's own, so whichever
+ *   of the two the reader opens first pays for it.
+ *
+ * It re-reads on the page's own twenty-second poll and quietly, which is rule
+ * 1: the last situation stands while the next lands. That is the roster's
+ * clock rather than the MLB app's, and deliberately — a reader with the roster
+ * open beside this must not see the same at-bat at two counts.
+ */
+function GameLiveTab({
+  game,
+  live,
+  reports,
+  openable,
+  onOpenPlayer,
+}: {
+  game: GameReport;
+  live: GameLive;
+  /** The Plays tab's own read — null until it lands, which draws no block
+   *  rather than a wait: the situation above is the answer and this is what
+   *  led to it. */
+  reports: PlayerReport[] | null;
+  openable: Set<string>;
+  onOpenPlayer: (key: string) => void;
+}) {
+  const play = live.play;
+  /** The at-bat being played, or null while there is not one — between men,
+   *  and between halves. */
+  const atBat = play && !play.complete ? play : null;
+  /** …and the last one finished, drawn when there is no at-bat to draw. */
+  const last = play && play.complete ? play : null;
+  const batter = atBat?.batter ?? live.batter;
+  const pitcher = atBat?.pitcher ?? live.pitcher;
+  /**
+   * **Which half the due-up men lead off.** MLB's `Middle` is the top over
+   * and the bottom of the same inning not begun; `End` is the bottom over and
+   * the inning about to turn. The head's chip says `Middle 3` and this says
+   * what that means.
+   */
+  const state = (game.status.inningState ?? '').toLowerCase();
+  const inning = game.status.currentInning ?? play?.inning ?? 0;
+  const dueHalf: HalfRef = state === 'end' ? { inning: inning + 1, half: 'Top' } : { inning, half: 'Bot' };
+  const halfName = (h: HalfRef) => `${isBottom(h.half) ? 'Bottom' : 'Top'} ${ordinalInning(h.inning)}`;
+
+  /**
+   * **The half's finished plays, newest first**, off the same `buildHalves`
+   * the Plays tab and the half-inning dialog use — the last block, which is
+   * the half being played or the one just ended. The at-bat in progress is
+   * dropped: it is the block above, and a card of it here would draw one
+   * at-bat twice on one screen.
+   */
+  const recent = useMemo(() => {
+    const halves = buildHalves(reports, false);
+    const block = halves[halves.length - 1];
+    if (!block) return null;
+    const done = block.entries.filter((e) => !(e.type === 'pa' && !e.pa.event));
+    return done.length > 0 ? { ...block, entries: done.slice().reverse() } : null;
+  }, [reports]);
+
+  return (
+    <div className="details-overview">
+      <section className="ovw-block ovw-column live-now">
+        <div className="ovw-head-row">
+          <h2 className="ovw-head">
+            {live.between ? (
+              <>
+                Due up
+                <span className="game-half-club">
+                  {' · '}
+                  {halfName(dueHalf)}
+                </span>
+              </>
+            ) : atBat ? (
+              'At bat'
+            ) : (
+              'Next up'
+            )}
+          </h2>
+          {!live.between && (
+            <span className="start-note">
+              {live.outs} {live.outs === 1 ? 'out' : 'outs'}
+            </span>
+          )}
+        </div>
+        {live.between ? (
+          <DueUp live={live} openable={openable} onOpenPlayer={onOpenPlayer} />
+        ) : (
+          <>
+            <PlayMatchup
+              batter={batter ? matchupMan(batter, 'batter') : null}
+              pitcher={pitcher ? matchupMan(pitcher, 'pitcher') : null}
+              /* The count and the situation ahead of the two faces, where the
+                 plate-appearance dialog puts the half-inning: the half is in
+                 the head's chip already, and the count is the one fact about
+                 a live at-bat that nothing else on the page says. */
+              lead={
+                <>
+                  <span className="live-count" title="Balls and strikes">
+                    {live.balls}-{live.strikes}
+                  </span>
+                  <BaseDiamond bases={live.bases} outs={live.outs} className="pa-bases" />
+                </>
+              }
+            />
+            <Queue live={live} openable={openable} onOpenPlayer={onOpenPlayer} />
+          </>
+        )}
+      </section>
+
+      {play && (
+        <section className="ovw-block ovw-column">
+          <div className="ovw-head-row">
+            <h2 className="ovw-head">{atBat ? 'This at-bat' : 'Last at-bat'}</h2>
+            {last && (
+              <span className="start-note">
+                {isBottom(last.half) ? 'Bottom' : 'Top'} {ordinalInning(last.inning)}
+              </span>
+            )}
+          </div>
+          {last && (
+            /* **Headed by its result**, in the feed's own badge and MLB's own
+               sentence, with the outs it left: this is the play the reader has
+               just watched, and the pitches under it are how it went. */
+            <p className="live-result">
+              <span className={`pa-badge kind-${outcomeKind(last.event)}`}>{eventLabel(last.event)}</span>
+              <span className="live-result-text">
+                {last.description ?? ''}{' '}
+                <b className="live-result-outs">
+                  {last.outs} {last.outs === 1 ? 'out' : 'outs'}
+                </b>
+              </span>
+            </p>
+          )}
+          <LivePitches play={play} />
+        </section>
+      )}
+
+      {recent && (
+        <section className="ovw-block game-half ovw-column">
+          <div className="ovw-head-row">
+            <h2 className="ovw-head">
+              {halfName(recent)}
+              <span className="game-half-club">
+                {' · '}
+                {isBottom(recent.half) ? game.home.abbr : game.away.abbr} batting
+              </span>
+            </h2>
+            <span className="start-note">newest first</span>
+          </div>
+          <div className="feed-list game-play-feed">
+            {recent.entries.map((e) => (
+              <FeedItem key={entryKey(e)} entry={e} onOpenDetails={onOpenPlayer} sameGame />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+/** A `LiveMan` as the matchup head takes him: his line for the game as the
+ *  third line, and a pitcher's count ahead of it the way the MLB app writes
+ *  it — `37 P · 3.0 IP, 2 K`. */
+function matchupMan(m: LiveMan, role: 'batter' | 'pitcher'): MatchupMan {
+  const note =
+    role === 'pitcher' && m.pitches !== null
+      ? [`${m.pitches} P`, m.line].filter(Boolean).join(' · ')
+      : m.line;
+  return { id: m.id, name: m.name, hand: m.hand, note };
+}
+
+/**
+ * **The two men behind the batter**, one line under the matchup: `On deck` and
+ * `In the hole`, each with his line for the game. The MLB app's own sentence,
+ * and the two names are doors where this page can open them.
+ */
+function Queue({
+  live,
+  openable,
+  onOpenPlayer,
+}: {
+  live: GameLive;
+  openable: Set<string>;
+  onOpenPlayer: (key: string) => void;
+}) {
+  const men: [string, LiveMan | null][] = [
+    ['On deck', live.onDeck],
+    ['In the hole', live.inHole],
+  ];
+  if (men.every(([, m]) => m === null)) return null;
+  return (
+    <p className="live-queue">
+      {men.map(([role, m]) =>
+        m ? (
+          <span className="live-queue-man" key={role}>
+            <span className="live-queue-role">{role}</span>
+            <PlayerName id={m.id} name={m.name} kind="batter" openable={openable} onOpenPlayer={onOpenPlayer} />
+            {m.line && <span className="live-queue-line">{m.line}</span>}
+          </span>
+        ) : null,
+      )}
+    </p>
+  );
+}
+
+/**
+ * **Between halves: who is coming up, and who they will face.** The three men
+ * in order, as the roster lists on this page draw a man — name, position, hand
+ * — with his line for the game on the end; and the pitcher above them, with
+ * his.
+ */
+function DueUp({
+  live,
+  openable,
+  onOpenPlayer,
+}: {
+  live: GameLive;
+  openable: Set<string>;
+  onOpenPlayer: (key: string) => void;
+}) {
+  const men = [live.batter, live.onDeck, live.inHole].filter((m): m is LiveMan => m !== null);
+  return (
+    <>
+      {live.pitcher && (
+        <PlayMatchup batter={null} pitcher={matchupMan(live.pitcher, 'pitcher')} />
+      )}
+      {men.length > 0 ? (
+        <ol className="start-list live-due">
+          {men.map((m) => (
+            <li className="start-row" key={m.id}>
+              <div className="start-line team-roster-line">
+                <PlayerName
+                  id={m.id}
+                  name={m.name}
+                  kind="batter"
+                  openable={openable}
+                  onOpenPlayer={onOpenPlayer}
+                  className="team-roster-name"
+                />
+                <span className="team-roster-pos">{m.pos ?? ''}</span>
+                <span className="team-roster-hand">{handToken(m.hand, 'batter')}</span>
+                <span className="live-due-line">{m.line ?? ''}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="ovw-none">MLB hasn’t named who is due up.</p>
+      )}
+    </>
+  );
+}
+
+/**
+ * **The at-bat's pitches** — the feed card's own table and zone, sharing a
+ * hover/tap highlight, with the non-pitch events in their place in the
+ * sequence. Its own component for the reason `PlateAppearanceDetail` is: the
+ * highlight belongs to the at-bat, and a new at-bat should not inherit the
+ * pitch a finger was on in the last one — which is what keying it on the play
+ * does.
+ *
+ * The container is declared here because the card's stacking rule is a
+ * container query, and a container query with no container silently fails —
+ * moved out of the feed card, the table and the zone would sit side by side at
+ * every width.
+ */
+function LivePitches({ play }: { play: LivePlay }) {
+  return <LivePitchesBody key={`${play.inning}-${play.half}-${play.batter?.id ?? 0}-${play.complete}`} play={play} />;
+}
+
+function LivePitchesBody({ play }: { play: LivePlay }) {
+  const [activePitch, setActivePitch] = useState<number | null>(null);
+  const toggleActivePitch = (n: number) => setActivePitch((cur) => (cur === n ? null : n));
+  if (play.pitches.length === 0 && play.actions.length === 0) {
+    return <p className="ovw-none">No pitches yet.</p>;
+  }
+  return (
+    <div className="live-ab-body">
+      <div className="pa-body">
+        <div className="pa-main">
+          <PitchTable
+            pitches={play.pitches}
+            actions={play.actions}
+            activePitch={activePitch}
+            onHover={setActivePitch}
+            onTap={toggleActivePitch}
+          />
+        </div>
+        <StrikeZone
+          pitches={play.pitches}
+          activePitch={activePitch}
+          onHoverPitch={setActivePitch}
+          onTapPitch={toggleActivePitch}
+        />
+      </div>
+    </div>
+  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────

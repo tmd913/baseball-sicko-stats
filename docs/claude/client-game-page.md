@@ -31,10 +31,11 @@ a page you are still reading, and this *replaces* the reading.
 
 ---
 
-## Three tabs
+## Three tabs, and a fourth while the game is on
 
 **Overview · Box Score · Plays**, and the order is the order a reader asks for
-them.
+them. **Live** stands ahead of all three while the game is being played, and is
+where a live game's page opens — see *The Live tab* below.
 
 ### Overview
 
@@ -509,6 +510,128 @@ height and its own chevron. Measured on a live game in the top of the 7th:
 options `Live · All innings · 1st … 7th`, value `live`, one block drawn
 (`Top 7th · NYY batting`) and `Show the 6th · 6` under it.
 
+## The Live tab
+
+**Where the game is, right now.** Every other tab on this page is a record —
+the line score so far, the box score so far, the plays so far — and none of
+them answers the question a reader with a game on actually has: *who is up,
+what is the count, where was that pitch*. The head's `Top 7` chip was the whole
+of what the page said about the present. Reported as wanting *"more detailed
+information for the live at bat (or the pitcher and upcoming hitters if it's
+between innings)"*, with the MLB app's Gameday screen as the reference.
+
+**First on the strip, and only while the game is on.** A tab that says where
+the game is has nothing to say about a game that has stopped, so the button is
+drawn only on a game that is live *and past first pitch* — the test is the
+report's `live` block rather than its state, because MLB calls a game Live at
+Warmup and there is nothing to draw until somebody throws.
+
+**The page opens on `Live`, and `Live` reads as `Overview` on a game that is
+not being played.** One default serves both: `useState(initialTab ?? 'live')`,
+normalized on read — a live game opens on the tab that says where it is, a
+finished one (which has no Live tab to be on) opens on the answer as it always
+did, and a game that *ends* while the reader is on Live falls through to
+Overview with no effect chasing the state change. That is the app's standing
+rule for an unrecognized value applied to a value that was recognized a moment
+ago, and it is the same shape the Plays tab's `pick` takes when its `live`
+option goes.
+
+### Three blocks, each a reading the app already draws put to the present tense
+
+**The situation.** The batter and the pitcher as the feed's own matchup head
+draws them — `PlayMatchup`, two faces either side of a `vs` — with the count and
+the base diamond in the `lead` slot, where the plate-appearance dialog puts the
+half-inning glyph. The half is in the head's chip already; the count is the one
+fact about a live at-bat that nothing else on the page says, so it is the loud
+thing in the block (22px, tabular figures so `1-2` and `3-2` are the same width
+and the diamond beside it does not step). Under each man his **line for the
+game as MLB writes it** — `1-3 | HR, 2 RBI`, `37 P · 3.0 IP, 2 K` — which is
+`MatchupMan`'s new third line (`note`) and is drawn nowhere else. Under the
+pair, **`On deck` and `In the hole`** with their lines, the MLB app's own
+sentence.
+
+**Between halves the same block is `Due up · Bottom 3rd`**: the three men in
+order, as this page's roster lists draw a man, with the pitcher they will face
+above them. It is the same five fields read with a flag, and the flag is MLB's:
+the linescore's `offense` block is *already the club due up* in `Middle` and
+`End`, and `defense.pitcher` the man who will pitch to them — measured on a
+final, where `offense.batter/onDeck/inHole` name the next three of the club that
+would have batted. Which half they lead off is derived from `inningState`:
+`Middle` is the bottom of this inning, `End` the top of the next.
+
+**The at-bat.** The feed card's own pitch table and strike zone — `PitchTable`
+and `StrikeZone`, sharing a hover/tap highlight — for the at-bat being thrown,
+with the **non-pitch events in their place in the sequence**: `PitchTable`
+takes `actions` now and draws a mound visit or a pitching change as a muted row
+after the pitch it followed (`afterPitch`), so the table reads as the at-bat
+did rather than as the pitches with the interruptions listed underneath. The
+highlight is keyed on the play, so a new at-bat does not inherit the pitch a
+finger was on in the last one. **The container is declared** (`.live-ab-body`,
+`container-type: inline-size`): the card's stacking rule is a container query,
+and a container query with no container silently fails — moved out of the feed
+card, the table and the zone sat side by side at every width.
+
+**When there is no at-bat to draw it is the last one**, headed by its result in
+the feed's own badge and MLB's own sentence with the outs it left — *Jung Hoo
+Lee grounds out, first baseman Spencer Horwitz to pitcher Mason Montgomery.
+**3 outs*** — because that is the play the reader has just watched. MLB keeps
+`currentPlay` on the finished play until the next batter's is opened, and
+`about.isComplete` is what separates the two; between halves it is the last
+out.
+
+**This half-inning.** The half's finished plays as feed items, off the same
+`buildHalves` the Plays tab and the half-inning dialog use — the last block,
+which is the half being played or the one just ended — and **newest first**.
+The Plays tab reads a half forwards because a game is a narrative; this tab
+reads it backwards because the play the reader wants beside the at-bat is the
+one before it, which is how the MLB app's timeline reads too. The at-bat in
+progress is dropped from it (`!e.pa.event`): the block above *is* it, and a
+card of it here would draw one at-bat twice on one screen. The read is the Plays
+tab's own key, so whichever of the two tabs the reader opens first pays for it
+and the other finds it done; while it is in flight the block is simply absent,
+the situation above being the answer and this only what led to it.
+
+### The wire
+
+**`GameReport.live`**, built by `game.ts::buildLive` and **null on anything but
+a game being played.** Three things off the feed, and each is MLB's own rather
+than derived:
+
+- `linescore.offense` / `.defense` for the men on the field and the runners
+  (the same block the day pipeline's `buildGameStatus` reads, so the report's
+  own `GameStatus` fills `bases`, `atBatId`, `onDeckId`, `onBaseIds` and
+  `pitchingId` now too — *`GameStatus` is one shape* below records what those
+  fields were while nothing on this page drew one);
+- `plays.currentPlay` for the at-bat, its pitches through
+  **`mlbStats.ts::pitchFromEvent`** — the day pipeline's own loop, lifted into a
+  function and exported so a pitch on this zone and the same pitch on the
+  feed's card are one mapping (type name, call vocabulary, plate coordinates,
+  break) — and its actions through `playActions`, exported the same way;
+- the box score's **`summary`** for each man's line, printed unedited, which is
+  the rule `notes` already keeps: prose off the wire, MLB's own abbreviations,
+  and a line this app composed would be a second author of the same sentence.
+
+**`allPlays` is deliberately not named** in the field list, so a finished
+game's four hundred plays stay off a payload re-read every twenty seconds; the
+Plays tab reads them off the day pipeline. **Measured** on two finals (823337,
+822696): the cut went **70,027 → 79,033** and **62,336 → 71,257** bytes, of
+which the play itself is ~2.2KB. The rest is `description` on every man's hand
+and his own zone bounds under `gameData.players`, which the leaf match cannot
+separate from the pitch's; `primaryPosition` was in the list for a commit as
+the position fallback and came out again at **3.8KB** for a fallback that
+never fires — every man the block names is in the game, so the box score has
+his position.
+
+**No cache version moved.** The field is null on every report that is ever
+frozen — a settled game is not being played — and its one reader tests the
+state before it looks, so a v2 blob deserialized without it answers exactly
+what a v3 blob would. The bump rule guards a field *read back out of a blob*;
+this one never is.
+
+**It re-reads on the page's own twenty-second poll, and quietly.** That is the
+roster's clock rather than the MLB app's, deliberately: a reader with the
+roster open beside this must not see the same at-bat at two counts.
+
 ## The head
 
 **Two clubs with the score between them**, which is the one thing that names
@@ -672,12 +795,15 @@ makes for `gameLog.ts`.
 
 ### `GameStatus` is one shape
 
-`buildStatus` fills `bases`, `atBatId`, `onDeckId`, `onBaseIds`, `pitchingId`
-and `inGamePitcherIds` with nulls and empty arrays, and that is deliberate: a
+`buildStatus` filled `bases`, `atBatId`, `onDeckId`, `onBaseIds`, `pitchingId`
+and `inGamePitcherIds` with nulls and empty arrays for as long as this cut of
+the feed did not ask for the `offense` block, and that was deliberate: a
 `GameStatus` is one shape across the whole app, and a second one differing in
 six fields would be a second thing every reader of a status has to know about.
-Those six belong to the *day* pipeline, which builds them from the `offense`
-block this cut of the feed does not ask for.
+**The Live tab's cut asks for that block now**, so five of the six are filled
+the way the day pipeline's `buildGameStatus` fills them; `inGamePitcherIds` is
+the one that needs `allPlays`, which the cut still declines, and stays empty
+rather than guessed.
 
 ### The plays route, and why it is the day pipeline
 
@@ -1104,7 +1230,42 @@ of every element on the roster, the player page and the Game Log tab for
   fixtures (`?start=2026-08-24`) draws four `aria-haspopup="dialog"` cells, and
   pressing one still raises the preview with the URL unchanged.
 
-**Bundle, `main` → this work.** JS **646.21 → 669.48 kB** raw, **192.22 →
+**The Live tab**, driven against gamePk 824424 (DET at CLE, 2026-09-04) at
+1200×900 and 390×844 while it was being played:
+
+- **At bat**, top of the 1st: strip `Live* · Overview · Box Score · Plays`,
+  the page opened on Live; heads `At bat · This at-bat · Top 1st · DET
+  batting`; count **`2-2`** with the diamond beside it; `McGonigle LHB 0-0`
+  vs `Allen LHP 9 P · 0.0 IP, 0 ER, 0 K, 0 BB`; `On deck Hao-Yu Lee 0-0 · In
+  the hole Dillon Dingler 0-0`; **4** pitch rows and **4** dots in the zone,
+  matching the wire's four; **1** feed item under it (the single before him)
+  and the in-progress at-bat not among them. Every block **x=200 w=800** at
+  1200 and **x=16 w=358** at 390; the at-bat's grid `574px 210px` at 1200 and
+  one column at 390, the zone stacked under the table at 220px.
+- **The one fault, found at 390**: the pitcher's third line, set `nowrap`, was
+  **149px in the 78px** the head's grid had for it and the whole page scrolled
+  **7px** sideways (`.details-view` 397 in 390). It wraps now; **overflow 0**
+  at both widths, the same line one row at 1200 and two at 390.
+- **Between halves**, middle of the 2nd: heads `Due up · Top 3rd · Last
+  at-bat · Bottom 2nd · CLE batting`; `Allen LHP 58 P · 2.0 IP, 5 ER, K, 2 BB`
+  over `Riley Greene LF LHB 0-0 | BB, R · Ben Malgeri RF RHB 1-1 | 2 RBI, R ·
+  Spencer Torkelson 1B RHB 1-1` — **MLB's offense block already the Tigers'**,
+  as the wire section says; the last at-bat headed `Flyout · Brayan Rocchio
+  flies out to center fielder Max Clark. 3 outs` over its three pitches;
+  **4** feed items for the half, newest first. Overflow 0 at 1200 and 390.
+- **A step off and back**: a name pressed on the half's list opens
+  `?player=batter-701678`, and `Back` returns to `?game=824424` **on Live**.
+  `Overview` then `Live` lights each in turn.
+- **A finished game is untouched**: `?game=823337` opens on `Overview*` with
+  the three tabs it always had, and its frozen v2 report carries no `live`
+  field at all.
+
+**Bundle, `main` → this work.** JS **819.80 → 825.15 kB** raw, **241.58 →
+242.75 kB gzipped** (+1.17); CSS **215.57 → 216.69 kB** raw, **38.11 → 38.28
+kB gzipped** (+0.17). The tab is `PlayMatchup`, `PitchTable`, `StrikeZone`,
+`BaseDiamond` and `FeedItem`, all of which the bundle was already carrying.
+
+**Bundle, `main` → the page itself.** JS **646.21 → 669.48 kB** raw, **192.22 →
 197.24 kB gzipped** (+5.02); CSS **169.51 → 174.72 kB** raw, **30.45 → 31.31 kB
 gzipped** (+0.86). **+5.88 kB gzipped in total** for a page, three tabs, three
 routes' worth of client, a tab on the club's page, a half-inning dialog, the

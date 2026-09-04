@@ -2407,6 +2407,14 @@ the season roster.
 Without the shared component the two dialogs for one at-bat would be two heads
 that agree today.
 
+**A third caller, and a third line.** The game page's Live tab draws the same
+head for the at-bat being played, and it is the one caller with something to
+say under a man's hand — his line for the game so far, as MLB's box score
+writes it (`1-3 | HR`, `37 P · 3.0 IP, 2 K`). So `MatchupMan` carries an
+optional `note`, drawn as `.pa-mu-note` in the hand's muted tone (a fact about
+him, not him) and drawn as nothing where absent, which is everywhere else. See
+*The Live tab* in the game page's document.
+
 **Driven at 1000**: feed → an outing → `Innings` → the 9th → `Luis Torrens —
 Strikeout · Bot 9`, whose head reads `Torrens (RHB) vs Megill (RHP)` with both
 faces and both presses. The stack is four deep there — the outing page (46),

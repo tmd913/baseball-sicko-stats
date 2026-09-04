@@ -460,7 +460,7 @@ export type GameDoor = (gamePk: number) => void;
  * reason `TeamPageTab` is: `App` names one when it puts a reader back on the
  * page they left, and it should not have to import a component to do it.
  */
-export type GamePageTab = 'overview' | 'box' | 'plays';
+export type GamePageTab = 'live' | 'overview' | 'box' | 'plays';
 
 export const GameDoorContext = createContext<GameDoor | null>(null);
 

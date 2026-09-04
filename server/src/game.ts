@@ -1,17 +1,29 @@
 import type {
+  BaseState,
   GameBatterLine,
   GameBattingTotals,
   GameDecision,
   GameInning,
+  GameLive,
   GamePitcherLine,
   GamePitchingTotals,
   GameReport,
   GameRosterMan,
   GameStatus,
   GameTeamLine,
+  LiveMan,
+  LivePlay,
 } from './types.js';
 import type { PlayerReport } from './types.js';
-import { hasStarted, isFinalStatus, isPostponedStatus, type GameStatusFields } from './mlbStats.js';
+import {
+  hasStarted,
+  isFinalStatus,
+  isPostponedStatus,
+  pitchFromEvent,
+  playActions,
+  type FeedPlayEvent,
+  type GameStatusFields,
+} from './mlbStats.js';
 import { getDay } from './savant.js';
 import { readBlob, writeBlob } from './storage.js';
 
@@ -171,6 +183,53 @@ const FEED_FIELDS = [
   'event',
   'eventType',
   'inning',
+  // ── liveData.plays.currentPlay, and who is on the field ─────────────────
+  // **The Live tab's own cut**, and the only reading of a *play* this module
+  // makes: `currentPlay` is the at-bat being played (or the last one, while
+  // the next man is not yet in the box), with its pitches. `allPlays` is
+  // deliberately not named, so a finished game's four hundred plays stay
+  // off a payload that is re-read every twenty seconds — the Plays tab reads
+  // them off the day pipeline instead (see `getGamePlays`).
+  'plays',
+  'currentPlay',
+  'about',
+  'halfInning',
+  'isComplete',
+  'count',
+  'matchup',
+  'pitcher',
+  'result',
+  'description',
+  'playEvents',
+  'isPitch',
+  'pitchNumber',
+  'details',
+  'call',
+  'pitchData',
+  'startSpeed',
+  'coordinates',
+  'pX',
+  'pZ',
+  'strikeZoneTop',
+  'strikeZoneBottom',
+  'breaks',
+  'spinRate',
+  'breakVerticalInduced',
+  'breakHorizontal',
+  'zone',
+  // `linescore.offense` and `.defense` beyond `batter`: the two men behind
+  // him, the runners, and the man on the mound. `first`/`second`/`third` also
+  // match the fielders under `defense`, which is three names this file does
+  // not read and is cheaper than a second request. **Measured** on two finals
+  // (823337, 822696): the cut went **70,027 → 79,033** and **62,336 → 71,257**
+  // bytes, of which the play itself is ~2.2KB; the rest is `description` on
+  // every man's hand and his own zone bounds under `gameData.players`, which
+  // the leaf match cannot separate from the pitch's.
+  'onDeck',
+  'inHole',
+  'first',
+  'second',
+  'third',
 ].join(',');
 
 const feedUrl = (gamePk: number) =>
@@ -229,6 +288,16 @@ interface BoxTeam {
   bullpen?: number[];
 }
 
+/** `liveData.plays.currentPlay`, as far as the Live tab reads it — the same
+ *  shape `mlbStats.ts::FeedPlay` reads off `allPlays`, cut to one play. */
+interface FeedCurrentPlay {
+  about?: { halfInning?: string; inning?: number; isComplete?: boolean };
+  count?: { balls?: number; strikes?: number; outs?: number };
+  matchup?: { batter?: FeedPerson; pitcher?: FeedPerson };
+  result?: { event?: string; eventType?: string; description?: string };
+  playEvents?: FeedPlayEvent[];
+}
+
 interface Feed {
   gameData?: {
     status?: GameStatusFields;
@@ -239,7 +308,12 @@ interface Feed {
     };
     players?: Record<
       string,
-      { id?: number; fullName?: string; batSide?: { code?: string }; pitchHand?: { code?: string } }
+      {
+        id?: number;
+        fullName?: string;
+        batSide?: { code?: string };
+        pitchHand?: { code?: string };
+      }
     >;
     venue?: { id?: number; name?: string };
     weather?: { condition?: string; temp?: string; wind?: string };
@@ -258,9 +332,24 @@ interface Feed {
         home?: { runs?: number; hits?: number; errors?: number; leftOnBase?: number };
         away?: { runs?: number; hits?: number; errors?: number; leftOnBase?: number };
       };
-      offense?: { batter?: { id?: number } };
-      defense?: { batter?: { id?: number } };
+      balls?: number;
+      strikes?: number;
+      offense?: {
+        batter?: FeedPerson | null;
+        onDeck?: FeedPerson | null;
+        inHole?: FeedPerson | null;
+        first?: FeedPerson | null;
+        second?: FeedPerson | null;
+        third?: FeedPerson | null;
+      };
+      defense?: {
+        pitcher?: FeedPerson | null;
+        batter?: FeedPerson | null;
+        onDeck?: FeedPerson | null;
+        inHole?: FeedPerson | null;
+      };
     };
+    plays?: { currentPlay?: FeedCurrentPlay };
     boxscore?: {
       teams?: { home?: BoxTeam; away?: BoxTeam };
       info?: { label?: string; value?: string }[];
@@ -330,19 +419,149 @@ function buildStatus(feed: Feed): GameStatus {
     currentInning: started ? numOrNull(ls?.currentInning) : null,
     inningState: started ? ls?.inningState ?? null : null,
     isTopInning: started ? ls?.isTopInning ?? null : null,
-    // The four that are only ever true of a live game, and which this page does
-    // not draw at all: a `GameStatus` is one shape across the whole app, and a
-    // second one differing in four nulls would be a second thing every reader
-    // of a status has to know about. The bases and the men on them belong to
-    // the *day* pipeline, which builds them from the offense block this cut of
-    // the feed does not ask for.
-    bases: null,
+    // The men on the field, off the linescore's offense and defense blocks —
+    // which this cut of the feed asks for now that the Live tab reads them,
+    // so they are filled here the way `buildGameStatus` fills them, rather than
+    // left as the nulls they were while nothing on this page drew one. A
+    // `GameStatus` is one shape across the whole app, and a reader of this one
+    // should find the same facts in the same fields.
+    bases: live ? basesOf(feed) : null,
     outs: live ? num(ls?.outs) : null,
-    atBatId: null,
-    onDeckId: null,
-    onBaseIds: [],
-    pitchingId: null,
+    atBatId: live ? numOrNull(ls?.offense?.batter?.id) : null,
+    onDeckId: live ? numOrNull(ls?.offense?.onDeck?.id) : null,
+    onBaseIds: live ? runnerIds(feed) : [],
+    pitchingId: live ? numOrNull(ls?.defense?.pitcher?.id) : null,
+    // The one field that needs `allPlays` — who has been taken out of the
+    // game — which this cut deliberately does not carry (see `FEED_FIELDS`).
+    // Empty rather than guessed.
     inGamePitcherIds: [],
+  };
+}
+
+/** **A game being played right now** — live on MLB's wire *and* past first
+ *  pitch, which is the test `buildStatus`, `buildDueUp` and `buildLive` all
+ *  make and so is written once. `hasStarted` for the reason recorded on the
+ *  status: MLB calls a game Live at Warmup and hands out a `Top 1` with it. */
+function isLiveNow(feed: Feed): boolean {
+  const s = feed.gameData?.status;
+  return !isPostponedStatus(s) && !isFinalStatus(s) && s?.abstractGameState === 'Live' && hasStarted(s);
+}
+
+const basesOf = (feed: Feed): BaseState => {
+  const o = feed.liveData?.linescore?.offense;
+  return { first: !!o?.first?.id, second: !!o?.second?.id, third: !!o?.third?.id };
+};
+
+const runnerIds = (feed: Feed): number[] => {
+  const o = feed.liveData?.linescore?.offense;
+  return [o?.first?.id, o?.second?.id, o?.third?.id].filter((x): x is number => typeof x === 'number');
+};
+
+/**
+ * **Where the game is right now** — the block the Live tab draws, and null on
+ * anything but a game being played.
+ *
+ * ## What it reads
+ *
+ * Three things off the feed, and each is MLB's own rather than derived:
+ *
+ * - **`linescore.offense` and `.defense`** for the men on the field — the
+ *   batter and the two behind him, the runners, and the pitcher. **MLB turns
+ *   these round at the break**: in `Middle` and `End` the offense block is
+ *   already the club due up next half and `defense.pitcher` the man who will
+ *   pitch to them, which is exactly the *Due up* reading the tab wants between
+ *   halves, and is why `between` is a flag beside the same five men rather
+ *   than a second set of fields.
+ * - **`plays.currentPlay`** for the at-bat — its pitches through
+ *   `pitchFromEvent`, the one mapping the day pipeline uses, so a pitch here
+ *   and the same pitch on the feed's card cannot disagree about its name or
+ *   its call. `about.isComplete` is what separates the at-bat in progress from
+ *   the last one finished, which is the same object until the next batter's
+ *   play is opened.
+ * - **The box score's `summary`** for each man's line — `1-3 | HR, 2 RBI`,
+ *   `3.0 IP, 2 ER, 2 K` — printed unedited, the rule `notes` already keeps:
+ *   it is prose off the wire, MLB's own abbreviations, and a line this file
+ *   composed would be a second author of the same sentence.
+ *
+ * ## Why no cache version moved
+ *
+ * The field is null on every report that is ever frozen — a settled game is
+ * not being played — and its one reader tests the state before it looks. So a
+ * v2 blob deserialized without it answers exactly what a v3 blob would. The
+ * bump rule guards a field *read back out of a blob*; this one never is.
+ */
+function buildLive(feed: Feed): GameLive | null {
+  if (!isLiveNow(feed)) return null;
+  const ls = feed.liveData?.linescore;
+  const data = feed.gameData;
+  const teams = feed.liveData?.boxscore?.teams;
+  /** A man's box-score entry, whichever club he is on: the block is read by
+   *  role rather than by side, and a pitcher's line and a batter's are on the
+   *  same map under the same key. */
+  const boxOf = (id: number): BoxPlayer | undefined =>
+    teams?.away?.players?.[`ID${id}`] ?? teams?.home?.players?.[`ID${id}`];
+  const man = (p: FeedPerson | null | undefined, role: 'batter' | 'pitcher'): LiveMan | null => {
+    const id = numOrNull(p?.id);
+    if (id === null) return null;
+    const gd = data?.players?.[`ID${id}`];
+    const bx = boxOf(id);
+    const stats = role === 'batter' ? bx?.stats?.batting : bx?.stats?.pitching;
+    return {
+      id,
+      name: p?.fullName ?? gd?.fullName ?? '',
+      hand: (role === 'batter' ? gd?.batSide?.code : gd?.pitchHand?.code) ?? null,
+      // Off the box score alone: every man this block names is in the game,
+      // so he has one there — and `gameData.players[].primaryPosition` was
+      // measured at 3.8KB across the sixty men on a feed read every twenty
+      // seconds, for a fallback that never fires.
+      pos: bx?.position?.abbreviation ?? null,
+      line: str(stats?.summary),
+      pitches: role === 'pitcher' ? numOrNull(stats?.numberOfPitches) : null,
+    };
+  };
+  const state = (ls?.inningState ?? '').toLowerCase();
+  const cp = feed.liveData?.plays?.currentPlay;
+  let play: LivePlay | null = null;
+  if (cp) {
+    let n = 0;
+    const pitches = (cp.playEvents ?? [])
+      .filter((ev) => ev.isPitch)
+      .map((ev) => ({
+        ...pitchFromEvent(ev, ++n),
+        // Bat tracking is Savant's and arrives with the day CSV, hours later.
+        // Null rather than absent, so the client's `Pitch` is one shape.
+        batSpeed: null,
+        swingLength: null,
+      }));
+    play = {
+      batter: man(cp.matchup?.batter, 'batter'),
+      pitcher: man(cp.matchup?.pitcher, 'pitcher'),
+      inning: cp.about?.inning ?? ls?.currentInning ?? 0,
+      half: cp.about?.halfInning?.toLowerCase() === 'top' ? 'Top' : 'Bot',
+      // `isComplete` where MLB sends it, and the presence of a result where it
+      // does not — the day pipeline's own test (`midAtBat`), measured against
+      // `isComplete` over 1,995 plays with no disagreement.
+      complete: cp.about?.isComplete ?? !!cp.result?.eventType,
+      event: str(cp.result?.event),
+      description: str(cp.result?.description),
+      balls: num(cp.count?.balls),
+      strikes: num(cp.count?.strikes),
+      outs: num(cp.count?.outs),
+      pitches,
+      actions: playActions(cp),
+    };
+  }
+  return {
+    balls: num(ls?.balls),
+    strikes: num(ls?.strikes),
+    outs: num(ls?.outs),
+    bases: basesOf(feed),
+    between: state === 'middle' || state === 'end',
+    batter: man(ls?.offense?.batter, 'batter'),
+    onDeck: man(ls?.offense?.onDeck, 'batter'),
+    inHole: man(ls?.offense?.inHole, 'batter'),
+    pitcher: man(ls?.defense?.pitcher, 'pitcher'),
+    play,
   };
 }
 
@@ -371,10 +590,8 @@ function buildStatus(feed: Feed): GameStatus {
  * highlight on a finished box score.
  */
 function buildDueUp(feed: Feed): { away: number | null; home: number | null } {
-  const s = feed.gameData?.status;
   const ls = feed.liveData?.linescore;
-  const live = !isPostponedStatus(s) && !isFinalStatus(s) && s?.abstractGameState === 'Live' && hasStarted(s);
-  if (!live) return { away: null, home: null };
+  if (!isLiveNow(feed)) return { away: null, home: null };
   const atBat = numOrNull(ls?.offense?.batter?.id);
   const dueUp = numOrNull(ls?.defense?.batter?.id);
   const top = ls?.isTopInning === true;
@@ -645,6 +862,7 @@ function buildReport(gamePk: number, feed: Feed): GameReport {
     innings: buildInnings(feed),
     scheduledInnings: scheduled,
     decisions: buildDecisions(feed),
+    live: buildLive(feed),
     notes: (box?.info ?? [])
       // MLB puts the date in this list as a label with no value; everything
       // else is a genuine pair. A note with nothing on the right of it would
