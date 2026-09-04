@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode, RefObject } from 'react';
+import type { MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react';
 import { useTabSlider } from './TabSlider';
 
 /** What one `deltaMode: 1` line is worth to a row that scrolls sideways — the
@@ -207,25 +207,135 @@ function ScrollArrow({
  * and its two-character labels are the case the hiding rule was actually
  * written for.
  */
+/**
+ * **Where each row was left, by label — and it has to live outside the
+ * component.**
+ *
+ * The Roster's readings run is rendered in *two* places: the page on a stream
+ * reading and the table's own pane on a table reading (see `tableTakesChrome`).
+ * Crossing between them is not a re-render, it is an **unmount and a mount
+ * somewhere else** — so a `useRef` goes with the old one and the new row starts
+ * at `scrollLeft: 0`.
+ *
+ * Which is what a reader loses: the run is 391px wider than a 430px phone, so
+ * `Schedule`, `Projected`, `Summary` and `News` are all off the right-hand end
+ * and have to be scrolled to. Measured, scrolled fully right and pressing each:
+ *
+ * | press | run `scrollLeft` |
+ * | --- | --- |
+ * | `News` | 391 → **0** |
+ * | `Feed` | 391 → **0** |
+ * | `Schedule` | 391 → 386 |
+ * | `Summary`, `Projected` | 391 → 391 |
+ *
+ * So the two that move the row are exactly the two that move it *between
+ * containers*, and the button the reader just pressed ends up off the end of a
+ * row that has scrolled back to the beginning — reported as *"feed, schedule,
+ * and news still scroll all the way to the beginning of the tabs"*.
+ *
+ * A module-level map keyed by the row's own label is the smallest thing that
+ * survives the move. It is not state anybody reads: nothing renders from it and
+ * a stale entry costs a clamp, which is why it is a plain `Map` rather than
+ * anything the app has to own. The label is already a required prop, and the
+ * two call sites that are one row pass the same one — which is the whole point,
+ * and is the same reason `App`'s page-scroll memory is keyed by view rather
+ * than by component.
+ */
+const rowScroll = new Map<string, number>();
+
 export function ScrollRow({
   children,
   label,
   className,
 }: {
   children: ReactNode;
-  /** What the row is, for the arrows' own labels. */
+  /** What the row is, for the arrows' own labels — and the key its scroll
+   *  offset is remembered under, so a row that moves between containers comes
+   *  back where the reader left it. See `rowScroll`. */
   label: string;
   className?: string;
 }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const { state, measure, nudge } = useOverflowArrows(boxRef, wrapRef);
+  /* **On mount, and only on mount.** A row that is merely re-rendering has not
+     lost anything, and writing its own remembered offset back on every render
+     would fight a reader mid-flick. `[label]` rather than `[]` because the key
+     is what the entry belongs to, not the mount. */
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const want = rowScroll.get(label);
+    if (!box || !want) return;
+    box.scrollLeft = want;
+    // The arrows are drawn off `scrollLeft`, so the restore has to be measured
+    // or the row comes back scrolled with a left arrow that says it is not.
+    measure();
+  }, [label, measure]);
+  const onScroll = useCallback(() => {
+    measure();
+    const box = boxRef.current;
+    if (box) rowScroll.set(label, Math.round(box.scrollLeft));
+  }, [label, measure]);
+
+  /**
+   * **The control a reader pressed stays where they can see it**, which
+   * remembering the offset gets most of the way to and not all of it.
+   *
+   * Keeping the row where it was is right for the controls that only light up.
+   * It is not enough for one that **changes size on being pressed**: `Schedule`
+   * turns into a span picker, so the row re-lays out under a preserved offset
+   * and the button that grew is pushed off the end. Measured at 430, scrolled
+   * fully right — the offset held at 386 of 391 and `Schedule` was off-screen
+   * anyway, which is the reader's complaint word for word with the row in the
+   * right place.
+   *
+   * So the press is remembered and the *element* is scrolled in, on the commit
+   * after it — a layout effect with no dependency list, for the reason the
+   * measure above has none: the row's content can change without its box doing
+   * so, and it is the content that moved. The ref is only ever set by a click,
+   * so this acts at most once per press and is a comparison against `null`
+   * otherwise.
+   *
+   * It is `DetailsShell`'s rule for its own tab strip, one tier out and by the
+   * same arithmetic — including the **peek**, read off `--tabstrip-arrow-w`
+   * rather than copied as a second 24 that would have to agree with the
+   * stylesheet's: these arrows are drawn *over* the row's ends, so landing a
+   * control flush against one puts it under a chevron.
+   *
+   * A control on a row that unmounts (`Feed` and `News` move the whole row from
+   * the page to the table's pane and back) is not reachable from here at all —
+   * the element goes with the old row. That case is the offset's to answer, and
+   * it does.
+   */
+  const pressed = useRef<HTMLElement | null>(null);
+  const onClick = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('button, a');
+    if (el && boxRef.current?.contains(el)) pressed.current = el;
+  }, []);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const el = pressed.current;
+    if (!box || !el) return;
+    pressed.current = null;
+    if (!box.contains(el)) return;
+    const left = el.offsetLeft - box.offsetLeft;
+    const overLeft = left - box.scrollLeft;
+    const overRight = left + el.offsetWidth - (box.scrollLeft + box.clientWidth);
+    const arrowW = parseFloat(getComputedStyle(box).getPropertyValue('--tabstrip-arrow-w'));
+    const PEEK = Number.isFinite(arrowW) && arrowW > 0 ? arrowW : 24;
+    if (overLeft < 0) box.scrollLeft += overLeft - PEEK;
+    else if (overRight > 0) box.scrollLeft += overRight + PEEK;
+    else return;
+    rowScroll.set(label, Math.round(box.scrollLeft));
+    measure();
+  });
+
   return (
-    <div ref={wrapRef} className={`tool-scroll${className ? ` ${className}` : ''}`}>
+    <div ref={wrapRef} className={`tool-scroll${className ? ` ${className}` : ''}`} onClick={onClick}>
       {state.over && (
         <ScrollArrow dir="l" shown={state.left} label={`Scroll ${label} left`} onPress={() => nudge(-1)} />
       )}
-      <div className="tool-scroll-box" ref={boxRef} onScroll={measure}>
+      <div className="tool-scroll-box" ref={boxRef} onScroll={onScroll}>
         <div className="tool-scroll-inner">{children}</div>
       </div>
       {state.over && (
