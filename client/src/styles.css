@@ -9867,8 +9867,35 @@ button.start-line:focus-visible {
 .mup-view.roster-mode > .mup-chrome {
   box-shadow: inset 0 -1px 0 var(--border);
 }
-.summary-scroll > .date-bar {
+/* **The readings run holds the top of the pane, above the bar.**
+ *
+ * It used to scroll away — the note on the shared `.date-bar` rule above still
+ * says so, that being the arrangement for as long as the bar alone held this
+ * top. Reported twice: *"the tabs on the roster page should remain in view when
+ * they are selected (seems to scroll away from them sometimes)"*, and then, of
+ * the reset that answered it, *"the scroll is still reseting when selecting some
+ * tabs"*. Both are the same ask read together — the run visible **and** the
+ * reader's place kept — and only pinning gives both. A reset gives the first at
+ * the cost of the second, which is what the reader said when they got one.
+ *
+ * Measured at 430×950, scrolled 900px down the pane: the run was at viewport
+ * **−801** and is at **99**, the reader's offset untouched at 900.
+ *
+ * It is the same band as the bar under it and pins as one: `top: 0` here, the
+ * bar at this row's own height, the header row under both. All three numbers are
+ * **measured, not declared** (`--tools-h`, `--date-bar-h`), which is this app's
+ * rule wherever a box's height is a function of the width or of a font it does
+ * not choose — and this row is both, wrapping at a narrow width and drawing a
+ * different run on a league page than on the Roster. */
+.summary-scroll > .view-tools {
+  position: sticky;
   top: 0;
+  /* Above the bar (4) so the two pin as a band rather than crossing. */
+  z-index: 5;
+}
+.summary-scroll > .date-bar {
+  /* Under the run above, which pins at 0 and is measured because it wraps. */
+  top: var(--tools-h, 0px);
   /* Above the header row (2) and above its own top-left corner cell (3): the
      rows and the headings both pass under this. Its ground, its seam and its
      shadow are the shared rule's — see there. */
@@ -10737,7 +10764,11 @@ button.start-line:focus-visible {
    pane, and a header row held 54px down under nothing there would be a band of
    rows showing through the gap. */
 .summary-scroll.has-pane-chrome {
-  --pane-bar-h: var(--date-bar-h, 0px);
+  /* **Both pinned rows, not just the bar.** The readings run holds this pane's
+     top now (see `.summary-scroll > .view-tools`), so the header row has two
+     boxes above it rather than one — held at the bar's height alone it sat
+     behind the run, and a band of rows scrolled through the gap. */
+  --pane-bar-h: calc(var(--tools-h, 0px) + var(--date-bar-h, 0px));
 }
 .summary-scroll {
   /* Grow to content, but cap at the available height and scroll past that. */

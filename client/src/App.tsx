@@ -145,6 +145,7 @@ import {
   useDelayedFlag,
   useDismissable,
   usePopoverFit,
+  usePublishedHeight,
   useResumed,
   useStickyChromeOffset,
 } from './hooks';
@@ -7146,6 +7147,12 @@ export default function App() {
     // the `view !== 'summary'` reset would otherwise fire on the same commit
     // and put the lens straight back out.
     setView('summary');
+    // **And the comparison card**, for the reason the other two readings state:
+    // it replaces the table outright, so a lens on the table's figures pressed
+    // over it lights a control with nothing to read. See `matchupButton`, which
+    // clears this reading when it turns on — this is that rule from the other
+    // side, and all three readings were missing it.
+    setRosterMatchup(false);
     setRosterProjected((on) => {
       if (on) return false;
       const today = baseballToday();
@@ -9246,6 +9253,18 @@ export default function App() {
           // the same exclusivity stated one control over. Without it a press
           // would light a toggle whose columns are on a page nobody is on.
           if (view !== 'summary') setView('summary');
+          /* **And the comparison card**, which is the fourth thing this run
+             can be showing and the one the other three forgot. The card
+             *replaces* the table, so a reading of the table pressed over it is
+             a control lit against a page it has no reach into — measured on the
+             live league, `Matchup` and `Schedule` lit together with the card
+             still up and the table nowhere: pressing another button did not
+             switch to it. `matchupButton` clears these three when it turns on;
+             this is the same rule read from the other side, and it was missing
+             on all three. `Feed` and `News` never needed it only because they
+             change the view, and the `view !== 'summary'` effect clears the card
+             on the way past. */
+          setRosterMatchup(false);
           // The `Summary` lens goes off for the same reason the projected one
           // does one line down: it is a third reading of the same cells, and
           // this one replaces the *columns* where that replaces the figures.
@@ -9454,6 +9473,18 @@ export default function App() {
           // Back to the table first, exactly as the other two readings do it:
           // this is a reading of the stat columns and the stream has none.
           if (view !== 'summary') setView('summary');
+          /* **And the comparison card**, which is the fourth thing this run
+             can be showing and the one the other three forgot. The card
+             *replaces* the table, so a reading of the table pressed over it is
+             a control lit against a page it has no reach into — measured on the
+             live league, `Matchup` and `Schedule` lit together with the card
+             still up and the table nowhere: pressing another button did not
+             switch to it. `matchupButton` clears these three when it turns on;
+             this is the same rule read from the other side, and it was missing
+             on all three. `Feed` and `News` never needed it only because they
+             change the view, and the `view !== 'summary'` effect clears the card
+             on the way past. */
+          setRosterMatchup(false);
           setRosterSummary((on) => {
             if (on) return false;
             // The same clearing the other two do — one departure from the plain
@@ -9550,10 +9581,21 @@ export default function App() {
    * The three things that can be in it, in the order the run draws them: the
    * board's lens, the Rankings table's lens, and the roster's five readings.
    */
+  /** The readings run's own box, whose height the pane's bar and header stick
+   *  below — see the note on the element and `--tools-h` in the stylesheet. */
+  const viewToolsRef = useRef<HTMLDivElement | null>(null);
+  usePublishedHeight(viewToolsRef, '--tools-h');
   const viewToolsRun = Boolean(leagueBoardProjected || leagueRankProjected || rosterTools);
   const viewTools =
     rosterTools || (view === 'league' && espnConnected) || view === 'mlb' ? (
-      <div className="view-tools">
+      /* **The ref is here so the row can hold the top of the table's pane.**
+         See `.summary-scroll > .view-tools`: pinned, it needs its own height
+         published for the date bar under it and the table's header row under
+         that to sit below rather than behind it. Measured rather than declared,
+         which is `--date-bar-h`'s own rule one box down — the row wraps, its
+         words are a font this app does not choose, and the run is a different
+         length on a league page than on the Roster. */
+      <div className="view-tools" ref={viewToolsRef}>
         {/* **Scoreboard / Rankings / Transactions, on a centered line of their
             own**, with everything else in the row breaking to the line under
             them. They are *which page of this league*, one tier down from the
