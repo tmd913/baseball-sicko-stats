@@ -1443,8 +1443,11 @@ table's own header over lines that have not filled in.
 | Season strip | 8 → **1** |
 | Next slot | 15 → **5** |
 | Day block | 4 → **2** |
-| News | 3 → 3 |
-| **the tab** | **75 → 16** |
+| News | 3 → **4** |
+| **the tab** | **75 → 17** |
+
+News goes *up* by one, which is the audit below rather than this pass: its
+standfirst is two lines on a phone and was reserving one.
 
 The news keeps its three, being the one block that was never dense.
 
@@ -1496,6 +1499,71 @@ going `0.72em`/8px → `1em`/12px now that a bar stands for a line rather than a
 cell. The Overview's own day cards were checked for the same reason, the bar
 being app-wide: a real card and a skeleton card side by side in the carousel are
 **383 and 383**.
+
+### Every box, audited against the settled one
+
+Thinning the bars is not the same as reserving the right boxes, and the second
+was checked by **diffing every measurable box in the skeleton against the same
+box once the read lands** — `/api/players/*` held open with CDP, the geometry
+read, the request released, the geometry read again. At **390, 430 and 1100**,
+because two of the four faults it found were only visible at one end.
+
+It found four, three of them wrong in ways no amount of looking would have
+shown:
+
+**The day block was reserving the wrong one of three rows.** `.player-day` draws
+an `UpcomingRow` for a game not yet started, a card or feed for one with plays in
+it, and `.pday-game.static` — what this reserved — for the case in between, a
+game that has started with nothing of his in it. That is the **narrowest** of the
+three and the least common. Measured on a man with a game later that day, the
+settled block held `.feed-item.upcoming-item > .upcoming-head` at 48px and **no
+`.pday-game` at all**: the skeleton was reserving a shape that was not the one
+arriving, 44 against 48, at every width. Drawn as the upcoming row it is exact
+for a game still to come and 4px closer to a played one, which is taller than
+both. Still one shape for three — that is this block's standing trade — but the
+middle one rather than the floor.
+
+**The game log carried `.ovw-table`, which is the season strip's modifier.** One
+of the three things that class takes off a plain log table is the body row's
+bottom border — right for a one-row strip, where the rule would sit a pixel above
+the box's own, and wrong under five rows. The block was **257.6 against 262.6**:
+five rows, five pixels, one per missing border.
+
+**And it was headed by columns the log does not have.** A hand-written nine —
+`DATE OPP AB R H HR RBI BB K` — against the **seventeen** a batter's log draws
+(`Date Opp Batting Pos H/AB R 2B 3B HR RBI BB K SB` and four `Szn` columns) and
+sixteen for a pitcher. Every label in the header changed on arrival, which is the
+one part of a skeleton that is supposed to be final. `BATTER_COLUMNS` and
+`PITCHER_COLUMNS` are exported now and the skeleton is headed by the same list
+the table is — `seasonLabels`' own rule, applied to the table beside it.
+
+**The news standfirst is two lines on a phone and was reserving one.** 18px, the
+largest single error on the tab, and the one that could not be fixed with a
+percentage: a bar at 94% is one line at *every* width, where the real sentence is
+one line in this tab's 800px reading column and two in a phone's 398. Measured on
+a real item — 105 characters, natural width **592px**, rendered 36px in a 398px
+box. So it is **two bars sized in pixels, totalling 592**, which break where the
+sentence breaks: two lines under 592px of column, one over it. That is *reserve
+the box by laying the worst case out* applied to the one thing here whose height
+is a function of the width, against the alternative of a media query at whatever
+width this machine's copy of the sentence happened to wrap at.
+
+**After, at all three widths**, every block is exact and what is left is
+sub-pixel:
+
+| block | 390 | 430 | 1100 |
+| --- | --- | --- | --- |
+| day | exact | exact | exact |
+| next slot | −0.4 | −0.4 | −0.4 |
+| news | exact | exact | exact |
+| season strip | exact | exact | exact |
+| game log | exact | exact | exact |
+
+The slot's 0.4 is 0.1px a row on five rows — the `.sk-line` bar's box against the
+text strut it stands in, below a device pixel at 1x and not worth the risk of
+chasing. **The Overview's day cards were audited the same way** (`/api/report*`
+held, `.ov-day`, `.lg-cats`, `.ov-perf` and the rest): every matched box
+identical at 430, so the app's other skeleton needed nothing.
 
 **And a skeleton wants no `WAIT_DELAY` in front of it**, which is the one place
 this departs from the app's loading rules rather than applying them.
