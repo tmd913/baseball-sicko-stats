@@ -689,7 +689,8 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
 }
 
 /**
- * Publish an element's height on `:root` as a custom property.
+ * Publish an element's height as a custom property — on `:root`, or on a host
+ * element for a bar that is one of two on screen.
  *
  * The third of this file's measured-rather-than-declared heights, and the
  * plainest: `--chrome-h` has to read `position` off the computed style because
@@ -705,11 +706,27 @@ export function useStickyChromeOffset<T extends HTMLElement>(): [RefObject<T | n
  * in: the property is what the table's header row sticks below, and a stale
  * height there is a 54px band of nothing between the top of the pane and the
  * first column heading on every view that has no bar.
+ *
+ * **`host` is `--details-chrome-h`'s rule, made available to this hook**, and
+ * it is here because a caller needed it. A property on `:root` says *the app's*
+ * bar is this tall, which is only true while there is one of that bar; an
+ * overlay that draws a second one is the case `useOverlayChromeOffset` already
+ * names — the two describe **different bars**, so the answer has to be scoped
+ * to the subtree that is asking. A custom property inherits, so the override
+ * reaches every descendant of the host and stops at the edge of it, and the
+ * root's own value is never written and so can never be clobbered by a box
+ * that is closing.
  */
 export function usePublishedHeight(
   ref: RefObject<HTMLElement | null>,
   prop: string,
   enabled = true,
+  /** Where to write it. Omitted, the document root, which is what a bar the app
+   *  itself owns wants. Given, that element alone — and **never the root as a
+   *  fallback**: a host that has gone means the subtree asking the question has
+   *  gone with it, and writing the root instead would hand the app's own bar a
+   *  number belonging to a box that is no longer on screen. */
+  host?: RefObject<HTMLElement | null>,
 ) {
   /**
    * **Write only when the number changes, and this is a performance fix rather
@@ -734,13 +751,23 @@ export function usePublishedHeight(
    * changes it is publishing a different number, and the last value written
    * under the old name says nothing about the new one.
    */
-  const published = useRef<{ prop: string; px: number } | null>(null);
-  const publish = useCallback((p: string, px: number) => {
-    const last = published.current;
-    if (last && last.prop === p && last.px === px) return;
-    published.current = { prop: p, px };
-    document.documentElement.style.setProperty(p, `${px}px`);
-  }, []);
+  const published = useRef<{ el: HTMLElement; prop: string; px: number } | null>(null);
+  const publish = useCallback(
+    (p: string, px: number) => {
+      // A scoped caller writes its host or nothing at all — see the note on
+      // `host` above. Unscoped, the root, which is always there.
+      const el = host ? host.current : document.documentElement;
+      if (!el) return;
+      const last = published.current;
+      // **The element is part of the comparison for the reason the prop is.**
+      // The last value written to one box says nothing about another, and a
+      // host that has been swapped is a different box.
+      if (last && last.el === el && last.prop === p && last.px === px) return;
+      published.current = { el, prop: p, px };
+      el.style.setProperty(p, `${px}px`);
+    },
+    [host],
+  );
 
   const sync = useCallback(() => {
     const el = enabled ? ref.current : null;

@@ -3256,6 +3256,24 @@ header row is 1px from its top.
 154.38 KB of CSS** (27.24 → 27.29) — 0.2KB and 0.23KB raw, 30 and 50 bytes over
 the wire, for a hook call, a ghost and the rules above.
 
+### And the band's own height was the app's, so the header row sat 46px low
+
+**The report: the sticky header is off on the matchup page, opened from the fantasy scoreboard.** A team page, with the readings run and the dates bar above the table.
+
+**`--tools-h` on `:root` is App's row, and this page draws its own.** `.summary-scroll.has-pane-chrome` holds the table's header at `calc(var(--tools-h) + var(--date-bar-h))` — *the two pinned rows in this pane*. The bar half was already right: this page's `DateBar` carries `measure`, and App draws none on the League or Matchup views, so the only bar publishing is the one on screen. The tools half was not. App's `.view-tools` is still mounted **behind** this overlay, it publishes `--tools-h` from there, and it is a different row of different controls at a different height — so the pane held its header below a bar it does not have.
+
+**Measured on `?view=league&mup=120&mt=9`, before.** App's row behind the overlay is **96px**; this page's is **50** at 1280×800 and **48** at 390×844. So `--pane-bar-h` resolved to **150px** over a pane whose chrome is **104**, and the offset landed on both pinned boxes: the dates bar sat at `top: 210` instead of 164, leaving a 46px band of nothing under the readings run, and the header cells sat at **264** against their own row at **218** — the words `BATTER OPPONENT H/AB …` displaced 46px down, over the first batters, with an empty strip above them. At 390 the same fault is **48px**.
+
+**So the page publishes its own, onto the overlay rather than onto the root** (`usePublishedHeight`'s new `host`). That is `--details-chrome-h`'s rule, which `useOverlayChromeOffset` already states in as many words: the two properties describe **different bars**, so the answer belongs to the subtree asking. A custom property inherits, so the override reaches every descendant of `.mup-view` and stops at its edge.
+
+**On the overlay and not the root, which is the half that matters on the way out.** Publishing `--tools-h` globally would have been right on screen and wrong when the page closed: `usePublishedHeight` writes a `0` on unmount, and its per-caller change-guard would then have let App's own row skip its next write as a no-op — the app's Roster left holding a zero. Scoped, the root is never written at all. Measured: `--tools-h` on `:root` reads **96px** before the page opens, while it is open, and after it closes.
+
+**Measured after.** At 1280×800 the band stacks **114–164 / 164–218 / 218–269** (run, bar, header) with the first row at 269 — no gap, no overlap, the header's cells flush on their own row; scrolled 800px into the pane the header is stuck at **218**, still flush under the bar. At 390×844: `--pane-bar-h` is `48 + 54` and the header's displacement is **0**. The side switch tracks it — `0px` on the Summary page, which has no tools row, **50px** on either team page, and back to `0` on the way out.
+
+**Nothing else moved.** The Roster view was never wrong here and is unchanged (its own row *is* the pane's, `--pane-bar-h` 50 + 54, displacement 0 at rest and stuck flush when scrolled), and so is the research board, whose `--tools-h` is its own condensed run. The full-page mode still reads 0 through `has-pane-chrome`.
+
+**Bundle: 819.69 → 819.80 KB of JS** (241.56 → 241.58 gzipped), CSS unchanged at 215.57 (38.11).
+
 ### The headline sits beside the badge on a phone, where it stacked under the name
 
 **This reverses the passage below it, which is kept because its measurement is

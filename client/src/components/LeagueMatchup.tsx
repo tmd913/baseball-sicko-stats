@@ -5,6 +5,7 @@ import {
   useLockBodyScroll,
   useOverlayChromeOffset,
   useOverlayFocus,
+  usePublishedHeight,
 } from '../hooks';
 import { DialogLayerContext } from './Modal';
 import { api } from '../api';
@@ -550,6 +551,31 @@ export default function LeagueMatchupView({
    * the table's own pane.
    */
   const chromeRef = useOverlayChromeOffset<HTMLDivElement>(viewRef);
+  /**
+   * **This page's readings run publishes its own `--tools-h`, scoped to the
+   * overlay** — and the scoping is the whole of it.
+   *
+   * `.summary-scroll.has-pane-chrome` holds the team table's header row at
+   * `--tools-h + --date-bar-h`, meaning *the two pinned rows in this pane*. The
+   * bar half was already right, this page's own `DateBar` carrying `measure`
+   * and the app drawing none on the League or Matchup views. The tools half was
+   * not: `--tools-h` on `:root` is **App's** row, which is still mounted behind
+   * this overlay and is a different row of different controls at a different
+   * height. Measured on `?view=league&mup=120&mt=9`: App's row **96px** against
+   * this one's **50** at 1280×800 and **48** at 390×844, so the header row was
+   * held 150px down a pane whose chrome is 104 — its cells 46px (and 48 on a
+   * phone) below the row they belong to, sitting over the first batters and
+   * leaving an empty band above.
+   *
+   * On the overlay rather than the root, which is `--details-chrome-h`'s own
+   * rule one hook over: the two properties describe **different bars**, and a
+   * custom property inherits, so the override answers everything inside this
+   * page and nothing outside it. Writing the root instead would have been
+   * right on screen and wrong on the way out — the app's row would be left
+   * carrying this page's number, or zero.
+   */
+  const toolsRef = useRef<HTMLDivElement | null>(null);
+  usePublishedHeight(toolsRef, '--tools-h', true, viewRef);
 
   /**
    * **The page it opens on, resolved from the team the caller named.** A
@@ -1515,7 +1541,7 @@ export default function LeagueMatchupView({
        here before (`.mup-tools`, `.mup-tool-icons`, the two ghosts and a
        container query of its own) was all in service of a card-column cap and
        a pinned band, and both are gone. */
-    <div className="view-tools">
+    <div className="view-tools" ref={toolsRef}>
       {/* **The four readings scroll rather than shedding their words.** Below
           640px this row used to visually hide `Feed`, `Schedule`, `Projected`
           and `Summary`, leaving four glyphs whose only self-description was a
