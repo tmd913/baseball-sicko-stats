@@ -353,12 +353,14 @@ function PaMan({
   id,
   name,
   hand,
+  note,
   role,
 }: {
   id: number | null;
   name: string;
   /** `L`/`R` off the plate appearance, or null. */
   hand: string | null;
+  note?: string | null;
   role: 'batter' | 'pitcher';
 }) {
   const door = usePlayerDoor();
@@ -427,6 +429,7 @@ function PaMan({
           </span>
         )}
         <span className="pa-mu-hand">{sub}</span>
+        {note && <span className="pa-mu-note">{note}</span>}
       </span>
     </span>
   );
@@ -463,6 +466,11 @@ export interface MatchupMan {
   name: string;
   /** `L`/`R` where the play carries it; null falls back to the season roster. */
   hand: string | null;
+  /** **A third line under the hand**, on the one caller that has something to
+   *  put there: the game page's Live tab, where it is the man's line for the
+   *  game so far (`1-3 | HR`, `37 P · 3.0 IP, 2 K`). Absent everywhere else,
+   *  and absent draws nothing rather than an empty row. */
+  note?: string | null;
 }
 
 export function PlayMatchup({

@@ -1481,7 +1481,12 @@ interface FeedHitData {
   totalDistance?: number;
   trajectory?: string;
 }
-interface FeedPlayEvent {
+/** One entry of a play's `playEvents` — a pitch, or a non-pitch action filed
+ *  in the at-bat it interrupted. **Exported for `game.ts`**, which reads the
+ *  same shape off `currentPlay` for the game page's Live tab: the two modules
+ *  cut different `fields=` lists of one endpoint, and a pitch must come out of
+ *  both readings as the same `Pitch`. */
+export interface FeedPlayEvent {
   isPitch?: boolean;
   pitchNumber?: number;
   playId?: string;
@@ -2049,6 +2054,41 @@ export interface PlayAction {
 }
 
 /**
+ * **One pitch off the wire**, as every reader of this app's pitches has it.
+ *
+ * Exported for `game.ts`, which reads `currentPlay` for the Live tab: a pitch
+ * on the game page's zone and the same pitch on the feed's card must be one
+ * mapping — the type name, the call vocabulary, the plate coordinates and the
+ * break — or a slider could read `Slider` in one place and `SL` in the other.
+ * `fallbackNumber` is what to number it when MLB has not (`pitches.length +
+ * 1`, the position it holds in the sequence).
+ */
+export function pitchFromEvent(ev: FeedPlayEvent, fallbackNumber: number): StatsApiPitch {
+  const pd = ev.pitchData;
+  const hd = ev.hitData;
+  return {
+    pitchNumber: ev.pitchNumber ?? fallbackNumber,
+    pitchType: pitchTypeName(ev.details?.type?.code, ev.details?.type?.description),
+    releaseSpeed: pd?.startSpeed ?? null,
+    spinRate: pd?.breaks?.spinRate ?? null,
+    description: pitchDescription(ev.details?.call?.code, ev.details?.call?.description),
+    balls: ev.count?.balls ?? null,
+    strikes: ev.count?.strikes ?? null,
+    plateX: pd?.coordinates?.pX ?? null,
+    plateZ: pd?.coordinates?.pZ ?? null,
+    szTop: pd?.strikeZoneTop ?? null,
+    szBot: pd?.strikeZoneBottom ?? null,
+    zone: pd?.zone ?? null,
+    launchSpeed: hd?.launchSpeed ?? null,
+    launchAngle: hd?.launchAngle ?? null,
+    hitDistance: hd?.totalDistance ?? null,
+    bbType: hd?.trajectory ?? null,
+    vBreak: pd?.breaks?.breakVerticalInduced ?? null,
+    hBreak: pd?.breaks?.breakHorizontal ?? null,
+  };
+}
+
+/**
  * The non-pitch events worth showing, as what they are *not*: a denylist, so a
  * kind MLB adds later shows up rather than being silently dropped — the safe
  * direction when the whole point is to say what is going on. What is excluded
@@ -2063,8 +2103,9 @@ const QUIET_ACTIONS = new Set([
   'stepoff',
 ]);
 
-/** The non-pitch events of a play, in the order they happened. */
-function playActions(play: FeedPlay): PlayAction[] {
+/** The non-pitch events of a play, in the order they happened. Exported for
+ *  `game.ts`, whose `currentPlay` is the same shape read off a narrower cut. */
+export function playActions(play: { playEvents?: FeedPlayEvent[] }): PlayAction[] {
   const actions: PlayAction[] = [];
   let pitches = 0;
   for (const ev of play.playEvents ?? []) {
@@ -2823,30 +2864,10 @@ export async function getStatsApiGame(
     let lastPlayId: string | null = null;
     for (const ev of play.playEvents ?? []) {
       if (!ev.isPitch) continue;
-      const pd = ev.pitchData;
       const hd = ev.hitData;
       if (hd) lastHit = hd;
       if (ev.playId) lastPlayId = ev.playId;
-      pitches.push({
-        pitchNumber: ev.pitchNumber ?? pitches.length + 1,
-        pitchType: pitchTypeName(ev.details?.type?.code, ev.details?.type?.description),
-        releaseSpeed: pd?.startSpeed ?? null,
-        spinRate: pd?.breaks?.spinRate ?? null,
-        description: pitchDescription(ev.details?.call?.code, ev.details?.call?.description),
-        balls: ev.count?.balls ?? null,
-        strikes: ev.count?.strikes ?? null,
-        plateX: pd?.coordinates?.pX ?? null,
-        plateZ: pd?.coordinates?.pZ ?? null,
-        szTop: pd?.strikeZoneTop ?? null,
-        szBot: pd?.strikeZoneBottom ?? null,
-        zone: pd?.zone ?? null,
-        launchSpeed: hd?.launchSpeed ?? null,
-        launchAngle: hd?.launchAngle ?? null,
-        hitDistance: hd?.totalDistance ?? null,
-        bbType: hd?.trajectory ?? null,
-        vBreak: pd?.breaks?.breakVerticalInduced ?? null,
-        hBreak: pd?.breaks?.breakHorizontal ?? null,
-      });
+      pitches.push(pitchFromEvent(ev, pitches.length + 1));
     }
 
     const evInning = play.about?.inning ?? 0;

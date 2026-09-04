@@ -2900,6 +2900,77 @@ export interface GameDecision {
   name: string;
 }
 
+/**
+ * **A man on the field, or about to be**, as the game page's Live tab names
+ * him: the batter in the box and the two behind him, the pitcher on the mound,
+ * and — between halves — the three due up and the man who will pitch to them.
+ */
+export interface LiveMan {
+  id: number;
+  name: string;
+  /** His bat side for a batter and his throwing hand for a pitcher, `L`/`R`/`S`
+   *  off `gameData.players`; null where MLB names none. */
+  hand: string | null;
+  /** The position he holds in this game (`SS`, `P`), off the box score, falling
+   *  back to his primary one. */
+  pos: string | null;
+  /** **MLB's own line for his game so far, unedited** — `1-3 | HR, 2 RBI` for a
+   *  batter and `3.0 IP, 2 ER, 2 K` for a pitcher, exactly as the box score's
+   *  `summary` writes it. Null before he has one (the first man up in a game,
+   *  a reliever who has not thrown). */
+  line: string | null;
+  /** A pitcher's pitch count so far; null for a batter. */
+  pitches: number | null;
+}
+
+/**
+ * **The play MLB is on** — `currentPlay`: the at-bat being played, or the last
+ * one completed while the next batter is not yet in the box or the half has
+ * ended. `complete` says which.
+ */
+export interface LivePlay {
+  batter: LiveMan | null;
+  pitcher: LiveMan | null;
+  inning: number;
+  /** `Top` / `Bot`, as a `PlateAppearance` spells it. */
+  half: string;
+  /** Whether MLB has given it a result. False is the at-bat in progress. */
+  complete: boolean;
+  /** MLB's result — `Strikeout`, `Groundout` — and its sentence, once there is
+   *  one. Both null while the at-bat is being played. */
+  event: string | null;
+  description: string | null;
+  /** The count and the outs as the last pitch left them. */
+  balls: number;
+  strikes: number;
+  outs: number;
+  pitches: Pitch[];
+  /** The non-pitch events filed in it — a mound visit, a pitching change, a
+   *  runner going — in the order they happened. */
+  actions: PlayAction[];
+}
+
+/**
+ * **Where a live game is, right now** — what the game page's Live tab draws.
+ * Null on anything but a game being played (see `game.ts::buildLive`).
+ */
+export interface GameLive {
+  balls: number;
+  strikes: number;
+  outs: number;
+  bases: BaseState;
+  /** **Between halves** — MLB's `Middle` and `End`: the last out is made and
+   *  the next half has not begun. Then `batter`, `onDeck` and `inHole` are the
+   *  three due up and `pitcher` is the man who will pitch to them, off the
+   *  linescore's `offense` and `defense`, which MLB turns round at the break. */
+  between: boolean;
+  batter: LiveMan | null;
+  onDeck: LiveMan | null;
+  inHole: LiveMan | null;
+  pitcher: LiveMan | null;
+  play: LivePlay | null;
+}
+
 /** **One game, whole** — what `/api/games/:gamePk` answers with. */
 export interface GameReport {
   gamePk: number;
@@ -2932,6 +3003,14 @@ export interface GameReport {
    *  number a line score's empty columns are drawn out to. */
   scheduledInnings: number;
   decisions: GameDecision[];
+  /**
+   * **Where the game is right now**, for the Live tab — the count, the bases,
+   * the men at the plate and on the mound, and the at-bat's pitches. **Null on
+   * anything but a game being played**, which is what keeps every frozen blob
+   * honest without a version bump: a settled report never had one to lose, and
+   * the one reader of the field tests the state before it looks.
+   */
+  live: GameLive | null;
   /** The box score's own footnotes — pitches-strikes, umpires, first pitch.
    *  MLB's labels and values, unedited. */
   notes: { label: string; value: string }[];

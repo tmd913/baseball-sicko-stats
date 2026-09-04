@@ -5525,6 +5525,112 @@ body {
   flex-direction: column;
   gap: var(--stack-gap);
 }
+
+/* ---- The game page's Live tab ---- */
+/* **The situation block is the feed's matchup head put to the present tense.**
+   `.pa-matchup` bleeds by `--table-bleed` and re-pads, which is right inside a
+   dialog body that declares one; here it sits in a capped column with no
+   padding of its own to give back, so the token is zeroed and the rule spans
+   the block exactly. */
+.live-now {
+  --table-bleed: 0px;
+}
+.live-now .pa-matchup {
+  padding-top: 6px;
+}
+/* The count, ahead of the two faces where the plate-appearance dialog puts the
+   half-inning glyph. It is the one fact about a live at-bat nothing else on the
+   page says, so it is the loud thing in the block: the head's score size, in
+   tabular figures so `1-2` and `3-2` are the same width and the diamond beside
+   it does not step. */
+.live-count {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+/* A man's line for the game, the third line under his hand: `1-3 | HR`, or
+   `37 P · 3.0 IP, 2 K`. MLB's own abbreviations, so it takes the muted tone the
+   hand takes rather than the name's weight — it is a fact about him, not him. */
+.pa-mu-note {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* `On deck · In the hole`, one line under the matchup, wrapping to two on a
+   phone. The role is a label and the name is the thing, so the label takes the
+   hand line's small caps and the name the body's own size. */
+.live-queue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+.live-queue-man {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.live-queue-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.live-queue-line,
+.live-due-line {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.live-due-line {
+  margin-left: auto;
+}
+.live-due {
+  margin-top: 10px;
+}
+/* The last at-bat's result, heading its pitches: the feed's own badge and MLB's
+   own sentence, with the outs it left in the sentence's own weight turned up. */
+.live-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.live-result-text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.live-result-outs {
+  font-weight: 800;
+}
+/* The at-bat's table and zone share the feed card's grid, whose stacking rule
+   is a container query — and a container query with no container silently
+   fails, so this box is the container the card would have been. */
+.live-ab-body {
+  container-type: inline-size;
+}
+/* A non-pitch event in its place in the sequence — a mound visit, a pitching
+   change. The number column is kept empty so the sentence starts where a
+   pitch's count does, and it takes the faint tone: it is what interrupted the
+   at-bat, not part of it. */
+.pitch-row.pitch-action {
+  grid-template-columns: 18px 1fr;
+  padding: 3px 4px;
+  color: var(--faint);
+  font-style: italic;
+}
 /* **The portrait and the club under it**, one column at the head of a player's
    page. The column is what lifts the picture: 64 + 12 + 25 = 101 is taller than
    the three lines of name, position and rostered share beside it (91), so
