@@ -7146,6 +7146,12 @@ export default function App() {
     // the `view !== 'summary'` reset would otherwise fire on the same commit
     // and put the lens straight back out.
     setView('summary');
+    // **And the comparison card**, for the reason the other two readings state:
+    // it replaces the table outright, so a lens on the table's figures pressed
+    // over it lights a control with nothing to read. See `matchupButton`, which
+    // clears this reading when it turns on — this is that rule from the other
+    // side, and all three readings were missing it.
+    setRosterMatchup(false);
     setRosterProjected((on) => {
       if (on) return false;
       const today = baseballToday();
@@ -8691,6 +8697,81 @@ export default function App() {
     return () => document.removeEventListener('scroll', onScroll, true);
   }, []);
 
+  /**
+   * **The control a reader just pressed stays where they can see it.**
+   *
+   * Reported: *"the tabs on the roster page should remain in view when they are
+   * selected (seems to scroll away from them sometimes)"*. They did, and the
+   * memory above is why — `scrollKey` is the **view**, so every reading of the
+   * Roster's table shares one offset and a press carries it straight across.
+   * Measured at 430×950, scrolled 900px down the summary pane, pressing each
+   * control in the run:
+   *
+   * | press | pane after | `.view-tools` top |
+   * | --- | --- | --- |
+   * | `Schedule` | 923 | **−824** |
+   * | `Projected` | 900 | **−801** |
+   * | `Summary` | 1074 | **−975** |
+   * | `Feed` | 0 | 99 |
+   * | `News` | 0 | 99 |
+   *
+   * So the reader presses a control, the whole table changes under them, and
+   * the control they pressed — and every other one in the run — is eight
+   * hundred pixels above the screen. `Feed` and `News` escape it by accident:
+   * they change the view, which is a different `scrollKey` and a pane that
+   * remounts at 0.
+   *
+   * **It scrolls only when the row is above the scrollport, and only far enough
+   * to put it back at the top** — and it is worth being exact about what that
+   * amounts to, because it is more than it sounds. The row is the pane's
+   * **first child**, so *any* offset at all has it behind the pinned chrome:
+   * measured, a pane at 40 puts `.view-tools` at viewport 59 under a 99px head.
+   * There is therefore no case where this moves the reader a little. Either
+   * they are at the top and nothing happens, or they are scrolled and the pane
+   * returns to 0.
+   *
+   * So this **is** a reset, and it is a deliberate one against the memory's own
+   * note two comments up — that a reading changes the numbers in the rows
+   * rather than which rows they are, so the man being read is still on screen.
+   * That argument is still true and it is not the one that decides this: a
+   * control the reader cannot see is a control they cannot press again or read
+   * the state of, which is the rule this app already applies to an empty state
+   * (*name the control that caused it, and point at where it is*) and to the
+   * percentile card's density switch (a card that can be empty has to leave the
+   * control that could change it reachable). It is also what `DetailsShell`
+   * does one layer down, for the same reason stated there.
+   *
+   * The scroll **memory** is untouched by this and was checked rather than
+   * assumed: leaving the Roster 700px down for the Feed and coming back lands
+   * at 700, exactly as it did before.
+   *
+   * **It stands down when the view changes**, which is the one case that would
+   * fight the restore above: that runs on the same commit, places a remembered
+   * offset, and this would undo it for any page remembered below its own tools
+   * row. A view change is the memory's business; this is only about a press
+   * that stays on one.
+   */
+  const rosterReading = `${scheduleSpan !== null}|${rosterProjected}|${rosterSummary}|${rosterMatchup}|${rosterOpp}`;
+  /* The reading and the view this last ran for. Values rather than a spent
+     flag, which is the trap `RULES.md` names and this file has found four
+     times: StrictMode runs a layout effect, tears it down and runs it again, so
+     a `first.current = false` on the way out makes the second pass look like a
+     change. An equal reading is that second pass and does nothing. */
+  const lastReading = useRef<string | null>(null);
+  const lastReadingView = useRef(view);
+  useLayoutEffect(() => {
+    const prev = lastReading.current;
+    const viewChanged = lastReadingView.current !== view;
+    lastReading.current = rosterReading;
+    lastReadingView.current = view;
+    if (prev === null || prev === rosterReading || viewChanged) return;
+    const pane = pageScroller();
+    const tools = document.querySelector<HTMLElement>('.view-tools');
+    if (!pane || !tools) return;
+    const above = tools.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+    if (above < 0) pane.scrollTop += above;
+  }, [rosterReading, view]);
+
   const firstPage = useRef(true);
   useLayoutEffect(() => {
     // The browser's own restore on a reload owns the first pass. Nothing else
@@ -9246,6 +9327,18 @@ export default function App() {
           // the same exclusivity stated one control over. Without it a press
           // would light a toggle whose columns are on a page nobody is on.
           if (view !== 'summary') setView('summary');
+          /* **And the comparison card**, which is the fourth thing this run
+             can be showing and the one the other three forgot. The card
+             *replaces* the table, so a reading of the table pressed over it is
+             a control lit against a page it has no reach into — measured on the
+             live league, `Matchup` and `Schedule` lit together with the card
+             still up and the table nowhere: pressing another button did not
+             switch to it. `matchupButton` clears these three when it turns on;
+             this is the same rule read from the other side, and it was missing
+             on all three. `Feed` and `News` never needed it only because they
+             change the view, and the `view !== 'summary'` effect clears the card
+             on the way past. */
+          setRosterMatchup(false);
           // The `Summary` lens goes off for the same reason the projected one
           // does one line down: it is a third reading of the same cells, and
           // this one replaces the *columns* where that replaces the figures.
@@ -9454,6 +9547,18 @@ export default function App() {
           // Back to the table first, exactly as the other two readings do it:
           // this is a reading of the stat columns and the stream has none.
           if (view !== 'summary') setView('summary');
+          /* **And the comparison card**, which is the fourth thing this run
+             can be showing and the one the other three forgot. The card
+             *replaces* the table, so a reading of the table pressed over it is
+             a control lit against a page it has no reach into — measured on the
+             live league, `Matchup` and `Schedule` lit together with the card
+             still up and the table nowhere: pressing another button did not
+             switch to it. `matchupButton` clears these three when it turns on;
+             this is the same rule read from the other side, and it was missing
+             on all three. `Feed` and `News` never needed it only because they
+             change the view, and the `view !== 'summary'` effect clears the card
+             on the way past. */
+          setRosterMatchup(false);
           setRosterSummary((on) => {
             if (on) return false;
             // The same clearing the other two do — one departure from the plain
