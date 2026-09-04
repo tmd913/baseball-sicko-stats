@@ -770,17 +770,37 @@ what the third row shows. The light schemes sit lower because the same alpha of
 a near-black ink over near-white moves less; both still read as a bar, and one
 value for all six beats six blocks that will drift.
 
-**One clock for the page, not one per bar.** Sixty bars each starting their own
-1.5s sweep at the moment they mount is sixty lights crossing at sixty phases,
-which reads as static. Negative delays by card (`0`, `-0.25s`, `-0.5s`) put the
-sweep on a diagonal, so the page has one wave passing over it.
+**The sweep is gone, and the bars pulse.** Two paragraphs stood here and both
+are worth keeping, because between them they are the whole of the argument that
+replaced them.
 
-**And the sweep is motion, so it answers `prefers-reduced-motion`.** A still bar
-is still a bar — the shape it reserves is the whole of what it says — so the
-light goes and a 2.2s fade takes its place, which is what the spinning ball does
-under the same query and for the reason stated there: a fade is not the kind of
-motion the preference is asking to be spared. Verified with the media feature
-emulated: `sk-sweep 1.5s` becomes `sk-fade 2.2s` with no `background-image`.
+The first was **one clock for the page, not one per bar**: sixty bars each
+starting their own 1.5s sweep at the moment they mount is sixty lights crossing
+at sixty phases, which reads as static, so negative delays by card (`0`,
+`-0.25s`, `-0.5s`) put the sweep on a diagonal and the page carried one wave.
+The second was **the sweep is motion, so it answers `prefers-reduced-motion`**:
+a still bar is still a bar — the shape it reserves is the whole of what it says
+— so under that query the light went and a 2.2s fade took its place, which is
+what the spinning ball does under the same query and for the reason stated
+there, a fade not being the kind of motion the preference asks to be spared.
+
+Asked for on the reader's own call — *"it should be a smooth pulsing effect
+instead of the current shimmer (across the whole app)"* — the second paragraph's
+fallback is now what everybody gets, and the first paragraph inverts. Staggering
+existed because a *travelling* light needs a wave to look like one; bars
+**breathing together** read as one surface waiting, and staggered they read as
+sixty things blinking. So the per-card delays go with the sweep and every bar in
+the app shares a phase: `sk-pulse 1.6s ease-in-out infinite`, opacity 1 → 0.45.
+
+Two things fall out of it, neither of them the reason:
+
+- **The `prefers-reduced-motion` block is gone**, having nothing left to
+  substitute — the default *is* what it used to install. The spinning ball keeps
+  its own query.
+- **It is the cheaper of the two.** A sweep animates `background-position`,
+  which is a paint on every frame of every bar — 75 of them on the player page's
+  Overview tab before that tab was thinned out. `opacity` is composited: one
+  layer property per bar, no paint.
 
 **One specificity trap, and it bit.** `.sk-door` alone is the same specificity
 as `.ov-day-more`, which is declared *later* in the stylesheet, so the button's
