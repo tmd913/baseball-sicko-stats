@@ -132,22 +132,37 @@ function DaySkeleton({ head }: { head: string }) {
           at **44px**, where the sentence is 15. `.ovw-none` is what a man whose
           club is not playing gets, which is the uncommon day.
           So the skeleton is the row, in the row's own classes: 68px against the
-          real 68, and one line of bars rather than three. */}
+          real 68, and one line of bars rather than three.
+
+          **Two bars, where there were four**, and the same reasoning one step
+          further along — reported as *"too many bars in current/next game
+          portion of player overview page"*. The row is a fixture on the left and
+          a status chip on the right, which is two facts; it was drawing four
+          because the real row happens to build each of those out of two spans
+          (a date beside a line, a time beside a matchup). Those are the *real*
+          row's seams, and a bar has no business reproducing them — four marks
+          across one line read as a row of separate values where the block holds
+          one fixture that has not arrived.
+
+          **The spans stay and only the bars go**, which is the whole of why the
+          height holds: `.pday-game` is one flex line and the row's 68px is that
+          line's box plus its padding, so what matters is that each side still
+          *has* a line — not how many bars are on it. `.feed-game-date` and
+          `.game-matchup` are kept as empty spans rather than deleted, because
+          they carry the row's gaps: with them gone the chip lost its right-hand
+          padding and the left bar started at the row's edge. Measured either
+          way, the block is 68px against the real 68. */}
       <div className="player-day">
         <div className="pday-game static">
-          <span className="feed-game-date">
-            <SkBar w="46px" />
-          </span>
+          <span className="feed-game-date" />
           <span className="feed-game-line pday-none">
-            <SkBar w="128px" />
+            <SkBar w="180px" />
           </span>
           <span className="game-status scheduled">
             <span className="game-status-detail">
-              <SkBar w="58px" />
+              <SkBar w="64px" />
             </span>
-            <span className="game-matchup">
-              <SkBar w="48px" />
-            </span>
+            <span className="game-matchup" />
           </span>
         </div>
       </div>

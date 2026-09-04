@@ -1428,8 +1428,8 @@ Recent Games log, plus a row of them under the season strip's labels — **45 an
 8 of the 75**. Reported as *"the shimmer effect has too many bars on the player
 overview page, consolidate them and make them bigger"*, and the count is the
 whole of why: a bar is meant to read as *one value not yet arrived*, and forty-five
-of them in a grid read as a redacted table — the same fault the day block was
-already fixed for, one block along.
+of them in a grid read as a redacted table — the same fault the day block had
+already been fixed for once, one block along, and would be fixed for again.
 
 **A game is a row, so the row is one bar.** Both tables take a single
 `colSpan={labels.length}` cell per row, and the fixture slot's three bars a row
@@ -1442,13 +1442,30 @@ table's own header over lines that have not filled in.
 | Recent Games | 45 → **5** |
 | Season strip | 8 → **1** |
 | Next slot | 15 → **5** |
-| Day block, news | 7 → 7 |
-| **the tab** | **75 → 18** |
+| Day block | 4 → **2** |
+| News | 3 → 3 |
+| **the tab** | **75 → 16** |
 
-The day block keeps its four and the news its three: they are the two blocks
-that were never dense, and the day block's four bars are *structural* — each sits
-in one of the row's spans and each span's line box is part of the 68px this
-block was measured to.
+The news keeps its three, being the one block that was never dense.
+
+**The day block took a second pass**, and the first one left it at four on the
+reasoning that its bars are *structural* — each sits in one of the row's spans,
+and each span's line box is part of the 68px the block was measured to. That is
+true of the **spans** and it is not true of the **bars**, which is the
+distinction the second pass turned on: reported as *"too many bars in
+current/next game portion of player overview page"*, and the count was four
+because the real row builds its two facts out of two spans each — a date beside
+a line, a time beside a matchup. Those are the real row's seams, and a bar has no
+business reproducing them; four marks across one line read as four values where
+the block holds one fixture that has not arrived.
+
+So the spans stay and only the bars go: a fixture on the left, a status chip on
+the right. `.pday-game` is one flex line and the block's 68px is that line's box
+plus its padding, so what holds it is that each side still *has* a line, not how
+many bars are on it. `.feed-game-date` and `.game-matchup` are kept as **empty**
+spans rather than deleted, because they carry the row's gaps — with them gone the
+chip lost its right-hand padding and the left bar started hard against the row's
+edge. Measured after: 68px, unchanged.
 
 **Which is the trap the consolidation walked into.** `.start-line` is
 `display: flex; align-items: baseline` over 13px type, so a bar dropped straight
