@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
-import { useResource, useResourcePoll } from './resource';
+import { refreshPolled, useResource, useResourcePoll } from './resource';
 import { SignOutButton, Splash } from './auth';
 import {
   MAX_LISTS,
@@ -7987,6 +7987,42 @@ export default function App() {
   useEffect(() => {
     projectedRef.current = rosterProjected;
   });
+  /**
+   * **Arriving on a screen brings its live answers up to date at once.**
+   *
+   * `useResourcePoll` fires its first tick on mount, which covers every page
+   * whose poll mounts with it — a game's page, a player's day. It cannot cover
+   * the reads that live *here*: `App` does not unmount when the view changes, so
+   * the roster report's poll is registered once at boot and its clock runs from
+   * whenever it last ticked, whatever the reader is looking at.
+   *
+   * Measured before this, leaving the Roster for the research board and coming
+   * back after **3 seconds**: no `/api/report` at all. The table was drawing an
+   * answer up to a full poll interval old, and going on drawing it, while the
+   * reader sat in front of it — reported as *"each screen should refresh
+   * immediately when you revisit it (quietly in the background) while games are
+   * live"*.
+   *
+   * **A change of `view` is the arrival**, and it is the whole of the test: the
+   * three params that say *which reading of a view* are not (a reader crossing
+   * `Schedule` has not gone anywhere), and neither is opening a page over one,
+   * which mounts its own poll and is covered by the first paragraph.
+   *
+   * `refreshPolled` decides *what* rather than this: only keys something is
+   * currently polling, which is already only keys with a live game in them. On a
+   * quiet day it reads nothing. And it is quiet, deduped against anything in
+   * flight, and restarts the intervals behind it — see there.
+   *
+   * The ref holds a **value** rather than a spent flag, which is the rule this
+   * file has found four times: StrictMode runs an effect, tears it down and runs
+   * it again, and an equal view is that second pass rather than an arrival.
+   */
+  const arrivedOn = useRef(view);
+  useEffect(() => {
+    if (arrivedOn.current === view) return;
+    arrivedOn.current = view;
+    refreshPolled();
+  }, [view]);
   useResourcePoll(reportKey, hasRealLiveGame ? LIVE_POLL_MS : null);
   /* The projection rides the same clock but is not the same resource, so it
      keeps a timer of its own — one that fires on the same gate and the same

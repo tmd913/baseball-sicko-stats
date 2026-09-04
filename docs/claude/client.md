@@ -2556,6 +2556,20 @@ key is *not yet*, which is what the boot gates became. The store keeps five
 things the callers used to keep individually — the sequence guard, the in-flight
 dedupe, the two loading flags, the error, and when the answer landed.
 
+**A screen is current the moment you come back to it, while games are live.** Two things carry that, because the app has two shapes of poll and only one of them mounts with its page.
+
+`useResourcePoll` **fires its first tick on mount** rather than one interval later. A timer starts counting when it is created, so a key last read *before the reader left* stayed unrefreshed for up to a whole interval after they returned; `useResource`'s own mount read does not cover it, being gated on `staleMs`, which for a live read *is* the poll interval, so everything inside the window falls through. That covers every page whose poll mounts with it — a game's page, a player's day.
+
+**The reads that live in `App` needed the other half**, and they are the ones a reader is most likely to mean. `App` does not unmount when the view changes, so the roster report's poll is registered once at boot and its clock runs from whenever it last ticked, whatever is on screen. Measured before this, leaving the Roster for the research board and coming back after **3 seconds**: **no `/api/report` at all** — the table drawing an answer up to a full interval old, and going on drawing it, with the reader in front of it. Reported as *"each screen should refresh immediately when you revisit it (quietly in the background) while games are live"*.
+
+So a change of `view` calls `refreshPolled()`, which reads every key something is **currently polling** and restarts the intervals behind it. Three things make that the right scope rather than a blunt refetch:
+
+- **`polls.size > 0` is the live gate, and it is not a test `refreshPolled` makes.** Whether a key is polled is a reading of its own answer — `hasRealLiveGame` off the report, `live` off the game — so *everything being polled* is already *everything with something happening in it*, decided by the callers that know. Visible in the measurement: across 12 view changes, `/api/report` (polled, games live) was re-read **12 times** and `/api/research` (not polled) **once**. On a quiet day this reads nothing.
+- **A change of `view` is the arrival, and nothing else is.** The params that say *which reading* of a view are not (crossing `Schedule` is not going anywhere), and neither is opening a page over one — that mounts its own poll and is the first paragraph's business.
+- **It is quiet, so it leaves no mark at all.** Both `loading` and `updating` are read off `e.loud`, which a quiet read does not touch. Verified by sampling every animation frame across 12 view changes with rows on screen: **zero** waits, and no exceptions.
+
+**And a mount read over an answer already on screen is quiet too.** `useResource`'s stale-mount read was loud outright, on the argument that it fires when the key changes and that is always something the reader did. What that missed is that a *mount* is the other way in: stepping back onto a page whose entry outlived the component asks for a key that already has an answer, and the answer is on screen before the read starts. A mark over it is *never over data* broken by the one read best placed to break it. `e.snap.settled` is exactly the question — false for a key nobody has answered, true for one being revisited — so loud now means *there is nothing to show yet*.
+
 **Two kinds of read, counted separately**, because the app has always had two
 and only one of them may say so on screen: a **loud** read is one somebody's
 action started — a step of the date bar, a change of roster, a press of refresh
