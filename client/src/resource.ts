@@ -219,12 +219,47 @@ function runRead(key: string, opts: { force?: boolean; quiet?: boolean } = {}): 
   return p;
 }
 
-function refreshTimer(e: Entry, key: string): void {
+function refreshTimer(e: Entry, key: string, restart = false): void {
   const want = e.polls.size > 0 ? Math.min(...e.polls.values()) : null;
-  if (want === e.pollMs) return;
+  if (want === e.pollMs && !restart) return;
   if (e.timer) clearInterval(e.timer);
   e.pollMs = want;
   e.timer = want == null ? null : setInterval(() => void runRead(key, { quiet: true }), want);
+}
+
+/**
+ * **Bring every live answer up to date now** — one quiet read of each key that
+ * something is currently polling, and the interval restarted behind it.
+ *
+ * *Each screen should refresh immediately when you revisit it (quietly in the
+ * background) while games are live.* Most screens get that from
+ * `useResourcePoll`, which fires its first tick on mount — so a page whose poll
+ * mounts and unmounts with it is current the moment it comes back.
+ *
+ * **The reads that live in `App` are the ones that need this**, and they are the
+ * ones the reader is most likely to mean: `App` does not unmount when the view
+ * changes, so the roster report's poll is never re-registered and its clock goes
+ * on running from whenever it last ticked. Measured before this, leaving the
+ * Roster for the research board and coming back after **3 seconds**: no
+ * `/api/report` at all, the table sitting on an answer up to a poll-interval old
+ * while the reader watched it.
+ *
+ * **`polls.size > 0` is the live gate, and it is not a test made here.** Whether
+ * a key is polled is a reading of its own answer — `hasRealLiveGame` off the
+ * report, `live` off the game — so "everything being polled" is already
+ * "everything that has something happening in it", decided by the callers that
+ * know. A quiet day polls nothing and this does nothing.
+ *
+ * The timer is **restarted** rather than left alone, so the tick that was due in
+ * two seconds does not read the same key twice; and `runRead` dedupes against
+ * anything in flight, so a view change during a poll costs nothing.
+ */
+export function refreshPolled(): void {
+  for (const [key, e] of entries) {
+    if (e.polls.size === 0) continue;
+    void runRead(key, { quiet: true });
+    refreshTimer(e, key, true);
+  }
 }
 
 /**
@@ -293,6 +328,35 @@ export function useResourcePoll(key: string | null, ms: number | null): void {
     const mine = me.current;
     e.polls.set(mine, ms);
     refreshTimer(e, key);
+    /**
+     * **The poll's first tick is now, not one interval from now** — which is
+     * what makes a page current the moment a reader comes back to it.
+     *
+     * A timer starts counting when it is created, so a key that was last read
+     * *before the reader left the page* stayed on screen unrefreshed for up to a
+     * whole interval after they returned. `useResource`'s own mount read does
+     * not cover it: that one is gated on `staleMs`, which for a live read is the
+     * poll interval itself, so everything inside the window falls through.
+     * Measured on the live app, leaving the Roster for the research board and
+     * coming back: after **3s** away, *no* `/api/report` at all — the table sat
+     * on an answer fetched before the reader left; after **25s**, one. Reported
+     * as *"each screen should refresh immediately when you revisit it (quietly
+     * in the background) while games are live"*.
+     *
+     * **`ms == null` is the whole of "while games are live"** and it is not a
+     * test this hook makes: whether to poll is a reading of the answer itself
+     * (`anyLive`, off the report), which is the reason this is a hook of its own
+     * and is stated at the top of it. A page nobody is polling is a page nothing
+     * is happening on, and it keeps the `staleMs` rule it always had.
+     *
+     * **Quiet, and deduped.** Nobody asked for it, so it leaves no mark at all:
+     * both `loading` and `updating` are read off `e.loud`, which a quiet read
+     * does not touch. And `runRead` returns the in-flight promise rather than
+     * starting a second one, which is what makes this free on a *first* mount —
+     * where `useResource` is already reading — and free again on StrictMode's
+     * second pass.
+     */
+    void runRead(key, { quiet: true });
     return () => {
       e.polls.delete(mine);
       refreshTimer(e, key);
@@ -404,10 +468,22 @@ export function useResource<T>(
     // set on the first pass is what leaves a wait up for ever. The dedupe in
     // `runRead` is what makes the second pass free.
     const stale = !e.snap.settled || Date.now() - e.snap.at >= staleMs;
-    // **Loud**, because this fires when the key changes — a different range, a
-    // different roster, a page opened — and that is always something the reader
-    // did. The quiet reads are the poll, the resume and the invalidation.
-    if (stale) void runRead(key);
+    /* **Loud only when there is nothing to show yet.**
+     *
+     * This fires when the key changes — a different range, a different roster, a
+     * page opened — and that is always something the reader did, which is why it
+     * was loud outright. What that missed is that a *mount* is the other way in
+     * here: stepping back onto a page whose entry outlived the component asks
+     * for a key that already has an answer, and the answer is on screen before
+     * the read starts. A mark over it is the "never over data" rule broken by
+     * the one read that is best placed to break it.
+     *
+     * So the split is the app's own: a read somebody is *waiting on* is loud, a
+     * read that refreshes something already drawn is quiet. `e.snap.settled` is
+     * exactly that question — it is false for a key nobody has ever answered and
+     * true for one being revisited. The quiet reads were the poll, the resume
+     * and the invalidation; the revisit joins them. */
+    if (stale) void runRead(key, { quiet: e.snap.settled });
   }, [key, staleMs]);
 
   /** The last answer this caller was given, for `keepPrevious`. Held per hook
