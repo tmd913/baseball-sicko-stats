@@ -1230,7 +1230,42 @@ of every element on the roster, the player page and the Game Log tab for
   fixtures (`?start=2026-08-24`) draws four `aria-haspopup="dialog"` cells, and
   pressing one still raises the preview with the URL unchanged.
 
-**Bundle, `main` → this work.** JS **646.21 → 669.48 kB** raw, **192.22 →
+**The Live tab**, driven against gamePk 824424 (DET at CLE, 2026-09-04) at
+1200×900 and 390×844 while it was being played:
+
+- **At bat**, top of the 1st: strip `Live* · Overview · Box Score · Plays`,
+  the page opened on Live; heads `At bat · This at-bat · Top 1st · DET
+  batting`; count **`2-2`** with the diamond beside it; `McGonigle LHB 0-0`
+  vs `Allen LHP 9 P · 0.0 IP, 0 ER, 0 K, 0 BB`; `On deck Hao-Yu Lee 0-0 · In
+  the hole Dillon Dingler 0-0`; **4** pitch rows and **4** dots in the zone,
+  matching the wire's four; **1** feed item under it (the single before him)
+  and the in-progress at-bat not among them. Every block **x=200 w=800** at
+  1200 and **x=16 w=358** at 390; the at-bat's grid `574px 210px` at 1200 and
+  one column at 390, the zone stacked under the table at 220px.
+- **The one fault, found at 390**: the pitcher's third line, set `nowrap`, was
+  **149px in the 78px** the head's grid had for it and the whole page scrolled
+  **7px** sideways (`.details-view` 397 in 390). It wraps now; **overflow 0**
+  at both widths, the same line one row at 1200 and two at 390.
+- **Between halves**, middle of the 2nd: heads `Due up · Top 3rd · Last
+  at-bat · Bottom 2nd · CLE batting`; `Allen LHP 58 P · 2.0 IP, 5 ER, K, 2 BB`
+  over `Riley Greene LF LHB 0-0 | BB, R · Ben Malgeri RF RHB 1-1 | 2 RBI, R ·
+  Spencer Torkelson 1B RHB 1-1` — **MLB's offense block already the Tigers'**,
+  as the wire section says; the last at-bat headed `Flyout · Brayan Rocchio
+  flies out to center fielder Max Clark. 3 outs` over its three pitches;
+  **4** feed items for the half, newest first. Overflow 0 at 1200 and 390.
+- **A step off and back**: a name pressed on the half's list opens
+  `?player=batter-701678`, and `Back` returns to `?game=824424` **on Live**.
+  `Overview` then `Live` lights each in turn.
+- **A finished game is untouched**: `?game=823337` opens on `Overview*` with
+  the three tabs it always had, and its frozen v2 report carries no `live`
+  field at all.
+
+**Bundle, `main` → this work.** JS **819.80 → 825.15 kB** raw, **241.58 →
+242.75 kB gzipped** (+1.17); CSS **215.57 → 216.69 kB** raw, **38.11 → 38.28
+kB gzipped** (+0.17). The tab is `PlayMatchup`, `PitchTable`, `StrikeZone`,
+`BaseDiamond` and `FeedItem`, all of which the bundle was already carrying.
+
+**Bundle, `main` → the page itself.** JS **646.21 → 669.48 kB** raw, **192.22 →
 197.24 kB gzipped** (+5.02); CSS **169.51 → 174.72 kB** raw, **30.45 → 31.31 kB
 gzipped** (+0.86). **+5.88 kB gzipped in total** for a page, three tabs, three
 routes' worth of client, a tab on the club's page, a half-inning dialog, the
