@@ -24,7 +24,7 @@ import type {
 import type { PitcherLookup } from './schedule';
 import { useDelayedFlag } from '../hooks';
 import { LoadingLine, SkBar } from './Loading';
-import { GameLogPreview } from './GameLog';
+import { BATTER_COLUMNS, GameLogPreview, PITCHER_COLUMNS } from './GameLog';
 import { Modal } from './Modal';
 import { OpponentRead, useOpponentBoards } from './OpponentTable';
 import { GamePark } from './ParkFactors';
@@ -131,24 +131,53 @@ function DaySkeleton({ head }: { head: string }) {
           `.player-day > .pday-game.static` — a date, a line and the fixture —
           at **44px**, where the sentence is 15. `.ovw-none` is what a man whose
           club is not playing gets, which is the uncommon day.
-          So the skeleton is the row, in the row's own classes: 68px against the
-          real 68, and one line of bars rather than three. */}
+          So the skeleton is the row, in the row's own classes.
+
+          **And it was the wrong row of the three, which only an audit of the
+          settled DOM showed.** `.player-day` draws one of three things: an
+          `UpcomingRow` for a game not yet started, a game card or feed for one
+          with plays in it, and `.pday-game.static` — the row this reserved — for
+          the case in between, a game that has started with nothing of his in it.
+          That is the **narrowest** of the three and the least common of them.
+          Measured at 390, 430 and 1100 on a man with a game later that day, the
+          settled block held `.feed-item.upcoming-item > .upcoming-head` at 48px
+          and no `.pday-game` at all: the skeleton was reserving a shape that was
+          not the one arriving, 44 against 48, at every width.
+
+          Drawn as the upcoming row it is 48 — exact for a game still to come,
+          and 4px closer to a played one, which is taller than both. Still one
+          shape standing in for three, which is this block's standing trade;
+          what changed is that it is now the middle one rather than the floor.
+
+          **Two bars, where there were four**, and the same reasoning one step
+          further along — reported as *"too many bars in current/next game
+          portion of player overview page"*. The row is a fixture on the left and
+          a status chip on the right, which is two facts; it was drawing four
+          because the real row happens to build each of those out of two spans
+          (a date beside a line, a time beside a matchup). Those are the *real*
+          row's seams, and a bar has no business reproducing them — four marks
+          across one line read as a row of separate values where the block holds
+          one fixture that has not arrived.
+
+          **The spans stay and only the bars go**, which is the whole of why the
+          height holds: `.pday-game` is one flex line and the row's 68px is that
+          line's box plus its padding, so what matters is that each side still
+          *has* a line — not how many bars are on it. `.feed-game-date` and
+          `.game-matchup` are kept as empty spans rather than deleted, because
+          they carry the row's gaps: with them gone the chip lost its right-hand
+          padding and the left bar started at the row's edge. Measured either
+          way, the block is 68px against the real 68. */}
       <div className="player-day">
-        <div className="pday-game static">
-          <span className="feed-game-date">
-            <SkBar w="46px" />
-          </span>
-          <span className="feed-game-line pday-none">
-            <SkBar w="128px" />
-          </span>
-          <span className="game-status scheduled">
-            <span className="game-status-detail">
+        <div className="feed-item upcoming-item">
+          <div className="upcoming-head">
+            <span className="feed-context">
+              <SkBar w="150px" />
+            </span>
+            <span className="game-prob-pitcher" />
+            <span className="feed-time">
               <SkBar w="58px" />
             </span>
-            <span className="game-matchup">
-              <SkBar w="48px" />
-            </span>
-          </span>
+          </div>
         </div>
       </div>
     </section>
@@ -213,15 +242,31 @@ function NewsSkeleton() {
           <span className="news-meta">
             <SkBar w="150px" />
           </span>
-          {/* The headline and the standfirst under it, which is two facts and
-              so is two bars; the meta line above is the third. It was three
-              bars for three lines and stays close to that, this block being the
-              one on the tab that was never dense. */}
+          {/* The headline and the standfirst under it, which is two facts; the
+              meta line above is the third. This block was never the dense one.
+
+              **The standfirst is two bars because it is usually two lines**, and
+              they are sized in pixels so that they *wrap where the sentence
+              does*. A percentage cannot: it scales with the box, so a bar at
+              94% is one line at every width, and the real summary is one line in
+              this tab's 800px reading column and two in a phone's 398. Measured
+              on a real item — 105 characters, natural width **592px**, rendered
+              36px (two lines at 18) in a 398px box. Two bars totalling 592 break
+              at the same place the sentence does: two lines under 592px of
+              column, one line over it.
+
+              That is *reserve the box by laying the worst case out* applied to
+              the one thing on this tab whose height is a function of the width
+              — the alternative being a media query at whatever width this
+              machine's copy of the sentence happened to wrap at.
+
+              Before: the news block was 104.8 against the real 122.8 at 430px,
+              the whole 18 being the second line. After: 122.8. */}
           <span className="news-headline">
             <SkBar w="72%" />
           </span>
           <span className="news-summary">
-            <SkBar w="94%" />
+            <SkBar w="300px" /> <SkBar w="286px" />
           </span>
         </div>
       </li>
@@ -273,12 +318,26 @@ function StatStripSkeleton({ labels }: { labels: string[] }) {
 /** The five-game preview, one bar per cell. Its column count is the log's, not
  *  the season strip's, so it is its own list rather than a reuse of that one. */
 function GameLogSkeleton({ isPitcher }: { isPitcher: boolean }) {
-  const labels = isPitcher
-    ? ['DATE', 'OPP', 'IP', 'H', 'ER', 'BB', 'K', 'ERA']
-    : ['DATE', 'OPP', 'AB', 'R', 'H', 'HR', 'RBI', 'BB', 'K'];
+  /* **The log's own columns, off the log's own list**, which is the rule the
+     season strip beside it already followed with `seasonLabels`: a skeleton
+     headed by a different set from the answer replacing it is a header that
+     changes as the read lands, which is the one part of a skeleton that is
+     supposed to be final. It was headed by a hand-written nine —
+     `DATE OPP AB R H HR RBI BB K` — against the seventeen a batter's log
+     actually draws (`Date Opp Batting Pos H/AB R 2B 3B HR RBI BB K SB` and four
+     `Szn` columns) and the sixteen a pitcher's does. Measured: every label in
+     the header row changed on arrival, and the table's width with them. */
+  const labels = ['Date', 'Opp', ...(isPitcher ? PITCHER_COLUMNS : BATTER_COLUMNS)];
   return (
     <div className="glog-scroll">
-      <table className="glog-table ovw-table">
+      {/* **`.glog-table` alone, without `.ovw-table`.** That modifier is the
+          *season strip's*, and one of the three things it takes off a plain log
+          table is the body row's bottom border — right for a one-row strip,
+          where the rule would sit a pixel above the box's own, and wrong here,
+          where five rows have five borders. Measured: the block was **257.6
+          against the real 262.6**, which is five rows times the one pixel this
+          class was removing. Off it, the two agree. */}
+      <table className="glog-table">
         <thead>
           <tr>
             {labels.map((label) => (

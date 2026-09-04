@@ -171,7 +171,7 @@ function Count({ n }: { n: number }) {
    order, AVG · OBP · SLG · OPS, so the eye takes them the way a slash line is
    taken. H/AB is where AB and H used to be two columns; see `HitsPerAb` for why
    one cell. */
-const BATTER_COLUMNS = [
+export const BATTER_COLUMNS = [
   'Batting', 'Pos', 'H/AB', 'R', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB',
   'Szn AVG', 'Szn OBP', 'Szn SLG', 'Szn OPS',
 ];
@@ -468,7 +468,7 @@ function EntryMargin({ m }: { m: number | null }) {
 /* Inn and Ent are the outing's setup — which innings he was in for, and the
    margin he inherited — and sit after the line rather than before it so the
    stats keep the left of the row, where a phone can see them without scrolling. */
-const PITCHER_COLUMNS = [
+export const PITCHER_COLUMNS = [
   'Dec', 'IP', 'H', 'R', 'ER', 'BB', 'K', 'HR', 'P',
   'Szn ERA', 'Szn FIP', 'Szn WHIP', 'Inn', 'Ent',
 ];
