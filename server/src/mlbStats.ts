@@ -1445,6 +1445,12 @@ const FEED_FIELDS = [
   // a pitch carries as `playId` — and its details carry the description and the
   // score the event left behind. `start` is the base a scoring runner came from.
   'playIndex',
+  // runners[].details.movementReason — which of a play's runner rows is the
+  // event itself and which is a consequence of it (`namesItsOwnEvent`). It
+  // comes through even without being named, like the `breaks` children above —
+  // measured, all 1,585 stolen-base rows in the 1,186 blobs already on disk
+  // carry it — so listing it is intent rather than a cache bump.
+  'movementReason',
   'actionPlayId',
   'awayScore',
   'homeScore',
@@ -1525,6 +1531,10 @@ interface FeedRunner {
     // Index into the play's `playEvents` of the event this movement happened on
     // — the pitch that was put in play, or the action a steal was recorded as.
     playIndex?: number;
+    // Why this runner moved, which is not the same question as what the play
+    // was filed under: a row is the event it names only when this reads
+    // `r_<eventType>`. See `namesItsOwnEvent`.
+    movementReason?: string | null;
   };
 }
 interface FeedPlay {
@@ -1992,6 +2002,73 @@ const BASE_EVENT_KINDS: Record<string, BaseEventKind> = {
 };
 
 const baseEventKind = (et: string): BaseEventKind | null => BASE_EVENT_KINDS[et] ?? null;
+
+/**
+ * **The kinds where a runner row is a *credit*, and so has to name itself.**
+ *
+ * MLB files a play's runner movements as one row each, and every row carries
+ * the *play's* `eventType` — including the rows that are a **consequence** of
+ * the event rather than the event. A steal of second on which the catcher
+ * throws the ball away produces two rows for the same man, both
+ * `stolen_base_2b`: `1B → 2B` and `2B → 3B`. Counting rows counts the steal
+ * twice, which is what put **two** steals on Carson Benge's 2026-09-07 against
+ * MLB's own game log's **one** (gamePk 823820, top of the 1st — *"Carson Benge
+ * steals (21) 2nd base… Carson Benge to 3rd. Throwing error by catcher Joe
+ * Mack."*).
+ *
+ * `details.movementReason` is the discriminator and it is free: the row that
+ * **is** the event spells `r_` + its own event type, and a row that merely rode
+ * along on it spells `r_adv_play` (or `r_adv_force`).
+ *
+ * **Measured over the 1,186 game blobs on disk**, every runner row of the
+ * eleven credited kinds and the four advance-only ones:
+ *
+ * | kind | rows naming themselves | rows naming an advance |
+ * | --- | --- | --- |
+ * | `stolen_base_*` | 1,577 | **8** |
+ * | `caught_stealing_*` | 386 | **10** |
+ * | `pickoff_*` | 95 | **1** |
+ * | `pickoff_caught_stealing_*` | 77 | **3** |
+ * | `pickoff_error_*` | 79 | **22** |
+ * | `defensive_indiff` | 165 | 0 |
+ * | `wild_pitch`, `passed_ball`, `balk`, `forced_balk` | **0** | 1,205 |
+ *
+ * The last row is why this is a set rather than a blanket rule: a wild pitch,
+ * a passed ball and a balk *never* name themselves — the runner advancing **is**
+ * the event — so testing them the same way would delete all 1,205 of them.
+ *
+ * **And the fault is worse than a double count**, which is why the test is on
+ * the reason rather than a de-duplication of (runner, event, play). Of the 44
+ * rows above that name an advance, only **15** duplicate a credit the same man
+ * genuinely earned; the other **29** are on a *different* runner entirely —
+ * Chandler Simpson taking second while Cedric Mullins was picked off third, and
+ * eight more like it, each one handing a man a caught stealing or a pickoff that
+ * was somebody else's out. De-duplicating would have caught 15 of the 44.
+ */
+const CREDITED_BASE_KINDS: ReadonlySet<BaseEventKind> = new Set<BaseEventKind>([
+  'sb',
+  'cs',
+  'po',
+  'pocs',
+  'poe',
+  'di',
+]);
+
+/**
+ * Whether this runner row is the base event it is filed under, rather than a
+ * movement that happened on the same play. Only the credited kinds are asked;
+ * for the pure advances the row is the event by definition, and for a runner
+ * row that is no base event at all (a batted ball's own movements) the question
+ * does not arise. A row with no reason at all is taken at face value — no blob
+ * on disk has one, and reading a missing field as "not the event" would silently
+ * empty the column rather than fix it.
+ */
+const namesItsOwnEvent = (et: string, runner: FeedRunner): boolean => {
+  const kind = baseEventKind(et);
+  if (kind === null || !CREDITED_BASE_KINDS.has(kind)) return true;
+  const reason = runner.details?.movementReason;
+  return reason == null || reason === `r_${et}`;
+};
 
 /**
  * The kinds that also land on the **pitcher's** game, because they happened
@@ -2906,9 +2983,15 @@ export async function getStatsApiGame(
           });
         }
       }
-      if (isStolenBase(et)) sbByRunner.set(rid, (sbByRunner.get(rid) ?? 0) + 1);
-      else if (isCaughtStealing(et)) csByRunner.set(rid, (csByRunner.get(rid) ?? 0) + 1);
-      const kind = baseEventKind(et);
+      // A row that rode along on the event rather than being it is skipped for
+      // both the count and the card — see `namesItsOwnEvent` for the 44 rows in
+      // the cache this drops and why 29 of them were on the wrong man.
+      const credited = namesItsOwnEvent(et, r);
+      if (credited) {
+        if (isStolenBase(et)) sbByRunner.set(rid, (sbByRunner.get(rid) ?? 0) + 1);
+        else if (isCaughtStealing(et)) csByRunner.set(rid, (csByRunner.get(rid) ?? 0) + 1);
+      }
+      const kind = credited ? baseEventKind(et) : null;
       if (kind) {
         addBaseEvent(rid, playPitcherId, {
           kind,
