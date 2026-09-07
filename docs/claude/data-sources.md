@@ -312,10 +312,26 @@ standing.
 
 **Verified against MLB's own boxscore, before → after**, over the whole cache:
 `sbByRunner`/`csByRunner` compared per player to `stats.batting.stolenBases` and
-`caughtStealing` for every game on disk. Benge's day through
-`/api/players/:id/day` — the route the player page's day dialog reads — goes
-`sb: 2 → 1` with one `sb` card in place of two, and his whole line
-(`AB 4 · H 1 · R 2 · RBI 0 · BB 1 · SB 1 · CS 0`) now agrees with MLB's
+`caughtStealing` for every game on disk.
+
+| run | games | cells | disagreements |
+| --- | --- | --- | --- |
+| before | 1,187 | 123,978 | **22** |
+| after (same run, paired) | 1,187 | 123,978 | **1** |
+| after (clean re-run) | 1,192 | 124,538 | **0** |
+
+**The paired run's one survivor was not a regression and not this fault.** Game
+824309: MLB **rescored** a Jake McCarthy steal to *defensive indifference* after
+the blob was frozen, so the blob disagreed with MLB identically before and after
+— the case *Official scoring moves* below exists for, healed by re-reading the
+game from the wire rather than by anything here. The clean re-run is the same
+cache with that blob current. It is worth knowing that a boxscore comparison
+over a whole cache **will surface rescorings as false positives**, and that the
+tell is a disagreement that is unchanged by the code being tested.
+
+Benge's day through `/api/players/:id/day` — the route the player page's day
+dialog reads — goes `sb: 2 → 1` with one `sb` card in place of two, and his
+whole line (`AB 4 · H 1 · R 2 · RBI 0 · BB 1 · SB 1 · CS 0`) agrees with MLB's
 boxscore cell for cell.
 
 **`DAY_SNAPSHOT_VERSION` went 10 → 11 and `FEED_CACHE_VERSION` did not move**,
