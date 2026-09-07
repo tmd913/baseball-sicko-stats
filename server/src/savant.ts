@@ -1140,8 +1140,24 @@ function projectDay(day: ParsedDay, filter: DayFilter): ParsedDay {
  *  with it**, and that is the same test v9 applied: `pitchData.breaks` is
  *  already in `FEED_FIELDS` (a `PitchMix` row has averaged those very numbers
  *  since it was written), so every cached game blob already holds what the new
- *  fields are derived from. */
-const DAY_SNAPSHOT_VERSION = 10;
+ *  fields are derived from.
+ *
+ *  **v11 adds nothing and is a bump on *meaning***, v7's own reason and the
+ *  arsenal blob's `-v5`: a runner row that merely rode along on a base event is
+ *  no longer counted as one (`mlbStats.ts::namesItsOwnEvent`). A v10 snapshot
+ *  has the wrong counts baked into its reports — `line.sb`/`line.cs` are set
+ *  from `sbByRunner`/`csByRunner` a few lines below and `baseEvents` is copied
+ *  onto the game, and `getReport` hands a stored day's `games` to the client
+ *  whole — so it would go on printing two steals where MLB prints one and
+ *  drawing a caught stealing under a man who was never caught. Measured over
+ *  the 1,186 game blobs on disk: **44 rows** wrong, **15** of them a doubled
+ *  credit and **29** a credit on the wrong runner. **`FEED_CACHE_VERSION` did
+ *  not move with it**, which is the test v9 and v10 both applied:
+ *  `details.movementReason` arrives through the field filter already — all
+ *  1,585 stolen-base rows on disk carry it — so every cached game blob can
+ *  answer, and a bump would re-download 1,186 games to arrive at 1,186
+ *  byte-identical ones. */
+const DAY_SNAPSHOT_VERSION = 11;
 
 /**
  * The on-the-wire form of a day.

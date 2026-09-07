@@ -1180,6 +1180,17 @@ capitalizes the result, so it read **`OTHER OUT`**. A `pitching_substitution`
 filed as a play of its own — which this API does not do and others have — would
 have read *Pitching Substitution* by exactly the same route.
 
+**The same fault has a second half on the *runner* side, and it is recorded
+elsewhere.** A play files one runner row per movement and every row carries the
+play's `eventType`, so a runner who rode along on a steal or a pickoff used to
+get a badge of his own — a steal drawn twice for the man who took the extra base
+on the throw, and a caught stealing under a man who was never caught. The rule
+that drops those (`mlbStats.ts::namesItsOwnEvent`, on
+`details.movementReason`) is in **Data sources**, *A runner row is not the event
+it is filed under, and one man had two steals*, with the 44 rows it drops
+counted by kind. It matters here because the badges this section's vocabulary
+draws are exactly what it was adding.
+
 **Driven, before → after**, on the seven days those seven plays fall on, through
 `/api/players/:id/day` (the route the player page's day dialog reads, drawing
 the same `playerDayEntries` items the stream draws), against MLB's own game log

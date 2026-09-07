@@ -193,7 +193,7 @@ changes next April is the line.
 - `cache/{date}.csv` — Savant CSV, downloaded once per date, kept forever (delete to refresh).
 - `cache/{date}-pull.csv` — **the same date's export filtered to `hfPull=Pull|`**, on the same terms and for the same reason: a finished day's pulled batted balls are a fact. It is the one thing that makes `pullAirRate` derivable on a window at all (see above), and it is small — **~280KB against the day's own 3.1MB**, so ~17% more cache for the season. One consumer, `statcastWindow.ts`, whose counts blob is the ordinary cache; this file exists so that bumping *that* version reparses off disk rather than sending 60 requests back to Savant, which is exactly why the day CSV beside it is kept.
 - Stats API responses cached via `storage.ts` **and** in-memory.
-- `day-{date}-v{N}.json.gz` — **a whole finished day as one gzipped object** (`DAY_SNAPSHOT_VERSION`, currently 9). Written by `getDay` once every game that day is final **and settled** (see *The last out is not the last word*); on a later cold read it replaces the schedule fetch + ~16 per-game reads + the CSV with a single read. Two things in it are `Map`s and so need explicit conversion (`JSON.stringify` turns a Map into `{}` silently): `ParsedDay.reports`, and each `DayGame`'s `homeStarters`/`awayStarters` — that second one is what v2 fixed. v3 added the pitching role each game carries, the line's win/save/hold credits, and the opposing team id (see **Pitchers on the watchlist**); v4 fills `probablePitcher` on a *pitcher's* own game — the opposing announced starter, which the builder used to leave null — for the summary table's opponent column; v5 gives each `BaseEvent` its clip, description, matchup and count, which a v4 snapshot has none of and would go on serving as a bare badge forever; **v6** is the rest of the base-event vocabulary — the eight kinds past stolen base and run, a pitcher's own copy of the ones he was a party to, and the situation each happened in (`onBase`, `runnerName`, `atBatNumber`, plus `awayScore`/`homeScore` on a `PlateAppearance`). Everything v6 adds is *derived* rather than newly fetched, which is exactly why the bump is needed and a `FEED_CACHE_VERSION` one is not: the raw fields it reads — `movement.start`/`end`, `runners[].details.runner.fullName`, `playIndex`, `actionPlayId`, the scores — were all already in `FEED_FIELDS` (leaf-matched, so `runner.fullName` and `result.awayScore` arrive without being named under their parents), so every cached final feed can answer for them, while a v5 snapshot holds the finished model and would go on serving a day with no balks in it. **v7 adds nothing at all and is a bump on *meaning***, the arsenal blob's own `-v5` reason: the plays MLB files under the batter who was up but which are not his plate appearance — a caught stealing, a pickoff, a runner thrown out at the plate — no longer become one (`mlbStats.ts::isPlateAppearance`), and a v6 snapshot has those rows baked into its reports, so it would go on drawing an `OTHER OUT` card in the feed under a batter who never made an out and counting it in his line. Measured before the bump: seven such plays in the 672 distinct games the cache holds, every one of them one at-bat high against MLB's own game log for that player and day. **v8 puts the sacrifice fly on every batting line** — a field a stored day is read straight back out of, so a v7 snapshot deserializes with `line.sf` undefined and the OBP denominator divides by `NaN`; see *The sacrifice fly* below for why it is the only blob that needed the bump. It doubles as the discard that heals a day frozen over an unwritten box score, there being no v8 snapshot anywhere yet. **v9 stamps the day with `builtAt`, the moment it was built from the wire** — the field `revisions.ts` compares a reported rescoring against, and the one thing that keeps *every* day from being rebuilt once for nothing (MLB writes to a game after the last out as a matter of course, so the change feed names most of a slate the night it is played). A v8 snapshot deserializes without it and reads as `builtAt: 0`, which is safe — older than any revision, so rebuilt the first time MLB names its date — but it is a field read straight back out of the blob, which is the test this file applies. See *Official scoring moves, and MLB says which games moved*.
+- `day-{date}-v{N}.json.gz` — **a whole finished day as one gzipped object** (`DAY_SNAPSHOT_VERSION`, currently 11). Written by `getDay` once every game that day is final **and settled** (see *The last out is not the last word*); on a later cold read it replaces the schedule fetch + ~16 per-game reads + the CSV with a single read. Two things in it are `Map`s and so need explicit conversion (`JSON.stringify` turns a Map into `{}` silently): `ParsedDay.reports`, and each `DayGame`'s `homeStarters`/`awayStarters` — that second one is what v2 fixed. v3 added the pitching role each game carries, the line's win/save/hold credits, and the opposing team id (see **Pitchers on the watchlist**); v4 fills `probablePitcher` on a *pitcher's* own game — the opposing announced starter, which the builder used to leave null — for the summary table's opponent column; v5 gives each `BaseEvent` its clip, description, matchup and count, which a v4 snapshot has none of and would go on serving as a bare badge forever; **v6** is the rest of the base-event vocabulary — the eight kinds past stolen base and run, a pitcher's own copy of the ones he was a party to, and the situation each happened in (`onBase`, `runnerName`, `atBatNumber`, plus `awayScore`/`homeScore` on a `PlateAppearance`). Everything v6 adds is *derived* rather than newly fetched, which is exactly why the bump is needed and a `FEED_CACHE_VERSION` one is not: the raw fields it reads — `movement.start`/`end`, `runners[].details.runner.fullName`, `playIndex`, `actionPlayId`, the scores — were all already in `FEED_FIELDS` (leaf-matched, so `runner.fullName` and `result.awayScore` arrive without being named under their parents), so every cached final feed can answer for them, while a v5 snapshot holds the finished model and would go on serving a day with no balks in it. **v7 adds nothing at all and is a bump on *meaning***, the arsenal blob's own `-v5` reason: the plays MLB files under the batter who was up but which are not his plate appearance — a caught stealing, a pickoff, a runner thrown out at the plate — no longer become one (`mlbStats.ts::isPlateAppearance`), and a v6 snapshot has those rows baked into its reports, so it would go on drawing an `OTHER OUT` card in the feed under a batter who never made an out and counting it in his line. Measured before the bump: seven such plays in the 672 distinct games the cache holds, every one of them one at-bat high against MLB's own game log for that player and day. **v8 puts the sacrifice fly on every batting line** — a field a stored day is read straight back out of, so a v7 snapshot deserializes with `line.sf` undefined and the OBP denominator divides by `NaN`; see *The sacrifice fly* below for why it is the only blob that needed the bump. It doubles as the discard that heals a day frozen over an unwritten box score, there being no v8 snapshot anywhere yet. **v9 stamps the day with `builtAt`, the moment it was built from the wire** — the field `revisions.ts` compares a reported rescoring against, and the one thing that keeps *every* day from being rebuilt once for nothing (MLB writes to a game after the last out as a matter of course, so the change feed names most of a slate the night it is played). A v8 snapshot deserializes without it and reads as `builtAt: 0`, which is safe — older than any revision, so rebuilt the first time MLB names its date — but it is a field read straight back out of the blob, which is the test this file applies. See *Official scoring moves, and MLB says which games moved*. **v10 puts the break on every pitch** (`Pitch.hBreak`/`vBreak`) and his own season spread on every arsenal row (`PitchMix.seasonHRange`/`seasonVRange`), which an outing's Movement Profile draws its cloud and its baseline from — a v9 blob deserializes with a full arsenal tab and an empty plot, which reads as a pitcher who threw nothing rather than as a stale blob. **v11 adds nothing and is a bump on *meaning*** — v7's own reason: a runner row that merely rode along on a base event is no longer counted as one, and a v10 snapshot has the doubled `line.sb` and the phantom `baseEvents` baked into its reports. See *A runner row is not the event it is filed under* below. `FEED_CACHE_VERSION` moved with none of the three, and each for the same reason: the raw fields all three read were already in the payload on disk.
 - `mlb-revisions-v1.json` — **which finished days MLB has rescored and this app has not rebuilt yet**: a `since` stamp and a map of baseball date → the `gamePk`s waiting, a few hundred bytes at rest and empty most of the time. What it is reduced *from* is `game/changes?updatedSince=`, so this is the rule `espn-period-anchor` and the RotoWire index follow — store the answer, not the payload. Polled at most once per **30 minutes**, and a cold process **adopts a stamp younger than that instead of polling**, which is what keeps the rule off the cold path: measured on a 7-day `/api/report` served entirely off snapshots, **228/212/207ms adopting against 226/216/204ms before the rule existed, and 681ms for the one process that has to poll**. Cleared by the *rebuild* rather than by the poll, or a revision reported to a process that then died would never be reported again. See *Official scoring moves* below for the whole of it.
 - `espn-lineup-{leagueId}-{teamId}-{period}-v2.json` — **one finished day's fantasy roster**, slot by slot (~5,170 bytes; 61 days of one team come to 488KB). Written only for a period strictly before today's and read back with **no freshness test**, on the same reasoning as the day snapshot above: you cannot retroactively start somebody in a game that has been played, nor retroactively have held him. Today's and any future day's are mutable and stay in memory on the ownership map's ten minutes. **v1 was the day's lineup alone, a bare list of MLB ids at 176 bytes**, and the bump is what stops one deserializing as a roster of nobody; the lineup is now derived from the roster rather than stored beside it, so the two cannot disagree about a day. See **ESPN fantasy league**, *A range is a range of rosters*, for why a range needs one of these per day and what the thirty-fold growth costs (nothing measurable — the time is ESPN's).
 - `espn-period-anchor-{season}-v2.json` — **one `{ period, date }` pair, 67 bytes**, reduced from ESPN's 850,891-byte `proTeamSchedules_wl`. It is what turns a calendar day into an ESPN scoring period, and it exists because doing that off ESPN's *current* period plus `baseballToday()` was wrong for the hour and a half each morning between our 3am rollover and ESPN's nightly batch. The payload is **cookie-free and static for the season**, so this is one read shared by every league and every user — the class `getPlayerPool`'s player list is in — and what is cached is the pair rather than the 0.81MB it came out of. Keyed by season on a **30-day** window in memory and in the storage tier; a season's schedule does not move. **The `-v2` is a bump that has outlived its field**: it was the All-Star break riding along with the pair, which the Rankings tab's two halves used to be cut on and which nothing reads since they became an even division by matchup period — a stored v2 blob simply carries two numbers this shape ignores, and re-bumping would spend the 850KB again to learn the same pair. The derivation never rejects (it answers with the pair or with null, the fallback being ESPN's own pointer), because the caller names a period in each of up to 62 places at once. See **ESPN fantasy league** for the whole of it.
@@ -262,6 +262,73 @@ board takes OBP off Savant's own leaderboard rather than computing one.
 `projection.ts` already carried the sacrifice residue as `BAT.sf`; putting it on
 the line is what makes a projected OPS recompute to the blended OBP it was
 pinned to, instead of running a hair high the way the measured one did.
+
+### A runner row is not the event it is filed under, and one man had two steals
+
+**Carson Benge's 2026-09-07 read two stolen bases against MLB's own game log's
+one** (gamePk 823820, NYM @ MIA, top of the 1st). MLB's line under the play:
+
+> *Carson Benge steals (21) 2nd base. Bo Bichette scores. Carson Benge to 3rd.
+> Throwing error by catcher Joe Mack.*
+
+One steal, then an extra base on the throw. The count came off `play.runners`,
+and MLB files **one row per movement, every row carrying the play's own
+`eventType`** — so the steal and the error-advance behind it are both
+`stolen_base_2b`, and `sbByRunner` incremented twice.
+
+**`details.movementReason` is the discriminator and it costs nothing.** The row
+that *is* the event spells `r_` + its own event type; a row that rode along on
+it spells `r_adv_play` (or `r_adv_force`). Counted over the **1,186 game blobs
+on disk**, every runner row of the credited kinds and the four advance-only
+ones:
+
+| kind | rows naming themselves | rows naming an advance |
+| --- | --- | --- |
+| `stolen_base_*` | 1,577 | **8** |
+| `caught_stealing_*` | 386 | **10** |
+| `pickoff_*` | 95 | **1** |
+| `pickoff_caught_stealing_*` | 77 | **3** |
+| `pickoff_error_*` | 79 | **22** |
+| `defensive_indiff` | 165 | 0 |
+| `wild_pitch`, `passed_ball`, `balk`, `forced_balk` | **0** | 1,205 |
+
+**The last row is why this is a set and not a blanket rule.** A wild pitch, a
+passed ball and a balk *never* name themselves — the runner advancing **is** the
+event — so testing them the same way deletes all 1,205 of them.
+`mlbStats.ts::CREDITED_BASE_KINDS` names the six kinds that have to answer, and
+`namesItsOwnEvent` is the test; a row with no reason at all is taken at face
+value, no blob on disk having one, because reading a missing field as *not the
+event* would empty the column rather than fix it.
+
+**De-duplicating was the obvious fix and it was wrong.** Of the 44 rows naming
+an advance, only **15** duplicate a credit the same man genuinely earned; the
+other **29** are on a *different runner entirely* — Chandler Simpson taking
+second while Cedric Mullins was picked off third, Daniel Susac taking third
+while somebody else was caught stealing second, and seven more like them. Those
+29 were handing a man a caught stealing or a pickoff that was **somebody else's
+out**, on his line and as a card in his feed. A de-duplication of
+(runner, event, play) would have caught 15 of the 44 and left the worse half
+standing.
+
+**Verified against MLB's own boxscore, before → after**, over the whole cache:
+`sbByRunner`/`csByRunner` compared per player to `stats.batting.stolenBases` and
+`caughtStealing` for every game on disk. Benge's day through
+`/api/players/:id/day` — the route the player page's day dialog reads — goes
+`sb: 2 → 1` with one `sb` card in place of two, and his whole line
+(`AB 4 · H 1 · R 2 · RBI 0 · BB 1 · SB 1 · CS 0`) now agrees with MLB's
+boxscore cell for cell.
+
+**`DAY_SNAPSHOT_VERSION` went 10 → 11 and `FEED_CACHE_VERSION` did not move**,
+which is the test *Caching* above states. A stored day holds `PlayerReport.games`
+and `getReport` reads those straight back out, so a v10 snapshot has the doubled
+`line.sb` and the phantom `baseEvents` baked in — nothing is added and only the
+meaning of what is stored has changed, which is v7's own reason and the arsenal
+blob's `-v5`. The game blob needed nothing: `details.movementReason` arrives
+through the `fields=` filter **already, unnamed** — all 1,585 stolen-base rows
+on disk carry it — so every cached feed can answer, and a bump would have
+re-downloaded 1,186 games to arrive at 1,186 byte-identical ones. It is named in
+`FEED_FIELDS` anyway, on the `breaks` children's precedent: listed so the intent
+is explicit, not because the payload needs asking.
 
 ### The last out is not the last word: a game MLB is still writing
 
